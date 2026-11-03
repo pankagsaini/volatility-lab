@@ -46,14 +46,24 @@ def get_market_summary() -> Dict[str, Any]:
 
     def format_index(row: Dict[str, Any], default_name: str) -> Dict[str, Any]:
         spot = row.get('Price')
+        fut = row.get('Month future LTP') or row.get('Listed future')
+        syn = row.get('Synthetic future')
         chg = row.get('% change')
         iv = row.get('IV')
         sprd = row.get('IV-RV Spread')
         chg_f = float(chg) if chg and np.isfinite(chg) else None
         as_of_str = str(row.get('As of', ''))[:16].replace('T', ' ')
+        fut_f = float(fut) if fut and np.isfinite(fut) else None
+        syn_f = float(syn) if syn and np.isfinite(syn) else None
+        spot_f = float(spot) if spot and np.isfinite(spot) else None
         return {
             'symbol': default_name,
-            'price': float(spot) if spot and np.isfinite(spot) else None,
+            'price': spot_f,
+            'spot': spot_f,
+            'future_price': fut_f,
+            'synthetic_future': syn_f,
+            'future_basis': round(fut_f - spot_f, 2) if fut_f is not None and spot_f is not None else None,
+            'synthetic_basis': round(syn_f - spot_f, 2) if syn_f is not None and spot_f is not None else None,
             'change': chg_f,
             'pchange': chg_f,
             'change_pct': chg_f,
@@ -215,10 +225,25 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
                 min_loss = total_loss
                 max_pain = test_s
 
-    # ATM Straddle Price
+    # ATM Straddle & Synthetic Future
     atm_row = next((r for r in rows if r['is_atm']), None)
     atm_straddle = (atm_row['call']['ltp'] + atm_row['put']['ltp']) if atm_row else 0.0
     pcr = round(total_put_oi / total_call_oi, 2) if total_call_oi > 0 else 1.0
+
+    synthetic_future = None
+    if atm_row and atm_row['call']['ltp'] > 0 and atm_row['put']['ltp'] > 0:
+        synthetic_future = round(atm_strike + atm_row['call']['ltp'] - atm_row['put']['ltp'], 2)
+
+    future_price = None
+    for q_key, q_val in content.get('quotes', {}).items():
+        if 'FUT' in q_key and isinstance(q_val, dict) and q_val.get('last_price'):
+            p_val = float(q_val['last_price'])
+            if p_val > 0:
+                future_price = p_val
+                break
+
+    future_basis = round(future_price - spot, 2) if future_price and spot else None
+    synthetic_basis = round(synthetic_future - spot, 2) if synthetic_future and spot else None
 
     matched_exp = next((e for e in available if e['expiry'] == expiry), None)
     dte_val = float(matched_exp['dte']) if matched_exp else 0.0
@@ -228,6 +253,10 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
         'expiry': expiry,
         'dte': dte_val,
         'spot': spot,
+        'future_price': future_price,
+        'future_basis': future_basis,
+        'synthetic_future': synthetic_future,
+        'synthetic_basis': synthetic_basis,
         'atm_strike': atm_strike,
         'straddle_ltp': round(atm_straddle, 2),
         'atm_straddle': round(atm_straddle, 2),

@@ -194,6 +194,8 @@ def render_terminal_header():
 
     with c1:
         spot=nifty.get('Price')
+        fut=nifty.get('Month future LTP') or nifty.get('Listed future')
+        syn=nifty.get('Synthetic future')
         chg=nifty.get('% change')
         iv=nifty.get('IV')
         sprd=nifty.get('IV-RV Spread')
@@ -205,18 +207,25 @@ def render_terminal_header():
                 <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">NIFTY 50</span>
                 <span style="color:{chg_color}; font-size:0.75rem; font-weight:700;">{chg_arrow} {chg:+.2f}%</span>
             </div>
-            <div style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
-                {f"{spot:,.1f}" if spot else "—"}
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:2px;">
+                <span style="font-size:1.22rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums;">
+                    {f"{spot:,.1f}" if spot else "—"}
+                </span>
+                <span style="font-size:0.72rem; color:#94a3b8; font-variant-numeric:tabular-nums;">
+                    Fut: <b style="color:#38bdf8;">{f"{fut:,.1f}" if fut else "—"}</b>
+                </span>
             </div>
             <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b; margin-top:4px;">
+                <span>Syn: <b style="color:#a78bfa;">{f"{syn:,.1f}" if syn else "—"}</b></span>
                 <span>ATM IV: <b style="color:#38bdf8;">{f"{iv:.1f}%" if iv else "—"}</b></span>
-                <span>Spread: <b style="color:#cbd5e1;">{f"{sprd:+.1f} pp" if sprd is not None and np.isfinite(sprd) else "—"}</b></span>
             </div>
         </div>
         ''', unsafe_allow_html=True)
 
     with c2:
         spot_bn=bn.get('Price')
+        fut_bn=bn.get('Month future LTP') or bn.get('Listed future')
+        syn_bn=bn.get('Synthetic future')
         chg_bn=bn.get('% change')
         iv_bn=bn.get('IV')
         sprd_bn=bn.get('IV-RV Spread')
@@ -228,12 +237,17 @@ def render_terminal_header():
                 <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">BANKNIFTY</span>
                 <span style="color:{chg_color_bn}; font-size:0.75rem; font-weight:700;">{chg_arrow_bn} {chg_bn:+.2f}%</span>
             </div>
-            <div style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
-                {f"{spot_bn:,.1f}" if spot_bn else "—"}
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:2px;">
+                <span style="font-size:1.22rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums;">
+                    {f"{spot_bn:,.1f}" if spot_bn else "—"}
+                </span>
+                <span style="font-size:0.72rem; color:#94a3b8; font-variant-numeric:tabular-nums;">
+                    Fut: <b style="color:#818cf8;">{f"{fut_bn:,.1f}" if fut_bn else "—"}</b>
+                </span>
             </div>
             <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b; margin-top:4px;">
+                <span>Syn: <b style="color:#a78bfa;">{f"{syn_bn:,.1f}" if syn_bn else "—"}</b></span>
                 <span>ATM IV: <b style="color:#818cf8;">{f"{iv_bn:.1f}%" if iv_bn else "—"}</b></span>
-                <span>Spread: <b style="color:#cbd5e1;">{f"{sprd_bn:+.1f} pp" if sprd_bn is not None and np.isfinite(sprd_bn) else "—"}</b></span>
             </div>
         </div>
         ''', unsafe_allow_html=True)

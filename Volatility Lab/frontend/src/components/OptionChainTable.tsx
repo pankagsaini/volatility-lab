@@ -80,8 +80,43 @@ export const OptionChainTable: React.FC<OptionChainTableProps> = ({
           </select>
         </div>
 
-        {/* Institutional Metrics Banner */}
-        <div className="flex items-center gap-4 text-xs font-mono">
+        {/* Option Pricing & Underlying Banner */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-mono">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
+            <span className="text-slate-400">Spot:</span>
+            <span className="font-bold text-white">
+              ₹{data?.spot != null ? data.spot.toLocaleString('en-IN') : '—'}
+            </span>
+          </div>
+
+          {data?.future_price != null && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
+              <span className="text-slate-400">Fut:</span>
+              <span className="font-bold text-cyan-400">
+                ₹{data.future_price.toLocaleString('en-IN')}
+              </span>
+              {data.future_basis != null && (
+                <span className={`text-[10px] ${data.future_basis >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  ({data.future_basis >= 0 ? '+' : ''}{data.future_basis.toFixed(1)})
+                </span>
+              )}
+            </div>
+          )}
+
+          {data?.synthetic_future != null && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
+              <span className="text-slate-400">Syn Fut:</span>
+              <span className="font-bold text-purple-400">
+                ₹{data.synthetic_future.toLocaleString('en-IN')}
+              </span>
+              {data.synthetic_basis != null && (
+                <span className={`text-[10px] ${data.synthetic_basis >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  ({data.synthetic_basis >= 0 ? '+' : ''}{data.synthetic_basis.toFixed(1)})
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
             <span className="text-slate-400">PCR:</span>
             <span className={`font-bold ${data && data.pcr > 1.0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -97,7 +132,7 @@ export const OptionChainTable: React.FC<OptionChainTableProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
-            <span className="text-slate-400">ATM Straddle:</span>
+            <span className="text-slate-400">Straddle:</span>
             <span className="font-bold text-cyan-400">
               ₹{data?.straddle_ltp != null ? data.straddle_ltp.toFixed(1) : '—'}
             </span>

@@ -73,8 +73,14 @@ export const TradeRadarView: React.FC<TradeRadarViewProps> = ({
               ))}
             </select>
           </div>
-          <div className="text-xs font-mono text-slate-400">
-            ATM Spot Ref: ₹{data?.spot ? data.spot.toLocaleString('en-IN') : '—'}
+          <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-slate-400">
+            <span>Spot: <b className="text-white">₹{data?.spot ? data.spot.toLocaleString('en-IN') : '—'}</b></span>
+            {data?.month_future != null && (
+              <span>Fut: <b className="text-cyan-400">₹{data.month_future.toLocaleString('en-IN')}</b></span>
+            )}
+            {data?.synthetic_future != null && (
+              <span>Syn: <b className="text-purple-400">₹{data.synthetic_future.toLocaleString('en-IN')}</b></span>
+            )}
           </div>
         </div>
       )}
@@ -166,8 +172,23 @@ export const TradeRadarView: React.FC<TradeRadarViewProps> = ({
               </span>
             </div>
 
+            <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-xs">
+              <div className="p-2 rounded bg-slate-900/60 border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Month Future LTP</span>
+                <span className="font-bold text-cyan-300">
+                  ₹{data?.month_future ? data.month_future.toLocaleString('en-IN') : '—'}
+                </span>
+              </div>
+              <div className="p-2 rounded bg-slate-900/60 border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Synthetic Future</span>
+                <span className="font-bold text-purple-300">
+                  ₹{data?.synthetic_future ? data.synthetic_future.toLocaleString('en-IN') : '—'}
+                </span>
+              </div>
+            </div>
+
             <div className="mb-3">
-              <div className="text-[11px] text-slate-400">Synthetic Futures Basis (C - P + K - S)</div>
+              <div className="text-[11px] text-slate-400">Parity Basis (Synthetic − Future)</div>
               <div className="text-xl font-bold font-mono text-cyan-400">
                 {data?.synthetic_basis_pts != null
                   ? `${data.synthetic_basis_pts > 0 ? '+' : ''}${data.synthetic_basis_pts.toFixed(1)} pts`

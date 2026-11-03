@@ -119,9 +119,17 @@ def render_trade_decision_radar(selected_rows):
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
                     <div style="background:#0c1320; border:1px solid #1a2538; border-radius:8px; padding:8px 12px;">
-                        <div style="color:#64748b; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;">Spot & ATM IV</div>
-                        <div style="font-size:1.15rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums;">{spot:,.1f}</div>
-                        <div style="color:#38bdf8; font-size:0.75rem; font-weight:600;">IV: {iv:.2f}% <span style="color:#64748b;">(Sprd: {spread_display})</span></div>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="color:#64748b; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;">Spot & IV</span>
+                            <span style="color:#38bdf8; font-size:0.72rem; font-weight:600;">IV: {iv:.2f}%</span>
+                        </div>
+                        <div style="font-size:1.15rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
+                            {spot:,.1f}
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#94a3b8; margin-top:3px;">
+                            <span>Fut: <b style="color:#38bdf8;">{f"{m_fut:,.1f}" if pd.notna(m_fut) and np.isfinite(m_fut) else "—"}</b></span>
+                            <span>Syn: <b style="color:#a78bfa;">{f"{syn:,.1f}" if pd.notna(syn) and np.isfinite(syn) else "—"}</b></span>
+                        </div>
                     </div>
                     <div style="background:#0c1320; border:1px solid #1a2538; border-radius:8px; padding:8px 12px;">
                         <div style="color:#64748b; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;">Expected Expiry Move</div>
@@ -965,7 +973,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
                         'Future reference','Synthetic status']
         for column in parity_columns:
             if column not in table:table[column]=np.nan if column not in ('Future contract','Future quote time','Future reference','Synthetic status') else 'Unavailable'
-        show_table(table[['Instrument','Price','IV','IV-RV Spread','Synthetic future','Month future LTP','Quote status']])
+        show_table(table[['Instrument','Price','Month future LTP','Synthetic future','IV','IV-RV Spread','Quote status']])
         with st.expander('Quote details'):
             show_table(table[['Instrument','Expiry','% change','Call IV','Put IV','25 Delta reversal','Underlying as of']])
             st.markdown('**ATM synthetic future check**')

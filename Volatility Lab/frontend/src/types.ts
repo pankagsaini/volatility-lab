@@ -5,6 +5,10 @@ export interface MarketSummary {
   nifty: {
     symbol: string;
     price: number | null;
+    future_price?: number | null;
+    synthetic_future?: number | null;
+    future_basis?: number | null;
+    synthetic_basis?: number | null;
     change: number | null;
     pchange: number | null;
     collected_at: string;
@@ -12,6 +16,10 @@ export interface MarketSummary {
   banknifty: {
     symbol: string;
     price: number | null;
+    future_price?: number | null;
+    synthetic_future?: number | null;
+    future_basis?: number | null;
+    synthetic_basis?: number | null;
     change: number | null;
     pchange: number | null;
     collected_at: string;
@@ -53,6 +61,10 @@ export interface OptionChainRow {
 export interface OptionChainPayload {
   symbol: string;
   spot: number;
+  future_price?: number | null;
+  future_basis?: number | null;
+  synthetic_future?: number | null;
+  synthetic_basis?: number | null;
   expiry: string;
   dte: number;
   atm_strike: number;
@@ -102,6 +114,8 @@ export interface VolSurfacePayload {
 export interface TradeRadar {
   symbol: string;
   spot: number;
+  month_future?: number | null;
+  synthetic_future?: number | null;
   expiry: string;
   dte: number;
   atm_strike: number;
