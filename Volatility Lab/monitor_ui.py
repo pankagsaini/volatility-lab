@@ -991,8 +991,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
         if st.session_state.get('options_chart_view_v2')=='Position risk':
             st.session_state.options_chart_view_v2='Volatility history'
         with b:
-            views=['Volatility history','IV–RV Spread','Term structure','Smile & skew','3D Vol Surface']
-            if st.session_state.get('advanced_workspace'):views+=['Research','Intraday']
+            views=['Volatility history','IV–RV Spread','Term structure','Smile & skew','3D Vol Surface','Research','Intraday']
             if st.session_state.get('options_chart_view_v2') not in views:st.session_state.options_chart_view_v2='Volatility history'
             chart=st.segmented_control('Chart',views,key='options_chart_view_v2',label_visibility='collapsed',selection_mode='single')
         chart=chart or 'Volatility history'

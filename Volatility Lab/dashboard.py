@@ -43,7 +43,7 @@ def drive_sync_label(info,now=None):
     label={'ready':'healthy','partial':'needs attention','syncing':'syncing','waiting':'waiting','stale':'stale','unknown':'status unavailable'}.get(status,status)
     return label,checked
 
-st.set_page_config(page_title='Volatility Lab',page_icon='◈',layout='wide',initial_sidebar_state='expanded')
+st.set_page_config(page_title='Volatility Lab',page_icon='◈',layout='wide',initial_sidebar_state='collapsed')
 
 st.session_state.pop('login_notice', None)
 
@@ -83,9 +83,7 @@ if st.session_state.get('dashboard_revision')!=revision:
 st.markdown('''<style>
 .stApp{background:#080c14;color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 [data-testid="stHeader"]{background:transparent!important;border-bottom:none!important;height:2.8rem!important;visibility:visible!important;z-index:90}
-[data-testid="stSidebarCollapseButton"] button, [data-testid="stSidebarCollapsedControl"] button{background:#0f1726!important;border:1px solid #1e293b!important;color:#38bdf8!important;border-radius:8px!important;padding:4px 8px!important;box-shadow:0 2px 8px rgba(0,0,0,0.3)!important}
-[data-testid="stSidebarCollapseButton"] button:hover, [data-testid="stSidebarCollapsedControl"] button:hover{background:#16243b!important;border-color:#0284c7!important;color:#00e5ff!important}
-[data-testid="stSidebar"]{background:#0b111c!important;border-right:1px solid #141e30}
+[data-testid="stSidebar"], [data-testid="collapsedControl"]{display:none!important}
 .block-container{max-width:1500px;padding-top:2.8rem!important;padding-bottom:2.5rem;padding-left:1.5rem;padding-right:1.5rem}
 
 /* Typography & Numbers */
@@ -117,59 +115,39 @@ button[kind="secondary"]{border-radius:8px;background:#111927;border:1px solid #
 hr{border-color:#182335!important;margin:1.2rem 0!important}
 </style>''',unsafe_allow_html=True)
 
-with st.sidebar:
+from collector_support import read_json, STATE
+from upstox_data import TOKEN_PATH
+from upstox_adapter import market_client
 
-    advanced=st.toggle('More tools',value=False,key='advanced_workspace',help='Adds research views, intraday tools and Backtest.')
+if TOKEN_PATH.exists():
+    version=(TOKEN_PATH.stat().st_mtime_ns,(ROOT/'upstox_data.py').stat().st_mtime_ns,(ROOT/'upstox_adapter.py').stat().st_mtime_ns)
+    if st.session_state.get('_upstox_version')!=version:
+        try:
+            st.session_state.data_client=market_client()
+            st.session_state._upstox_version=version
+        except MarketDataError as error:st.error(str(error))
 
-    from collector_support import read_json, STATE
-    from upstox_data import TOKEN_PATH
-    from upstox_adapter import market_client
-    if TOKEN_PATH.exists():
-        version=(TOKEN_PATH.stat().st_mtime_ns,(ROOT/'upstox_data.py').stat().st_mtime_ns,(ROOT/'upstox_adapter.py').stat().st_mtime_ns)
-        if st.session_state.get('_upstox_version')!=version:
-            try:
-                st.session_state.data_client=market_client()
-                st.session_state._upstox_version=version
-            except MarketDataError as error:st.error(str(error))
-    client=st.session_state.get('data_client')
-    if client is not None:
-        from upstox_adapter import UpstoxAdapter
-        client.__class__=UpstoxAdapter
-    ready=bool(client and client.authenticated)
-    st.caption('Upstox token saved · read-only' if ready else 'Upstox not set up · saved history remains available')
-    capture=read_json(STATE/'status.json')
-    backfill=read_json(ROOT/'data'/'upstox'/'collection_status.json')
+client=st.session_state.get('data_client')
+if client is not None:
+    from upstox_adapter import UpstoxAdapter
+    client.__class__=UpstoxAdapter
 
-    from upstox_data import render_connection
-    render_connection()
+ready=bool(client and client.authenticated)
+capture=read_json(STATE/'status.json')
+backfill=read_json(ROOT/'data'/'upstox'/'collection_status.json')
 
-    with st.expander('Model inputs'):
+rate_info=get_rate()
+rate=rate_info.get('model_rate')
+dividend_info=get_yields()
+dividend={symbol:item.get('model_yield') for symbol,item in dividend_info.items()}
+spread=3.0  # Stored-history compatibility; this does not filter broker IV.
 
-        rate_info=get_rate()
+st.session_state.pop('wide_atm_fallback',None)
 
-        rate=rate_info.get('model_rate')
-
-        if rate is None:
-            st.info('Model rate unavailable.')
-        else:
-            value=rate_info.get('yield_percent')
-            st.metric('RBI 91-day T-bill',f'{value:.4f}%' if value is not None else 'Unavailable')
-            checked=str(rate_info.get('checked_at') or 'unavailable')[:10]
-            st.caption(f'Checked {checked} · model uses continuous ACT/365')
-            if rate_info.get('error'):st.warning(rate_info['error'])
-            if rate_info.get('source'):st.link_button('RBI source',rate_info['source'])
-
-        dividend_info=get_yields()
-        dividend={symbol:item.get('model_yield') for symbol,item in dividend_info.items()}
-        for symbol,item in dividend_info.items():
-            value=item.get('yield_percent')
-            st.metric(symbol+' dividend yield',f'{value:.2f}%' if value is not None else 'Unavailable')
-            st.caption('Published '+str(item.get('as_of') or 'unavailable')+' · checked '+str(item.get('checked_at') or 'unavailable')[:10])
-            if item.get('source'):st.link_button(symbol+' factsheet',item['source'])
-            if item.get('error'):st.warning(item['error'])
-        spread=3.0  # Stored-history compatibility; this does not filter broker IV.
-
-    st.session_state.pop('wide_atm_fallback',None)
+if not ready:
+    with st.expander('⚠️ Upstox API Setup / Token Refresh', expanded=False):
+        from upstox_data import render_connection
+        render_connection()
 
 def render_terminal_header():
     now=datetime.now(IST)
@@ -325,42 +303,11 @@ def cloud_sync_status():
         if count!=previous and right.button('Show updates',key='cloud_show_updates'):
             st.session_state['_cloud_seen']=count
             st.rerun()
-with st.sidebar:
-    with st.expander('Data collection'):
-        cloud_sync_status()
-        capture_summary=latest_cloud_capture()
-        if capture_summary:st.caption(capture_summary)
-        receipt=read_json(ROOT/'data'/'google_archive'/'receipt_status.json')
-        verified=receipt.get('verified_at')
-        if verified:
-            try:
-                receipt_time=datetime.fromisoformat(str(verified).replace('Z','+00:00'))
-                if receipt_time.tzinfo is None:receipt_time=receipt_time.replace(tzinfo=timezone.utc)
-                age_days=(datetime.now(timezone.utc)-receipt_time.astimezone(timezone.utc)).total_seconds()/86400
-                if age_days>8:
-                    st.warning('Local archive verification is overdue; Drive cleanup will retain unverified captures.')
-                else:
-                    st.caption('Local archive verified '+receipt_time.astimezone(IST).strftime('%d %b %H:%M IST'))
-            except (ValueError,TypeError):st.caption('Local archive verification date unavailable')
-        else:st.caption('No local archive verification receipt yet.')
-        if capture and capture.get('status')=='recovered':
-            st.caption('Local daily history through '+capture.get('recovered_through','unknown'))
-        elif capture:
-            st.caption('Laptop history backup · '+str(capture.get('status','unknown'))+' · '+str(capture.get('attempt',''))[:16].replace('T',' '))
-        if backfill:
-            st.caption('Historical archive download · '+str(backfill.get('status','unknown'))+' · '+str(backfill.get('stage','')))
-        minute_status=read_json(ROOT/'data'/'backtest_1minute'/'status.json')
-        if minute_status:
-            jobs=minute_status.get('jobs') or {}
-            current=minute_status.get('current') or {}
-            progress=' · '.join(f'{label} {jobs[key]:,}' for label,key in [('done','done'),('queued','pending')] if isinstance(jobs.get(key),int))
-            if minute_status.get('status')=='running':
-                st.caption('Historical minute download · running'+(' · '+progress if progress else ''))
-                if current.get('symbol'):
-                    st.caption(f"Current: {current['symbol']} · {current.get('start','')} to {current.get('end','')}")
-            elif minute_status.get('status'):
-                st.caption('Historical minute download · '+str(minute_status.get('status')))
-
+# Cloud background sync
+try:
+    google_archive_sync.ensure_sync(rate,dividend,spread)
+except Exception:
+    pass
 
 if capture.get('status') in ('failed','partial'):
     errors = capture.get('errors', [])
@@ -376,7 +323,7 @@ if capture.get('status') in ('failed','partial'):
 
 workspace_labels={'Options':'⚡ Options Terminal','Futures':'📈 Futures Carry','Backtest':'🧪 Backtest Studio'}
 label_to_mode={v:k for k,v in workspace_labels.items()}
-raw_markets=['Options','Futures']+(['Backtest'] if advanced else [])
+raw_markets=['Options','Futures','Backtest']
 markets=[workspace_labels[m] for m in raw_markets]
 
 saved_ws=st.session_state.get('market_workspace')
