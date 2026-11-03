@@ -21,6 +21,8 @@ Volatility Lab/logs/
 *.log
 
 # Large Market Data Files & Binary Databases
+*.sqlite*
+Volatility Lab/*.sqlite*
 Volatility Lab/data/backtest_1minute/*.json.gz
 Volatility Lab/data/backtest_1minute/*.sqlite*
 Volatility Lab/data/backtest_futures/*.json.gz
@@ -31,6 +33,7 @@ Volatility Lab/data/underlying_history/
 Volatility Lab/data/dividend_sources/*.pdf
 Volatility Lab/data/*.sqlite*
 Volatility Lab/data/**/*.sqlite*
+Volatility Lab/web/plotly.min.js
 
 # Explicitly Keep Tracking Metadatas, Audits, Charges & JSON Configs in data/
 !Volatility Lab/data/audit/
