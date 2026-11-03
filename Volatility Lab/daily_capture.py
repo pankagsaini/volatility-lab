@@ -88,28 +88,28 @@ def _run(now=None):
             from upstox_archive import incremental_capture
             try:incremental_capture()
             except MarketDataError as error:errors.append(str(error))
-        if stage!='history_catchup':
-            state['step']='Options calculations';atomic_json(STATUS,state)
+        # Live options calculations run during closing_quotes (15:20-16:30 IST).
+        # EOD IV is captured autonomously via Google Cloud under IV DATA POLICY.md.
+        if stage == 'closing_quotes':
+            state['step'] = 'Options calculations'; atomic_json(STATUS, state)
             from risk_free import get_rate
             from dividend_yield import get_yields
             from expiry_data import ExpiryMonitor
-            rate=get_rate().get('model_rate')
-            yields=get_yields()
-            dividend={symbol:yields.get(symbol,{}).get('model_yield') for symbol in ('NIFTY','BANKNIFTY')}
-            result=ExpiryMonitor().refresh_all(client,rate,dividend,3.)
-            rows=result.get('rows',[])
-            for symbol in ('NIFTY','BANKNIFTY'):
-                selected=[r for r in rows if r.get('Instrument')==symbol]
-                if not selected:errors.append(symbol+': option observations missing')
-                usable=[r for r in selected if isinstance(r.get('IV'),(int,float)) and math.isfinite(r['IV']) and str(r.get('As of',''))[:10]==str(now.date())]
-                if not usable:errors.append(symbol+': no current accepted IV observations')
+            rate = get_rate().get('model_rate')
+            yields = get_yields()
+            dividend = {symbol: yields.get(symbol, {}).get('model_yield') for symbol in ('NIFTY', 'BANKNIFTY')}
+            result = ExpiryMonitor().refresh_all(client, rate, dividend, 3.)
+            rows = result.get('rows', [])
+            for symbol in ('NIFTY', 'BANKNIFTY'):
+                selected = [r for r in rows if r.get('Instrument') == symbol]
+                if not selected: errors.append(symbol + ': option observations missing')
+                usable = [r for r in selected if isinstance(r.get('IV'), (int, float)) and math.isfinite(r['IV']) and str(r.get('As of', ''))[:10] == str(now.date())]
+                if not usable: errors.append(symbol + ': no current accepted IV observations')
                 for row in selected:
-                    valid=lambda value:isinstance(value,(int,float)) and math.isfinite(value)
-                    if (not valid(row.get('IV')) or str(row.get('As of',''))[:10]!=str(now.date())
-                            or row.get('Source')!='Upstox supplied IV'):
-                        state.setdefault('quality_gaps',[]).append(symbol+' '+str(row.get('Expiry'))+': no accepted closing IV')
-                    if stage=='eod' and not valid(row.get('IV-RV Spread')):
-                        state.setdefault('quality_gaps',[]).append(symbol+' '+str(row.get('Expiry'))+': closing IV-RV unavailable')
+                    valid = lambda value: isinstance(value, (int, float)) and math.isfinite(value)
+                    if (not valid(row.get('IV')) or str(row.get('As of', ''))[:10] != str(now.date())
+                            or row.get('Source') != 'Upstox supplied IV'):
+                        state.setdefault('quality_gaps', []).append(symbol + ' ' + str(row.get('Expiry')) + ': no accepted closing IV')
         if not errors:completed[key]=now.isoformat()
         state.update(status='partial' if errors else 'complete',errors=errors,completed=completed)
     except Exception as exc:

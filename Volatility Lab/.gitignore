@@ -4,7 +4,10 @@ __pycache__/
 *credentials*
 *Credentials*
 *token*
-data/
+data/*
+!data/audit/
+data/audit/*
+!data/audit/contract_blacklist.json
 .packages/
 .runtime/
 logs/

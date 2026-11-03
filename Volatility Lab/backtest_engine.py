@@ -4,7 +4,7 @@ from datetime import datetime,timedelta,timezone
 import json,gzip,sqlite3,math
 from contextlib import closing
 import pandas as pd
-from backtest_common import record_skip
+from backtest_common import record_skip, is_blacklisted_option
 ROOT=Path(__file__).resolve().parent/'data/backtest_1minute'
 
 def load(symbol,start,end):
@@ -18,12 +18,16 @@ def load(symbol,start,end):
  contracts={};series={};conflicts=set()
  for kind,metastr,file in jobs:
   meta=json.loads(metastr)
+  key=meta.get('key')
+  if key and is_blacklisted_option(key,symbol,(meta.get('contract') or {}).get('weekly') is True):continue
   with gzip.open(ROOT/file,'rt',encoding='utf-8') as f:o=json.load(f)
   if kind=='contracts':
    for r in o['data']:
-    if r.get('instrument_type') in ('CE','PE'):contracts[r['instrument_key']]=r
+    if r.get('instrument_type') in ('CE','PE'):
+     k=r.get('instrument_key')
+     if not is_blacklisted_option(k,symbol,r.get('weekly') is True):contracts[k]=r
   else:
-   key=meta['key'];dest=series.setdefault(key,{})
+   dest=series.setdefault(key,{})
    for row in o['data']['candles']:
     dt=datetime.fromisoformat(row[0])
     if dt.tzinfo is None:continue

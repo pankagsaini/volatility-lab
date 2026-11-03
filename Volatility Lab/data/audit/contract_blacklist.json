@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "updated": "2026-11-03",
+  "policy": "Exclude broker data anomalies and reused exchange tokens from strategy backtests.",
+  "source_audit": "data/audit/historical_integrity_review_2026-10-26.md",
+  "blacklisted_keys": [
+    "NSE_FO|58561|03-10-2024",
+    "NSE_FO|61471|23-11-2026"
+  ],
+  "blacklisted_futures": [
+    {
+      "symbol": "BANKNIFTY",
+      "expiry": "2024-11-27",
+      "reason": "BANKNIFTY FUT expiring 27-Nov-2024 has 25,094 corrupt bars in April-July 2024 at fractions of a rupee."
+    },
+    {
+      "symbol": "NIFTY",
+      "expiry": "2026-11-23",
+      "reason": "Token 61471 has 20 daily rows in Oct-Nov 2025 fixed at 12.45."
+    }
+  ],
+  "blacklisted_contracts": [
+    {
+      "instrument_key": "NSE_FO|58561|03-10-2024",
+      "symbol": "NIFTY",
+      "trading_symbol": "NIFTY 26050 PE 03 OCT 24",
+      "expiry": "2024-10-03",
+      "reason": "Exchange token 58561 reuse anomaly: contains 20,110 minute rows in Sep-Nov 2023 when NIFTY was ~19,500."
+    },
+    {
+      "instrument_key": "NSE_FO|61471|23-11-2026",
+      "symbol": "NIFTY",
+      "expiry": "2026-11-23",
+      "reason": "Price anomaly: 20 daily rows in Oct-Nov 2025 each fixed at 12.45."
+    }
+  ],
+  "excluded_patterns": [
+    {
+      "rule": "BANKNIFTY_WEEKLY_OPTIONS",
+      "symbol": "BANKNIFTY",
+      "weekly": true,
+      "reason": "NSE BANKNIFTY weekly options are discontinued and excluded from backtests."
+    }
+  ]
+}

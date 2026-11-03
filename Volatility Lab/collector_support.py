@@ -23,12 +23,18 @@ _local = threading.local()
 def atomic_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
-    try:
-        temp.write_text(json.dumps(value, indent=2, allow_nan=False), encoding='utf-8')
-        os.replace(temp, path)
-    finally:
-        temp.unlink(missing_ok=True)
+    text = json.dumps(value, indent=2, allow_nan=False)
+    for attempt in range(8):
+        temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
+        try:
+            temp.write_text(text, encoding='utf-8')
+            os.replace(temp, path)
+            return
+        except PermissionError:
+            if attempt == 7: raise
+            clock.sleep(min(.05 * 2**attempt, 1.))
+        finally:
+            temp.unlink(missing_ok=True)
 
 
 def read_json(path, default=None):

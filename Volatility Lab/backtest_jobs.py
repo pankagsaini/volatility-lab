@@ -50,14 +50,21 @@ def _options(task):
 
 
 def _futures(task):
-    from futures_backtest import load,simulate
+    from futures_backtest import load,simulate,contract_lot_sizes
     s=task.settings
     task.phase='Loading selected futures archives'
     bars,conflicts=load(s['symbol'],s['start'],s['end'])
     task.phase='Simulating carry strategy'
     pair={'Near - Far':(0,2),'Near - Next':(0,1),'Next - Far':(1,2)}[s['name'].removesuffix(' carry')]
-    trades,skips,position=simulate(bars,pair,s['entry_carry'],s['target_carry'],s['quantity'],
-        1 if s['direction'].startswith('Buy') else -1,s['slippage_bps'],s['max_hold_days'],s['brokerage_per_order'])
+    lots=s.get('lots')
+    if lots:
+        contracts=contract_lot_sizes(s['symbol'])
+        trades,skips,position=simulate(bars,pair,s['entry_carry'],s['target_carry'],s.get('quantity',75),
+            1 if s['direction'].startswith('Buy') else -1,s['slippage_bps'],s['max_hold_days'],s['brokerage_per_order'],
+            lots=lots,contracts=contracts)
+    else:
+        trades,skips,position=simulate(bars,pair,s['entry_carry'],s['target_carry'],s['quantity'],
+            1 if s['direction'].startswith('Buy') else -1,s['slippage_bps'],s['max_hold_days'],s['brokerage_per_order'])
     coverage=dict(conflicts=conflicts,dated_contract_days=len(bars),open_position=bool(position),unfinished_position=position)
     return trades,skips,s,coverage
 

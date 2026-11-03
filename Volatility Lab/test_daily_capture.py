@@ -38,4 +38,18 @@ class DailyCaptureTests(unittest.TestCase):
                 self.assertEqual(dc.run(datetime(2026,10,23,8,30,tzinfo=IST)),0)
                 client.assert_not_called()
 
+    def test_eod_stage_does_not_attempt_off_hours_live_quotes(self):
+        with tempfile.TemporaryDirectory() as d,patch.object(dc,'STATUS',Path(d)/'status.json'),\
+             patch('futures_sync.refresh_all',return_value=[]),\
+             patch('daily_capture.verify_history',return_value=[]),\
+             patch('upstox_archive.incremental_capture'):
+            with patch('upstox_adapter.market_client') as client,\
+                 patch('expiry_data.ExpiryMonitor') as monitor:
+                # 18:30 IST is EOD stage
+                self.assertEqual(dc.run(datetime(2026,10,23,18,30,tzinfo=IST)),0)
+                monitor.assert_not_called()
+                state=json.loads(dc.STATUS.read_text())
+                self.assertEqual(state['status'],'complete')
+                self.assertIn('2026-10-23_eod',state['completed'])
+
 if __name__=='__main__':unittest.main()

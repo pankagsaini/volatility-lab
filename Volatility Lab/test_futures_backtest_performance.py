@@ -17,10 +17,12 @@ class FuturesLoadCacheTests(TestCase):
     def tearDown(self):
         self.location.stop();engine.clear_load_cache();self.temp.cleanup()
 
-    def write(self,name,rows,symbol='NIFTY',interval='day',provider='Upstox'):
+    def write(self,name,rows,symbol='NIFTY',interval='day',provider='Upstox',expiry='2024-11-28',lot_size=None):
         path=self.root/(name+'.json.gz')
+        contract={'instrument_type':'FUT','expiry':expiry}
+        if lot_size is not None:contract['lot_size']=lot_size
         body={'provider':provider,'path':'/historical/'+interval+'/2024-10-31/2024-10-01',
-              'meta':{'symbol':symbol,'contract':{'instrument_type':'FUT','expiry':'2024-11-28'}},
+              'meta':{'symbol':symbol,'contract':contract},
               'data':{'candles':rows}}
         with gzip.open(path,'wt',encoding='utf-8') as handle:json.dump(body,handle)
         return path
@@ -71,12 +73,51 @@ class FuturesLoadCacheTests(TestCase):
         self.assertEqual((len(bars),count),(1,0))
         with self.assertRaises(ValueError):engine.load('NIFTY','2024-11-01','2024-11-01')
 
+    def test_blacklisted_future_is_excluded_from_load(self):
+        self.write('corrupt_banknifty',[self.row('2024-10-01',50000)],symbol='BANKNIFTY',expiry='2024-11-27')
+        self.write('valid_banknifty',[self.row('2024-10-01',50000)],symbol='BANKNIFTY',expiry='2024-10-30')
+        bars,count=engine.load('BANKNIFTY','2024-10-01','2024-10-31')
+        self.assertEqual(count,0)
+        self.assertEqual(len(bars),1)
+        self.assertIn(('2024-10-01','2024-10-30'),bars)
+        self.assertNotIn(('2024-10-01','2024-11-27'),bars)
+
     def test_cache_has_row_and_file_bounds(self):
         for i in range(6):self.write(str(i),[self.row('2024-10-01'),self.row('2024-10-02')])
         with patch.object(engine,'_MAX_CACHE_ROWS',5),patch.object(engine,'_MAX_CACHE_FILES',2):
             engine.load('NIFTY','2024-10-01','2024-10-31')
             self.assertLessEqual(engine._FILE_CACHE_ROWS,5)
             self.assertLessEqual(len(engine._FILE_CACHE),2)
+
+    def test_contract_lot_sizes_reads_metadata(self):
+        self.write('c1',[self.row('2024-10-01',100)],expiry='2024-10-31',lot_size=25)
+        self.write('c2',[self.row('2024-10-01',100)],expiry='2025-02-27',lot_size=75)
+        sizes=engine.contract_lot_sizes('NIFTY')
+        self.assertEqual(sizes,{'2024-10-31':25,'2025-02-27':75})
+
+
+class FuturesLotSizingTests(TestCase):
+    def test_dated_lot_sizes_applied_to_legs(self):
+        bars={
+            ('2025-01-06','2025-01-30'):(100.,101.,99.,100.,10),
+            ('2025-01-06','2025-02-27'):(100.5,101.,99.,100.5,10),
+            ('2025-01-07','2025-01-30'):(100.,101.,99.,100.,10),
+            ('2025-01-07','2025-02-27'):(100.5,101.,99.,100.5,10),
+            ('2025-01-08','2025-01-30'):(100.,101.,99.,100.,10),
+            ('2025-01-08','2025-02-27'):(101.5,102.,99.,101.5,10),
+            ('2025-01-09','2025-01-30'):(100.,101.,99.,100.,10),
+            ('2025-01-09','2025-02-27'):(101.5,102.,99.,101.5,10),
+        }
+        contracts={'2025-01-30':{'lot_size':25},'2025-02-27':{'lot_size':75}}
+        trades,skips,pos=engine.simulate(bars,pair=(0,1),entry=7.,target=10.,lots=2,contracts=contracts,near_side=-1)
+        self.assertFalse(trades.empty)
+        t=trades.iloc[0]
+        self.assertEqual(t['Sizing'],'broker_lot_size')
+        self.assertEqual(t['Strategy lots'],2)
+        self.assertEqual(t['Near lot size'],25)
+        self.assertEqual(t['Far lot size'],75)
+        self.assertEqual(t['Near quantity'],50)
+        self.assertEqual(t['Far quantity'],150)
 
 
 class FuturesSimulationParityTests(TestCase):

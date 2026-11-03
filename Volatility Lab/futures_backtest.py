@@ -5,6 +5,7 @@ from threading import RLock
 import gzip,json,math
 import pandas as pd
 from broker_charges import charge
+from backtest_common import is_blacklisted_future
 ROOT=Path(__file__).resolve().parent/'data/backtest_futures'
 
 # The archive contains many minute responses; this daily engine must not keep
@@ -47,6 +48,29 @@ def clear_load_cache():
  global _FILE_CACHE_ROWS
  with _FILE_CACHE_LOCK:_FILE_CACHE.clear();_FILE_CACHE_ROWS=0
 
+def broker_lot_size(contract):
+ if isinstance(contract,dict):
+  v=contract.get('lot_size')
+  if isinstance(v,(int,float)) and v>0:return int(v)
+ elif isinstance(contract,(int,float)) and contract>0:return int(contract)
+ return None
+
+
+def contract_lot_sizes(symbol):
+ sizes={}
+ for p in sorted(ROOT.resolve().glob('*.json.gz')):
+  saved=_daily_archive(p)
+  if saved is None or saved[0]!=symbol:continue
+  _,r,_=saved
+  exp=r.get('expiry')
+  if not exp:continue
+  exp_str=str(pd.to_datetime(exp,unit='ms',utc=True).date()) if isinstance(exp,(int,float)) else str(exp)[:10]
+  if is_blacklisted_future(symbol,exp_str):continue
+  lot=broker_lot_size(r)
+  if lot and exp_str not in sizes:sizes[exp_str]=lot
+ return sizes
+
+
 def load(symbol,start,end):
  bars={};conflicts=set()
  first,last=str(start),str(end)
@@ -55,6 +79,7 @@ def load(symbol,start,end):
   if saved is None or saved[0]!=symbol:continue
   _,r,candles=saved
   exp=r['expiry'];exp=str(pd.to_datetime(exp,unit='ms',utc=True).date()) if isinstance(exp,(int,float)) else exp
+  if is_blacklisted_future(symbol,exp):continue
   for row in candles:
    day=str(row[0])[:10]
    if not first<=day<=last:continue
@@ -64,7 +89,7 @@ def load(symbol,start,end):
  for key in conflicts:bars.pop(key,None)
  return bars,len(conflicts)
 
-def simulate(bars,pair=(0,2),entry=6.,target=6.66,quantity=75,near_side=-1,slip_bps=1,max_days=30,brokerage_per_order=20):
+def simulate(bars,pair=(0,2),entry=6.,target=6.66,quantity=75,near_side=-1,slip_bps=1,max_days=30,brokerage_per_order=20,lots=None,contracts=None):
  if entry==target or near_side not in (-1,1):raise ValueError('Choose distinct thresholds and a direction')
  by_day={}
  for day,expiry in bars:
@@ -82,11 +107,19 @@ def simulate(bars,pair=(0,2),entry=6.,target=6.66,quantity=75,near_side=-1,slip_
   if any(v is None or v[4]<=0 or not all(math.isfinite(x) and x>0 for x in v[:4]) for v in values):return None
   return [v[index] for v in values]
  def carry(px,exps):return math.log(px[1]/px[0])*365/(stamp(exps[1])-stamp(exps[0])).days*100
- def costs(day,px,opening):
+ def leg_quantities(exps):
+  if lots is not None and lots>0:
+   c_near=(contracts or {}).get(exps[0])
+   c_far=(contracts or {}).get(exps[1])
+   lot_near=broker_lot_size(c_near) or quantity
+   lot_far=broker_lot_size(c_far) or quantity
+   return int(lots)*lot_near,int(lots)*lot_far
+  return quantity,quantity
+ def costs(day,px,opening,qn,qf):
   out={}
-  for value,side in zip(px,[near_side,-near_side]):
+  for value,side,q in zip(px,[near_side,-near_side],[qn,qf]):
    action='buy' if side*(1 if opening else -1)==1 else 'sell'
-   for k,v in charge(day,'Futures',value,quantity,action,brokerage_per_order).items():out[k]=out.get(k,0)+v
+   for k,v in charge(day,'Futures',value,q,action,brokerage_per_order).items():out[k]=out.get(k,0)+v
   return out
  def mark_position(day):
   if not position:return False
@@ -95,21 +128,23 @@ def simulate(bars,pair=(0,2),entry=6.,target=6.66,quantity=75,near_side=-1,slip_
    position['last_mark_issue']='Missing exact-contract close'
    return False
   sides=[near_side,-near_side]
-  gross=sum(s*(b-a)*quantity for s,a,b in zip(sides,position['raw'],px))
-  after_entry=sum(s*(b-a)*quantity for s,a,b in zip(sides,position['fills'],px))-sum(position['costs'].values())
+  qs=[position['q_near'],position['q_far']]
+  gross=sum(s*(b-a)*q for s,a,b,q in zip(sides,position['raw'],px,qs))
+  after_entry=sum(s*(b-a)*q for s,a,b,q in zip(sides,position['fills'],px,qs))-sum(position['costs'].values())
   position['last_mark']={'date':day,'prices':px,'carry':carry(px,position['exps']),'gross':gross,'after_entry_costs':after_entry}
   position['last_mark_issue']=None
   return True
  def unfinished(reason):
   if not position:return None
   last=position.get('last_mark') or {}
-  return {
+  qn,qf=position['q_near'],position['q_far']
+  rec={
    'Status':reason,
    'Entry':position['day'],
    'Near expiry':position['exps'][0],
    'Far expiry':position['exps'][1],
    'Direction':'Buy near / sell far' if near_side==1 else 'Sell near / buy far',
-   'Quantity per leg':quantity,
+   'Quantity per leg':qn if qn==qf else f"{qn} (near) / {qf} (far)",
    'Entry carry %':position['carry'],
    'Entry fill near':position['fills'][0],
    'Entry fill far':position['fills'][1],
@@ -122,6 +157,10 @@ def simulate(bars,pair=(0,2),entry=6.,target=6.66,quantity=75,near_side=-1,slip_
    'Unrealised P&L before exit costs':last.get('after_entry_costs'),
    'Mark status':'Latest exact-contract close' if last else position.get('last_mark_issue','No exact-contract close after entry')
   }
+  if lots is not None and lots>0:
+   rec['Sizing']='broker_lot_size'
+   rec['Strategy lots']=int(lots)
+  return rec
  final_reason=None
  for day in days:
   if pending:
@@ -137,12 +176,24 @@ def simulate(bars,pair=(0,2),entry=6.,target=6.66,quantity=75,near_side=-1,slip_
     sides=[near_side,-near_side]
     fills=[v*(1+s*(1 if kind=='entry' else -1)*slip_bps/10000) for v,s in zip(px,sides)]
     if kind=='entry':
-     position={'day':day,'exps':exps,'raw':px,'fills':fills,'costs':costs(day,fills,True),'carry':signalcarry,'last_mark':None,'last_mark_issue':None}
+     qn,qf=leg_quantities(exps)
+     position={'day':day,'exps':exps,'raw':px,'fills':fills,'q_near':qn,'q_far':qf,'costs':costs(day,fills,True,qn,qf),'carry':signalcarry,'last_mark':None,'last_mark_issue':None}
     else:
-     gross=sum(s*(b-a)*quantity for s,a,b in zip(sides,position['raw'],px));net_before=sum(s*(b-a)*quantity for s,a,b in zip(sides,position['fills'],fills))
-     components=costs(day,fills,False)
+     qn,qf=position['q_near'],position['q_far']
+     gross=sum(s*(b-a)*q for s,a,b,q in zip(sides,position['raw'],px,[qn,qf]))
+     net_before=sum(s*(b-a)*q for s,a,b,q in zip(sides,position['fills'],fills,[qn,qf]))
+     components=costs(day,fills,False,qn,qf)
      for k,v in position['costs'].items():components[k]+=v
-     trades.append({'Entry':position['day'],'Exit':day,'Near expiry':exps[0],'Far expiry':exps[1],'Entry carry %':position['carry'],'Exit signal carry %':signalcarry,'Gross':gross,'Slippage':gross-net_before,'Charges':sum(components.values()),'Net':net_before-sum(components.values()),'Reason':reason,**components});position=None
+     trade={'Entry':position['day'],'Exit':day,'Near expiry':exps[0],'Far expiry':exps[1],'Entry carry %':position['carry'],'Exit signal carry %':signalcarry,'Gross':gross,'Slippage':gross-net_before,'Charges':sum(components.values()),'Net':net_before-sum(components.values()),'Reason':reason,**components}
+     if lots is not None and lots>0:
+      trade['Sizing']='broker_lot_size'
+      trade['Strategy lots']=int(lots)
+      trade['Near lot size']=qn//int(lots) if lots else None
+      trade['Far lot size']=qf//int(lots) if lots else None
+      trade['Near quantity']=qn
+      trade['Far quantity']=qf
+     trades.append(trade)
+     position=None
     pending=None
    else:
     missing='Missing exact contract open; '+kind+' not filled'
