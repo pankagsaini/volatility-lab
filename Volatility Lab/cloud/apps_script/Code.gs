@@ -126,7 +126,7 @@ function scheduledCapture(){
   try{closed=marketClosed_(now);}catch(e){
     const message='Market calendar unavailable; capture paused.';
     p.setProperty('COLLECTOR_STATUS',message+' '+day);
-    recordCollectorFailure_(message,now);
+
     throw e;
   }
   if(closed){p.setProperty('COLLECTOR_STATUS','Exchange closed '+day);return;}
@@ -142,7 +142,7 @@ function scheduledCapture(){
     if(budget.ms>=55*60000){
       const message='Daily runtime safety limit reached.';
       p.setProperty('COLLECTOR_STATUS',message+' '+day);
-      recordCollectorFailure_(message,now);
+  
       return;
     }
     attempted=true;p.setProperty('ATTEMPT_'+mode,String(now.getTime()));
@@ -154,11 +154,11 @@ function scheduledCapture(){
       failureMessage='Capture '+mode+' incomplete'+(details?': '+details:'');
       throw Error('Capture incomplete; sanitized details in execution log and Drive archive');
     }
-    resolveCollectorAlert_('Collector recovered after a complete '+mode+' capture.',new Date());
+
   }catch(e){
     const message=failureMessage||safeError_(e);
     p.setProperty('COLLECTOR_STATUS','failed '+mode+' '+new Date().toISOString()+' · '+message);
-    recordCollectorFailure_(message,new Date());
+
     throw e;
   }finally{
     if(attempted){let b=JSON.parse(p.getProperty('RUNTIME_BUDGET')||'{}');if(b.day!==day)b={day:day,ms:0};b.ms+=Date.now()-started+1000;p.setProperty('RUNTIME_BUDGET',JSON.stringify(b));}
@@ -195,12 +195,12 @@ function reconcilePriorSession(){
     if(!old.catalogue||old.mode!=='eod')throw Error('Invalid reconciliation archive');
     const result=capture_('eod',{target_day:target,catalogue:old.catalogue});
     p.setProperty('RECONCILIATION_STATUS',target+' '+result.status+' '+new Date().toISOString());
-    if(result.status==='complete')resolveCollectorAlert_('Prior-session data recovery completed.',new Date());
-    else recordCollectorFailure_('Prior-session candle recovery is still incomplete.',new Date());
+
+
   }catch(e){
     const message=safeError_(e);
     p.setProperty('RECONCILIATION_STATUS','Retry pending: '+message);
-    recordCollectorFailure_('Prior-session reconciliation failed: '+message,new Date());
+
     throw e;
   }
   finally{
@@ -212,107 +212,13 @@ function reconcilePriorSession(){
   }
 }
 
-function alertCalendar_(){
-  const id=props_().getProperty('ALERT_CALENDAR_ID');
-  const calendar=id?CalendarApp.getCalendarById(id):CalendarApp.getDefaultCalendar();
-  if(!calendar)throw Error('Alert calendar unavailable');
-  return calendar;
-}
-function alertDate_(day){
-  const parts=day.split('-').map(Number);
-  return new Date(parts[0],parts[1]-1,parts[2],12,0,0);
-}
-function alertState_(){
-  try{return JSON.parse(props_().getProperty('ACTIVE_ALERT')||'null');}catch(e){return null;}
-}
-function alertEventForDay_(calendar,day,state){
-  if(state&&state.event_id){
-    const byId=CalendarApp.getEventById(state.event_id);
-    if(byId&&day_(byId.getAllDayStartDate())===day)return byId;
-  }
-  const marker='VOLATILITY_LAB_COLLECTOR_ALERT:'+day;
-  return calendar.getEventsForDay(alertDate_(day)).find(e=>String(e.getDescription()||'').includes(marker))||null;
-}
-function recordCollectorFailure_(message,now){
-  const p=props_(),stamp=now||new Date(),day=day_(stamp),label=String(message||'Collector failure').slice(0,300);
-  const state=alertState_()||{first_seen:stamp.toISOString()};
-  const previousDay=state.day,previousMessage=state.message,previousUpdate=Date.parse(state.calendar_updated||'');
-  state.day=day;state.last_seen=stamp.toISOString();state.message=label;
-  const marker='VOLATILITY_LAB_COLLECTOR_ALERT:'+day;
-  const description=marker+'\nStatus: Needs attention\nFirst detected: '+state.first_seen+
-    '\nLast detected: '+state.last_seen+'\nDetails: '+label+
-    '\nOpen Apps Script Executions and the private Drive archive for capture details.';
-  try{
-    const calendar=alertCalendar_();
-    let event=alertEventForDay_(calendar,day,state);
-    if(!event){
-      event=calendar.createAllDayEvent('Volatility Lab collector needs attention',alertDate_(day),{description:description});
-      state.calendar_updated=stamp.toISOString();
-    }else if(previousDay!==day||previousMessage!==label||!Number.isFinite(previousUpdate)||stamp.getTime()-previousUpdate>=60*60000){
-      event.setTitle('Volatility Lab collector needs attention');event.setDescription(description);
-      state.calendar_updated=stamp.toISOString();
-    }
-    state.event_id=event.getId();
-    p.setProperty('ALERT_CALENDAR_ERROR','');
-  }catch(e){
-    p.setProperty('ALERT_CALENDAR_ERROR',safeError_(e));
-    console.log(JSON.stringify({alert:'calendar_write_failed',reason:safeError_(e)}));
-  }
-  p.setProperty('ACTIVE_ALERT',JSON.stringify(state));
-}
-function resolveCollectorAlert_(message,now){
-  const p=props_(),state=alertState_();if(!state)return;
-  const stamp=now||new Date(),start=alertDate_(String(state.first_seen||state.day).slice(0,10));
-  const end=alertDate_(day_(stamp));end.setDate(end.getDate()+1);
-  try{
-    const calendar=alertCalendar_(),events=calendar.getEvents(start,end);
-    const marker='VOLATILITY_LAB_COLLECTOR_ALERT:';
-    events.filter(e=>String(e.getDescription()||'').includes(marker)).forEach(e=>{
-      const description=String(e.getDescription()||'').replace(/\nStatus: Needs attention/g,'\nStatus: Resolved')+
-        '\nResolved at: '+stamp.toISOString()+'\nResolution: '+String(message||'Collection recovered.');
-      e.setTitle('Resolved · Volatility Lab collector');e.setDescription(description);
-    });
-    p.deleteProperty('ACTIVE_ALERT');p.setProperty('ALERT_CALENDAR_ERROR','');
-  }catch(e){
-    p.setProperty('ALERT_CALENDAR_ERROR',safeError_(e));
-    console.log(JSON.stringify({alert:'calendar_resolution_failed',reason:safeError_(e)}));
-  }
-}
-function installFailureWatchdog(){
-  const calendar=CalendarApp.getDefaultCalendar();
-  if(!calendar)throw Error('Open Google Calendar and retry authorization.');
-  const p=props_();p.setProperty('ALERT_CALENDAR_ID',calendar.getId());
-  const installed=ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==='failureWatchdog');
-  if(!installed)ScriptApp.newTrigger('failureWatchdog').timeBased().everyMinutes(15).create();
-  console.log('Failure watchdog enabled: checks capture health every 15 minutes and keeps one all-day Calendar alert per failure day.');
-}
-function failureWatchdog(){
-  const p=props_(),now=new Date(),day=day_(now),weekday=Number(Utilities.formatDate(now,VL.zone,'u')),mins=minute_(now);
-  if(p.getProperty('SCHEDULE_MODE')!=='intraday'||weekday>5)return;
-  let issue=null,closed;
-  const lock=LockService.getScriptLock();if(!lock.tryLock(100))return;
-  try{
-    try{closed=marketClosed_(now);}catch(e){
-      recordCollectorFailure_('Market calendar unavailable; trading-session health could not be checked.',now);return;
-    }
-    if(closed)return;
-    if(mins>=560&&mins<960){
-      const last=Date.parse(p.getProperty('SUCCESS_SNAPSHOT_AT')||'');
-      if(!Number.isFinite(last)||day_(new Date(last))!==day)issue='No complete market snapshot has been recorded today.';
-      else if(now.getTime()-last>20*60000)issue='No complete market snapshot has succeeded in the last 20 minutes.';
-    }else if(mins>=960&&mins<=990){
-      const last=Date.parse(p.getProperty('SUCCESS_SNAPSHOT_AT')||'');
-      if(!Number.isFinite(last)||day_(new Date(last))!==day||now.getTime()-last>35*60000)
-        issue='The final market snapshot appears to be missing.';
-    }else if(mins>=1350&&p.getProperty('SUCCESS_EOD')!==day){
-      issue='End-of-day candle capture has not completed by 22:30 IST.';
-    }
-    if(issue)recordCollectorFailure_(issue,now);
-    else if(alertState_())resolveCollectorAlert_('Scheduled collection is healthy again.',now);
-  }finally{lock.releaseLock();}
+// Utility to remove failure watchdog trigger if previously installed.
+function removeFailureWatchdogTrigger(){
+  ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='failureWatchdog').forEach(t=>ScriptApp.deleteTrigger(t));
+  console.log('Failure watchdog trigger removed.');
 }
 
-// Weekly cleanup requires a recent, independently verified laptop receipt.
+// Weekly cleanup// Weekly cleanup requires a recent, independently verified laptop receipt.
 function installWeeklyCleanup(){
   if(!ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==='weeklyCleanup'))
     ScriptApp.newTrigger('weeklyCleanup').timeBased().everyDays(1).atHour(20).inTimezone(VL.zone).create();
