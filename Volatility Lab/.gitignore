@@ -1,0 +1,11 @@
+__pycache__/
+.venv/
+.env
+*credentials*
+*Credentials*
+*token*
+data/
+.packages/
+.runtime/
+logs/
+.auth/

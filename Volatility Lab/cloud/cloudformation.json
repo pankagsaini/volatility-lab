@@ -1,0 +1,370 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Volatility Lab private read-only Upstox collector. Keep account on Free Plan; no automatic upgrades.",
+  "Parameters": {
+    "TokenParameter": {
+      "Type": "String",
+      "Default": "/volatility-lab/upstox-analytics",
+      "AllowedPattern": "/[a-zA-Z0-9_./-]+",
+      "Description": "Existing SSM Standard SecureString; NEVER paste the token in this field."
+    },
+    "StopDate": {
+      "Type": "String",
+      "Default": "2027-04-09",
+      "AllowedPattern": "[0-9]{4}-[0-9]{2}-[0-9]{2}",
+      "Description": "Stop before this account Free Plan ends on 2027-04-16; export data earlier."
+    },
+    "ScheduleState": {
+      "Type": "String",
+      "Default": "DISABLED",
+      "AllowedValues": [
+        "DISABLED",
+        "ENABLED"
+      ],
+      "Description": "Enable only after successful live capture and download verification."
+    }
+  },
+  "Resources": {
+    "Archive": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BillingMode": "PROVISIONED",
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 10
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "sk",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "sk",
+            "KeyType": "RANGE"
+          }
+        ],
+        "SSESpecification": {
+          "SSEEnabled": true
+        }
+      }
+    },
+    "Logs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/${AWS::StackName}-collector"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "CollectorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CollectorOnly",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "Archive",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "ssm:GetParameter",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${TokenParameter}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "Logs",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Collector": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-collector"
+        },
+        "Runtime": "python3.12",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "CollectorRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 512,
+        "Timeout": 240,
+        "ReservedConcurrentExecutions": 1,
+        "Code": {
+          "ZipFile": "\"\"\"AWS Lambda: read-only raw Upstox archive. No trading or model calculations.\"\"\"\nimport gzip\nimport hashlib\nimport json\nimport os\nimport time\nfrom datetime import datetime, timedelta, timezone\nfrom urllib.error import HTTPError, URLError\nfrom urllib.parse import urlencode, quote\nfrom urllib.request import Request, build_opener, HTTPRedirectHandler\n\nIST = timezone(timedelta(hours=5, minutes=30))\nINDICES = {'NIFTY': 'NSE_INDEX|Nifty 50', 'BANKNIFTY': 'NSE_INDEX|Nifty Bank'}\nCHUNK = 180_000\n\n\nclass NoRedirect(HTTPRedirectHandler):\n    def redirect_request(self, *args, **kwargs):\n        return None\n\n\ndef packed(value):\n    return gzip.compress(json.dumps(value, separators=(',', ':'), allow_nan=False).encode(), mtime=0)\n\n\ndef unpacked(blob):\n    return json.loads(gzip.decompress(blob))\n\n\nclass Archive:\n    def __init__(self, table):\n        self.table = table\n\n    def read(self, day, key):\n        item = self.table.get_item(Key={'pk': day, 'sk': key}, ConsistentRead=True).get('Item')\n        if not item:\n            return None\n        parts = []\n        for i in range(int(item['parts'])):\n            part = self.table.get_item(Key={'pk': day, 'sk': f\"blob|{item['sha256']}|{i:04d}\"}, ConsistentRead=True)['Item']\n            parts.append(bytes(part['payload']))\n        blob = b''.join(parts)\n        if hashlib.sha256(blob).hexdigest() != item['sha256']:\n            raise ValueError('Archive integrity failure')\n        return unpacked(blob)\n\n    def save(self, day, key, value):\n        blob = packed(value)\n        digest = hashlib.sha256(blob).hexdigest()\n        count = (len(blob) + CHUNK - 1) // CHUNK\n        for i in range(count):\n            self.table.put_item(Item={'pk': day, 'sk': f'blob|{digest}|{i:04d}', 'payload': blob[i * CHUNK:(i + 1) * CHUNK]})\n        # Publish only after every chunk is durable. Readers never see half a capture.\n        self.table.put_item(Item={'pk': day, 'sk': key, 'sha256': digest, 'parts': count, 'bytes': len(blob)})\n\n\nclass Broker:\n    def __init__(self, token):\n        self.token = token\n        self.opener = build_opener(NoRedirect())\n        self.last = 0\n\n    def get(self, path, params=None):\n        allowed = path in ('/v2/option/chain', '/v2/option/contract', '/v2/market-quote/quotes') or path.startswith('/v3/historical-candle/')\n        if not allowed or any(c in path for c in ('..', '?', '#')):\n            raise ValueError('Unapproved endpoint')\n        url = 'https://api.upstox.com' + path + ('?' + urlencode(params) if params else '')\n        for attempt in range(3):\n            time.sleep(max(0, 0.3 - (time.monotonic() - self.last)))\n            self.last = time.monotonic()\n            req = Request(url, headers={'Authorization': 'Bearer ' + self.token, 'Accept': 'application/json', 'User-Agent': 'VolatilityLab/1.0 (read-only market-data client)'})\n            try:\n                with self.opener.open(req, timeout=12) as response:\n                    result = json.loads(response.read(20_000_000))\n                if result.get('status') != 'success' or not result.get('data'):\n                    raise ValueError('Empty or unsuccessful broker response')\n                return result['data']\n            except HTTPError as exc:\n                if exc.code not in (429, 500, 502, 503, 504) or attempt == 2:\n                    raise RuntimeError(f'Broker HTTP {exc.code}') from None\n            except (URLError, TimeoutError, OSError):\n                if attempt == 2:\n                    raise RuntimeError('Broker network failure') from None\n            time.sleep(2 ** attempt)\n\n    def master(self):\n        req = Request('https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz', headers={'User-Agent': 'VolatilityLab/1.0'})\n        with self.opener.open(req, timeout=30) as response:\n            rows = json.loads(gzip.decompress(response.read(40_000_000)))\n        return [r for r in rows if r.get('underlying_key') in INDICES.values() and r.get('instrument_type') == 'FUT']\n\n\ndef expiry_date(value):\n    if isinstance(value, (int, float)):\n        return datetime.fromtimestamp(value / 1000, IST).date().isoformat()\n    return str(value)[:10]\n\n\ndef catalogue(broker, day):\n    master = broker.master()\n    result = {}\n    for symbol, key in INDICES.items():\n        futures = sorted((dict(r, expiry=expiry_date(r['expiry'])) for r in master if r['underlying_key'] == key and expiry_date(r['expiry']) >= day), key=lambda r: r['expiry'])[:3]\n        if len(futures) < 3:\n            raise ValueError('Three listed futures not available: ' + symbol)\n        contracts = broker.get('/v2/option/contract', {'instrument_key': key})\n        dates = sorted({r['expiry'] for r in contracts if day <= r['expiry'] <= futures[-1]['expiry']})\n        if symbol == 'BANKNIFTY':\n            dates = [d for d in dates if d in {r['expiry'] for r in futures}]\n        if not dates:\n            raise ValueError('No listed options: ' + symbol)\n        result[symbol] = {'futures': futures, 'option_expiries': dates}\n    return result\n\n\ndef collect(broker, archive, now, context, mode='snapshot'):\n    day = now.date().isoformat()\n    slot = now.replace(minute=(now.minute // 5) * 5, second=0, microsecond=0).isoformat()\n    key = f'capture|{slot}|{mode}'\n    previous = archive.read(day, key)\n    if previous and previous.get('status') == 'complete':\n        return {'status': 'already_saved', 'slot': slot}\n    cat = archive.read(day, 'catalogue')\n    if not cat:\n        cat = catalogue(broker, day)\n        archive.save(day, 'catalogue', cat)\n    report = {'schema': 1, 'provider': 'Upstox', 'retrieved_at': now.isoformat(), 'slot': slot, 'mode': mode, 'status': 'complete', 'records': [], 'errors': [], 'pending': []}\n\n    def fetch(label, path, params=None):\n        if context and context.get_remaining_time_in_millis() < 45000:\n            report['errors'].append({'item': label, 'reason': 'Runtime budget exhausted'})\n            return None\n        try:\n            raw = broker.get(path, params)\n            objkey = f'data|{slot}|{mode}|{label}'\n            archive.save(day, objkey, {'provider': 'Upstox', 'retrieved_at': datetime.now(IST).isoformat(), 'data': raw})\n            report['records'].append(objkey)\n            return raw\n        except Exception as exc:\n            # Never log broker response bodies, headers, or credential strings.\n            reason = str(exc) if isinstance(exc, RuntimeError) and str(exc).startswith('Broker ') else type(exc).__name__\n            report['errors'].append({'item': label, 'reason': reason})\n            return None\n\n    allkeys = list(INDICES.values()) + ['NSE_INDEX|India VIX']\n    for row in cat.values():\n        allkeys.extend(r['instrument_key'] for r in row['futures'])\n    fetch('quotes', '/v2/market-quote/quotes', {'instrument_key': ','.join(allkeys)})\n    if mode == 'snapshot':\n        for symbol, row in cat.items():\n            for expiry in row['option_expiries']:\n                fetch(symbol + '|' + expiry, '/v2/option/chain', {'instrument_key': INDICES[symbol], 'expiry_date': expiry})\n    else:\n        for instrument in allkeys:\n            # Overlap revisits pending EOD candles; no fabricated IV history.\n            start = (now.date() - timedelta(days=10)).isoformat()\n            data = fetch(instrument, '/v3/historical-candle/' + quote(instrument, safe='') + '/days/1/' + day + '/' + start)\n            if data and not any(str(r[0])[:10] == day for r in data.get('candles', [])):\n                report['pending'].append(instrument)\n    report['status'] = 'partial' if report['errors'] or report['pending'] else 'complete'\n    archive.save(day, key, report)\n    archive.save('status', 'latest|' + mode, report)\n    return report\n\n\ndef handler(event, context):\n    import boto3\n    from botocore.config import Config\n    now = datetime.now(IST)\n    if now.date().isoformat() >= os.environ['STOP_DATE']:\n        return {'status': 'stopped_before_free_plan_expiry'}\n    if now.weekday() >= 5:\n        return {'status': 'weekend'}\n    mode = event.get('mode', 'snapshot')\n    if mode not in ('snapshot', 'eod'):\n        raise ValueError('Invalid capture mode')\n    if mode == 'snapshot' and not (9 * 60 <= now.hour * 60 + now.minute <= 16 * 60):\n        return {'status': 'outside_capture_window'}\n    config = Config(retries={'mode': 'adaptive', 'max_attempts': 8})\n    token = boto3.client('ssm', config=config).get_parameter(Name=os.environ['TOKEN_PARAMETER'], WithDecryption=True)['Parameter']['Value']\n    table = boto3.resource('dynamodb', config=config).Table(os.environ['TABLE_NAME'])\n    result = collect(Broker(token), Archive(table), now, context, mode)\n    print(json.dumps({'status': result['status'], 'mode': mode, 'errors': len(result.get('errors', [])), 'pending': len(result.get('pending', []))}))\n    return {'status': result['status'], 'mode': mode}\n"
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "Archive"
+            },
+            "TOKEN_PARAMETER": {
+              "Ref": "TokenParameter"
+            },
+            "STOP_DATE": {
+              "Ref": "StopDate"
+            }
+          }
+        }
+      }
+    },
+    "ScheduleGroup": {
+      "Type": "AWS::Scheduler::ScheduleGroup"
+    },
+    "SchedulerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "scheduler.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "ScheduleGroup",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CollectorOnly",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "lambda:InvokeFunction",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "Collector",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "InvokeConfig": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "Collector"
+        },
+        "Qualifier": "$LATEST",
+        "MaximumEventAgeInSeconds": 120,
+        "MaximumRetryAttempts": 0
+      }
+    },
+    "MarketSchedule": {
+      "Type": "AWS::Scheduler::Schedule",
+      "Properties": {
+        "GroupName": {
+          "Ref": "ScheduleGroup"
+        },
+        "ScheduleExpression": "cron(0/5 9-15 ? * MON-FRI *)",
+        "ScheduleExpressionTimezone": "Asia/Kolkata",
+        "FlexibleTimeWindow": {
+          "Mode": "OFF"
+        },
+        "State": {
+          "Ref": "ScheduleState"
+        },
+        "EndDate": {
+          "Fn::Sub": "${StopDate}T00:00:00Z"
+        },
+        "Target": {
+          "Arn": {
+            "Fn::GetAtt": [
+              "Collector",
+              "Arn"
+            ]
+          },
+          "RoleArn": {
+            "Fn::GetAtt": [
+              "SchedulerRole",
+              "Arn"
+            ]
+          },
+          "Input": "{\"mode\": \"snapshot\"}",
+          "RetryPolicy": {
+            "MaximumEventAgeInSeconds": 60,
+            "MaximumRetryAttempts": 0
+          }
+        }
+      }
+    },
+    "ClosingSchedule": {
+      "Type": "AWS::Scheduler::Schedule",
+      "Properties": {
+        "GroupName": {
+          "Ref": "ScheduleGroup"
+        },
+        "ScheduleExpression": "cron(0 16 ? * MON-FRI *)",
+        "ScheduleExpressionTimezone": "Asia/Kolkata",
+        "FlexibleTimeWindow": {
+          "Mode": "OFF"
+        },
+        "State": {
+          "Ref": "ScheduleState"
+        },
+        "EndDate": {
+          "Fn::Sub": "${StopDate}T00:00:00Z"
+        },
+        "Target": {
+          "Arn": {
+            "Fn::GetAtt": [
+              "Collector",
+              "Arn"
+            ]
+          },
+          "RoleArn": {
+            "Fn::GetAtt": [
+              "SchedulerRole",
+              "Arn"
+            ]
+          },
+          "Input": "{\"mode\": \"snapshot\"}",
+          "RetryPolicy": {
+            "MaximumEventAgeInSeconds": 60,
+            "MaximumRetryAttempts": 0
+          }
+        }
+      }
+    },
+    "EodSchedule": {
+      "Type": "AWS::Scheduler::Schedule",
+      "Properties": {
+        "GroupName": {
+          "Ref": "ScheduleGroup"
+        },
+        "ScheduleExpression": "cron(0,30 17,19 ? * MON-FRI *)",
+        "ScheduleExpressionTimezone": "Asia/Kolkata",
+        "FlexibleTimeWindow": {
+          "Mode": "OFF"
+        },
+        "State": {
+          "Ref": "ScheduleState"
+        },
+        "EndDate": {
+          "Fn::Sub": "${StopDate}T00:00:00Z"
+        },
+        "Target": {
+          "Arn": {
+            "Fn::GetAtt": [
+              "Collector",
+              "Arn"
+            ]
+          },
+          "RoleArn": {
+            "Fn::GetAtt": [
+              "SchedulerRole",
+              "Arn"
+            ]
+          },
+          "Input": "{\"mode\": \"eod\"}",
+          "RetryPolicy": {
+            "MaximumEventAgeInSeconds": 60,
+            "MaximumRetryAttempts": 0
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "TableName": {
+      "Value": {
+        "Ref": "Archive"
+      }
+    },
+    "CollectorFunction": {
+      "Value": {
+        "Ref": "Collector"
+      }
+    },
+    "TokenParameter": {
+      "Value": {
+        "Ref": "TokenParameter"
+      }
+    },
+    "ScheduledStop": {
+      "Value": {
+        "Ref": "StopDate"
+      }
+    }
+  }
+}

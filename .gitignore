@@ -1,0 +1,48 @@
+# Byte-compiled / optimized / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Embedded Python Runtime & MinGit Binary Tools
+Volatility Lab/.runtime/
+Volatility Lab/.dependencies/
+
+# Encrypted Auth Credentials & Token Storage
+Volatility Lab/.auth/
+*.bin
+*.lock
+*.tmp
+
+# System Diagnostic Logs
+Volatility Lab/logs/
+*.log
+
+# Large Market Data Files & Binary Databases
+Volatility Lab/data/backtest_1minute/*.json.gz
+Volatility Lab/data/backtest_1minute/*.sqlite*
+Volatility Lab/data/backtest_futures/*.json.gz
+Volatility Lab/data/google_archive/*.json.gz
+Volatility Lab/data/quote_archive/
+Volatility Lab/data/quote_quality/
+Volatility Lab/data/underlying_history/
+Volatility Lab/data/dividend_sources/*.pdf
+Volatility Lab/data/*.sqlite*
+Volatility Lab/data/**/*.sqlite*
+
+# Explicitly Keep Tracking Metadatas, Audits, Charges & JSON Configs in data/
+!Volatility Lab/data/audit/
+!Volatility Lab/data/audit/**
+!Volatility Lab/data/charges/
+!Volatility Lab/data/charges/**
+!Volatility Lab/data/daily_collector/
+!Volatility Lab/data/daily_collector/*.json
+!Volatility Lab/data/daily_collector/*.jsonl
+!Volatility Lab/data/upstox/*.json
+!Volatility Lab/data/upstox/*.jsonl
+!Volatility Lab/data/backtest_runs/
+!Volatility Lab/data/backtest_runs/*.json
+!Volatility Lab/data/backtest_1minute/status.json
+!Volatility Lab/data/backtest_futures/*status.json
+!Volatility Lab/data/google_archive/*.json
+!Volatility Lab/data/*.json

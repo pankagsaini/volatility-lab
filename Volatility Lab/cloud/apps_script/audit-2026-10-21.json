@@ -1,0 +1,25 @@
+{
+  "audited_at": "2026-10-21T15:07:25.536692",
+  "cloud_today_sample": {
+    "files": 119,
+    "complete": 119,
+    "first_ist": "09:00:43",
+    "last_ist": "14:54:42",
+    "errors": []
+  },
+  "local_sync": {
+    "status": "ready",
+    "updated": "2026-10-21T09:36:15.879479+00:00",
+    "imported": 0,
+    "total_files": 201,
+    "errors": [],
+    "source": "G:\\My Drive\\Volatility Lab - private Upstox archive"
+  },
+  "receipt": {
+    "verified_at": "2026-10-21T09:36:15.805211+00:00"
+  },
+  "cleanup_live_test": "PASS: missing receipt retained, incorrect checksum retained, verified old disposable file trashed, recent disposable file retained; market files touched=0",
+  "production_cleanup": "Executed successfully; weekly cleanup not due yet",
+  "local_regression_tests": "8 scenarios passed",
+  "limits": "Today EOD is not due yet. Google time triggers are approximate. Laptop must reconnect periodically for local backup receipts; cloud data is retained if receipt is absent or stale."
+}

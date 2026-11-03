@@ -1,0 +1,33 @@
+{
+  "tested_at": "2026-10-20T08:09:00.329995+05:30",
+  "scope": "Local-network preliminary benchmark; excludes Google Drive writes and Apps Script latency",
+  "catalogue_seconds": 3.5,
+  "expiries": {
+    "NIFTY": [
+      "2026-10-27",
+      "2026-11-03",
+      "2026-11-09",
+      "2026-11-17",
+      "2026-11-23",
+      "2026-12-01",
+      "2026-12-29"
+    ],
+    "BANKNIFTY": [
+      "2026-10-27",
+      "2026-11-23",
+      "2026-12-29"
+    ]
+  },
+  "runs": [
+    {
+      "seconds": 4.59,
+      "requests": 11,
+      "gzip_bytes": 105714
+    },
+    {
+      "seconds": 4.66,
+      "requests": 11,
+      "gzip_bytes": 105714
+    }
+  ]
+}
