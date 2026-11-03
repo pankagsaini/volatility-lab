@@ -45,9 +45,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <span className="font-bold text-base tracking-tight text-white flex items-center gap-1.5 whitespace-nowrap">
                 VOLATILITY LAB
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold">
-                  PRO SAAS
-                </span>
               </span>
             </div>
           </div>

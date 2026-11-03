@@ -36,7 +36,7 @@ if LOCAL_PLOTLY.exists() and not WEB_PLOTLY.exists():
 
 app = FastAPI(
     title="Volatility Lab Workstation API",
-    description="Institutional Quantitative Analytics & Volatility Engine for NSE NIFTY & BANKNIFTY",
+    description="Quantitative Volatility Engine for NSE NIFTY & BANKNIFTY",
     version="2.0.0"
 )
 

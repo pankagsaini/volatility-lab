@@ -227,12 +227,12 @@ export const App: React.FC = () => {
         {/* Tab Navigation Segmented Bar */}
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900/80 border border-slate-800/80 backdrop-blur-md overflow-x-auto">
           {[
-            { id: 'surface', label: '3D Vol Surface & Smile', icon: Box },
-            { id: 'chain', label: 'Option Chain & Greeks', icon: Zap },
-            { id: 'radar', label: 'Trade Decision Radar', icon: Target },
-            { id: 'candles', label: 'TradingView Candlesticks', icon: BarChart2 },
-            { id: 'backtest', label: 'Backtest Runner', icon: FlaskConical },
-            { id: 'carry', label: 'Futures Carry & Term', icon: ArrowLeftRight },
+            { id: 'surface', label: 'Vol Surface', icon: Box },
+            { id: 'chain', label: 'Option Chain', icon: Zap },
+            { id: 'radar', label: 'Trade Radar', icon: Target },
+            { id: 'candles', label: 'Candlesticks', icon: BarChart2 },
+            { id: 'backtest', label: 'Backtest', icon: FlaskConical },
+            { id: 'carry', label: 'Futures Carry', icon: ArrowLeftRight },
           ].map((tab) => {
             const active = activeTab === tab.id;
             const Icon = tab.icon;

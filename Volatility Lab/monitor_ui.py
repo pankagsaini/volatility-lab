@@ -35,7 +35,7 @@ from expiry_forecast import expiry_forecast, VERSION as EXPIRY_VERSION,term_stru
 def render_trade_decision_radar(selected_rows):
     """Executive trade decision panel with regime, spread bias, expected move, and basis."""
     if not selected_rows:return
-    st.markdown('<div style="margin-top:2px; margin-bottom:10px;"><span style="font-size:0.76rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#06b6d4;">Tactical Volatility & Trade Decision Radar</span></div>', unsafe_allow_html=True)
+    st.markdown('<div style="margin-top:2px; margin-bottom:10px;"><span style="font-size:0.76rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#06b6d4;">Volatility Radar</span></div>', unsafe_allow_html=True)
     cols=st.columns(len(selected_rows))
     for col,row in zip(cols,selected_rows):
         symbol=row.get('Instrument','—')
@@ -69,19 +69,19 @@ def render_trade_decision_radar(selected_rows):
                     bias_color='#10b981'
                     bias_bg='rgba(16, 185, 129, 0.12)'
                     bias_border='#10b981'
-                    bias_text='⚡ Premium Selling Favorable (Credit Spreads, Iron Condors, Straddles). IV commands an attractive premium over trailing realized movement.'
+                    bias_text='Premium Selling Favorable — IV trades at a premium over trailing realized volatility.'
                 elif spread<-1.5:
                     bias_badge='COMPRESSED VOLATILITY'
                     bias_color='#06b6d4'
                     bias_bg='rgba(6, 182, 212, 0.12)'
                     bias_border='#06b6d4'
-                    bias_text='🎯 Long Gamma / Debit Spreads Favorable (Long Calendars, Straddles). Market pricing is discounted relative to historical movement.'
+                    bias_text='Long Volatility Favorable — IV is discounted relative to realized movement.'
                 else:
                     bias_badge='FAIR VALUE SPREAD'
                     bias_color='#94a3b8'
                     bias_bg='rgba(148, 163, 184, 0.12)'
                     bias_border='#475569'
-                    bias_text='⚖️ Directional / Skew Neutral. IV tracks realized volatility closely within statistical bounds.'
+                    bias_text='Spread Neutral — IV aligns with historical movement within normal bounds.'
                 spread_display=f'{spread:+.2f} pp'
             else:
                 bias_badge='SPREAD PENDING'

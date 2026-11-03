@@ -85,7 +85,7 @@ export const TradeRadarView: React.FC<TradeRadarViewProps> = ({
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
-                <Compass className="w-4 h-4" /> Tactical Volatility Regime
+                <Compass className="w-4 h-4" /> Volatility Regime
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 font-bold border border-cyan-500/20">
                 {data?.expiry ? `${data.expiry} (${data.dte.toFixed(1)}d)` : 'Loading...'}
@@ -115,7 +115,7 @@ export const TradeRadarView: React.FC<TradeRadarViewProps> = ({
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                <Target className="w-4 h-4" /> 1-Sigma Expected Move ({data?.expiry || ''})
+                <Target className="w-4 h-4" /> Expected Move ({data?.expiry || ''})
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
                 68.2% Probability
@@ -162,7 +162,7 @@ export const TradeRadarView: React.FC<TradeRadarViewProps> = ({
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4" /> Put-Call Parity & Basis
+                <AlertTriangle className="w-4 h-4" /> Put-Call Parity
               </span>
             </div>
 

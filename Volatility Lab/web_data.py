@@ -1,4 +1,4 @@
-"""High-performance data engine for the Opstra-inspired Web Application."""
+"""High-performance data engine for the Volatility Lab Web Application."""
 
 from datetime import datetime, date
 import json
@@ -115,7 +115,7 @@ def get_available_expiries(symbol: str) -> List[Dict[str, Any]]:
 
 
 def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[str, Any]:
-    """Opstra-style option chain table with Call Greeks, Strike, Put Greeks, PCR, and Max Pain."""
+    """Option chain table with Call Greeks, Strike, Put Greeks, PCR, and Max Pain."""
     available = get_available_expiries(symbol)
     if not available:
         return {'symbol': symbol, 'error': f'No active option chains found for {symbol}'}
@@ -249,7 +249,7 @@ def get_vol_surface_payload(
     include_zero_dte: bool = True,
     selected_expiry: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Opstra-grade 3D Volatility Surface, 2D Multi-Expiry Smile Overlay, and Term Structure."""
+    """3D Volatility Surface, 2D Multi-Expiry Smile Overlay, and Term Structure."""
     from vol_surface_3d import load_expiry_chains, extract_surface_mesh
 
     chains = load_expiry_chains(symbol, DATA)
@@ -291,7 +291,7 @@ def get_vol_surface_payload(
         'expiries': atm_ridge_expiries
     }
 
-    # 2. Opstra-Style 2D Smile Curves for every listed expiry
+    # 2. 2D Smile Curves for every listed expiry
     smile_curves = []
     colors = ['#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6', '#14b8a6']
     

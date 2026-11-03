@@ -155,34 +155,26 @@ def render_terminal_header():
     is_open=(now.weekday()<5) and (555<=t_min<=930)
     
     if is_open:
-        status_pill='<span style="background:rgba(16,185,129,0.12); color:#10b981; border:1px solid #10b981; padding:4px 10px; border-radius:9999px; font-size:0.75rem; font-weight:700; letter-spacing:0.04em;">● NSE LIVE · REGULAR SESSION</span>'
+        status_pill='<span style="background:rgba(16,185,129,0.12); color:#10b981; border:1px solid #10b981; padding:3px 8px; border-radius:9999px; font-size:0.72rem; font-weight:600; letter-spacing:0.02em;">● LIVE</span>'
     elif now.weekday()<5 and 540<=t_min<555:
-        status_pill='<span style="background:rgba(245,158,11,0.12); color:#f59e0b; border:1px solid #f59e0b; padding:4px 10px; border-radius:9999px; font-size:0.75rem; font-weight:700;">◑ NSE PRE-OPEN</span>'
+        status_pill='<span style="background:rgba(245,158,11,0.12); color:#f59e0b; border:1px solid #f59e0b; padding:3px 8px; border-radius:9999px; font-size:0.72rem; font-weight:600;">◑ PRE-OPEN</span>'
     else:
-        status_pill='<span style="background:rgba(148,163,184,0.12); color:#94a3b8; border:1px solid #334155; padding:4px 10px; border-radius:9999px; font-size:0.75rem; font-weight:600;">○ NSE CLOSED · POST-MARKET</span>'
+        status_pill='<span style="background:rgba(148,163,184,0.12); color:#94a3b8; border:1px solid #334155; padding:3px 8px; border-radius:9999px; font-size:0.72rem; font-weight:500;">○ CLOSED</span>'
         
     ist_time=now.strftime('%d %b %H:%M IST')
     
     st.markdown(f'''
-    <div style="display:flex; justify-content:space-between; align-items:flex-end; padding-bottom:10px; border-bottom:1px solid #162236; margin-bottom:12px;">
-        <div>
-            <div style="display:flex; align-items:center; gap:10px;">
-                <span style="font-size:1.85rem; font-weight:800; letter-spacing:-0.03em; color:#f8fafc; font-family:-apple-system,sans-serif;">
-                    <span style="color:#00d2ff;">◈</span> VOLATILITY LAB
-                </span>
-                <span style="background:#0f2038; color:#38bdf8; border:1px solid #0284c7; padding:2px 8px; border-radius:6px; font-size:0.68rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">
-                    PRO TERMINAL
-                </span>
-            </div>
-            <div style="color:#64748b; font-size:0.78rem; margin-top:2px; font-weight:500;">
-                Institutional Volatility Surface, Forecasting & Derivatives Intelligence
-            </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:8px; border-bottom:1px solid #162236; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:1.35rem; font-weight:700; letter-spacing:-0.02em; color:#f8fafc; font-family:-apple-system,BlinkMacSystemFont,sans-serif;">
+                <span style="color:#00d2ff;">◈</span> Volatility Lab
+            </span>
         </div>
-        <div style="text-align:right;">
+        <div style="display:flex; align-items:center; gap:10px;">
             {status_pill}
-            <div style="color:#64748b; font-size:0.72rem; margin-top:4px; font-variant-numeric:tabular-nums;">
+            <span style="color:#64748b; font-size:0.75rem; font-variant-numeric:tabular-nums;">
                 {ist_time}
-            </div>
+            </span>
         </div>
     </div>
     ''', unsafe_allow_html=True)
@@ -259,7 +251,7 @@ def render_terminal_header():
                 {f"{vix_val:.2f}" if vix_val else "—"}
             </div>
             <div style="font-size:0.72rem; color:#64748b; margin-top:4px;">
-                Benchmark Volatility Index
+                NSE Volatility Index
             </div>
         </div>
         ''', unsafe_allow_html=True)
@@ -276,7 +268,7 @@ def render_terminal_header():
                 {sync_count:,} <span style="font-size:0.76rem; font-weight:500; color:#64748b;">archives</span>
             </div>
             <div style="font-size:0.72rem; color:#64748b; margin-top:4px;">
-                3-min snapshot pipeline
+                Google Drive snapshots
             </div>
         </div>
         ''', unsafe_allow_html=True)
@@ -311,17 +303,11 @@ except Exception:
 
 if capture.get('status') in ('failed','partial'):
     errors = capture.get('errors', [])
-    now_ist = datetime.now(IST)
-    is_evening_pending = (
-        all('pending' in e.lower() or 'missing' in e.lower() for e in errors)
-        and (16 <= now_ist.hour < 21)
-    )
-    if is_evening_pending:
-        st.info('Laptop history backup: waiting for Upstox evening candle publication (scheduled retries active).')
-    else:
-        st.warning('Laptop history backup needs attention: ' + '; '.join(errors[:2]))
+    is_normal_catchup = all('pending' in e.lower() or 'missing' in e.lower() for e in errors)
+    if not is_normal_catchup and errors:
+        st.warning('Laptop history backup: ' + '; '.join(errors[:2]))
 
-workspace_labels={'Options':'⚡ Options Terminal','Futures':'📈 Futures Carry','Backtest':'🧪 Backtest Studio'}
+workspace_labels={'Options':'Options','Futures':'Futures','Backtest':'Backtest'}
 label_to_mode={v:k for k,v in workspace_labels.items()}
 raw_markets=['Options','Futures','Backtest']
 markets=[workspace_labels[m] for m in raw_markets]
@@ -329,6 +315,8 @@ markets=[workspace_labels[m] for m in raw_markets]
 saved_ws=st.session_state.get('market_workspace')
 if saved_ws in label_to_mode:current_label=saved_ws
 elif saved_ws in workspace_labels:current_label=workspace_labels[saved_ws]
+elif saved_ws in ('⚡ Options Terminal','📈 Futures Carry','🧪 Backtest Studio'):
+    current_label={'⚡ Options Terminal':'Options','📈 Futures Carry':'Futures','🧪 Backtest Studio':'Backtest'}.get(saved_ws,'Options')
 else:current_label=workspace_labels['Options']
 
 if current_label not in markets:current_label=markets[0]

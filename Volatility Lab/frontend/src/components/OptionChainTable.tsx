@@ -63,7 +63,7 @@ export const OptionChainTable: React.FC<OptionChainTableProps> = ({
         <div className="flex items-center gap-3">
           <Zap className="w-4 h-4 text-cyan-400" />
           <h2 className="text-sm font-semibold tracking-wide text-white uppercase">
-            Opstra / Definedge Paired Option Chain — {symbol}
+            Option Chain — {symbol}
           </h2>
 
           {/* Expiry Dropdown */}

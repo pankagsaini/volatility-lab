@@ -194,10 +194,10 @@ export const VolSurface3D: React.FC<VolSurface3DProps> = ({
         <div className="flex items-center gap-2">
           <Box className="w-4 h-4 text-cyan-400" />
           <h2 className="text-sm font-semibold tracking-wide text-white uppercase">
-            Opstra / Definedge 3D Volatility Surface — Strike × DTE × IV
+            3D Volatility Surface — Strike × DTE × IV
           </h2>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-            ATM Ridge Illuminated
+            ATM Ridge
           </span>
           {activeFocus && (
             <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1">

@@ -108,7 +108,7 @@ export const SmileChart: React.FC<SmileChartProps> = ({ data, isDark, selectedEx
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-cyan-400" />
           <h2 className="text-sm font-semibold tracking-wide text-white uppercase">
-            Opstra 2D Multi-Expiry Smile Overlay
+            Volatility Smile Overlay
           </h2>
           {activeFocus && (
             <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 flex items-center gap-1">

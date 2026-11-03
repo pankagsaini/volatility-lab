@@ -329,7 +329,7 @@ def render_vol_surface_3d(symbol: str, selected_row: Dict[str, Any], result: Dic
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div>
                 <span style="font-size:1.15rem; font-weight:600; color:#f8fafc; letter-spacing:-0.02em;">
-                    Institutional 3D Volatility Surface
+                    3D Volatility Surface
                 </span>
                 <span style="background:#162238; color:#06b6d4; font-size:0.75rem; font-weight:600; padding:3px 8px; border-radius:6px; margin-left:8px; border:1px solid #1e3a5f;">
                     Strike × DTE × IV
