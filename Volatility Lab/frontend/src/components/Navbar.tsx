@@ -136,13 +136,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}
           </button>
 
-          {/* Collapsible Drawer Trigger */}
+          {/* Collapsible Drawer Trigger / Advanced Sidebar */}
           <button
             onClick={onOpenDrawer}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 hover:text-white transition-colors"
+            title="Open Advanced Parameters & Options Sidebar"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-cyan-500/30 text-xs font-medium text-cyan-300 hover:text-white transition-all shadow-sm shadow-cyan-500/10"
           >
             <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">Parameters</span>
+            <span className="hidden sm:inline font-semibold">Advanced / Sidebar</span>
           </button>
         </div>
       </div>

@@ -43,7 +43,7 @@ def drive_sync_label(info,now=None):
     label={'ready':'healthy','partial':'needs attention','syncing':'syncing','waiting':'waiting','stale':'stale','unknown':'status unavailable'}.get(status,status)
     return label,checked
 
-st.set_page_config(page_title='Volatility Lab',page_icon='◈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Volatility Lab',page_icon='◈',layout='wide',initial_sidebar_state='expanded')
 
 st.session_state.pop('login_notice', None)
 
@@ -82,9 +82,11 @@ if st.session_state.get('dashboard_revision')!=revision:
 
 st.markdown('''<style>
 .stApp{background:#080c14;color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-[data-testid="stHeader"]{background:#080c14!important;border-bottom:none!important;height:0!important;min-height:0!important;visibility:hidden!important}
+[data-testid="stHeader"]{background:transparent!important;border-bottom:none!important;height:2.8rem!important;visibility:visible!important;z-index:90}
+[data-testid="stSidebarCollapseButton"] button, [data-testid="stSidebarCollapsedControl"] button{background:#0f1726!important;border:1px solid #1e293b!important;color:#38bdf8!important;border-radius:8px!important;padding:4px 8px!important;box-shadow:0 2px 8px rgba(0,0,0,0.3)!important}
+[data-testid="stSidebarCollapseButton"] button:hover, [data-testid="stSidebarCollapsedControl"] button:hover{background:#16243b!important;border-color:#0284c7!important;color:#00e5ff!important}
 [data-testid="stSidebar"]{background:#0b111c!important;border-right:1px solid #141e30}
-.block-container{max-width:1500px;padding-top:1.5rem!important;padding-bottom:2.5rem;padding-left:1.5rem;padding-right:1.5rem}
+.block-container{max-width:1500px;padding-top:2.8rem!important;padding-bottom:2.5rem;padding-left:1.5rem;padding-right:1.5rem}
 
 /* Typography & Numbers */
 h1,h2,h3,h4{letter-spacing:-0.035em;color:#f8fafc;font-weight:600}
