@@ -188,14 +188,15 @@ function catalogue_(now) {
       .sort((a, b) => a.expiry.localeCompare(b.expiry))
       .slice(0, 3);
 
-    if (futures.length !== 3) {
-      throw new Error('Three futures unavailable for ' + symbol);
+    if (futures.length < 2) {
+      throw new Error('Futures contracts unavailable for ' + symbol);
     }
 
     // Discover active option contracts
     const contracts = api_('/v2/option/contract', { instrument_key: underlyingKey });
+    const maxExpiry = futures[futures.length - 1].expiry;
     let dates = [...new Set(contracts.map(x => String(x.expiry).slice(0, 10)))]
-      .filter(x => x >= today && x <= futures[2].expiry)
+      .filter(x => x >= today && x <= maxExpiry)
       .sort();
 
     if (symbol === 'BANKNIFTY') {
@@ -376,7 +377,7 @@ function capture_(mode, recovery) {
  */
 function safeError_(err) {
   const message = String(err.message || '');
-  const isWhitelisted = /^(Broker HTTP \d{3}|Empty broker data|Invalid broker JSON|Incomplete quote response|Wrong option expiry|Instrument master unavailable|Three futures unavailable for (NIFTY|BANKNIFTY)|No option expiries for (NIFTY|BANKNIFTY)|Set UPSTOX_TOKEN in Script Properties)$/.test(message);
+  const isWhitelisted = /^(Broker HTTP \d{3}|Empty broker data|Invalid broker JSON|Incomplete quote response|Wrong option expiry|Instrument master unavailable|(Three futures unavailable|Futures contracts unavailable) for (NIFTY|BANKNIFTY)|No option expiries for (NIFTY|BANKNIFTY)|Set UPSTOX_TOKEN in Script Properties)$/.test(message);
 
   return isWhitelisted ? message : 'Capture failed; check permissions, network or quota';
 }

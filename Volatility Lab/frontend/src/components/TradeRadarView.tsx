@@ -20,28 +20,34 @@ export const TradeRadarView: React.FC<TradeRadarViewProps> = ({
 
   useEffect(() => {
     let mounted = true;
+
+    const doFetch = () => {
+      const query = new URLSearchParams({ symbol });
+      if (selectedExpiry) {
+        query.append('expiry', selectedExpiry);
+      }
+
+      fetch(`/api/trade-radar?${query.toString()}`)
+        .then((r) => r.json())
+        .then((res: TradeRadar) => {
+          if (mounted) {
+            setData(res);
+            setLoading(false);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load trade radar:', err);
+          if (mounted) setLoading(false);
+        });
+    };
+
     setLoading(true);
-
-    const query = new URLSearchParams({ symbol });
-    if (selectedExpiry) {
-      query.append('expiry', selectedExpiry);
-    }
-
-    fetch(`/api/trade-radar?${query.toString()}`)
-      .then((r) => r.json())
-      .then((res: TradeRadar) => {
-        if (mounted) {
-          setData(res);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load trade radar:', err);
-        if (mounted) setLoading(false);
-      });
+    doFetch();
+    const interval = setInterval(doFetch, 20000);
 
     return () => {
       mounted = false;
+      clearInterval(interval);
     };
   }, [symbol, selectedExpiry]);
 

@@ -151,7 +151,14 @@ export const OptionChainTable: React.FC<OptionChainTableProps> = ({
           </thead>
 
           <tbody className="divide-y divide-slate-800/60">
-            {data?.rows.map((row) => {
+            {!data?.rows?.length && (
+              <tr>
+                <td colSpan={13} className="py-12 text-center text-slate-500 text-xs font-mono">
+                  {loading ? 'Loading option chain...' : 'No option chain data available for this expiry.'}
+                </td>
+              </tr>
+            )}
+            {data?.rows?.map((row) => {
               const isAtm = row.is_atm;
               return (
                 <tr
@@ -161,11 +168,11 @@ export const OptionChainTable: React.FC<OptionChainTableProps> = ({
                   }`}
                 >
                   {/* Call Greeks */}
-                  <td className="py-1.5 px-2 text-slate-400">{row.call.delta ? row.call.delta.toFixed(2) : '—'}</td>
-                  <td className="py-1.5 px-2 text-slate-400">{row.call.theta ? row.call.theta.toFixed(1) : '—'}</td>
-                  <td className="py-1.5 px-2 text-cyan-300">{row.call.iv ? `${row.call.iv.toFixed(1)}%` : '—'}</td>
-                  <td className="py-1.5 px-2 text-slate-400">{row.call.volume ? row.call.volume.toLocaleString('en-IN') : '—'}</td>
-                  <td className="py-1.5 px-2 text-slate-300">{row.call.oi ? row.call.oi.toLocaleString('en-IN') : '—'}</td>
+                  <td className="py-1.5 px-2 text-slate-400">{row.call.delta != null ? row.call.delta.toFixed(2) : '—'}</td>
+                  <td className="py-1.5 px-2 text-slate-400">{row.call.theta != null ? row.call.theta.toFixed(1) : '—'}</td>
+                  <td className="py-1.5 px-2 text-cyan-300">{row.call.iv != null ? `${row.call.iv.toFixed(1)}%` : '—'}</td>
+                  <td className="py-1.5 px-2 text-slate-400">{row.call.volume != null ? row.call.volume.toLocaleString('en-IN') : '—'}</td>
+                  <td className="py-1.5 px-2 text-slate-300">{row.call.oi != null ? row.call.oi.toLocaleString('en-IN') : '—'}</td>
                   <td
                     onClick={() =>
                       onInspectContract({
@@ -179,7 +186,7 @@ export const OptionChainTable: React.FC<OptionChainTableProps> = ({
                     className="py-1.5 px-2 font-bold text-emerald-400 border-r border-slate-800 cursor-pointer hover:underline"
                     title="Click to inspect Call Contract"
                   >
-                    {row.call.ltp ? row.call.ltp.toFixed(2) : '—'}
+                    {row.call.ltp != null ? row.call.ltp.toFixed(2) : '—'}
                   </td>
 
                   {/* Strike Column */}
@@ -202,13 +209,13 @@ export const OptionChainTable: React.FC<OptionChainTableProps> = ({
                     className="py-1.5 px-2 font-bold text-rose-400 text-left cursor-pointer hover:underline"
                     title="Click to inspect Put Contract"
                   >
-                    {row.put.ltp ? row.put.ltp.toFixed(2) : '—'}
+                    {row.put.ltp != null ? row.put.ltp.toFixed(2) : '—'}
                   </td>
-                  <td className="py-1.5 px-2 text-slate-300">{row.put.oi ? row.put.oi.toLocaleString('en-IN') : '—'}</td>
-                  <td className="py-1.5 px-2 text-slate-400">{row.put.volume ? row.put.volume.toLocaleString('en-IN') : '—'}</td>
-                  <td className="py-1.5 px-2 text-cyan-300">{row.put.iv ? `${row.put.iv.toFixed(1)}%` : '—'}</td>
-                  <td className="py-1.5 px-2 text-slate-400">{row.put.theta ? row.put.theta.toFixed(1) : '—'}</td>
-                  <td className="py-1.5 px-2 text-slate-400">{row.put.delta ? row.put.delta.toFixed(2) : '—'}</td>
+                  <td className="py-1.5 px-2 text-slate-300">{row.put.oi != null ? row.put.oi.toLocaleString('en-IN') : '—'}</td>
+                  <td className="py-1.5 px-2 text-slate-400">{row.put.volume != null ? row.put.volume.toLocaleString('en-IN') : '—'}</td>
+                  <td className="py-1.5 px-2 text-cyan-300">{row.put.iv != null ? `${row.put.iv.toFixed(1)}%` : '—'}</td>
+                  <td className="py-1.5 px-2 text-slate-400">{row.put.theta != null ? row.put.theta.toFixed(1) : '—'}</td>
+                  <td className="py-1.5 px-2 text-slate-400">{row.put.delta != null ? row.put.delta.toFixed(2) : '—'}</td>
                 </tr>
               );
             })}

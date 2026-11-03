@@ -49,28 +49,40 @@ def get_market_summary() -> Dict[str, Any]:
         chg = row.get('% change')
         iv = row.get('IV')
         sprd = row.get('IV-RV Spread')
+        chg_f = float(chg) if chg and np.isfinite(chg) else None
+        as_of_str = str(row.get('As of', ''))[:16].replace('T', ' ')
         return {
             'symbol': default_name,
             'price': float(spot) if spot and np.isfinite(spot) else None,
-            'change_pct': float(chg) if chg and np.isfinite(chg) else None,
+            'change': chg_f,
+            'pchange': chg_f,
+            'change_pct': chg_f,
             'atm_iv': float(iv) if iv and np.isfinite(iv) else None,
             'iv_rv_spread': float(sprd) if sprd and np.isfinite(sprd) else None,
-            'as_of': str(row.get('As of', ''))[:16].replace('T', ' ')
+            'collected_at': as_of_str,
+            'as_of': as_of_str
         }
 
     return {
         'ist_time': now.strftime('%d %b %Y %H:%M:%S IST'),
         'market_status': status,
         'status_type': status_type,
+        'market_open': is_open,
         'is_open': is_open,
         'nifty': format_index(nifty, 'NIFTY 50'),
         'banknifty': format_index(bn, 'BANKNIFTY'),
         'india_vix': {
+            'symbol': 'INDIA VIX',
+            'price': float(vix_val) if vix_val and np.isfinite(vix_val) else None,
             'value': float(vix_val) if vix_val and np.isfinite(vix_val) else None,
+            'change': None,
+            'pchange': None,
             'regime': 'Low Vol' if vix_val and vix_val < 13 else ('Normal Vol' if vix_val and vix_val <= 18 else 'Elevated Vol')
         },
         'cloud_sync': {
             'status': sync_state,
+            'last_snapshot': str(cloud_info.get('last_snapshot', cloud_info.get('last_update', ''))),
+            'today_count': sync_count,
             'total_files': sync_count
         }
     }
@@ -208,11 +220,16 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
     atm_straddle = (atm_row['call']['ltp'] + atm_row['put']['ltp']) if atm_row else 0.0
     pcr = round(total_put_oi / total_call_oi, 2) if total_call_oi > 0 else 1.0
 
+    matched_exp = next((e for e in available if e['expiry'] == expiry), None)
+    dte_val = float(matched_exp['dte']) if matched_exp else 0.0
+
     return {
         'symbol': symbol,
         'expiry': expiry,
+        'dte': dte_val,
         'spot': spot,
         'atm_strike': atm_strike,
+        'straddle_ltp': round(atm_straddle, 2),
         'atm_straddle': round(atm_straddle, 2),
         'total_call_oi': total_call_oi,
         'total_put_oi': total_put_oi,
@@ -255,16 +272,24 @@ def get_vol_surface_payload(
     ref_spot = diags['ref_spot']
 
     # 1. ATM Ridge (The exact Term Structure spine along ATM across expiries)
-    atm_ridge = []
-    atm_idx = len(x_grid) // 2
+    target_atm = 100.0 if space_mode == 'moneyness' else ref_spot
+    atm_idx = int(np.argmin(np.abs(np.array(x_grid) - target_atm)))
+    atm_ridge_x = []
+    atm_ridge_y = []
+    atm_ridge_z = []
+    atm_ridge_expiries = []
     for i, entry in enumerate(chains if include_zero_dte else [c for c in chains if c['dte'] >= 1.0]):
         if i < len(y_grid):
-            atm_ridge.append({
-                'expiry': entry['expiry'],
-                'dte': float(y_grid[i]),
-                'atm_strike': ref_spot,
-                'iv': float(z_matrix[i, atm_idx])
-            })
+            atm_ridge_x.append(float(x_grid[atm_idx]))
+            atm_ridge_y.append(float(y_grid[i]))
+            atm_ridge_z.append(float(z_matrix[i, atm_idx]))
+            atm_ridge_expiries.append(entry['expiry'])
+    atm_ridge = {
+        'x': atm_ridge_x,
+        'y': atm_ridge_y,
+        'z': atm_ridge_z,
+        'expiries': atm_ridge_expiries
+    }
 
     # 2. Opstra-Style 2D Smile Curves for every listed expiry
     smile_curves = []
@@ -299,15 +324,27 @@ def get_vol_surface_payload(
                 })
 
     # 3. Term Structure Curve (ATM IV vs DTE)
-    term_structure = [
-        {
-            'expiry': sc['expiry'],
-            'dte': sc['dte'],
-            'label': sc['label'],
-            'iv': next((iv for s, iv in zip(sc['strikes'], sc['ivs']) if abs(s - ref_spot) < 100), sc['ivs'][len(sc['ivs'])//2])
-        }
-        for sc in smile_curves
-    ]
+    ts_dtes = []
+    ts_ivs = []
+    ts_expiries = []
+    for sc in smile_curves:
+        atm_iv_ts = next(
+            (iv for s, iv in zip(sc['strikes'], sc['ivs']) if abs(s - ref_spot) < 150),
+            sc['ivs'][len(sc['ivs']) // 2] if sc['ivs'] else 0.0
+        )
+        ts_dtes.append(float(sc['dte']))
+        ts_ivs.append(float(atm_iv_ts))
+        ts_expiries.append(sc['expiry'])
+
+    term_regime = 'Contango (Normal)' if diags['term_slope'] > 0.5 else (
+        'Backwardation (Inverted)' if diags['term_slope'] < -0.5 else 'Flat Term'
+    )
+    term_structure = {
+        'dtes': ts_dtes,
+        'ivs': ts_ivs,
+        'expiries': ts_expiries,
+        'regime': term_regime
+    }
 
     selected_dte = next((float(sc['dte']) for sc in smile_curves if sc.get('expiry') == selected_expiry), None) if selected_expiry else None
     for sc in smile_curves:
@@ -315,6 +352,7 @@ def get_vol_surface_payload(
 
     return {
         'symbol': symbol,
+        'spot': ref_spot,
         'ref_spot': ref_spot,
         'selected_expiry': selected_expiry,
         'selected_dte': selected_dte,
@@ -333,8 +371,12 @@ def get_vol_surface_payload(
             'front_atm_iv': diags['front_atm_iv'],
             'back_atm_iv': diags['back_atm_iv'],
             'term_slope': diags['term_slope'],
-            'term_regime': 'Contango (Normal)' if diags['term_slope'] > 0.5 else ('Backwardation (Inverted)' if diags['term_slope'] < -0.5 else 'Flat Term'),
-            'front_skew': diags['front_skew']
+            'term_regime': term_regime,
+            'front_skew': diags['front_skew'],
+            'interp_method': 'linear',
+            'space_mode': space_mode,
+            'iv_mode': iv_mode,
+            'range_pct': range_pct
         }
     }
 
@@ -404,23 +446,51 @@ def get_trade_radar(symbol: str, expiry: Optional[str] = None) -> Dict[str, Any]
     else:
         basis_status = 'Parity Reference'
 
+    # Compute ATM straddle LTP from option chain file
+    straddle_ltp = 0.0
+    strike_step = 50.0 if ('NIFTY' in symbol.upper() and 'BANK' not in symbol.upper()) else 100.0
+    atm_strike_r = round(spot / strike_step) * strike_step
+    try:
+        chain_file = DATA / f"{symbol.lower()}_option_quotes_{exp}.json"
+        if chain_file.exists():
+            import json as _json
+            _content = _json.loads(chain_file.read_text(encoding='utf-8'))
+            _chain = _content.get('broker_option_chain', [])
+            _atm_row = next(
+                (r for r in _chain if abs(float(r.get('strike_price', 0)) - atm_strike_r) < (strike_step * 0.6)),
+                None
+            )
+            if _atm_row:
+                c_ltp = float(_atm_row.get('call_options', {}).get('market_data', {}).get('ltp') or 0.0)
+                p_ltp = float(_atm_row.get('put_options', {}).get('market_data', {}).get('ltp') or 0.0)
+                straddle_ltp = round(c_ltp + p_ltp, 2)
+    except Exception:
+        straddle_ltp = 0.0
+
     return {
         'symbol': symbol,
         'spot': spot,
         'expiry': exp,
         'dte': round(dte, 1),
+        'atm_strike': atm_strike_r,
+        'atm_iv': round(iv, 2),
         'iv': round(iv, 2),
         'spread': round(spread_val, 2) if spread_val is not None else None,
         'bias_title': bias_title,
         'bias_type': bias_type,
         'bias_action': bias_action,
+        'notes': [desc],
         'description': desc,
+        'straddle_ltp': straddle_ltp,
+        'straddle_be_low': round(spot - straddle_ltp, 1) if straddle_ltp > 0 else None,
+        'straddle_be_high': round(spot + straddle_ltp, 1) if straddle_ltp > 0 else None,
         'expected_move_pts': round(move_pts, 1),
         'expected_move_pct': round(move_pct, 2),
         'expected_range_low': round(spot - move_pts, 1),
         'expected_range_high': round(spot + move_pts, 1),
         'synthetic_future': round(float(syn), 2) if syn and np.isfinite(syn) else None,
         'month_future': round(float(m_fut), 2) if m_fut and np.isfinite(m_fut) else None,
+        'synthetic_basis_pts': round(basis_pts, 2) if basis_pts is not None else None,
         'basis_pts': round(basis_pts, 2) if basis_pts is not None else None,
         'basis_status': basis_status
     }
@@ -474,8 +544,11 @@ def get_historical_candles(symbol: str = 'NIFTY') -> dict:
                 'low': round(l, 2),
                 'close': round(c, 2),
             })
-            # Vol estimate based on true range and level
-            vol_val = max(1000, int(abs(h - l) * (150 if sym == 'nifty' else 40)))
+            # Use real volume from CSV if present, otherwise estimate from true range
+            if 'Volume' in df.columns and pd.notna(row.get('Volume')):
+                vol_val = max(0, int(row.get('Volume', 0) or 0))
+            else:
+                vol_val = max(1000, int(abs(h - l) * (150 if sym == 'nifty' else 40)))
             volumes.append({
                 'time': d_str,
                 'value': vol_val,

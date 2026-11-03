@@ -183,7 +183,8 @@ def extract_surface_mesh(
     z_matrix = np.array(z_rows)
 
     # Diagnostic summary
-    atm_idx = len(x_grid) // 2
+    target_atm = 100.0 if space_mode == 'moneyness' else ref_spot
+    atm_idx = int(np.argmin(np.abs(x_grid - target_atm)))
     front_atm_iv = float(z_matrix[0, atm_idx])
     back_atm_iv = float(z_matrix[-1, atm_idx])
     term_slope = back_atm_iv - front_atm_iv

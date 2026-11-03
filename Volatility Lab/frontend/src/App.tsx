@@ -161,26 +161,43 @@ export const App: React.FC = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     let ws: WebSocket | null = null;
+    let reconnectTimer: any = null;
+    let isMounted = true;
 
-    try {
-      ws = new WebSocket(wsUrl);
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'market_tick' && msg.data) {
-            setSummary(msg.data);
+    const connectWs = () => {
+      if (!isMounted) return;
+      try {
+        ws = new WebSocket(wsUrl);
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'market_tick' && msg.data) {
+              setSummary(msg.data);
+            }
+          } catch (e) {
+            // ignore parsing error
           }
-        } catch (e) {
-          // ignore parsing error
-        }
-      };
-    } catch (e) {
-      // fallback to polling if WS not available
-    }
+        };
+        ws.onerror = () => {
+          if (ws) ws.close();
+        };
+        ws.onclose = () => {
+          if (isMounted) {
+            reconnectTimer = setTimeout(connectWs, 5000);
+          }
+        };
+      } catch (e) {
+        // fallback to polling if WS not available
+      }
+    };
+
+    connectWs();
 
     const interval = setInterval(refreshMarketSummary, 20000);
     return () => {
+      isMounted = false;
       clearInterval(interval);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (ws) ws.close();
     };
   }, [refreshMarketSummary]);
@@ -241,6 +258,7 @@ export const App: React.FC = () => {
           <div className="space-y-4 animate-fade-in">
             {/* 3D Surface with Active Expiry Cross-Section Highlight */}
             <VolSurface3D
+              data={surfaceData}
               symbol={selectedSymbol}
               isDark={isDark}
               surfaceRange={surfaceRange}

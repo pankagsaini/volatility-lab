@@ -3,6 +3,7 @@ import { Box, Layers, Target } from 'lucide-react';
 import { VolSurfacePayload } from '../types';
 
 interface VolSurface3DProps {
+  data?: VolSurfacePayload | null;
   symbol: string;
   isDark: boolean;
   surfaceRange: number;
@@ -13,6 +14,7 @@ interface VolSurface3DProps {
 }
 
 export const VolSurface3D: React.FC<VolSurface3DProps> = ({
+  data: propData,
   symbol,
   isDark,
   surfaceRange,
@@ -22,10 +24,17 @@ export const VolSurface3D: React.FC<VolSurface3DProps> = ({
   selectedExpiry,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [data, setData] = useState<VolSurfacePayload | null>(null);
+  const [internalData, setInternalData] = useState<VolSurfacePayload | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const data = propData !== undefined ? propData : internalData;
+
   useEffect(() => {
+    if (propData !== undefined) {
+      setLoading(false);
+      return;
+    }
+
     let mounted = true;
     setLoading(true);
 
@@ -44,7 +53,7 @@ export const VolSurface3D: React.FC<VolSurface3DProps> = ({
       .then((r) => r.json())
       .then((res: VolSurfacePayload) => {
         if (mounted) {
-          setData(res);
+          setInternalData(res);
           setLoading(false);
         }
       })
@@ -56,7 +65,7 @@ export const VolSurface3D: React.FC<VolSurface3DProps> = ({
     return () => {
       mounted = false;
     };
-  }, [symbol, surfaceRange, ivMode, spaceMode, includeZeroDte, selectedExpiry]);
+  }, [propData, symbol, surfaceRange, ivMode, spaceMode, includeZeroDte, selectedExpiry]);
 
   useEffect(() => {
     if (!containerRef.current || !data || !data.z_matrix) return;

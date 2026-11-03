@@ -108,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 isMarketOpen ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
               }`}
             />
-            <span className="hidden xs:inline">
+            <span className="hidden sm:inline">
               {summary?.market_status || (isMarketOpen ? '● NSE LIVE' : '○ NSE CLOSED')}
             </span>
           </div>
