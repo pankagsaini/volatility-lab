@@ -31,7 +31,8 @@ def render_options():
  st.caption('ATM uses the previous spot-minute close. Strike offsets are points; runs use each contract’s saved lot size.')
  with st.expander('Costs & capital'):
   a,b,c=st.columns(3);capital_allocated=a.number_input('Capital allocated · INR · 0 = no cap',min_value=0.,value=0.,step=50000.);margin_per_lot=b.number_input('Broker margin per strategy lot · INR · optional',min_value=0.,value=0.,step=50000.);brokerage_per_order=c.number_input('Brokerage per executed order · INR',min_value=0,value=20,step=1,help='Upstox standard is ₹20 per order; enter the fee for your plan.')
-  st.caption('Enter broker margin per strategy lot to calculate return on capital or apply a capital cap. Leave at zero to omit both.')
+  estimate_margin=st.checkbox('Auto-estimate exchange SPAN + Exposure margin proxy for short legs',value=True,help='Approximates SEBI/NSE SPAN and exposure margin (~10% notional for naked shorts / spread max loss for hedged spreads) when manual broker margin is zero.')
+  st.caption('Enter broker margin per strategy lot, or leave at zero to use the automated exchange SPAN + Exposure proxy.')
  a,b,c=st.columns(3);stop=a.number_input('Portfolio stop · INR · 0 = off',min_value=0.,value=0.,step=500.);target=b.number_input('Portfolio target · INR · 0 = off',min_value=0.,value=0.,step=500.);slip=c.number_input('Slippage · bps per fill',min_value=0.,max_value=500.,value=5.)
  st.caption('Stops and targets use estimated P&L at minute close and fill at the next minute open. Actual losses can exceed the stop.')
  filters=[]
@@ -41,7 +42,7 @@ def render_options():
    a,b=st.columns(2);low=a.number_input(metric+' minimum',value=0.,key='builder_low_'+metric);high=b.number_input(metric+' maximum',value=100.,key='builder_high_'+metric)
    filters.append((metric,low,high))
   st.caption('Signals must be same-expiry and no more than 15 minutes old. Historical OHLC has no IV or delta; missing signals exclude that session.')
- settings=dict(name=name,symbol=symbol,start=str(start),end=str(end),entry=entry.strftime('%H:%M'),exit=exit.strftime('%H:%M'),lots=int(lots),capital_allocated=capital_allocated,margin_per_lot=margin_per_lot,brokerage_per_order=brokerage_per_order,expiry_rank=0 if expiry_rank=='Nearest' else 1,min_dte=dte[0],max_dte=dte[1],weekdays=[['Mon','Tue','Wed','Thu','Fri'].index(x) for x in weekdays],legs=legs.to_dict('records'),stop=stop,target=target,slippage_bps=slip,filters=filters,charges='Upstox dated estimate',engine='multi_leg_v1')
+ settings=dict(name=name,symbol=symbol,start=str(start),end=str(end),entry=entry.strftime('%H:%M'),exit=exit.strftime('%H:%M'),lots=int(lots),capital_allocated=capital_allocated,margin_per_lot=margin_per_lot,estimate_margin=estimate_margin,brokerage_per_order=brokerage_per_order,expiry_rank=0 if expiry_rank=='Nearest' else 1,min_dte=dte[0],max_dte=dte[1],weekdays=[['Mon','Tue','Wed','Thu','Fri'].index(x) for x in weekdays],legs=legs.to_dict('records'),stop=stop,target=target,slippage_bps=slip,filters=filters,charges='Upstox dated estimate',engine='multi_leg_v1')
  if st.button('Run backtest',type='primary',disabled=jobs.pending(st.session_state)):
   try:
    validate(settings)

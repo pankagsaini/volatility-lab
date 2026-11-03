@@ -61,6 +61,36 @@ def validate(s):
   if leg['Side'] not in ('Buy','Sell') or leg['Type'] not in ('CE','PE'):raise ValueError('Each leg needs a side and option type.')
   if not math.isfinite(float(leg['Offset'])) or not 1<=int(leg['Ratio'])<=20 or float(leg['Ratio'])!=int(leg['Ratio']):raise ValueError('Invalid leg offset or ratio.')
 
+def estimate_exchange_margin(legs, spot_price, symbol='NIFTY'):
+ if not legs or spot_price <= 0: return 0.
+ has_short = any(leg['side'] == -1 for leg in legs)
+ if not has_short:
+  return max(0., sum(leg['side'] * leg['entry'] * leg['quantity'] for leg in legs))
+ psr = 0.10 if symbol == 'BANKNIFTY' else 0.08
+ exposure_pct = 0.02
+ net_calls = sum(leg['side'] * leg['quantity'] for leg in legs if leg['contract'].get('instrument_type') == 'CE')
+ net_puts = sum(leg['side'] * leg['quantity'] for leg in legs if leg['contract'].get('instrument_type') == 'PE')
+ is_defined_risk = (net_calls >= 0 and net_puts >= 0)
+ strikes = [float(leg['contract'].get('strike_price', spot_price)) for leg in legs]
+ test_points = set(strikes) | {spot_price * (1 + r) for r in (-0.15, -psr, -psr/2, 0, psr/2, psr, 0.15)}
+ def portfolio_loss(s_star):
+  pnl = 0.
+  for leg in legs:
+   k = float(leg['contract'].get('strike_price', spot_price))
+   opt_type = leg['contract'].get('instrument_type')
+   intr = max(0., s_star - k) if opt_type == 'CE' else max(0., k - s_star)
+   pnl += leg['side'] * (intr - leg['entry']) * leg['quantity']
+  return -pnl
+ max_loss = max(0., max(portfolio_loss(pt) for pt in test_points))
+ if is_defined_risk:
+  exposure_buffer = sum(0.01 * spot_price * leg['quantity'] for leg in legs if leg['side'] == -1)
+  return round(max_loss + exposure_buffer, 2)
+ else:
+  short_exposure = sum(exposure_pct * spot_price * leg['quantity'] for leg in legs if leg['side'] == -1)
+  scan_loss = max(portfolio_loss(spot_price * (1 + r)) for r in (-psr, 0, psr))
+  return round(max(max_loss, scan_loss) + short_exposure, 2)
+
+
 def simulate(contracts,series,spotkey,s,signals=()):
  validate(s);trades=[];skips=[];spot=series.get(spotkey,{})
  sizing_mode,size=sizing(s);capital_allocated,margin_per_lot=capital_settings(s)
@@ -100,6 +130,9 @@ def simulate(contracts,series,spotkey,s,signals=()):
   if margin_per_lot>0:
    capital_required=margin_per_lot*size
    capital_source='Manual broker allocation'
+  elif has_short and (s.get('estimate_margin') or s.get('margin_model')=='exchange_span_proxy'):
+   capital_required=estimate_exchange_margin(legs,float(prior[3]),s.get('symbol','NIFTY'))
+   capital_source='Exchange SPAN + Exposure proxy'
   elif has_short:
    capital_required=None
    capital_source='Broker margin not supplied'

@@ -56,6 +56,17 @@ class StrategyTests(unittest.TestCase):
   self.assertTrue(__import__('pandas').isna(t.iloc[0]['Capital required']))
   self.assertEqual(t.iloc[0]['Capital source'],'Broker margin not supplied')
  @patch('strategy_backtest.charge',return_value={})
+ def test_exchange_span_exposure_proxy_margin_calculated_when_requested(self,_):
+  c,b,s=self.base()
+  for r in c:r['lot_size']=25
+  s.pop('quantity');s.update(lots=1,estimate_margin=True)
+  t,_=engine.simulate(c,b,'spot',s)
+  self.assertFalse(t.empty)
+  self.assertFalse(__import__('pandas').isna(t.iloc[0]['Capital required']))
+  self.assertGreater(t.iloc[0]['Capital required'],0)
+  self.assertEqual(t.iloc[0]['Capital source'],'Exchange SPAN + Exposure proxy')
+  self.assertIsNotNone(t.iloc[0]['Net / capital %'])
+ @patch('strategy_backtest.charge',return_value={})
  def test_manual_margin_scales_by_strategy_lots_and_enforces_cap(self,_):
   c,b,s=self.base()
   for r in c:r['lot_size']=25

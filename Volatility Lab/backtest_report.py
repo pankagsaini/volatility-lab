@@ -54,7 +54,7 @@ def render(trades,skips,settings,coverage):
     a,b,c,d=st.columns(4);a.metric('Average trade',f'₹{net.mean():,.0f}');b.metric('Average win / loss',f'{wins.mean() if len(wins) else 0:,.0f} / {losses.mean() if len(losses) else 0:,.0f}');c.metric('Total trading costs',f'₹{(t.Charges+t.Slippage).sum():,.0f}');d.metric('Completed trades',str(len(t)))
     if 'Capital required' in t:
      covered=pd.to_numeric(t['Capital required'],errors='coerce').notna()
-     st.caption(f'Return on capital is available for {covered.sum()} of {len(t)} trades. It uses entry debit or your broker-margin input, not historical SPAN.')
+     st.caption(f'Return on capital is available for {covered.sum()} of {len(t)} trades. Capital source: {t["Capital source"].iloc[0] if "Capital source" in t.columns and len(t) else "entry debit or margin allocation"}.')
     else:st.caption('Legacy fixed-unit run: no historical lot-size, capital or return-on-capital fields were recorded.')
     st.caption(f"Costs use {settings.get('charges','saved-run fee assumptions')} plus entered slippage. Drawdown uses closed trades; intratrade risk and margin are not modeled.")
   if tabs[1].open:
