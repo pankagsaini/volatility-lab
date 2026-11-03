@@ -117,6 +117,13 @@ function installIntradaySchedule(){
 }
 function scheduledCapture(){
   const now=new Date(),day=day_(now),weekday=Number(Utilities.formatDate(now,VL.zone,'u')),mins=minute_(now),p=props_();
+  if(typeof ScriptApp!=='undefined'&&!p.getProperty('WATCHDOG_REMOVED')){
+    try{
+      ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='failureWatchdog').forEach(t=>ScriptApp.deleteTrigger(t));
+      p.setProperty('WATCHDOG_REMOVED','1');
+      console.log('Automated cleanup: failureWatchdog trigger purged.');
+    }catch(e){console.warn('Could not auto-remove trigger:',e);}
+  }
   if(p.getProperty('SCHEDULE_MODE')!=='intraday')return;
   if(mins>=420&&mins<540){reconcilePriorSession();return;}
   if(weekday>5)return;
