@@ -228,13 +228,16 @@ def history_figure(symbol,expiry,hv,iv,period,relative=False,spread_only=False):
     return fig
 
 @st.cache_data(show_spinner=False)
-
 def analyze_models(raw):
-
     frame=one_year(pd.read_csv(__import__('io').BytesIO(raw)),history_cutoff())
-
     from model_view import model_tables
     return model_tables(frame)
+
+@st.cache_data(show_spinner=False)
+def analyze_candidates(raw):
+    frame=one_year(pd.read_csv(__import__('io').BytesIO(raw)),history_cutoff())
+    from model_view import fit_candidates
+    return fit_candidates(frame)
 
 def render_validation(symbol):
 
@@ -358,8 +361,10 @@ def render_models(symbol,selected,frame,result):
     c.metric('INDIA VIX' if symbol=='NIFTY' else 'Yang–Zhang · past 20 trading days',(f'{vix:.2f}%' if vix is not None else '—') if symbol=='NIFTY' else f'{yz20:.2f}%')
 
     st.markdown('**Volatility by horizon**')
+    show_candidates=st.checkbox('Include candidate models (GJR-GARCH leverage, GARCH-t)',value=False,key='show_candidate_models',help='Fits asymmetric GJR-GARCH and fat-tailed Student-t models alongside baseline normal GARCH(1,1).')
+    candidates=analyze_candidates(frame.to_csv(index=False).encode()) if show_candidates else None
     from model_view import horizon_grid
-    grid=horizon_grid(forecasts,realized,ewma)
+    grid=horizon_grid(forecasts,realized,ewma,candidates=candidates)
     horizon=st.select_slider('Holding period · trading days',options=grid.iloc[:,0].astype(int).tolist(),value=20,key='model_holding_period')
     show_table(grid[grid.iloc[:,0]==horizon])
     st.caption('Annualized % · Days = trading sessions · GARCH/EWMA: next N days · Yang–Zhang: past N days. Standard EWMA has a flat annualized forecast across horizons.')
@@ -897,7 +902,25 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
         if chart=='Term structure':render_term_structure(symbol,result)
         elif chart=='Smile & skew':render_smile(symbol,chart_selected,config)
         elif chart=='Research':
-            render_relative_value(symbol,chart_selected,config)
+            res_view=st.radio('Research tool',['Relative value & smile metrics','Candidate model validation & diagnostics','HAR-RV volatility cascades'],horizontal=True,key='research_tool_selector')
+            if res_view=='Relative value & smile metrics':
+                render_relative_value(symbol,chart_selected,config)
+            elif res_view=='Candidate model validation & diagnostics':
+                from research_ui import render_research
+                render_research(DATA.parent,symbol,chart_selected)
+            elif res_view=='HAR-RV volatility cascades':
+                st.subheader(f'{symbol} · HAR-RV Volatility Cascades')
+                st.caption('Heterogeneous Autoregressive realized volatility decomposing trailing daily (1d), weekly (5d), and monthly (22d) components.')
+                hist_path=DATA.parent/'data'/f'{symbol.lower()}_daily.csv'
+                if not hist_path.exists():hist_path=DATA/f'{symbol.lower()}_one_year.csv'
+                if hist_path.exists():
+                    df=pd.read_csv(hist_path)
+                    from har_research import har_components_summary
+                    summary=har_components_summary(df)
+                    st.line_chart(summary.set_index('Date').tail(126)[['Daily RV %','Weekly (5d) RV %','Monthly (22d) RV %']])
+                    st.dataframe(summary.tail(10).round(2),hide_index=True,width='stretch')
+                else:
+                    st.info('Daily price history not found for HAR calculation.')
         elif chart=='Intraday':
             from restored_lab import render_archived_intraday
             render_archived_intraday(DATA,symbol,chart_selected,config)

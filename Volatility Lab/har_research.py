@@ -41,3 +41,22 @@ def evaluate(frame,horizons=(5,10,20,30)):
                 rows.append({'Origin':str(origin.date()),'Horizon':h,'Model':model,'Forecast variance':value,
                     'Realized variance':actual,'Status':status if model=='HAR-RV' else 'ok'})
     return pd.DataFrame(rows)
+
+
+def har_components_summary(frame):
+    from vol_lib import validate_ohlc
+    clean=validate_ohlc(frame)
+    log_ret=np.log(clean.Close/clean.Close.shift(1)).dropna()
+    daily_var=(log_ret**2)
+    rv_day=np.sqrt(daily_var*252)*100
+    rv_week=np.sqrt(daily_var.rolling(5).mean()*252)*100
+    rv_month=np.sqrt(daily_var.rolling(22).mean()*252)*100
+    dates=clean.index[1:]
+    date_str=dates.strftime('%Y-%m-%d') if hasattr(dates,'strftime') else dates.astype(str)
+    df=pd.DataFrame({
+        'Date':date_str,
+        'Daily RV %':rv_day,
+        'Weekly (5d) RV %':rv_week,
+        'Monthly (22d) RV %':rv_month
+    }).dropna()
+    return df
