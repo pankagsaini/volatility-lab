@@ -316,6 +316,11 @@ def history_figure(symbol,expiry,hv,iv,period,relative=False,spread_only=False):
 
             low,high=float(finite.min()),float(finite.max())
 
+            if not spread_only and len(finite) >= 4:
+                p95 = float(np.percentile(finite, 95))
+                if high > p95 * 1.8 and high > 35.0:
+                    high = min(high, p95 * 1.4)
+
             padding=max((high-low)*.12,.10,abs(high)*.02 if high==low else 0.)
 
             lower=low-padding if spread_only else max(0.,low-padding)
@@ -1040,12 +1045,24 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
         if chart in ('Volatility history','IV–RV Spread'):
 
-            range_col,settings_col=st.columns([4,1])
+            scope_col,range_col,settings_col=st.columns([3,2,1])
+            exp_label = f"Selected: {expiry}" if expiry else "Selected expiry"
+            scope_map = {exp_label: 'Selected expiry', 'Continuous roll (across expiries)': 'Across expiries'}
+            
+            chosen_scope_label = scope_col.segmented_control(
+                'Scope',
+                [exp_label, 'Continuous roll (across expiries)'],
+                default=exp_label,
+                label_visibility='collapsed',
+                key=f'iv_history_scope_v7_{symbol}_{expiry}'
+            ) or exp_label
+            scope = scope_map.get(chosen_scope_label, 'Selected expiry')
+
             period=range_col.segmented_control('Range',['1M','3M','6M','1Y'],default='1M',label_visibility='collapsed',key='options_range_v2') or '1M'
             with settings_col.popover('Chart settings',width='stretch'):
-                if st.session_state.get('iv_history_scope_v5')=='Across expiries · Google Cloud':
-                    st.session_state['iv_history_scope_v5']='Across expiries'
-                scope=st.radio('History',['Across expiries','Selected expiry'],horizontal=True,key='iv_history_scope_v5')
+                relative=st.toggle('Relative spread %',value=False,key='iv_history_relative_v2')
+                filter_0dte=st.toggle('Filter 0-DTE terminal anomalies',value=True,key='filter_0dte_artifacts',help='Excludes terminal settlement Black-Scholes solver spikes on expiry day (T=0).')
+
             if scope=='Across expiries':
                 from option_context import transition_context
                 hist=transition_context(DATA/'monitor.sqlite',symbol,config)
@@ -1056,15 +1073,21 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
                 sources=hist.Source.fillna('')
                 hist=hist[sources.str.startswith('Upstox supplied IV')].copy()
                 hist=hist.dropna(subset=['IV']).copy()
+                # Exclude 0-DTE terminal Black-Scholes vega singularities on expiration day (Date == Expiry)
+                if filter_0dte and not hist.empty and 'Expiry' in hist.columns:
+                    terminal_spike = (pd.to_datetime(hist['Date']) == pd.to_datetime(hist['Expiry'])) & (pd.to_numeric(hist['IV']) > 50.0)
+                    if terminal_spike.any():
+                        hist = hist[~terminal_spike].copy()
 
             if hist.empty:
-                st.info('No IV observations are available for this selection yet.')
+                st.info(f'No historical IV observations recorded for {symbol} {expiry} yet. Switch to "Continuous roll" to view historical index volatility.')
             else:
-                st.caption(f"{hist.Date.nunique()} IV sessions · {hist.Date.min():%d %b %Y} to {hist.Date.max():%d %b %Y}")
+                active_label = f"Expiry {expiry} ({hist.Date.nunique()} sessions)" if scope == 'Selected expiry' else "Continuous Front-Month Index Roll"
+                st.caption(f"**Series:** {active_label} · {hist.Date.min():%d %b %Y} to {hist.Date.max():%d %b %Y}")
 
             data=chart_iv_spread(hist,hv)
 
-            relative=False
+            relative=st.session_state.get('iv_history_relative_v2', False)
 
             st.plotly_chart(history_figure(symbol,expiry,hv,data,period,relative,spread_only=chart=='IV–RV Spread'),key=f'history_{symbol}_{expiry}_{period}_{chart}',width='stretch',config={'displaylogo':False})
 
