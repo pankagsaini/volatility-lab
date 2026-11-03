@@ -6,7 +6,6 @@ import {
   Target,
   BarChart2,
   FlaskConical,
-  ArrowLeftRight,
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { TickerRibbon } from './components/TickerRibbon';
@@ -17,7 +16,6 @@ import { OptionChainTable } from './components/OptionChainTable';
 import { TradeRadarView } from './components/TradeRadarView';
 import { TradingViewChart } from './components/TradingViewChart';
 import { BacktestRunnerView } from './components/BacktestRunnerView';
-import { FuturesCarryView } from './components/FuturesCarryView';
 import { ContractInspectorModal } from './components/ContractInspectorModal';
 import { DrawerInspector } from './components/DrawerInspector';
 import { MarketSummary, ExpiryItem, VolSurfacePayload } from './types';
@@ -26,7 +24,7 @@ export const App: React.FC = () => {
   // Global State
   const [selectedSymbol, setSelectedSymbol] = useState<'NIFTY' | 'BANKNIFTY'>('NIFTY');
   const [activeTab, setActiveTab] = useState<
-    'surface' | 'chain' | 'radar' | 'candles' | 'backtest' | 'carry'
+    'surface' | 'chain' | 'radar' | 'candles' | 'backtest'
   >('surface');
   const [isDark, setIsDark] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -232,7 +230,6 @@ export const App: React.FC = () => {
             { id: 'radar', label: 'Trade Radar', icon: Target },
             { id: 'candles', label: 'Candlesticks', icon: BarChart2 },
             { id: 'backtest', label: 'Backtest', icon: FlaskConical },
-            { id: 'carry', label: 'Futures Carry', icon: ArrowLeftRight },
           ].map((tab) => {
             const active = activeTab === tab.id;
             const Icon = tab.icon;
@@ -308,12 +305,6 @@ export const App: React.FC = () => {
         {activeTab === 'backtest' && (
           <div className="animate-fade-in">
             <BacktestRunnerView />
-          </div>
-        )}
-
-        {activeTab === 'carry' && (
-          <div className="animate-fade-in">
-            <FuturesCarryView />
           </div>
         )}
       </main>

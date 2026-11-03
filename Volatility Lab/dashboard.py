@@ -321,21 +321,21 @@ if capture.get('status') in ('failed','partial'):
     if not is_normal_catchup and errors:
         st.warning('Laptop history backup: ' + '; '.join(errors[:2]))
 
-workspace_labels={'Options':'Options','Futures':'Futures','Backtest':'Backtest'}
+workspace_labels={'Options':'Options','Backtest':'Backtest'}
 label_to_mode={v:k for k,v in workspace_labels.items()}
-raw_markets=['Options','Futures','Backtest']
+raw_markets=['Options','Backtest']
 markets=[workspace_labels[m] for m in raw_markets]
 
 saved_ws=st.session_state.get('market_workspace')
 if saved_ws in label_to_mode:current_label=saved_ws
 elif saved_ws in workspace_labels:current_label=workspace_labels[saved_ws]
-elif saved_ws in ('⚡ Options Terminal','📈 Futures Carry','🧪 Backtest Studio'):
-    current_label={'⚡ Options Terminal':'Options','📈 Futures Carry':'Futures','🧪 Backtest Studio':'Backtest'}.get(saved_ws,'Options')
+elif saved_ws in ('⚡ Options Terminal','📈 Futures Carry','🧪 Backtest Studio','Futures'):
+    current_label='Backtest' if 'Backtest' in str(saved_ws) else 'Options'
 else:current_label=workspace_labels['Options']
 
 if current_label not in markets:current_label=markets[0]
 
-chosen_label=st.segmented_control('Market',markets,default=current_label,label_visibility='collapsed',key='market_workspace_label') or current_label
+chosen_label=st.segmented_control('Workspace',markets,default=current_label,label_visibility='collapsed',key='market_workspace_label') or current_label
 workspace=label_to_mode.get(chosen_label,'Options')
 st.session_state.market_workspace=workspace
 
@@ -347,12 +347,6 @@ if dividend_ready:register(ROOT/'data'/'monitor.sqlite',rate,dividend,spread)
 if workspace=='Backtest':
     import backtest_ui
     backtest_ui.render()
-elif workspace=='Futures':
-
-    import futures_ui
-
-    futures_ui.render()
-
 else:
     if not dividend_ready:st.info('Dividend inputs unavailable; broker data remains available, model scenarios are withheld.')
     monitor_ui.render_monitor(rate,dividend,spread)
