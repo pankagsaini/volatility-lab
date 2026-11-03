@@ -89,6 +89,29 @@ class TestWebServer(unittest.TestCase):
         self.assertIn('rate_percent', carry)
         self.assertIn('indices', carry)
 
+    def test_historical_candles(self):
+        candles = web_data.get_historical_candles('NIFTY')
+        self.assertEqual(candles['symbol'], 'NIFTY')
+        self.assertIn('candles', candles)
+        self.assertIn('volumes', candles)
+        self.assertGreater(len(candles['candles']), 200)
+        c0 = candles['candles'][0]
+        self.assertIn('time', c0)
+        self.assertIn('open', c0)
+        self.assertIn('high', c0)
+        self.assertIn('low', c0)
+        self.assertIn('close', c0)
+
+    def test_backtest_overview(self):
+        bt = web_data.get_backtest_overview()
+        self.assertIn('runs', bt)
+        if bt['runs']:
+            r = bt['runs'][0]
+            self.assertIn('name', r)
+            self.assertIn('win_rate_pct', r)
+            self.assertIn('total_net_pnl', r)
+
+
 
 if __name__ == '__main__':
     unittest.main()

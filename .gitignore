@@ -33,6 +33,11 @@ Volatility Lab/data/underlying_history/
 Volatility Lab/data/dividend_sources/*.pdf
 Volatility Lab/data/*.sqlite*
 Volatility Lab/data/**/*.sqlite*
+# Node / Frontend Dependencies
+node_modules/
+**/node_modules/
+.npm/
+Volatility Lab/frontend/node_modules/
 Volatility Lab/web/plotly.min.js
 
 # Explicitly Keep Tracking Metadatas, Audits, Charges & JSON Configs in data/

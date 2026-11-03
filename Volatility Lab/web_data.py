@@ -434,3 +434,93 @@ def get_futures_carry_payload() -> Dict[str, Any]:
         })
             
     return {'rate_percent': rf, 'indices': results}
+
+
+def get_historical_candles(symbol: str = 'NIFTY') -> dict:
+    """Historical daily candles and volume estimates for TradingView Lightweight Charts."""
+    sym = 'banknifty' if 'BANK' in symbol.upper() else 'nifty'
+    csv_path = DATA / f"{sym}_one_year.csv"
+    if not csv_path.exists():
+        return {'symbol': symbol, 'candles': [], 'volume': []}
+    
+    try:
+        import pandas as pd
+        df = pd.read_csv(csv_path)
+        candles = []
+        volumes = []
+        for _, row in df.iterrows():
+            d_str = str(row['Date'])
+            o = float(row['Open'])
+            h = float(row['High'])
+            l = float(row['Low'])
+            c = float(row['Close'])
+            candles.append({
+                'time': d_str,
+                'open': round(o, 2),
+                'high': round(h, 2),
+                'low': round(l, 2),
+                'close': round(c, 2),
+            })
+            # Vol estimate based on true range and level
+            vol_val = max(1000, int(abs(h - l) * (150 if sym == 'nifty' else 40)))
+            volumes.append({
+                'time': d_str,
+                'value': vol_val,
+                'color': 'rgba(16, 185, 129, 0.45)' if c >= o else 'rgba(244, 63, 94, 0.45)'
+            })
+        return {
+            'symbol': symbol,
+            'count': len(candles),
+            'last_price': candles[-1]['close'] if candles else 0.0,
+            'candles': candles,
+            'volumes': volumes
+        }
+    except Exception as exc:
+        return {'symbol': symbol, 'error': str(exc), 'candles': [], 'volumes': []}
+
+
+def get_backtest_overview() -> dict:
+    """Recent backtest reports with win rate, net PnL, drawdowns, and trade records."""
+    runs_dir = DATA / 'backtest_runs'
+    if not runs_dir.exists():
+        return {'runs': []}
+    
+    reports = []
+    import json
+    for p in sorted(runs_dir.glob('*.json'), reverse=True):
+        try:
+            raw = json.loads(p.read_text(encoding='utf-8'))
+            trades = raw.get('trades', [])
+            settings = raw.get('settings', {})
+            name = settings.get('name', 'Strategy')
+            sym = settings.get('symbol', 'NIFTY')
+            
+            wins = sum(1 for t in trades if float(t.get('Net', 0)) > 0)
+            losses = sum(1 for t in trades if float(t.get('Net', 0)) < 0)
+            total_net = sum(float(t.get('Net', 0)) for t in trades)
+            total_gross = sum(float(t.get('Gross', 0)) for t in trades)
+            total_charges = sum(float(t.get('Charges', 0)) for t in trades)
+            total_slippage = sum(float(t.get('Slippage', 0)) for t in trades)
+            win_rate = round((wins / len(trades) * 100), 1) if trades else 0.0
+
+            reports.append({
+                'id': p.stem,
+                'name': name,
+                'symbol': sym,
+                'start': settings.get('start'),
+                'end': settings.get('end'),
+                'engine': settings.get('engine', 'v1'),
+                'total_trades': len(trades),
+                'wins': wins,
+                'losses': losses,
+                'win_rate_pct': win_rate,
+                'total_net_pnl': round(total_net, 2),
+                'total_gross_pnl': round(total_gross, 2),
+                'total_charges': round(total_charges, 2),
+                'total_slippage': round(total_slippage, 2),
+                'trades': trades[:15]  # recent sample
+            })
+        except Exception:
+            continue
+    return {'runs': reports}
+
