@@ -13,6 +13,8 @@ Volatility Lab/.auth/
 *.bin
 *.lock
 *.tmp
+.clasprc.json
+.clasp.json
 
 # System Diagnostic Logs
 Volatility Lab/logs/

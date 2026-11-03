@@ -59,7 +59,7 @@ MODULES=('market_data','dashboard_cache','catalogue_fetch','refresh_policy','ups
 
          'market_table','relative_value','synthetic_future','expiry_data','model_view','research_ui',
 
-         'trade_review_ui','research_health','restored_lab','options_context_cache','monitor_ui','futures_data','futures_rolling','futures_sync','futures_view_cache','futures_ui','broker_charges','backtest_index','backtest_engine','backtest_signals','strategy_backtest','backtest_report','futures_backtest','backtest_jobs','futures_backtest_ui','backtest_ui')
+         'trade_review_ui','research_health','restored_lab','options_context_cache','vol_surface_3d','monitor_ui','futures_data','futures_rolling','futures_sync','futures_view_cache','futures_ui','broker_charges','backtest_index','backtest_engine','backtest_signals','strategy_backtest','backtest_report','futures_backtest','backtest_jobs','futures_backtest_ui','backtest_ui')
 
 import monitor_ui
 
@@ -81,65 +81,38 @@ if st.session_state.get('dashboard_revision')!=revision:
     st.session_state.expiry_initial_attempted=False
 
 st.markdown('''<style>
+.stApp{background:#080c14;color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+[data-testid="stHeader"]{background:#080c14!important;border-bottom:1px solid #141e30}
+[data-testid="stSidebar"]{background:#0b111c!important;border-right:1px solid #141e30}
+.block-container{max-width:1500px;padding-top:1.2rem;padding-bottom:2.5rem;padding-left:1.5rem;padding-right:1.5rem}
 
-.stApp{background:#0c1321;color:#e4ecf8}
-[data-testid="stPopoverButton"]{border-radius:10px!important;background:#131e2d!important}
-[data-testid="stSegmentedControl"] button{border-radius:8px!important;font-size:.85rem!important}
-[data-testid="stDataFrame"]{border:1px solid #243348;border-radius:12px;overflow:hidden}
-[data-testid="stPlotlyChart"]{border:1px solid #202e42;border-radius:14px;padding:8px;background:#0c1321}
-[data-testid="stExpander"]{border-color:#243348!important;border-radius:10px!important}
+/* Typography & Numbers */
+h1,h2,h3,h4{letter-spacing:-0.035em;color:#f8fafc;font-weight:600}
+div[data-testid="stMetricValue"]{font-variant-numeric:tabular-nums;font-weight:700;color:#f8fafc;font-size:1.35rem}
+div[data-testid="stMetricLabel"]{color:#94a3b8;font-size:0.76rem;text-transform:uppercase;letter-spacing:0.06em;font-weight:600}
 
+/* Cards & Containers */
+div[data-testid="stMetric"]{background:linear-gradient(145deg,#0f1726 0%,#0c121e 100%);border:1px solid #1a273e;border-radius:12px;padding:12px 16px;box-shadow:0 4px 14px rgba(0,0,0,0.28)}
+[data-testid="stDataFrame"]{border:1px solid #1a273e;border-radius:12px;overflow:hidden;background:#0c121e}
+[data-testid="stPlotlyChart"]{border:1px solid #1a273e;border-radius:14px;padding:8px;background:#090e17;box-shadow:0 4px 18px rgba(0,0,0,0.3)}
+[data-testid="stExpander"]{border:1px solid #1a273e!important;border-radius:10px!important;background:#0c1320!important}
+[data-testid="stPopoverButton"]{border-radius:8px!important;background:#111927!important;border:1px solid #1f2f48!important;color:#cbd5e1!important}
 
-.block-container{max-width:1450px;padding-top:1.2rem;padding-bottom:2rem;padding-left:1.5rem;padding-right:1.5rem}
+/* Navigation Segmented Control */
+[data-testid="stSegmentedControl"]{background:#0c1320;border:1px solid #1a273e;border-radius:10px;padding:4px}
+[data-testid="stSegmentedControl"] button{border-radius:8px!important;font-size:0.86rem!important;font-weight:600!important;transition:all 0.15s ease}
+[data-testid="stSegmentedControl"] button[aria-selected="true"]{background:#16243b!important;color:#38bdf8!important;box-shadow:0 2px 8px rgba(0,210,255,0.15);border:1px solid #0284c7!important}
 
-h1{font-size:2.1rem!important;letter-spacing:-.055em;margin-bottom:0!important}
+/* Radio buttons & Pills */
+div[data-testid="stRadio"] [role="radiogroup"]{gap:0.45rem}
+div[data-testid="stRadio"] label{border:1px solid #1a273e;border-radius:8px;padding:7px 14px;background:#0f1726;font-size:0.84rem}
+div[data-testid="stRadio"] label:has(input:checked){border-color:#06b6d4;background:#0f2738;color:#38bdf8}
 
-h2,h3{letter-spacing:-.025em}
+/* Buttons */
+button[kind="primary"]{border-radius:8px;background:#0284c7;border:none;font-weight:600}
+button[kind="secondary"]{border-radius:8px;background:#111927;border:1px solid #1f2f48;color:#cbd5e1}
 
-h3{font-size:1.3rem!important}
-
-[data-testid="stVerticalBlock"]{gap:.8rem}
-
-section[data-testid="stSidebar"]{background:#111c2d}
-
-div[data-testid="stMetric"]{background:#131f31;border:1px solid #26364d;border-radius:12px;padding:14px 18px}
-
-div[data-testid="stMetricLabel"]{color:#a3b7d0}
-
-div[data-testid="stDataFrame"]{border:1px solid #26364d;border-radius:10px;overflow:hidden}
-
-div[data-testid="stExpander"]{border-color:#253247}
-
-div[data-testid="stCaptionContainer"]{color:#91a5c0}
-
-[data-testid="stHeader"]{background:#0c1321}
-
-button[kind="primary"]{border-radius:8px}
-
-div[data-testid="stRadio"]{padding:4px 0 10px}
-
-div[data-testid="stRadio"] [role="radiogroup"]{gap:.45rem}
-
-div[data-testid="stRadio"] label{border:1px solid #26364d;border-radius:8px;padding:7px 12px;background:#111c2d}
-
-div[data-testid="stRadio"] label:has(input:checked){border-color:#50c5b4;background:#163037}
-
-div[data-testid="stMetricValue"]{font-variant-numeric:tabular-nums}
-
-hr{border-color:#253247!important;margin:1rem 0!important}
-
-div[data-testid="stMetricValue"]{font-size:1.45rem}
-
-div[data-testid="stExpander"]{border-radius:10px;background:#101a2a}
-
-@media(max-width:700px){.block-container{padding-left:1rem;padding-right:1rem}h1{font-size:1.7rem!important}}
-
-.brand-eyebrow{color:#50c5b4;font-size:.72rem;letter-spacing:.20em;font-weight:600;margin-top:8px}
-h1{font-size:2.35rem!important;letter-spacing:-.045em!important}
-h3{font-size:1.12rem!important;font-weight:600!important}
-[data-testid="stCaptionContainer"]{font-size:.78rem;line-height:1.5}
-[data-testid="stMetric"]{box-shadow:none!important}
-.block-container{max-width:1500px;padding-top:2rem}
+hr{border-color:#182335!important;margin:1.2rem 0!important}
 </style>''',unsafe_allow_html=True)
 
 with st.sidebar:
@@ -196,7 +169,139 @@ with st.sidebar:
 
     st.session_state.pop('wide_atm_fallback',None)
 
-st.title('Volatility Lab')
+def render_terminal_header():
+    now=datetime.now(IST)
+    t_min=now.hour*60+now.minute
+    is_open=(now.weekday()<5) and (555<=t_min<=930)
+    
+    if is_open:
+        status_pill='<span style="background:rgba(16,185,129,0.12); color:#10b981; border:1px solid #10b981; padding:4px 10px; border-radius:9999px; font-size:0.75rem; font-weight:700; letter-spacing:0.04em;">● NSE LIVE · REGULAR SESSION</span>'
+    elif now.weekday()<5 and 540<=t_min<555:
+        status_pill='<span style="background:rgba(245,158,11,0.12); color:#f59e0b; border:1px solid #f59e0b; padding:4px 10px; border-radius:9999px; font-size:0.75rem; font-weight:700;">◑ NSE PRE-OPEN</span>'
+    else:
+        status_pill='<span style="background:rgba(148,163,184,0.12); color:#94a3b8; border:1px solid #334155; padding:4px 10px; border-radius:9999px; font-size:0.75rem; font-weight:600;">○ NSE CLOSED · POST-MARKET</span>'
+        
+    ist_time=now.strftime('%d %b %H:%M IST')
+    
+    st.markdown(f'''
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; padding-bottom:10px; border-bottom:1px solid #162236; margin-bottom:12px;">
+        <div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:1.85rem; font-weight:800; letter-spacing:-0.03em; color:#f8fafc; font-family:-apple-system,sans-serif;">
+                    <span style="color:#00d2ff;">◈</span> VOLATILITY LAB
+                </span>
+                <span style="background:#0f2038; color:#38bdf8; border:1px solid #0284c7; padding:2px 8px; border-radius:6px; font-size:0.68rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">
+                    PRO TERMINAL
+                </span>
+            </div>
+            <div style="color:#64748b; font-size:0.78rem; margin-top:2px; font-weight:500;">
+                Institutional Volatility Surface, Forecasting & Derivatives Intelligence
+            </div>
+        </div>
+        <div style="text-align:right;">
+            {status_pill}
+            <div style="color:#64748b; font-size:0.72rem; margin-top:4px; font-variant-numeric:tabular-nums;">
+                {ist_time}
+            </div>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    from expiry_data import load_snapshot
+    import numpy as np
+    snap=load_snapshot(None,allow_saved=True) or {}
+    rows=snap.get('rows',[])
+    nifty=next((r for r in rows if r.get('Instrument')=='NIFTY'),{})
+    bn=next((r for r in rows if r.get('Instrument')=='BANKNIFTY'),{})
+    vix_val=snap.get('india_vix',{}).get('value')
+    info=read_json(ROOT/'data'/'google_archive'/'status.json')
+    sync_state,_=drive_sync_label(info)
+    sync_count=info.get('total_files',0)
+
+    c1,c2,c3,c4=st.columns(4)
+
+    with c1:
+        spot=nifty.get('Price')
+        chg=nifty.get('% change')
+        iv=nifty.get('IV')
+        sprd=nifty.get('IV-RV Spread')
+        chg_color='#10b981' if chg and chg>=0 else '#ef4444'
+        chg_arrow='▲' if chg and chg>=0 else '▼'
+        st.markdown(f'''
+        <div style="background:#0f1726; border:1px solid #1a273e; border-radius:10px; padding:10px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">NIFTY 50</span>
+                <span style="color:{chg_color}; font-size:0.75rem; font-weight:700;">{chg_arrow} {chg:+.2f}%</span>
+            </div>
+            <div style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
+                {f"{spot:,.1f}" if spot else "—"}
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b; margin-top:4px;">
+                <span>ATM IV: <b style="color:#38bdf8;">{f"{iv:.1f}%" if iv else "—"}</b></span>
+                <span>Spread: <b style="color:#cbd5e1;">{f"{sprd:+.1f} pp" if sprd is not None and np.isfinite(sprd) else "—"}</b></span>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with c2:
+        spot_bn=bn.get('Price')
+        chg_bn=bn.get('% change')
+        iv_bn=bn.get('IV')
+        sprd_bn=bn.get('IV-RV Spread')
+        chg_color_bn='#10b981' if chg_bn and chg_bn>=0 else '#ef4444'
+        chg_arrow_bn='▲' if chg_bn and chg_bn>=0 else '▼'
+        st.markdown(f'''
+        <div style="background:#0f1726; border:1px solid #1a273e; border-radius:10px; padding:10px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">BANKNIFTY</span>
+                <span style="color:{chg_color_bn}; font-size:0.75rem; font-weight:700;">{chg_arrow_bn} {chg_bn:+.2f}%</span>
+            </div>
+            <div style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
+                {f"{spot_bn:,.1f}" if spot_bn else "—"}
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b; margin-top:4px;">
+                <span>ATM IV: <b style="color:#818cf8;">{f"{iv_bn:.1f}%" if iv_bn else "—"}</b></span>
+                <span>Spread: <b style="color:#cbd5e1;">{f"{sprd_bn:+.1f} pp" if sprd_bn is not None and np.isfinite(sprd_bn) else "—"}</b></span>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with c3:
+        vix_desc='Low Vol' if vix_val and vix_val<13 else ('Normal' if vix_val and vix_val<=18 else 'Elevated')
+        vix_color='#10b981' if vix_val and vix_val<=15 else ('#f59e0b' if vix_val and vix_val<=20 else '#ef4444')
+        st.markdown(f'''
+        <div style="background:#0f1726; border:1px solid #1a273e; border-radius:10px; padding:10px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">INDIA VIX</span>
+                <span style="color:{vix_color}; font-size:0.72rem; font-weight:700;">{vix_desc}</span>
+            </div>
+            <div style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
+                {f"{vix_val:.2f}" if vix_val else "—"}
+            </div>
+            <div style="font-size:0.72rem; color:#64748b; margin-top:4px;">
+                Benchmark Volatility Index
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with c4:
+        sync_badge_color='#10b981' if sync_state=='healthy' else ('#f59e0b' if sync_state=='syncing' else '#64748b')
+        st.markdown(f'''
+        <div style="background:#0f1726; border:1px solid #1a273e; border-radius:10px; padding:10px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">CLOUD MIRROR</span>
+                <span style="color:{sync_badge_color}; font-size:0.72rem; font-weight:700; text-transform:uppercase;">● {sync_state}</span>
+            </div>
+            <div style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
+                {sync_count:,} <span style="font-size:0.76rem; font-weight:500; color:#64748b;">archives</span>
+            </div>
+            <div style="font-size:0.72rem; color:#64748b; margin-top:4px;">
+                3-min snapshot pipeline
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+render_terminal_header()
 
 import google_archive_sync
 @st.fragment(run_every=30)
@@ -258,9 +363,21 @@ with st.sidebar:
 if capture.get('status') in ('failed','partial'):
     st.warning('Laptop history backup needs attention: '+'; '.join(capture.get('errors',[])[:2]))
 
-markets=['Options','Futures']+(['Backtest'] if advanced else [])
-if st.session_state.get('market_workspace') not in markets:st.session_state.market_workspace='Options'
-workspace=st.segmented_control('Market',markets,label_visibility='collapsed',key='market_workspace') or 'Options'
+workspace_labels={'Options':'⚡ Options Terminal','Futures':'📈 Futures Carry','Backtest':'🧪 Backtest Studio'}
+label_to_mode={v:k for k,v in workspace_labels.items()}
+raw_markets=['Options','Futures']+(['Backtest'] if advanced else [])
+markets=[workspace_labels[m] for m in raw_markets]
+
+saved_ws=st.session_state.get('market_workspace')
+if saved_ws in label_to_mode:current_label=saved_ws
+elif saved_ws in workspace_labels:current_label=workspace_labels[saved_ws]
+else:current_label=workspace_labels['Options']
+
+if current_label not in markets:current_label=markets[0]
+
+chosen_label=st.segmented_control('Market',markets,default=current_label,label_visibility='collapsed',key='market_workspace_label') or current_label
+workspace=label_to_mode.get(chosen_label,'Options')
+st.session_state.market_workspace=workspace
 
 from history_policy import register
 

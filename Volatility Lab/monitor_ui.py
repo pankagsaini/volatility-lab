@@ -32,6 +32,113 @@ from quote_status import snapshot_status
 
 from expiry_forecast import expiry_forecast, VERSION as EXPIRY_VERSION,term_structure_forecast,TERM_VERSION
 
+def render_trade_decision_radar(selected_rows):
+    """Executive trade decision panel with regime, spread bias, expected move, and basis."""
+    if not selected_rows:return
+    st.markdown('<div style="margin-top:2px; margin-bottom:10px;"><span style="font-size:0.76rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#06b6d4;">Tactical Volatility & Trade Decision Radar</span></div>', unsafe_allow_html=True)
+    cols=st.columns(len(selected_rows))
+    for col,row in zip(cols,selected_rows):
+        symbol=row.get('Instrument','—')
+        exp=row.get('Expiry','—')
+        spot=row.get('Price')
+        iv=row.get('IV')
+        spread=row.get('IV-RV Spread')
+        syn=row.get('Synthetic future')
+        m_fut=row.get('Month future LTP')
+        rev25=row.get('25 Delta reversal')
+
+        with col:
+            if not spot or not np.isfinite(spot) or not iv or not np.isfinite(iv):
+                st.info(f"{symbol} ({exp}): Live quotes pending.")
+                continue
+
+            try:
+                exp_date=pd.Timestamp(exp).date()
+                today=datetime.now(IST).date()
+                dte=max(0.2,float((exp_date-today).days))
+            except Exception:
+                dte=5.0
+            move_pts=spot*(iv/100.0)*np.sqrt(dte/365.0)
+            move_pct=(move_pts/spot)*100.0
+            lower_range=spot-move_pts
+            upper_range=spot+move_pts
+
+            if pd.notna(spread) and np.isfinite(spread):
+                if spread>1.5:
+                    bias_badge='RICH VOLATILITY'
+                    bias_color='#10b981'
+                    bias_bg='rgba(16, 185, 129, 0.12)'
+                    bias_border='#10b981'
+                    bias_text='⚡ Premium Selling Favorable (Credit Spreads, Iron Condors, Straddles). IV commands an attractive premium over trailing realized movement.'
+                elif spread<-1.5:
+                    bias_badge='COMPRESSED VOLATILITY'
+                    bias_color='#06b6d4'
+                    bias_bg='rgba(6, 182, 212, 0.12)'
+                    bias_border='#06b6d4'
+                    bias_text='🎯 Long Gamma / Debit Spreads Favorable (Long Calendars, Straddles). Market pricing is discounted relative to historical movement.'
+                else:
+                    bias_badge='FAIR VALUE SPREAD'
+                    bias_color='#94a3b8'
+                    bias_bg='rgba(148, 163, 184, 0.12)'
+                    bias_border='#475569'
+                    bias_text='⚖️ Directional / Skew Neutral. IV tracks realized volatility closely within statistical bounds.'
+                spread_display=f'{spread:+.2f} pp'
+            else:
+                bias_badge='SPREAD PENDING'
+                bias_color='#f59e0b'
+                bias_bg='rgba(245, 158, 11, 0.12)'
+                bias_border='#b45309'
+                bias_text='Historical daily prices updating for RV alignment.'
+                spread_display='—'
+
+            if pd.notna(syn) and pd.notna(m_fut) and np.isfinite(syn) and np.isfinite(m_fut):
+                basis=syn-m_fut
+                basis_threshold=30.0 if symbol=='NIFTY' else 75.0
+                if abs(basis)<=basis_threshold:
+                    basis_status=f'● Parity Normal ({basis:+.1f} pts)'
+                    basis_color='#10b981'
+                else:
+                    basis_status=f'⚠️ Basis Dislocation ({basis:+.1f} pts)'
+                    basis_color='#f59e0b'
+            else:
+                basis_status='Parity: Reference'
+                basis_color='#94a3b8'
+
+            skew_text=f'Put Skew: {abs(rev25):.2f} pp' if pd.notna(rev25) and np.isfinite(rev25) else 'Skew: —'
+
+            st.markdown(f'''
+            <div style="background:#111927; border:1px solid #1f2d42; border-radius:12px; padding:14px 16px; margin-bottom:12px; box-shadow:0 4px 16px rgba(0,0,0,0.25);">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1b2637; padding-bottom:8px; margin-bottom:10px;">
+                    <div>
+                        <span style="font-weight:700; font-size:1.05rem; color:#f8fafc;">{symbol}</span>
+                        <span style="color:#64748b; font-size:0.8rem; margin-left:6px;">{exp} ({dte:.1f}d)</span>
+                    </div>
+                    <span style="background:{bias_bg}; color:{bias_color}; border:1px solid {bias_border}; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:6px; letter-spacing:0.04em;">
+                        {bias_badge}
+                    </span>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+                    <div style="background:#0c1320; border:1px solid #1a2538; border-radius:8px; padding:8px 12px;">
+                        <div style="color:#64748b; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;">Spot & ATM IV</div>
+                        <div style="font-size:1.15rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums;">{spot:,.1f}</div>
+                        <div style="color:#38bdf8; font-size:0.75rem; font-weight:600;">IV: {iv:.2f}% <span style="color:#64748b;">(Sprd: {spread_display})</span></div>
+                    </div>
+                    <div style="background:#0c1320; border:1px solid #1a2538; border-radius:8px; padding:8px 12px;">
+                        <div style="color:#64748b; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;">Expected Expiry Move</div>
+                        <div style="font-size:1.15rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums;">±{move_pts:.0f} pts</div>
+                        <div style="color:#a855f7; font-size:0.75rem; font-weight:600;">±{move_pct:.2f}% <span style="color:#64748b;">({lower_range:,.0f}–{upper_range:,.0f})</span></div>
+                    </div>
+                </div>
+                <div style="font-size:0.78rem; line-height:1.45; color:#cbd5e1; background:#0e1726; border-left:3px solid {bias_color}; border-radius:4px; padding:6px 10px; margin-bottom:8px;">
+                    {bias_text}
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b;">
+                    <span style="color:{basis_color}; font-weight:600;">{basis_status}</span>
+                    <span>{skew_text}</span>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
+
 def show_table(frame):
 
     numeric=frame.select_dtypes(include='number').columns
@@ -846,6 +953,8 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
         table['Underlying as of']=[pd.Timestamp(r['As of']).strftime('%d %b %H:%M') if r.get('As of') else 'Unavailable' for r in selected_rows]
 
+        render_trade_decision_radar(selected_rows)
+
         parity_columns=['ATM strike','ATM call LTP','ATM put LTP','Synthetic future',
                         'Month future LTP','Future contract','Future quote time',
                         'Future reference','Synthetic status']
@@ -877,7 +986,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
         if st.session_state.get('options_chart_view_v2')=='Position risk':
             st.session_state.options_chart_view_v2='Volatility history'
         with b:
-            views=['Volatility history','IV–RV Spread','Term structure','Smile & skew']
+            views=['Volatility history','IV–RV Spread','Term structure','Smile & skew','3D Vol Surface']
             if st.session_state.get('advanced_workspace'):views+=['Research','Intraday']
             if st.session_state.get('options_chart_view_v2') not in views:st.session_state.options_chart_view_v2='Volatility history'
             chart=st.segmented_control('Chart',views,key='options_chart_view_v2',label_visibility='collapsed',selection_mode='single')
@@ -895,12 +1004,15 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
                 st.warning('HV could not be loaded from saved daily prices. IV–RV requires those prices too.')
 
 
-        if chart in ('Term structure','Smile & skew'):
+        if chart in ('Term structure','Smile & skew','3D Vol Surface'):
             status=snapshot_status(chart_selected.get('As of'),chart_selected.get('Source'),ready,retrieved_at=chart_selected.get('Retrieved at'))
             if not status.startswith(('Recent snapshot','Recent API retrieval')):
                 st.caption('Saved observation · underlying '+str(chart_selected.get('As of','unavailable'))+' · '+status)
         if chart=='Term structure':render_term_structure(symbol,result)
         elif chart=='Smile & skew':render_smile(symbol,chart_selected,config)
+        elif chart=='3D Vol Surface':
+            from vol_surface_3d import render_vol_surface_3d
+            render_vol_surface_3d(symbol,chart_selected,result,DATA)
         elif chart=='Research':
             res_view=st.radio('Research tool',['Relative value & smile metrics','Candidate model validation & diagnostics','HAR-RV volatility cascades'],horizontal=True,key='research_tool_selector')
             if res_view=='Relative value & smile metrics':
