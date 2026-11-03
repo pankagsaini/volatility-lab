@@ -82,9 +82,9 @@ if st.session_state.get('dashboard_revision')!=revision:
 
 st.markdown('''<style>
 .stApp{background:#080c14;color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-[data-testid="stHeader"]{background:#080c14!important;border-bottom:1px solid #141e30}
+[data-testid="stHeader"]{background:#080c14!important;border-bottom:none!important;height:0!important;min-height:0!important;visibility:hidden!important}
 [data-testid="stSidebar"]{background:#0b111c!important;border-right:1px solid #141e30}
-.block-container{max-width:1500px;padding-top:1.2rem;padding-bottom:2.5rem;padding-left:1.5rem;padding-right:1.5rem}
+.block-container{max-width:1500px;padding-top:1.5rem!important;padding-bottom:2.5rem;padding-left:1.5rem;padding-right:1.5rem}
 
 /* Typography & Numbers */
 h1,h2,h3,h4{letter-spacing:-0.035em;color:#f8fafc;font-weight:600}
@@ -361,7 +361,16 @@ with st.sidebar:
 
 
 if capture.get('status') in ('failed','partial'):
-    st.warning('Laptop history backup needs attention: '+'; '.join(capture.get('errors',[])[:2]))
+    errors = capture.get('errors', [])
+    now_ist = datetime.now(IST)
+    is_evening_pending = (
+        all('pending' in e.lower() or 'missing' in e.lower() for e in errors)
+        and (16 <= now_ist.hour < 21)
+    )
+    if is_evening_pending:
+        st.info('Laptop history backup: waiting for Upstox evening candle publication (scheduled retries active).')
+    else:
+        st.warning('Laptop history backup needs attention: ' + '; '.join(errors[:2]))
 
 workspace_labels={'Options':'⚡ Options Terminal','Futures':'📈 Futures Carry','Backtest':'🧪 Backtest Studio'}
 label_to_mode={v:k for k,v in workspace_labels.items()}

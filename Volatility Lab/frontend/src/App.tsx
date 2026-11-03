@@ -100,7 +100,10 @@ export const App: React.FC = () => {
         const list = res.expiries || [];
         setExpiries(list);
         if (list.length > 0) {
-          setSelectedExpiry(list[0].expiry);
+          setSelectedExpiry((prev) => {
+            const exists = list.some((e) => e.expiry === prev);
+            return exists ? prev : list[0].expiry;
+          });
         }
       })
       .catch((err) => console.error('Failed to load expiries:', err));
@@ -108,7 +111,7 @@ export const App: React.FC = () => {
 
   // Fetch Vol Surface Payload for Smile & Term Structure
   const refreshSurfaceData = useCallback(
-    (symbol: string, range: number, mode: string, space: string, z0: boolean) => {
+    (symbol: string, range: number, mode: string, space: string, z0: boolean, expiry?: string) => {
       const query = new URLSearchParams({
         symbol,
         mode,
@@ -116,6 +119,9 @@ export const App: React.FC = () => {
         range: range.toString(),
         include_0dte: z0.toString(),
       });
+      if (expiry) {
+        query.append('selected_expiry', expiry);
+      }
       fetch(`/api/vol-surface?${query.toString()}`)
         .then((r) => r.json())
         .then((data: VolSurfacePayload) => setSurfaceData(data))
@@ -128,8 +134,27 @@ export const App: React.FC = () => {
   useEffect(() => {
     refreshMarketSummary();
     refreshExpiries(selectedSymbol);
-    refreshSurfaceData(selectedSymbol, surfaceRange, ivMode, spaceMode, includeZeroDte);
-  }, [selectedSymbol, refreshMarketSummary, refreshExpiries, refreshSurfaceData, surfaceRange, ivMode, spaceMode, includeZeroDte]);
+  }, [selectedSymbol, refreshMarketSummary, refreshExpiries]);
+
+  // Synchronized Surface Reload when symbol, expiry, or parameters change
+  useEffect(() => {
+    refreshSurfaceData(
+      selectedSymbol,
+      surfaceRange,
+      ivMode,
+      spaceMode,
+      includeZeroDte,
+      selectedExpiry
+    );
+  }, [
+    selectedSymbol,
+    selectedExpiry,
+    refreshSurfaceData,
+    surfaceRange,
+    ivMode,
+    spaceMode,
+    includeZeroDte,
+  ]);
 
   // WebSocket for Live Market Tick Streaming
   useEffect(() => {
@@ -162,10 +187,13 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#080c14] text-[#e2e8f0] flex flex-col transition-colors selection:bg-cyan-500/30 selection:text-cyan-200">
-      {/* Top Sticky Navbar */}
+      {/* Top Sticky Header with Symbol & Global Expiry Sync */}
       <Navbar
         selectedSymbol={selectedSymbol}
         onSelectSymbol={(sym) => setSelectedSymbol(sym as 'NIFTY' | 'BANKNIFTY')}
+        selectedExpiry={selectedExpiry}
+        onSelectExpiry={setSelectedExpiry}
+        expiries={expiries}
         summary={summary}
         currentTime={currentTime}
         isDark={isDark}
@@ -175,7 +203,7 @@ export const App: React.FC = () => {
         isRefreshing={isRefreshing}
       />
 
-      <main className="flex-1 max-w-[1720px] w-full mx-auto px-4 py-5 space-y-5">
+      <main className="flex-1 max-w-[1720px] w-full mx-auto px-4 py-4 space-y-4">
         {/* Ticker Ribbon */}
         <TickerRibbon summary={summary} />
 
@@ -211,7 +239,7 @@ export const App: React.FC = () => {
         {/* Tab Contents: Instant Seamless Switching */}
         {activeTab === 'surface' && (
           <div className="space-y-4 animate-fade-in">
-            {/* 3D Surface */}
+            {/* 3D Surface with Active Expiry Cross-Section Highlight */}
             <VolSurface3D
               symbol={selectedSymbol}
               isDark={isDark}
@@ -219,12 +247,13 @@ export const App: React.FC = () => {
               ivMode={ivMode}
               spaceMode={spaceMode}
               includeZeroDte={includeZeroDte}
+              selectedExpiry={selectedExpiry}
             />
 
             {/* 2D Smiles & Term Structure side-by-side */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <SmileChart data={surfaceData} isDark={isDark} />
-              <TermStructureChart data={surfaceData} isDark={isDark} />
+              <SmileChart data={surfaceData} isDark={isDark} selectedExpiry={selectedExpiry} />
+              <TermStructureChart data={surfaceData} isDark={isDark} selectedExpiry={selectedExpiry} />
             </div>
           </div>
         )}
@@ -243,7 +272,12 @@ export const App: React.FC = () => {
 
         {activeTab === 'radar' && (
           <div className="animate-fade-in">
-            <TradeRadarView symbol={selectedSymbol} />
+            <TradeRadarView
+              symbol={selectedSymbol}
+              selectedExpiry={selectedExpiry}
+              expiries={expiries}
+              onSelectExpiry={setSelectedExpiry}
+            />
           </div>
         )}
 

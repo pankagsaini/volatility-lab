@@ -1,13 +1,14 @@
 import React, { useEffect, useRef } from 'react';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, Target } from 'lucide-react';
 import { VolSurfacePayload } from '../types';
 
 interface SmileChartProps {
   data: VolSurfacePayload | null;
   isDark: boolean;
+  selectedExpiry?: string;
 }
 
-export const SmileChart: React.FC<SmileChartProps> = ({ data, isDark }) => {
+export const SmileChart: React.FC<SmileChartProps> = ({ data, isDark, selectedExpiry }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -19,20 +20,39 @@ export const SmileChart: React.FC<SmileChartProps> = ({ data, isDark }) => {
     const textColor = isDark ? '#e2e8f0' : '#1e293b';
     const gridColor = isDark ? '#1e293b' : '#e2e8f0';
 
-    const colors = ['#00e5ff', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#3b82f6'];
+    const colors = ['#38bdf8', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#a855f7'];
 
-    const traces = data.smile_curves.slice(0, 6).map((curve, idx) => ({
-      x: curve.strikes,
-      y: curve.ivs,
-      mode: 'lines+markers',
-      name: `${curve.expiry} (${curve.dte.toFixed(1)}d)`,
-      line: {
-        color: colors[idx % colors.length],
-        width: 2.2,
-        shape: 'spline',
-      },
-      marker: { size: 4 },
-    }));
+    // Ensure the selected expiry is included in curves to plot
+    let curvesToPlot = [...data.smile_curves.slice(0, 6)];
+    const focusExp = selectedExpiry || data.selected_expiry;
+    if (focusExp) {
+      const match = data.smile_curves.find((c) => c.expiry === focusExp);
+      if (match && !curvesToPlot.some((c) => c.expiry === match.expiry)) {
+        curvesToPlot.push(match);
+      }
+    }
+
+    const traces = curvesToPlot.map((curve, idx) => {
+      const isSelected = focusExp ? curve.expiry === focusExp : idx === 0;
+      return {
+        x: curve.strikes,
+        y: curve.ivs,
+        mode: 'lines+markers',
+        name: isSelected
+          ? `★ ${curve.expiry} (${curve.dte.toFixed(1)}d) [SELECTED]`
+          : `${curve.expiry} (${curve.dte.toFixed(1)}d)`,
+        line: {
+          color: isSelected ? '#00e5ff' : colors[idx % colors.length],
+          width: isSelected ? 3.5 : 1.8,
+          shape: 'spline',
+        },
+        marker: {
+          size: isSelected ? 6 : 3.5,
+          color: isSelected ? '#00e5ff' : colors[idx % colors.length],
+        },
+        opacity: isSelected ? 1.0 : 0.7,
+      };
+    });
 
     // Vertical ATM line shape
     const shapes = data.spot
@@ -78,16 +98,24 @@ export const SmileChart: React.FC<SmileChartProps> = ({ data, isDark }) => {
     };
 
     Plotly.react(containerRef.current, traces, layout, { responsive: true, displayModeBar: false });
-  }, [data, isDark]);
+  }, [data, isDark, selectedExpiry]);
+
+  const activeFocus = selectedExpiry || data?.selected_expiry;
 
   return (
     <div className="glass-panel p-4 rounded-xl border border-slate-800">
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-800">
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-cyan-400" />
           <h2 className="text-sm font-semibold tracking-wide text-white uppercase">
             Opstra 2D Multi-Expiry Smile Overlay
           </h2>
+          {activeFocus && (
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 flex items-center gap-1">
+              <Target className="w-3 h-3" />
+              Focus: {activeFocus}
+            </span>
+          )}
         </div>
         <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
           ATM Ref: ₹{data?.spot ? data.spot.toLocaleString('en-IN') : '—'}

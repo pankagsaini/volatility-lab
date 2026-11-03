@@ -229,7 +229,8 @@ def get_vol_surface_payload(
     iv_mode: str = 'otm',
     space_mode: str = 'strike',
     range_pct: float = 8.0,
-    include_zero_dte: bool = True
+    include_zero_dte: bool = True,
+    selected_expiry: Optional[str] = None
 ) -> Dict[str, Any]:
     """Opstra-grade 3D Volatility Surface, 2D Multi-Expiry Smile Overlay, and Term Structure."""
     from vol_surface_3d import load_expiry_chains, extract_surface_mesh
@@ -308,9 +309,15 @@ def get_vol_surface_payload(
         for sc in smile_curves
     ]
 
+    selected_dte = next((float(sc['dte']) for sc in smile_curves if sc.get('expiry') == selected_expiry), None) if selected_expiry else None
+    for sc in smile_curves:
+        sc['is_selected'] = (sc.get('expiry') == selected_expiry) if selected_expiry else False
+
     return {
         'symbol': symbol,
         'ref_spot': ref_spot,
+        'selected_expiry': selected_expiry,
+        'selected_dte': selected_dte,
         'space_mode': space_mode,
         'x_grid': [float(x) for x in x_grid],
         'y_grid': [float(y) for y in y_grid],
@@ -332,12 +339,18 @@ def get_vol_surface_payload(
     }
 
 
-def get_trade_radar(symbol: str) -> Dict[str, Any]:
+def get_trade_radar(symbol: str, expiry: Optional[str] = None) -> Dict[str, Any]:
     """Executive trade opportunity radar and ATM expected expiry move metrics."""
     from expiry_data import load_snapshot
     snap = load_snapshot(None, allow_saved=True) or {}
     rows = snap.get('rows', [])
-    row = next((r for r in rows if r.get('Instrument') == symbol), None)
+    selected_rows = [r for r in rows if r.get('Instrument') == symbol]
+    if expiry:
+        row = next((r for r in selected_rows if r.get('Expiry') == expiry), None)
+        if not row and selected_rows:
+            row = selected_rows[0]
+    else:
+        row = selected_rows[0] if selected_rows else None
     
     if not row or not row.get('Price') or not row.get('IV'):
         return {'symbol': symbol, 'error': f'Live quotes not available for {symbol}'}

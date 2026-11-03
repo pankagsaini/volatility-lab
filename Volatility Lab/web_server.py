@@ -93,7 +93,8 @@ async def api_vol_surface(
     mode: str = Query("otm"),
     space: str = Query("strike"),
     range: float = Query(8.0),
-    include_0dte: bool = Query(True)
+    include_0dte: bool = Query(True),
+    selected_expiry: str = Query(None)
 ):
     """Opstra-grade 3D Volatility Surface, 2D Multi-Expiry Smile Overlay, and Term Structure."""
     sym = symbol.upper()
@@ -103,7 +104,8 @@ async def api_vol_surface(
             iv_mode=mode,
             space_mode=space,
             range_pct=range,
-            include_zero_dte=include_0dte
+            include_zero_dte=include_0dte,
+            selected_expiry=selected_expiry
         )
         return data
     except Exception as exc:
@@ -111,11 +113,11 @@ async def api_vol_surface(
 
 
 @app.get("/api/trade-radar")
-async def api_trade_radar(symbol: str = Query("NIFTY")):
+async def api_trade_radar(symbol: str = Query("NIFTY"), expiry: str = Query(None)):
     """Trade opportunity signals, expected move, range bounds, and synthetic basis."""
     sym = symbol.upper()
     try:
-        data = web_data.get_trade_radar(sym)
+        data = web_data.get_trade_radar(sym, expiry=expiry)
         return data
     except Exception as exc:
         return JSONResponse({"symbol": sym, "error": str(exc)}, status_code=500)

@@ -1,10 +1,13 @@
 import React from 'react';
-import { Activity, Sun, Moon, Sliders, RefreshCw } from 'lucide-react';
-import { MarketSummary } from '../types';
+import { Activity, Sun, Moon, Sliders, RefreshCw, Calendar } from 'lucide-react';
+import { MarketSummary, ExpiryItem } from '../types';
 
 interface NavbarProps {
   selectedSymbol: string;
   onSelectSymbol: (symbol: string) => void;
+  selectedExpiry: string;
+  onSelectExpiry: (expiry: string) => void;
+  expiries: ExpiryItem[];
   summary: MarketSummary | null;
   currentTime: string;
   isDark: boolean;
@@ -17,6 +20,9 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   selectedSymbol,
   onSelectSymbol,
+  selectedExpiry,
+  onSelectExpiry,
+  expiries,
   summary,
   currentTime,
   isDark,
@@ -28,26 +34,26 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isMarketOpen = summary?.market_open ?? false;
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-[#080c14]/90 backdrop-blur-md px-4 py-2.5 transition-colors">
-      <div className="max-w-[1720px] mx-auto flex items-center justify-between gap-4">
-        {/* Left: Branding & Instrument Selector */}
-        <div className="flex items-center gap-6">
+    <header className="sticky top-0 z-50 w-full border-b border-slate-800 bg-[#080c14]/95 backdrop-blur-md px-4 py-2.5 transition-colors">
+      <div className="max-w-[1720px] mx-auto flex flex-wrap items-center justify-between gap-3">
+        {/* Left: Branding, Instrument Selector & Global Expiry Selector */}
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
               <Activity className="w-5 h-5 text-white" />
             </div>
             <div>
-              <span className="font-bold text-base tracking-tight text-white flex items-center gap-1.5">
+              <span className="font-bold text-base tracking-tight text-white flex items-center gap-1.5 whitespace-nowrap">
                 VOLATILITY LAB
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                  PRO SaaS
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold">
+                  PRO SAAS
                 </span>
               </span>
             </div>
           </div>
 
           {/* Instrument Toggle Segmented Control */}
-          <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800">
+          <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 shrink-0">
             {['NIFTY', 'BANKNIFTY'].map((sym) => {
               const active = selectedSymbol === sym;
               return (
@@ -65,10 +71,30 @@ export const Navbar: React.FC<NavbarProps> = ({
               );
             })}
           </div>
+
+          {/* Global Expiry Selector */}
+          {expiries && expiries.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-900 border border-slate-800 shrink-0">
+              <Calendar className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="text-[10px] uppercase font-bold text-slate-400 hidden md:inline">Expiry:</span>
+              <select
+                value={selectedExpiry}
+                onChange={(e) => onSelectExpiry(e.target.value)}
+                className="bg-transparent text-xs font-mono font-semibold text-cyan-300 focus:outline-none cursor-pointer py-1"
+                title="Select global focus expiry"
+              >
+                {expiries.map((exp) => (
+                  <option key={exp.expiry} value={exp.expiry} className="bg-slate-900 text-white">
+                    {exp.expiry} ({exp.dte.toFixed(1)}d)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Right: Market Status, IST Clock, Theme Toggle, Settings Drawer */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {/* Live Status Pill */}
           <div
             className={`flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-mono font-medium border ${
@@ -82,7 +108,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 isMarketOpen ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
               }`}
             />
-            {summary?.market_status || (isMarketOpen ? '● NSE LIVE' : '○ NSE CLOSED')}
+            <span className="hidden xs:inline">
+              {summary?.market_status || (isMarketOpen ? '● NSE LIVE' : '○ NSE CLOSED')}
+            </span>
           </div>
 
           {/* IST Clock */}
@@ -114,7 +142,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 hover:text-white transition-colors"
           >
             <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Parameters</span>
+            <span className="hidden sm:inline">Parameters</span>
           </button>
         </div>
       </div>

@@ -67,6 +67,8 @@ export interface OptionChainPayload {
 export interface VolSurfacePayload {
   symbol: string;
   spot: number;
+  selected_expiry?: string;
+  selected_dte?: number;
   x_grid: number[];
   y_grid: number[];
   z_matrix: number[][];
@@ -81,6 +83,7 @@ export interface VolSurfacePayload {
     dte: number;
     strikes: number[];
     ivs: number[];
+    is_selected?: boolean;
   }>;
   term_structure: {
     dtes: number[];

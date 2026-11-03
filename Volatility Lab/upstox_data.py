@@ -102,16 +102,16 @@ class UpstoxDataClient:
                 break
             except HTTPError as error:
                 if error.code in (429,500,502,503,504) and attempt<2:
-                    try:delay=min(float((error.headers or {}).get('Retry-After','0')),10.)
+                    try:delay=min(float((error.headers or {}).get('Retry-After','0')),30.)
                     except (TypeError,ValueError):delay=0.
-                    time.sleep(max(delay,.5*(2**attempt)))
+                    time.sleep(max(delay,2.0*(2**attempt)))
                     continue
                 raise UpstoxDataError(http_error_message(error,path)) from None
             except (URLError,OSError,ValueError):
                 if attempt<2:
-                    time.sleep(.5*(2**attempt))
+                    time.sleep(2.0*(2**attempt))
                     continue
-                raise UpstoxDataError('Upstox connection failed or returned an invalid response after 3 attempts.') from None
+                raise UpstoxDataError('Upstox connection failed or returned an invalid response after 3 attempts (retry horizon exceeded).') from None
         if payload.get('status')!='success' or 'data' not in payload:
             raise UpstoxDataError('Upstox did not return successful market data.')
         return payload['data']

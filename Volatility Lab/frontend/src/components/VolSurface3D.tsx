@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, Layers, Eye } from 'lucide-react';
+import { Box, Layers, Target } from 'lucide-react';
 import { VolSurfacePayload } from '../types';
 
 interface VolSurface3DProps {
@@ -9,6 +9,7 @@ interface VolSurface3DProps {
   ivMode: string;
   spaceMode: string;
   includeZeroDte: boolean;
+  selectedExpiry?: string;
 }
 
 export const VolSurface3D: React.FC<VolSurface3DProps> = ({
@@ -18,6 +19,7 @@ export const VolSurface3D: React.FC<VolSurface3DProps> = ({
   ivMode,
   spaceMode,
   includeZeroDte,
+  selectedExpiry,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<VolSurfacePayload | null>(null);
@@ -34,6 +36,9 @@ export const VolSurface3D: React.FC<VolSurface3DProps> = ({
       range: surfaceRange.toString(),
       include_0dte: includeZeroDte.toString(),
     });
+    if (selectedExpiry) {
+      query.append('selected_expiry', selectedExpiry);
+    }
 
     fetch(`/api/vol-surface?${query.toString()}`)
       .then((r) => r.json())
@@ -51,7 +56,7 @@ export const VolSurface3D: React.FC<VolSurface3DProps> = ({
     return () => {
       mounted = false;
     };
-  }, [symbol, surfaceRange, ivMode, spaceMode, includeZeroDte]);
+  }, [symbol, surfaceRange, ivMode, spaceMode, includeZeroDte, selectedExpiry]);
 
   useEffect(() => {
     if (!containerRef.current || !data || !data.z_matrix) return;
@@ -103,13 +108,35 @@ export const VolSurface3D: React.FC<VolSurface3DProps> = ({
       name: 'ATM Ridge Spine',
     };
 
+    // 3. Highlighted Selected Expiry Cross-Section Curve
+    const focusExp = selectedExpiry || data.selected_expiry;
+    let selectedCurveTrace: any = null;
+    if (focusExp && data.smile_curves) {
+      const match = data.smile_curves.find((c) => c.expiry === focusExp);
+      if (match && match.strikes && match.strikes.length > 0) {
+        selectedCurveTrace = {
+          type: 'scatter3d',
+          mode: 'lines+markers',
+          x: match.strikes,
+          y: Array(match.strikes.length).fill(match.dte),
+          z: match.ivs,
+          line: { color: '#ffb703', width: 7 },
+          marker: { size: 4.5, color: '#ffffff' },
+          name: `Focus: ${match.expiry} (${match.dte.toFixed(1)}d)`,
+        };
+      }
+    }
+
     const layout = {
       paper_bgcolor: bgColor,
       plot_bgcolor: bgColor,
       margin: { l: 10, r: 10, t: 10, b: 10 },
       scene: {
         xaxis: {
-          title: { text: spaceMode === 'moneyness' ? 'Moneyness (K/S)' : 'Strike Price (₹)', font: { color: textColor, size: 11 } },
+          title: {
+            text: spaceMode === 'moneyness' ? 'Moneyness (K/S)' : 'Strike Price (₹)',
+            font: { color: textColor, size: 11 },
+          },
           gridcolor: gridColor,
           zerolinecolor: gridColor,
           tickfont: { color: textColor, size: 10 },
@@ -144,12 +171,17 @@ export const VolSurface3D: React.FC<VolSurface3DProps> = ({
       displayModeBar: false,
     };
 
-    Plotly.react(containerRef.current, [surfaceTrace, atmTrace], layout, config);
-  }, [data, isDark, spaceMode]);
+    const traces = [surfaceTrace, atmTrace];
+    if (selectedCurveTrace) traces.push(selectedCurveTrace);
+
+    Plotly.react(containerRef.current, traces, layout, config);
+  }, [data, isDark, spaceMode, selectedExpiry]);
+
+  const activeFocus = selectedExpiry || data?.selected_expiry;
 
   return (
     <div className="glass-panel p-4 rounded-xl border border-slate-800">
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-800">
         <div className="flex items-center gap-2">
           <Box className="w-4 h-4 text-cyan-400" />
           <h2 className="text-sm font-semibold tracking-wide text-white uppercase">
@@ -158,6 +190,12 @@ export const VolSurface3D: React.FC<VolSurface3DProps> = ({
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
             ATM Ridge Illuminated
           </span>
+          {activeFocus && (
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+              <Target className="w-3 h-3" />
+              Focus: {activeFocus} {data?.selected_dte != null ? `(${data.selected_dte.toFixed(1)}d)` : ''}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
