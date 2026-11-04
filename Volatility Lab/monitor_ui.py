@@ -765,32 +765,26 @@ def render_relative_value(symbol,selected,config):
     from relative_value import history as research_history,maturity_stats
     from volatility_regime import regime_input,regime_summary
 
-    with st.expander('Historical volatility regime'):
+    st.markdown('<div style="margin-top:16px; margin-bottom:6px;"><span style="font-size:0.82rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#38bdf8;">◈ Historical Volatility Regime & Maturity Relative Value</span></div>', unsafe_allow_html=True)
 
-        try:
-
-            path=regime_input(DATA,symbol)
-
-            summary=regime_summary(pd.read_csv(path),selected.get('As of'))
-
-            show_table(summary[['Measure','HV %','Prior-year percentile','Regime','Prior sessions','As of']])
-
-            st.caption('Historical HV percentile · low ≤20 · elevated ≥80')
-
-        except (OSError,ValueError,TypeError) as exc:st.info(str(exc))
+    try:
+        path=regime_input(DATA,symbol)
+        summary=regime_summary(pd.read_csv(path),selected.get('As of'))
+        show_table(summary[['Measure','HV %','Prior-year percentile','Regime','Prior sessions','As of']])
+        st.caption('Historical HV percentile · low ≤20% · normal 20–80% · elevated ≥80%')
+    except (OSError,ValueError,TypeError) as exc:
+        st.info(f"Regime calculation: {exc}")
 
     saved=research_history(DATA/'monitor.sqlite',symbol,config,comparable=True)
 
     if saved.empty:
-
-        st.info('Research observations will appear after Cloud captures.');return
+        st.info('Maturity-matched observations will appear after Cloud captures.');return
 
     match=saved[(saved.Expiry==selected.get('Expiry'))&(saved['As of']==selected.get('As of'))&(saved.Config==config)]
 
     if match.empty:
-
         latest=pd.to_datetime(saved['As of'],format='ISO8601',utc=True).max().tz_convert(IST)
-        st.info(f'No matching research record for this quote. Latest saved history: {latest:%d %b} · {len(saved)} observations.')
+        st.info(f'No matching maturity-matched record for this quote. Latest saved history: {latest:%d %b} · {len(saved)} observations.')
         return
 
     current=match.iloc[-1].to_dict()
@@ -798,24 +792,21 @@ def render_relative_value(symbol,selected,config):
     measures=[]
 
     for metric in ['IV','IV-RV Spread','25 Delta reversal']:
-
         measures.append({'Measure':metric,'Value':current.get(metric),**maturity_stats(saved,current,metric)})
 
     ready=[m for m in measures if m['Percentile'] is not None]
 
-    if ready:show_table(pd.DataFrame(ready))
+    if ready:
+        st.markdown('**Maturity-Matched Historical Ranking (±3 DTE cycles)**')
+        show_table(pd.DataFrame(ready))
+    else:
+        st.caption('Relative rankings unavailable · collecting comparable expiry cycles')
 
-    else:st.caption('Relative rankings unavailable · collecting comparable expiry cycles')
-
-    with st.expander('Research coverage'):
-
+    with st.expander('Research coverage details & CSV export'):
         show_table(pd.DataFrame(measures)[['Measure','Prior days','Expiry cycles','Status']])
-
-    st.caption('Volatility: annualized % · spreads: pp · historical DTE matched ±3 days')
-
-    st.caption(f"Saved observations: {len(saved)} · latest snapshot: {current['As of']}")
-
-    st.download_button('Download research history',saved.to_csv(index=False).encode(),file_name=f'{symbol}_research_history.csv',mime='text/csv')
+        st.caption('Volatility: annualized % · spreads: pp · historical DTE matched ±3 days')
+        st.caption(f"Saved observations: {len(saved)} · latest snapshot: {current['As of']}")
+        st.download_button('Download research history CSV',saved.to_csv(index=False).encode(),file_name=f'{symbol}_research_history.csv',mime='text/csv')
 
 def render_monitor(rate=.065,dividend=0.,spread=3.):
 
@@ -996,63 +987,49 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
         expiry=chosen.get(symbol)
 
-        if st.session_state.get('options_chart_view_v2')=='Position risk':
-            st.session_state.options_chart_view_v2='Volatility history'
+        views=['Vol Regime & History','Term Structure & Calendars','Smile & Skew','Intraday Straddle & Greeks']
+        view_aliases={
+            'Volatility history':'Vol Regime & History',
+            'IV–RV Spread':'Vol Regime & History',
+            'Term structure':'Term Structure & Calendars',
+            'Smile & skew':'Smile & Skew',
+            'Intraday':'Intraday Straddle & Greeks',
+            'Research':'Vol Regime & History',
+            '3D Vol Surface':'Vol Regime & History',
+            'Position risk':'Vol Regime & History',
+        }
+        current_view=st.session_state.get('options_chart_view_v2')
+        if current_view in view_aliases:
+            st.session_state.options_chart_view_v2=view_aliases[current_view]
+        elif current_view not in views:
+            st.session_state.options_chart_view_v2='Vol Regime & History'
+
         with b:
-            views=['Volatility history','IV–RV Spread','Term structure','Smile & skew','3D Vol Surface','Research','Intraday']
-            if st.session_state.get('options_chart_view_v2') not in views:st.session_state.options_chart_view_v2='Volatility history'
-            chart=st.segmented_control('Chart',views,key='options_chart_view_v2',label_visibility='collapsed',selection_mode='single')
-        chart=chart or 'Volatility history'
-
-
+            chart=st.segmented_control('Chart view',views,key='options_chart_view_v2',label_visibility='collapsed',selection_mode='single')
+        chart=chart or 'Vol Regime & History'
 
         selected={**next(r for r in selected_rows if r['Instrument']==symbol),'Config':config}
         chart_selected={**next(r for r in chart_rows if r['Instrument']==symbol),'Config':config}
 
-        frame=None;hv=None
-        if chart in ('Volatility history','IV–RV Spread'):
+        if chart in ('Term Structure & Calendars','Smile & Skew'):
+            status=snapshot_status(chart_selected.get('As of'),chart_selected.get('Source'),ready,retrieved_at=chart_selected.get('Retrieved at'))
+            if not status.startswith(('Recent snapshot','Recent API retrieval')):
+                st.caption('Saved observation · underlying '+str(chart_selected.get('As of','unavailable'))+' · '+status)
+
+        if chart=='Term Structure & Calendars':
+            render_term_structure(symbol,result)
+        elif chart=='Smile & Skew':
+            render_smile(symbol,chart_selected,config)
+        elif chart=='Intraday Straddle & Greeks':
+            from restored_lab import render_archived_intraday
+            render_archived_intraday(DATA,symbol,chart_selected,config)
+        elif chart=='Vol Regime & History':
+            frame=None;hv=None
             try:frame,hv=chart_prices(symbol)
             except (OSError,ValueError,KeyError):
                 st.warning('HV could not be loaded from saved daily prices. IV–RV requires those prices too.')
 
-
-        if chart in ('Term structure','Smile & skew','3D Vol Surface'):
-            status=snapshot_status(chart_selected.get('As of'),chart_selected.get('Source'),ready,retrieved_at=chart_selected.get('Retrieved at'))
-            if not status.startswith(('Recent snapshot','Recent API retrieval')):
-                st.caption('Saved observation · underlying '+str(chart_selected.get('As of','unavailable'))+' · '+status)
-        if chart=='Term structure':render_term_structure(symbol,result)
-        elif chart=='Smile & skew':render_smile(symbol,chart_selected,config)
-        elif chart=='3D Vol Surface':
-            from vol_surface_3d import render_vol_surface_3d
-            render_vol_surface_3d(symbol,chart_selected,result,DATA)
-        elif chart=='Research':
-            res_view=st.radio('Research tool',['Relative value & smile metrics','Candidate model validation & diagnostics','HAR-RV volatility cascades'],horizontal=True,key='research_tool_selector')
-            if res_view=='Relative value & smile metrics':
-                render_relative_value(symbol,chart_selected,config)
-            elif res_view=='Candidate model validation & diagnostics':
-                from research_ui import render_research
-                render_research(DATA.parent,symbol,chart_selected)
-            elif res_view=='HAR-RV volatility cascades':
-                st.subheader(f'{symbol} · HAR-RV Volatility Cascades')
-                st.caption('Heterogeneous Autoregressive realized volatility decomposing trailing daily (1d), weekly (5d), and monthly (22d) components.')
-                hist_path=DATA/f'{symbol.lower()}_daily.csv'
-                if not hist_path.exists():hist_path=DATA/f'{symbol.lower()}_one_year.csv'
-                if hist_path.exists():
-                    df=pd.read_csv(hist_path)
-                    from har_research import har_components_summary
-                    summary=har_components_summary(df)
-                    st.line_chart(summary.set_index('Date').tail(126)[['Daily RV %','Weekly (5d) RV %','Monthly (22d) RV %']])
-                    st.dataframe(summary.tail(10).round(2),hide_index=True,width='stretch')
-                else:
-                    st.info('Daily price history not found for HAR calculation.')
-        elif chart=='Intraday':
-            from restored_lab import render_archived_intraday
-            render_archived_intraday(DATA,symbol,chart_selected,config)
-
-
-        if chart in ('Volatility history','IV–RV Spread'):
-
-            scope_col,range_col,settings_col=st.columns([3,2,1])
+            scope_col,mode_col,range_col,settings_col=st.columns([3,2,2,1])
             exp_label = f"Selected: {expiry}" if expiry else "Selected expiry"
             scope_map = {exp_label: 'Selected expiry', 'Continuous roll (across expiries)': 'Across expiries'}
             
@@ -1061,12 +1038,20 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
                 [exp_label, 'Continuous roll (across expiries)'],
                 default=exp_label,
                 label_visibility='collapsed',
-                key=f'iv_history_scope_v7_{symbol}_{expiry}'
+                key=f'iv_history_scope_v8_{symbol}_{expiry}'
             ) or exp_label
             scope = scope_map.get(chosen_scope_label, 'Selected expiry')
 
+            metric_mode = mode_col.segmented_control(
+                'Metric',
+                ['IV vs Realized', 'IV–RV Spread'],
+                default='IV vs Realized',
+                label_visibility='collapsed',
+                key=f'regime_metric_mode_{symbol}'
+            ) or 'IV vs Realized'
+
             period=range_col.segmented_control('Range',['1M','3M','6M','1Y'],default='1M',label_visibility='collapsed',key='options_range_v2') or '1M'
-            with settings_col.popover('Chart settings',width='stretch'):
+            with settings_col.popover('Settings',width='stretch'):
                 relative=st.toggle('Relative spread %',value=False,key='iv_history_relative_v2')
                 filter_0dte=st.toggle('Filter 0-DTE terminal anomalies',value=True,key='filter_0dte_artifacts',help='Excludes terminal settlement Black-Scholes solver spikes on expiry day (T=0).')
 
@@ -1095,8 +1080,9 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             data=chart_iv_spread(hist,hv)
 
             relative=st.session_state.get('iv_history_relative_v2', False)
+            spread_only = (metric_mode == 'IV–RV Spread')
 
-            st.plotly_chart(history_figure(symbol,expiry,hv,data,period,relative,spread_only=chart=='IV–RV Spread'),key=f'history_{symbol}_{expiry}_{period}_{chart}',width='stretch',config={'displaylogo':False})
+            st.plotly_chart(history_figure(symbol,expiry,hv,data,period,relative,spread_only=spread_only),key=f'history_{symbol}_{expiry}_{period}_{metric_mode}',width='stretch',config={'displaylogo':False})
 
             start=pd.Timestamp(datetime.now(IST).date())-pd.DateOffset(months={'1M':1,'3M':3,'6M':6,'1Y':12}[period])
             visible=data[data.Date>=start]
@@ -1107,8 +1093,38 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             if not visible.empty and visible['IV-RV Spread'].isna().any():
                 reasons=visible.loc[visible['IV-RV Spread'].isna(),'RV status'].value_counts()
                 if len(reasons):st.caption('Spread gaps: '+', '.join(str(k)+' ('+str(v)+')' for k,v in reasons.items()))
-            if chart=='IV–RV Spread':
+            if spread_only:
                 st.caption('Spread = broker IV − HV30. When HV30 moves slowly, the spread can track IV closely.')
+
+            render_relative_value(symbol, chart_selected, config)
+
+        with st.expander('🔬 Advanced Diagnostics & Secondary Research Models', expanded=False):
+            diag_tab = st.radio(
+                'Diagnostic module',
+                ['3D Vol Surface Mesh', 'Candidate Model Validation & Diagnostics', 'HAR-RV Realized Vol Cascades'],
+                horizontal=True,
+                key='diag_secondary_selector'
+            )
+            if diag_tab == '3D Vol Surface Mesh':
+                from vol_surface_3d import render_vol_surface_3d
+                render_vol_surface_3d(symbol, chart_selected, result, DATA)
+            elif diag_tab == 'Candidate Model Validation & Diagnostics':
+                from research_ui import render_research
+                render_research(DATA.parent, symbol, chart_selected)
+            elif diag_tab == 'HAR-RV Realized Vol Cascades':
+                st.subheader(f'{symbol} · HAR-RV Volatility Cascades')
+                st.caption('Heterogeneous Autoregressive realized volatility decomposing trailing daily (1d), weekly (5d), and monthly (22d) components.')
+                hist_path = DATA / f'{symbol.lower()}_daily.csv'
+                if not hist_path.exists():
+                    hist_path = DATA / f'{symbol.lower()}_one_year.csv'
+                if hist_path.exists():
+                    df = pd.read_csv(hist_path)
+                    from har_research import har_components_summary
+                    summary = har_components_summary(df)
+                    st.line_chart(summary.set_index('Date').tail(126)[['Daily RV %', 'Weekly (5d) RV %', 'Monthly (22d) RV %']])
+                    st.dataframe(summary.tail(10).round(2), hide_index=True, width='stretch')
+                else:
+                    st.info('Daily price history not found for HAR calculation.')
 
         if st.session_state.get('advanced_workspace'):
             from trade_review_ui import render_risk_context
