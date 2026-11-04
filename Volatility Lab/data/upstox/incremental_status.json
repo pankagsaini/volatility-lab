@@ -1,0 +1,12 @@
+{
+  "status": "partial",
+  "through": "2026-11-04",
+  "updated": "2026-11-04T20:31:13.400614+05:30",
+  "downloads": 16,
+  "missing": [
+    "NIFTY day through 2026-11-03",
+    "NIFTY 1minute through 2026-11-03",
+    "BANKNIFTY day through 2026-11-03",
+    "BANKNIFTY 1minute through 2026-11-03"
+  ]
+}

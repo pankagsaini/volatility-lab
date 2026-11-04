@@ -1,0 +1,22 @@
+{
+  "status": "complete",
+  "updated": "2026-10-16T00:32:03.112388+05:30",
+  "downloads": 1137,
+  "coverage": [
+    {
+      "interval": "1minute",
+      "instruments": 14,
+      "rows": 520422,
+      "first": "2024-10-15T09:15:00+05:30",
+      "last": "2026-10-15T15:39:00+05:30"
+    },
+    {
+      "interval": "day",
+      "instruments": 1320,
+      "rows": 8607,
+      "first": "2023-10-11T00:00:00+05:30",
+      "last": "2026-10-15T00:00:00+05:30"
+    }
+  ],
+  "note": "Raw OHLC/OI archive. Historical option candles are ATM research samples, not historical bid/ask or IV."
+}

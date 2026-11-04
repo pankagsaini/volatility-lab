@@ -42,19 +42,42 @@ node_modules/
 Volatility Lab/frontend/node_modules/
 Volatility Lab/web/plotly.min.js
 
-# Explicitly Keep Tracking Metadatas, Audits, Charges & JSON Configs in data/
-!Volatility Lab/data/audit/
-!Volatility Lab/data/audit/**
+# Data subdirectories to ignore
+Volatility Lab/data/upstox/chains/
+Volatility Lab/data/upstox/catalogues/
+Volatility Lab/data/experiments/
+Volatility Lab/data/validation/
+Volatility Lab/data/input_history/
+Volatility Lab/data/exports/
+Volatility Lab/data/futures/
+Volatility Lab/data/research_inputs/
+Volatility Lab/data/backtest_1minute/
+!Volatility Lab/data/backtest_1minute/status.json
+!Volatility Lab/data/backtest_1minute/scope.json
+Volatility Lab/data/backtest_futures/
+!Volatility Lab/data/backtest_futures/*status.json
+!Volatility Lab/data/backtest_futures/scope.json
+Volatility Lab/data/google_archive/
+!Volatility Lab/data/google_archive/*.json
+
+# Explicitly Keep Tracking Metadatas, Audits, Charges, Baseline Quotes, and Historical Prices
+!Volatility Lab/data/*.json
+!Volatility Lab/data/*.csv
 !Volatility Lab/data/charges/
 !Volatility Lab/data/charges/**
 !Volatility Lab/data/daily_collector/
 !Volatility Lab/data/daily_collector/*.json
 !Volatility Lab/data/daily_collector/*.jsonl
+!Volatility Lab/data/dividend_sources/*.txt
 !Volatility Lab/data/upstox/*.json
 !Volatility Lab/data/upstox/*.jsonl
 !Volatility Lab/data/backtest_runs/
 !Volatility Lab/data/backtest_runs/*.json
-!Volatility Lab/data/backtest_1minute/status.json
-!Volatility Lab/data/backtest_futures/*status.json
-!Volatility Lab/data/google_archive/*.json
-!Volatility Lab/data/*.json
+
+# Exclude all databases, large audit archives, and temp files regardless of directory
+*.sqlite*
+**/*.sqlite*
+*.lock
+*.tmp
+Volatility Lab/data/audit/
+Volatility Lab/data/audit/**

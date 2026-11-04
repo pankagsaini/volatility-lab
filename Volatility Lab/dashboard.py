@@ -83,38 +83,30 @@ if st.session_state.get('dashboard_revision')!=revision:
     st.session_state.expiry_initial_attempted=False
 
 st.markdown('''<style>
-.stApp{background:#080c14;color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-[data-testid="stHeader"]{background:transparent!important;border-bottom:none!important;height:2.8rem!important;visibility:visible!important;z-index:90}
-[data-testid="stSidebar"], [data-testid="collapsedControl"]{display:none!important}
-.block-container{max-width:1500px;padding-top:2.8rem!important;padding-bottom:2.5rem;padding-left:1.5rem;padding-right:1.5rem}
+.stApp{background:#0c1321;color:#e4ecf8}
+[data-testid="stPopoverButton"]{border-radius:10px!important;background:#131e2d!important}
+[data-testid="stSegmentedControl"] button{border-radius:8px!important;font-size:.85rem!important}
+[data-testid="stDataFrame"]{border:1px solid #243348;border-radius:12px;overflow:hidden}
+[data-testid="stPlotlyChart"]{border:1px solid #202e42;border-radius:14px;padding:8px;background:#0c1321}
+[data-testid="stExpander"]{border-color:#243348!important;border-radius:10px!important}
 
-/* Typography & Numbers */
-h1,h2,h3,h4{letter-spacing:-0.035em;color:#f8fafc;font-weight:600}
-div[data-testid="stMetricValue"]{font-variant-numeric:tabular-nums;font-weight:700;color:#f8fafc;font-size:1.35rem}
-div[data-testid="stMetricLabel"]{color:#94a3b8;font-size:0.76rem;text-transform:uppercase;letter-spacing:0.06em;font-weight:600}
-
-/* Cards & Containers */
-div[data-testid="stMetric"]{background:linear-gradient(145deg,#0f1726 0%,#0c121e 100%);border:1px solid #1a273e;border-radius:12px;padding:12px 16px;box-shadow:0 4px 14px rgba(0,0,0,0.28)}
-[data-testid="stDataFrame"]{border:1px solid #1a273e;border-radius:12px;overflow:hidden;background:#0c121e}
-[data-testid="stPlotlyChart"]{border:1px solid #1a273e;border-radius:14px;padding:8px;background:#090e17;box-shadow:0 4px 18px rgba(0,0,0,0.3)}
-[data-testid="stExpander"]{border:1px solid #1a273e!important;border-radius:10px!important;background:#0c1320!important}
-[data-testid="stPopoverButton"]{border-radius:8px!important;background:#111927!important;border:1px solid #1f2f48!important;color:#cbd5e1!important}
-
-/* Navigation Segmented Control */
-[data-testid="stSegmentedControl"]{background:#0c1320;border:1px solid #1a273e;border-radius:10px;padding:4px}
-[data-testid="stSegmentedControl"] button{border-radius:8px!important;font-size:0.86rem!important;font-weight:600!important;transition:all 0.15s ease}
-[data-testid="stSegmentedControl"] button[aria-selected="true"]{background:#16243b!important;color:#38bdf8!important;box-shadow:0 2px 8px rgba(0,210,255,0.15);border:1px solid #0284c7!important}
-
-/* Radio buttons & Pills */
-div[data-testid="stRadio"] [role="radiogroup"]{gap:0.45rem}
-div[data-testid="stRadio"] label{border:1px solid #1a273e;border-radius:8px;padding:7px 14px;background:#0f1726;font-size:0.84rem}
-div[data-testid="stRadio"] label:has(input:checked){border-color:#06b6d4;background:#0f2738;color:#38bdf8}
-
-/* Buttons */
-button[kind="primary"]{border-radius:8px;background:#0284c7;border:none;font-weight:600}
-button[kind="secondary"]{border-radius:8px;background:#111927;border:1px solid #1f2f48;color:#cbd5e1}
-
-hr{border-color:#182335!important;margin:1.2rem 0!important}
+.block-container{max-width:1450px;padding-top:1.2rem;padding-bottom:2rem;padding-left:1.5rem;padding-right:1.5rem}
+h1{font-size:2.1rem!important;letter-spacing:-.055em;margin-bottom:0!important}
+h2,h3{letter-spacing:-.025em}
+h3{font-size:1.3rem!important}
+[data-testid="stVerticalBlock"]{gap:.8rem}
+section[data-testid="stSidebar"]{background:#111c2d}
+div[data-testid="stMetric"]{background:#131f31;border:1px solid #26364d;border-radius:12px;padding:14px 18px}
+div[data-testid="stMetricLabel"]{color:#a3b7d0}
+div[data-testid="stDataFrame"]{border:1px solid #26364d;border-radius:10px;overflow:hidden}
+div[data-testid="stExpander"]{border-color:#253247}
+div[data-testid="stCaptionContainer"]{color:#91a5c0}
+[data-testid="stHeader"]{background:#0c1321}
+button[kind="primary"]{border-radius:8px}
+div[data-testid="stRadio"]{padding:4px 0 10px}
+div[data-testid="stRadio"] [role="radiogroup"]{gap:.45rem}
+div[data-testid="stRadio"] label{border:1px solid #26364d;border-radius:8px;padding:7px 14px;background:#131f31;font-size:.88rem}
+div[data-testid="stRadio"] label:has(input:checked){border-color:#38bdf8;background:#172942;color:#38bdf8}
 </style>''',unsafe_allow_html=True)
 
 from collector_support import read_json, STATE
@@ -151,154 +143,8 @@ if not ready:
         from upstox_data import render_connection
         render_connection()
 
-def render_terminal_header():
-    now=datetime.now(IST)
-    t_min=now.hour*60+now.minute
-    is_open=(now.weekday()<5) and (555<=t_min<=930)
-    
-    if is_open:
-        status_pill='<span style="background:rgba(16,185,129,0.12); color:#10b981; border:1px solid #10b981; padding:3px 8px; border-radius:9999px; font-size:0.72rem; font-weight:600; letter-spacing:0.02em;">● LIVE</span>'
-    elif now.weekday()<5 and 540<=t_min<555:
-        status_pill='<span style="background:rgba(245,158,11,0.12); color:#f59e0b; border:1px solid #f59e0b; padding:3px 8px; border-radius:9999px; font-size:0.72rem; font-weight:600;">◑ PRE-OPEN</span>'
-    else:
-        status_pill='<span style="background:rgba(148,163,184,0.12); color:#94a3b8; border:1px solid #334155; padding:3px 8px; border-radius:9999px; font-size:0.72rem; font-weight:500;">○ CLOSED</span>'
-        
-    ist_time=now.strftime('%d %b %H:%M IST')
-    
-    st.markdown(f'''
-    <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:8px; border-bottom:1px solid #162236; margin-bottom:12px;">
-        <div style="display:flex; align-items:center; gap:8px;">
-            <span style="font-size:1.35rem; font-weight:700; letter-spacing:-0.02em; color:#f8fafc; font-family:-apple-system,BlinkMacSystemFont,sans-serif;">
-                <span style="color:#00d2ff;">◈</span> Volatility Lab
-            </span>
-        </div>
-        <div style="display:flex; align-items:center; gap:10px;">
-            {status_pill}
-            <span style="color:#64748b; font-size:0.75rem; font-variant-numeric:tabular-nums;">
-                {ist_time}
-            </span>
-        </div>
-    </div>
-    ''', unsafe_allow_html=True)
+st.title('Volatility Lab')
 
-    from expiry_data import load_snapshot
-    import numpy as np
-    snap=load_snapshot(None,allow_saved=True) or {}
-    rows=snap.get('rows',[])
-    nifty=next((r for r in rows if r.get('Instrument')=='NIFTY'),{})
-    bn=next((r for r in rows if r.get('Instrument')=='BANKNIFTY'),{})
-    def _num(v):
-        try:
-            return float(v) if v is not None else None
-        except (ValueError, TypeError):
-            return None
-
-    vix_val=snap.get('india_vix',{}).get('value')
-    info=read_json(ROOT/'data'/'google_archive'/'status.json') or {}
-    sync_state,_=drive_sync_label(info)
-    sync_count=int(info.get('total_files',0) or 0)
-
-    c1,c2,c3,c4=st.columns(4)
-
-    with c1:
-        spot=_num(nifty.get('Price'))
-        fut=_num(nifty.get('Month future LTP') or nifty.get('Listed future'))
-        syn=_num(nifty.get('Synthetic future'))
-        chg=_num(nifty.get('% change'))
-        iv=_num(nifty.get('IV'))
-        sprd=_num(nifty.get('IV-RV Spread'))
-        chg_color='#10b981' if (chg is not None and chg>=0) else ('#ef4444' if (chg is not None and chg<0) else '#94a3b8')
-        chg_arrow='▲' if (chg is not None and chg>=0) else ('▼' if (chg is not None and chg<0) else '')
-        chg_txt=f"{chg_arrow} {chg:+.2f}%" if chg is not None else "—"
-        st.markdown(f'''
-        <div style="background:#0f1726; border:1px solid #1a273e; border-radius:10px; padding:10px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">NIFTY 50</span>
-                <span style="color:{chg_color}; font-size:0.75rem; font-weight:700;">{chg_txt}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:2px;">
-                <span style="font-size:1.22rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums;">
-                    {f"{spot:,.1f}" if spot is not None else "—"}
-                </span>
-                <span style="font-size:0.72rem; color:#94a3b8; font-variant-numeric:tabular-nums;">
-                    Fut: <b style="color:#38bdf8;">{f"{fut:,.1f}" if fut is not None else "—"}</b>
-                </span>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b; margin-top:4px;">
-                <span>Syn: <b style="color:#a78bfa;">{f"{syn:,.1f}" if syn is not None else "—"}</b></span>
-                <span>ATM IV: <b style="color:#38bdf8;">{f"{iv:.1f}%" if iv is not None else "—"}</b></span>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with c2:
-        spot_bn=_num(bn.get('Price'))
-        fut_bn=_num(bn.get('Month future LTP') or bn.get('Listed future'))
-        syn_bn=_num(bn.get('Synthetic future'))
-        chg_bn=_num(bn.get('% change'))
-        iv_bn=_num(bn.get('IV'))
-        sprd_bn=_num(bn.get('IV-RV Spread'))
-        chg_color_bn='#10b981' if (chg_bn is not None and chg_bn>=0) else ('#ef4444' if (chg_bn is not None and chg_bn<0) else '#94a3b8')
-        chg_arrow_bn='▲' if (chg_bn is not None and chg_bn>=0) else ('▼' if (chg_bn is not None and chg_bn<0) else '')
-        chg_txt_bn=f"{chg_arrow_bn} {chg_bn:+.2f}%" if chg_bn is not None else "—"
-        st.markdown(f'''
-        <div style="background:#0f1726; border:1px solid #1a273e; border-radius:10px; padding:10px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">BANKNIFTY</span>
-                <span style="color:{chg_color_bn}; font-size:0.75rem; font-weight:700;">{chg_txt_bn}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:2px;">
-                <span style="font-size:1.22rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums;">
-                    {f"{spot_bn:,.1f}" if spot_bn is not None else "—"}
-                </span>
-                <span style="font-size:0.72rem; color:#94a3b8; font-variant-numeric:tabular-nums;">
-                    Fut: <b style="color:#818cf8;">{f"{fut_bn:,.1f}" if fut_bn is not None else "—"}</b>
-                </span>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b; margin-top:4px;">
-                <span>Syn: <b style="color:#a78bfa;">{f"{syn_bn:,.1f}" if syn_bn is not None else "—"}</b></span>
-                <span>ATM IV: <b style="color:#818cf8;">{f"{iv_bn:.1f}%" if iv_bn is not None else "—"}</b></span>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with c3:
-        vix_f=_num(vix_val)
-        vix_desc='Low Vol' if (vix_f is not None and vix_f<13) else ('Normal' if (vix_f is not None and vix_f<=18) else ('Elevated' if vix_f is not None else '—'))
-        vix_color='#10b981' if (vix_f is not None and vix_f<=15) else ('#f59e0b' if (vix_f is not None and vix_f<=20) else ('#ef4444' if vix_f is not None else '#94a3b8'))
-        st.markdown(f'''
-        <div style="background:#0f1726; border:1px solid #1a273e; border-radius:10px; padding:10px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">INDIA VIX</span>
-                <span style="color:{vix_color}; font-size:0.72rem; font-weight:700;">{vix_desc}</span>
-            </div>
-            <div style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
-                {f"{vix_f:.2f}" if vix_f is not None else "—"}
-            </div>
-            <div style="font-size:0.72rem; color:#64748b; margin-top:4px;">
-                NSE Volatility Index
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with c4:
-        sync_badge_color='#10b981' if sync_state=='healthy' else ('#f59e0b' if sync_state=='syncing' else '#64748b')
-        st.markdown(f'''
-        <div style="background:#0f1726; border:1px solid #1a273e; border-radius:10px; padding:10px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">CLOUD MIRROR</span>
-                <span style="color:{sync_badge_color}; font-size:0.72rem; font-weight:700; text-transform:uppercase;">● {sync_state}</span>
-            </div>
-            <div style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
-                {sync_count:,} <span style="font-size:0.76rem; font-weight:500; color:#64748b;">archives</span>
-            </div>
-            <div style="font-size:0.72rem; color:#64748b; margin-top:4px;">
-                Google Drive snapshots
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-render_terminal_header()
 
 import google_archive_sync
 @st.fragment(run_every=30)

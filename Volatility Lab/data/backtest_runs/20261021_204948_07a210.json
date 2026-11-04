@@ -1,0 +1,162 @@
+{
+  "settings": {
+    "name": "Iron condor",
+    "symbol": "NIFTY",
+    "start": "2024-10-01",
+    "end": "2024-10-31",
+    "entry": "09:20",
+    "exit": "15:15",
+    "quantity": 75,
+    "expiry_rank": 0,
+    "min_dte": 1,
+    "max_dte": 35,
+    "weekdays": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "legs": [
+      {
+        "Side": "Sell",
+        "Type": "CE",
+        "Offset": 200,
+        "Ratio": 1
+      },
+      {
+        "Side": "Sell",
+        "Type": "PE",
+        "Offset": -200,
+        "Ratio": 1
+      },
+      {
+        "Side": "Buy",
+        "Type": "CE",
+        "Offset": 700,
+        "Ratio": 1
+      },
+      {
+        "Side": "Buy",
+        "Type": "PE",
+        "Offset": -700,
+        "Ratio": 1
+      }
+    ],
+    "stop": 0.0,
+    "target": 0.0,
+    "slippage_bps": 5.0,
+    "filters": [],
+    "charges": "Zerodha dated estimate",
+    "engine": "multi_leg_v1"
+  },
+  "coverage": {
+    "conflicts": 0,
+    "underlying_first": "2024-10-01 09:15",
+    "underlying_last": "2024-10-31 15:29",
+    "underlying_observed_sessions": 22,
+    "download_state_at_run": "running"
+  },
+  "trades": [
+    {
+      "Date": "2024-10-01",
+      "Expiry": "2024-10-03",
+      "Entry time": "09:20",
+      "Exit time": "15:15",
+      "Exit reason": "Scheduled exit",
+      "Signal minute": null,
+      "ATM": 25900.0,
+      "Gross": 2066.25,
+      "Slippage": 4.809375,
+      "Charges": 198.7965380704,
+      "Net": 1862.6440869296,
+      "Legs": "[{\"Contract\": \"NIFTY 26100 CE 03 OCT 24\", \"Side\": \"Sell\", \"Quantity\": 75, \"Entry\": 40.929525000000005, \"Exit\": 7.8039}, {\"Contract\": \"NIFTY 25700 PE 03 OCT 24\", \"Side\": \"Sell\", \"Quantity\": 75, \"Entry\": 34.832575000000006, \"Exit\": 35.0175}, {\"Contract\": \"NIFTY 26600 CE 03 OCT 24\", \"Side\": \"Buy\", \"Quantity\": 75, \"Entry\": 3.5517749999999997, \"Exit\": 0.7996000000000001}, {\"Contract\": \"NIFTY 25200 PE 03 OCT 24\", \"Side\": \"Buy\", \"Quantity\": 75, \"Entry\": 4.002, \"Exit\": 1.29935}]"
+    }
+  ],
+  "skips": [
+    {
+      "Date": "2024-10-03",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-04",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-07",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-08",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-09",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-10",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-11",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-14",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-15",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-16",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-17",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-18",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-21",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-22",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-23",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-24",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-25",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-28",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-29",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-30",
+      "Reason": "Missing or untraded entry candle"
+    },
+    {
+      "Date": "2024-10-31",
+      "Reason": "Missing or untraded entry candle"
+    }
+  ]
+}

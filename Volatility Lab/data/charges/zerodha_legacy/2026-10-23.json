@@ -1,0 +1,26 @@
+{
+  "checked": "2026-10-23",
+  "observed_from": "2026-10-21",
+  "rates": {
+    "Futures": {
+      "stt": 0.0005,
+      "exchange": 1.83e-05,
+      "stamp": 2e-05,
+      "gst": 0.18,
+      "sebi": 1e-06,
+      "brokerage": 20.0,
+      "brokerage_rate": 0.0003
+    },
+    "Options": {
+      "stt": 0.0015,
+      "exchange": 0.0003553,
+      "stamp": 3e-05,
+      "gst": 0.18,
+      "sebi": 1e-06,
+      "brokerage": 20.0,
+      "brokerage_rate": null
+    }
+  },
+  "source": "https://zerodha.com/charges/",
+  "status": "checked"
+}

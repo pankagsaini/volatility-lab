@@ -1,0 +1,58 @@
+                                                                                                                                                September 30, 2026September 30, 2026
+
+The Nifty 50 index is a well-diversified 50 companies index reflecting overall market conditions. Nifty 50 Index is computed usingThe Nifty 50 index is a well-diversified 50 companies index reflecting overall market conditions. Nifty 50 Index is computed using
+free float market capitalization method.free float market capitalization method.
+
+Nifty 50 can be used for a variety of purposes such as benchmarking fund portfolios, launching of index funds, ETFs and structuredNifty 50 can be used for a variety of purposes such as benchmarking fund portfolios, launching of index funds, ETFs and structured
+products.products.
+
+Index Variants: Nifty50 USD, Nifty50 JPY, Nifty 50 Total Returns Index (Gross and Net) and Nifty50 Dividend Points IndexIndex Variants: Nifty50 USD, Nifty50 JPY, Nifty 50 Total Returns Index (Gross and Net) and Nifty50 Dividend Points Index
+
+
+
+
+
+
+
+
+
+
+Portfolio Characteristics                                                                      Statistics
+Methodology                          Free Float Market Capitalization                                  Index             QTD        YTD      1 Year     5 Years        Since
+No. of Constituents                  50                                                          Returns (%) #                                                      Inception
+Launch Date                          April 22, 1996                                            Price Return                -5.22   -13.43       -8.09       5.13          10.61
+Base Date                            November 03, 1995                                         Total Return                -4.91   -12.61       -7.09       6.38          12.12
+Base Value                           1000                                                      Net Total Return            -4.99   -12.93       -7.47       5.28                -
+
+Calculation Frequency                Real-Time                                                                                                                        Since
+Index Rebalancing                    Semi - Annually                                                   Statistics ##               1 Year          5 Years         Inception
+Sector Representation                                                                           Std. Deviation *                        13.42           13.82              22.39
+                           Sector                                 Weight(%)                     Beta (NIFTY 50)                           1.00            1.00              1.00
+Financial Services                                                           37.45              Correlation (NIFTY 50)                    1.00            1.00              1.00
+Oil, Gas & Consumable Fuels                                                    9.39
+Information Technology                                                         7.52            Fundamentals
+Automobile and Auto Components                                                 6.65                        P/E                        P/B                 Dividend Yield
+Fast Moving Consumer Goods                                                     5.50                      19.36                        2.78                        1.22
+Telecommunication                                                              5.10
+Metals & Mining                                                                4.86            Top constituents by weightage
+Healthcare                                                                     4.74                                 Company’s Name                                 Weight(%)
+Construction                                                                   4.20
+Consumer Services                                                              3.05             HDFC Bank Ltd.                                                             10.38
+Consumer Durables                                                              2.85             ICICI Bank Ltd.                                                              9.05
+Power                                                                          2.59             Reliance Industries Ltd.                                                     7.58
+Services                                                                       2.42             Bharti Airtel Ltd.                                                           5.10
+Construction Materials                                                         2.34
+Capital Goods                                                                  1.33             Larsen & Toubro Ltd.                                                         4.20
+                                                                                                State Bank of India                                                          3.79
+                                                                                                Axis Bank Ltd.                                                               3.37
+                                                                                                Infosys Ltd.                                                                 3.35
+                                                                                                Kotak Mahindra Bank Ltd.                                                     2.93
+                                                                                                Mahindra & Mahindra Ltd.                                                     2.52
+
+## Based on Price Return Index.
+# QTD,YTD and 1 year returns are absolute returns.Returns for greater than one year are CAGR returns.
+* Average daily standard deviation annualised.
+Disclaimer: All information contained herewith is provided for reference purpose only. NSE Indices Limited (formerly known as India Index Services & Products Limited-IISL) ensures accuracy and reliability of the above
+information to the best of its endeavors. However, NSE Indices Limited makes no warranty or representation as to the accuracy, completeness or reliability of any of the information contained herein and disclaim any and all
+liability whatsoever to any person for any damage or loss of any nature arising from or as a result of reliance on any of the information provided herein. The information contained in this document is not intended to provide any
+professional advice.                                                                                                                                                              1

@@ -9,9 +9,12 @@ ROOT=Path(__file__).resolve().parent/'data/backtest_1minute'
 
 def load(symbol,start,end):
  first,last=str(start),str(end)
+ db_path = ROOT/'queue.sqlite'
+ if not db_path.exists():
+  raise OSError('1-minute backtest database (queue.sqlite) is stored locally on desktop. Saved backtest runs are viewable below.')
  # Apply the same metadata predicates in SQLite, rather than deserializing every
  # completed request from the five-year archive for each selected date range.
- with closing(sqlite3.connect((ROOT/'queue.sqlite').resolve().as_uri()+'?mode=ro',uri=True,timeout=30)) as con:
+ with closing(sqlite3.connect(db_path.resolve().as_uri()+'?mode=ro',uri=True,timeout=30)) as con:
   jobs=con.execute('''SELECT kind,meta,file FROM jobs WHERE state="done" AND kind IN ("contracts","minute")
    AND json_extract(meta,'$.symbol')=? AND (kind='contracts' OR
    (COALESCE(json_extract(meta,'$.end'),'9999')>=? AND COALESCE(json_extract(meta,'$.start'),'0000')<=?))''',(symbol,first,last)).fetchall()

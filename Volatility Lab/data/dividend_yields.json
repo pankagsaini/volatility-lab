@@ -1,0 +1,24 @@
+{
+  "NIFTY": {
+    "yield_percent": 1.42,
+    "model_yield": 0.014199999999999999,
+    "as_of": "2026-10-30",
+    "basis": "Published index dividend yield proxy; not expiry-specific expected dividends",
+    "source": "https://www.niftyindices.com/Factsheet/ind_nifty50.pdf",
+    "sha256": "3c98909d1e06ec7887f9288250edf7f88b20d069e84748eb1dfbbd998246c642",
+    "checked_at": "2026-11-04T00:00:52.918880+05:30",
+    "error": null,
+    "attempt_day": "2026-11-04"
+  },
+  "BANKNIFTY": {
+    "yield_percent": 1.14,
+    "model_yield": 0.011399999999999999,
+    "as_of": "2026-10-30",
+    "basis": "Published index dividend yield proxy; not expiry-specific expected dividends",
+    "source": "https://www.niftyindices.com/Factsheet/ind_nifty_bank.pdf",
+    "sha256": "e2f07b6a30e07fc29f8cd2f4f27476b6e0af9709830d6e4d37c1affb89c379e5",
+    "checked_at": "2026-11-04T00:00:52.918880+05:30",
+    "error": null,
+    "attempt_day": "2026-11-04"
+  }
+}

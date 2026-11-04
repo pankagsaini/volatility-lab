@@ -1,0 +1,18 @@
+[
+  {
+    "symbol": "NIFTY",
+    "compared_sessions": 246,
+    "max_close_difference_percent": 0.0,
+    "rows": 747,
+    "first": "2023-10-11",
+    "last": "2026-10-14"
+  },
+  {
+    "symbol": "BANKNIFTY",
+    "compared_sessions": 246,
+    "max_close_difference_percent": 0.0,
+    "rows": 747,
+    "first": "2023-10-11",
+    "last": "2026-10-14"
+  }
+]

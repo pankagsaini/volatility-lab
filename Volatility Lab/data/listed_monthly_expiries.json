@@ -1,0 +1,46 @@
+{
+  "NIFTY": {
+    "2026-10": {
+      "expiry": "2026-10-27",
+      "observed": "2026-10-27 21:41:40.950148+05:30",
+      "source": "Upstox NFO FUT master"
+    },
+    "2026-11": {
+      "expiry": "2026-11-23",
+      "observed": "2026-11-04 20:43:47.943174+05:30",
+      "source": "Upstox NFO FUT master"
+    },
+    "2026-12": {
+      "expiry": "2026-12-29",
+      "observed": "2026-11-04 20:43:47.943174+05:30",
+      "source": "Upstox NFO FUT master"
+    },
+    "2027-01": {
+      "expiry": "2027-01-25",
+      "observed": "2026-11-04 20:43:47.943174+05:30",
+      "source": "Upstox NFO FUT master"
+    }
+  },
+  "BANKNIFTY": {
+    "2026-10": {
+      "expiry": "2026-10-27",
+      "observed": "2026-10-27 21:41:40.950148+05:30",
+      "source": "Upstox NFO FUT master"
+    },
+    "2026-11": {
+      "expiry": "2026-11-23",
+      "observed": "2026-11-04 20:43:47.943174+05:30",
+      "source": "Upstox NFO FUT master"
+    },
+    "2026-12": {
+      "expiry": "2026-12-29",
+      "observed": "2026-11-04 20:43:47.943174+05:30",
+      "source": "Upstox NFO FUT master"
+    },
+    "2027-01": {
+      "expiry": "2027-01-25",
+      "observed": "2026-11-04 20:43:47.943174+05:30",
+      "source": "Upstox NFO FUT master"
+    }
+  }
+}

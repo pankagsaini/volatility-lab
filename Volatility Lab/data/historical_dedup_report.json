@@ -1,0 +1,368 @@
+[
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163756375985.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163917116554.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T164117804067.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T164448318896.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T164552178635.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T173941599055.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T174041127557.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T174101535714.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T174547576276.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T174708493188.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T180547971904.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T182553575509.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T220111850480.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T230112113386.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T163439149347.csv",
+    "sha256": "08D097575FCA88993839E83391D192199153BBAC142D2AB4D01D5D19C4A9619F",
+    "redundantBytes": 22758
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261006T221237144635.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261006T220733242026.csv",
+    "sha256": "108CCC44A82A4514EBF93E9DAE97A58BBF90689C07701FB009064D66F2327A1F",
+    "redundantBytes": 22859
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261007T073943435071.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261006T220733242026.csv",
+    "sha256": "108CCC44A82A4514EBF93E9DAE97A58BBF90689C07701FB009064D66F2327A1F",
+    "redundantBytes": 22859
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261007T074120129038.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261006T220733242026.csv",
+    "sha256": "108CCC44A82A4514EBF93E9DAE97A58BBF90689C07701FB009064D66F2327A1F",
+    "redundantBytes": 22859
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261007T094228173862.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261006T220733242026.csv",
+    "sha256": "108CCC44A82A4514EBF93E9DAE97A58BBF90689C07701FB009064D66F2327A1F",
+    "redundantBytes": 22859
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T185045038135.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T181624636266.csv",
+    "sha256": "21CA0294B78733075587CEC08230C4C87927FA80C335D7B88AE97587CDF0526F",
+    "redundantBytes": 22803
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T185125023311.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T181624636266.csv",
+    "sha256": "21CA0294B78733075587CEC08230C4C87927FA80C335D7B88AE97587CDF0526F",
+    "redundantBytes": 22803
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261008T092837044864.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T181624636266.csv",
+    "sha256": "21CA0294B78733075587CEC08230C4C87927FA80C335D7B88AE97587CDF0526F",
+    "redundantBytes": 22803
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261008T100814276595.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T181624636266.csv",
+    "sha256": "21CA0294B78733075587CEC08230C4C87927FA80C335D7B88AE97587CDF0526F",
+    "redundantBytes": 22803
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261008T100948699156.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T181624636266.csv",
+    "sha256": "21CA0294B78733075587CEC08230C4C87927FA80C335D7B88AE97587CDF0526F",
+    "redundantBytes": 22803
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261008T101121573273.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T181624636266.csv",
+    "sha256": "21CA0294B78733075587CEC08230C4C87927FA80C335D7B88AE97587CDF0526F",
+    "redundantBytes": 22803
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261008T102318136274.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T181624636266.csv",
+    "sha256": "21CA0294B78733075587CEC08230C4C87927FA80C335D7B88AE97587CDF0526F",
+    "redundantBytes": 22803
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261008T120648090987.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T181624636266.csv",
+    "sha256": "21CA0294B78733075587CEC08230C4C87927FA80C335D7B88AE97587CDF0526F",
+    "redundantBytes": 22803
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261008T151236230359.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T181624636266.csv",
+    "sha256": "21CA0294B78733075587CEC08230C4C87927FA80C335D7B88AE97587CDF0526F",
+    "redundantBytes": 22803
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261008T152510300162.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T181624636266.csv",
+    "sha256": "21CA0294B78733075587CEC08230C4C87927FA80C335D7B88AE97587CDF0526F",
+    "redundantBytes": 22803
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261008T155951675484.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T181624636266.csv",
+    "sha256": "21CA0294B78733075587CEC08230C4C87927FA80C335D7B88AE97587CDF0526F",
+    "redundantBytes": 22803
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20260924T222924408480.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20260924T093823975337.csv",
+    "sha256": "2F1A5C7A2404702FE78F4E5DB71E83BD013768190B4A694B50F4E0D8AFA2A837",
+    "redundantBytes": 22864
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T105400981313.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261015T164344352004.csv",
+    "sha256": "594A26C0ADC8B81C057AA14E7D9EA4C2E355CFD0AB145D3E2A2015291CB899DB",
+    "redundantBytes": 22804
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261016T120209975100.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261015T164344352004.csv",
+    "sha256": "594A26C0ADC8B81C057AA14E7D9EA4C2E355CFD0AB145D3E2A2015291CB899DB",
+    "redundantBytes": 22804
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261008T092837044864.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261007T181624636266.csv",
+    "sha256": "71423189FEBD8374ED442E7D7F61D9AFC4FFBC43092F225C2E15275BF6811981",
+    "redundantBytes": 22860
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261008T100814276595.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261007T181624636266.csv",
+    "sha256": "71423189FEBD8374ED442E7D7F61D9AFC4FFBC43092F225C2E15275BF6811981",
+    "redundantBytes": 22860
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261008T100948699156.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261007T181624636266.csv",
+    "sha256": "71423189FEBD8374ED442E7D7F61D9AFC4FFBC43092F225C2E15275BF6811981",
+    "redundantBytes": 22860
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261008T101121573273.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261007T181624636266.csv",
+    "sha256": "71423189FEBD8374ED442E7D7F61D9AFC4FFBC43092F225C2E15275BF6811981",
+    "redundantBytes": 22860
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261008T102318136274.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261007T181624636266.csv",
+    "sha256": "71423189FEBD8374ED442E7D7F61D9AFC4FFBC43092F225C2E15275BF6811981",
+    "redundantBytes": 22860
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261008T120648090987.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261007T181624636266.csv",
+    "sha256": "71423189FEBD8374ED442E7D7F61D9AFC4FFBC43092F225C2E15275BF6811981",
+    "redundantBytes": 22860
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261008T152510300162.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261007T181624636266.csv",
+    "sha256": "71423189FEBD8374ED442E7D7F61D9AFC4FFBC43092F225C2E15275BF6811981",
+    "redundantBytes": 22860
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261008T155951675484.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261007T181624636266.csv",
+    "sha256": "71423189FEBD8374ED442E7D7F61D9AFC4FFBC43092F225C2E15275BF6811981",
+    "redundantBytes": 22860
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261012T114828099609.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261012T114322068689.csv",
+    "sha256": "763BFB9CDF941B33C03C429C8D8F6DE5628B75E0D5D7E50367FD3318ADC62B0B",
+    "redundantBytes": 22712
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261012T114931890693.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261012T114322068689.csv",
+    "sha256": "763BFB9CDF941B33C03C429C8D8F6DE5628B75E0D5D7E50367FD3318ADC62B0B",
+    "redundantBytes": 22712
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261006T221237144635.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261006T220733242026.csv",
+    "sha256": "9E65A4926CED0FD07F27DF85C06C7BD6B0046BB87F372EBC32F73514491FBE39",
+    "redundantBytes": 22802
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T073943435071.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261006T220733242026.csv",
+    "sha256": "9E65A4926CED0FD07F27DF85C06C7BD6B0046BB87F372EBC32F73514491FBE39",
+    "redundantBytes": 22802
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T074120129038.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261006T220733242026.csv",
+    "sha256": "9E65A4926CED0FD07F27DF85C06C7BD6B0046BB87F372EBC32F73514491FBE39",
+    "redundantBytes": 22802
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261007T094228173862.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20261006T220733242026.csv",
+    "sha256": "9E65A4926CED0FD07F27DF85C06C7BD6B0046BB87F372EBC32F73514491FBE39",
+    "redundantBytes": 22802
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163756375985.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163917116554.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T164117804067.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T164448318896.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T164552178635.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T173941599055.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T174041127557.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T174101535714.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T174547576276.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T174708493188.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T180547971904.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T182553575509.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T220111850480.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T230112113386.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\banknifty_20261016T163439149347.csv",
+    "sha256": "A90910D4E2868AFC0C5F359B9A13EDED59E791EE81096DE698D7E847DFA8FF01",
+    "redundantBytes": 22815
+  },
+  {
+    "path": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20260924T222924408480.csv",
+    "retained": "D:\\My First Algo\\Volatility Lab\\data\\underlying_history\\nifty_20260924T093823975337.csv",
+    "sha256": "F29DF66EF443F0FE21FB5DC6FAEEF729C649D00BF4C994556D8C02378ABCD901",
+    "redundantBytes": 22804
+  }
+]

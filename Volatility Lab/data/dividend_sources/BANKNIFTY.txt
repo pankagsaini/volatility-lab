@@ -1,0 +1,57 @@
+                                                                                                                                               September 30, 2026
+
+ The Nifty Bank Index comprises of the most liquid and large Indian Banking stocks. It provides investors and market intermediaries a
+ benchmark that captures the capital market performance of the Indian banks. The Index comprises of maximum 14 companies listed
+ on National Stock Exchange of India (NSE).
+
+ Nifty Bank Index is computed using free float market capitalization method.
+
+ Nifty Bank Index can be used for a variety of purposes such as benchmarking fund portfolios, launching of index funds, ETFs and
+ structured products.
+
+ Index Variant: Nifty Bank Total Returns Index.
+
+
+
+
+
+
+Portfolio Characteristics
+ Methodology                         Periodic Capped Free Float                                      Index           QTD         YTD       1 Year     5 Years         Since
+ No. of Constituents                 14                                                        Returns (%) #                                                       Inception
+                                                                                                Price Return            -5.06      -8.31      -0.01        7.86           16.12
+ Launch Date                         September 15, 2003                                         Total Return            -4.88      -7.70       0.65        8.72           17.60
+ Base Date                           January 01, 2000                                                                                                                Since
+ Base Value                          1000                                                             Statistics ##               1 Year          5 Years         Inception
+
+ Calculation Frequency               Real-Time                                                 Std. Deviation *                        16.98            16.96             27.94
+ Index Rebalancing                   Semi-Annually                                             Beta (NIFTY 50)                           1.15            1.07              1.09
+                                                                                               Correlation (NIFTY 50)                    0.91            0.87              0.84
+1 Year Performance Comparison of Sector Indices
+                                                                                              Fundamentals
+                                                                                                          P/E                        P/B                 Dividend Yield
+                                                                                                         12.95                       1.65                        0.72
+
+                                                                                               Top constituents by weightage
+
+                                                                                                                    Company’s Name                                Weight(%)
+
+                                                                                               HDFC Bank Ltd.                                                             18.61
+                                                                                               ICICI Bank Ltd.                                                            14.18
+                                                                                               Kotak Mahindra Bank Ltd.                                                   10.20
+                                                                                               Axis Bank Ltd.                                                             10.06
+                                                                                               State Bank of India                                                          9.93
+                                                                                               Federal Bank Ltd.                                                            6.56
+                                                                                               IndusInd Bank Ltd.                                                           4.97
+                                                                                               AU Small Finance Bank Ltd.                                                   4.85
+                                                                                               IDFC First Bank Ltd.                                                         4.54
+                                                                                               Bank of Baroda                                                               3.59
+
+
+## Based on Price Return Index.
+# QTD,YTD and 1 year returns are absolute returns.Returns for greater than one year are CAGR returns.
+* Average daily standard deviation annualised
+Disclaimer: All information contained herewith is provided for reference purpose only. NSE Indices Limited (formerly known as India Index Services & Products Limited-IISL) ensures accuracy
+and reliability of the above information to the best of its endeavors. However, NSE Indices Limited makes no warranty or representation as to the accuracy, completeness or reliability of any of
+the information contained herein and disclaim any and all liability whatsoever to any person for any damage or loss of any nature arising from or as a result of reliance on any of the information
+provided herein. The information contained in this document is not intended to provide any professional advice.                                                                1
