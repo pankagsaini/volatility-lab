@@ -11,7 +11,7 @@ c.folder_=()=>archive;c.capture_=()=>{captures++;return {status:'complete'}};
 c.scheduledCapture();assert.equal(captures,0);assert(props.get('COLLECTOR_STATUS').includes('closed'));
 now+=86400000;c.scheduledCapture();assert.equal(captures,1);c.scheduledCapture();assert.equal(captures,1);
 now+=180000;c.scheduledCapture();assert.equal(captures,2);
-props.set('RUNTIME_BUDGET',JSON.stringify({day:'2026-10-21',ms:55*60000}));now+=180000;c.scheduledCapture();assert.equal(captures,2);
+props.set('RUNTIME_BUDGET',JSON.stringify({day:'2026-10-21',ms:75*60000}));now+=180000;c.scheduledCapture();assert.equal(captures,2);
 c.weeklyCleanup();assert.equal(scans,0);assert.equal(deleted,0);
 receipt={schema:1,verified_at:new Date(now).toISOString(),files:{'2026-09-01_snapshot_120000_complete.json.gz':{size:3,sha256:'0'.repeat(64)}}};
 c.weeklyCleanup();assert.equal(deleted,0);

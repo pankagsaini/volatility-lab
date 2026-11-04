@@ -134,6 +134,64 @@ function api_(path, params) {
 }
 
 /**
+ * High-performance concurrent HTTP fetcher using UrlFetchApp.fetchAll.
+ * Dispatches all option chain and quote requests in parallel.
+ * Falls back safely to sequential api_() if fetchAll is unavailable.
+ */
+function apiAll_(requests) {
+  if (!requests || !requests.length) return [];
+  if (typeof UrlFetchApp !== 'undefined' && typeof UrlFetchApp.fetchAll === 'function') {
+    const token = props_().getProperty('UPSTOX_TOKEN');
+    if (!token) {
+      throw new Error('Set UPSTOX_TOKEN in Script Properties');
+    }
+
+    const payloads = requests.map(req => {
+      const queryString = Object.keys(req.params || {})
+        .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(req.params[key]))
+        .join('&');
+      const url = 'https://api.upstox.com' + req.path + (queryString ? '?' + queryString : '');
+      return {
+        url: url,
+        headers: {
+          Authorization: 'Bearer ' + token,
+          Accept: 'application/json'
+        },
+        muteHttpExceptions: true,
+        followRedirects: false
+      };
+    });
+
+    const responses = UrlFetchApp.fetchAll(payloads);
+    return responses.map((response, i) => {
+      const req = requests[i];
+      const statusCode = response.getResponseCode();
+      if (statusCode === 200) {
+        try {
+          const body = JSON.parse(response.getContentText());
+          if (body.status === 'success' && body.data) {
+            return { label: req.label, path: req.path, params: req.params, data: body.data };
+          }
+        } catch (err) {
+          return { label: req.label, path: req.path, params: req.params, error: 'Invalid broker JSON' };
+        }
+      }
+      return { label: req.label, path: req.path, params: req.params, error: 'Broker HTTP ' + statusCode };
+    });
+  }
+
+  // Fallback to sequential api_() if running in test environment
+  return requests.map(req => {
+    try {
+      const data = api_(req.path, req.params);
+      return { label: req.label, path: req.path, params: req.params, data: data };
+    } catch (err) {
+      return { label: req.label, path: req.path, params: req.params, error: safeError_(err) };
+    }
+  });
+}
+
+/**
  * Gzip-compress payload and persist directly into private Drive folder.
  */
 function save_(name, value) {
@@ -281,42 +339,50 @@ function capture_(mode, recovery) {
       });
     }
 
-    // Execute requests with execution budget guard
-    for (const req of requests) {
+    // Execute requests concurrently with execution budget guard
+    const responses = apiAll_(requests);
+    for (const res of responses) {
       if (Date.now() - started > 240000) {
-        report.errors.push({ item: req.label, reason: 'Runtime budget exhausted' });
+        report.errors.push({ item: res.label, reason: 'Runtime budget exhausted' });
         continue;
       }
 
-      try {
-        const data = api_(req.path, req.params);
+      let data = res.data;
+      if (res.error) {
+        // Fallback retry for single failing request
+        try {
+          data = api_(res.path, res.params);
+        } catch (retryErr) {
+          report.errors.push({ item: res.label, reason: safeError_(retryErr) });
+          continue;
+        }
+      }
 
-        if (req.label === 'quotes') {
+      try {
+        if (res.label === 'quotes') {
           const returnedTokens = new Set(Object.values(data).map(q => q.instrument_token));
           if (keys.some(k => !returnedTokens.has(k))) {
             throw new Error('Incomplete quote response');
           }
-        } else if (req.path === '/v2/option/chain' && data.some(r => r.expiry !== req.params.expiry_date)) {
+        } else if (res.path === '/v2/option/chain' && data.some(r => r.expiry !== res.params.expiry_date)) {
           throw new Error('Wrong option expiry');
         }
 
         report.records.push({
-          label: req.label,
+          label: res.label,
           retrieved_at: new Date().toISOString(),
           data: data
         });
 
-        if (mode === 'eod' && req.label !== 'quotes') {
+        if (mode === 'eod' && res.label !== 'quotes') {
           const candles = data.candles || [];
           if (!candles.some(c => String(c[0]).slice(0, 10) === targetDay)) {
-            report.pending.push(req.label);
+            report.pending.push(res.label);
           }
         }
       } catch (err) {
-        report.errors.push({ item: req.label, reason: safeError_(err) });
+        report.errors.push({ item: res.label, reason: safeError_(err) });
       }
-
-      Utilities.sleep(150);
     }
 
     report.status = (report.errors.length || report.pending.length) ? 'partial' : 'complete';
@@ -515,7 +581,7 @@ function scheduledCapture() {
   let failureMessage = null;
 
   try {
-    const interval = Number(properties.getProperty('INTERVAL_MINUTES') || 3);
+    const interval = Number(properties.getProperty('INTERVAL_MINUTES') || 1);
     const slot = today + '|' + Math.floor((mins - 540) / interval);
 
     // Snapshot slot deduplication
@@ -532,12 +598,12 @@ function scheduledCapture() {
       }
     }
 
-    // Daily runtime budget guard (55 minutes max execution per day)
+    // Daily runtime budget guard (75 minutes max execution per day for 1-minute captures)
     let budget = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
     if (budget.day !== today) {
       budget = { day: today, ms: 0 };
     }
-    if (budget.ms >= 55 * 60000) {
+    if (budget.ms >= 75 * 60000) {
       const message = 'Daily runtime safety limit reached.';
       properties.setProperty('COLLECTOR_STATUS', message + ' ' + today);
       return;
