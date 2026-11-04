@@ -143,154 +143,7 @@ if not ready:
         from upstox_data import render_connection
         render_connection()
 
-def render_executive_header():
-    now = datetime.now(IST)
-    t_min = now.hour * 60 + now.minute
-    is_open = (now.weekday() < 5) and (555 <= t_min <= 930)
-
-    if is_open:
-        status_pill = '<span style="background:rgba(16,185,129,0.12); color:#10b981; border:1px solid #10b981; padding:3px 10px; border-radius:9999px; font-size:0.72rem; font-weight:600; letter-spacing:0.02em;">● LIVE</span>'
-    elif now.weekday() < 5 and 540 <= t_min < 555:
-        status_pill = '<span style="background:rgba(245,158,11,0.12); color:#f59e0b; border:1px solid #f59e0b; padding:3px 10px; border-radius:9999px; font-size:0.72rem; font-weight:600;">◑ PRE-OPEN</span>'
-    else:
-        status_pill = '<span style="background:rgba(148,163,184,0.12); color:#94a3b8; border:1px solid #334155; padding:3px 10px; border-radius:9999px; font-size:0.72rem; font-weight:500;">○ CLOSED</span>'
-
-    ist_time = now.strftime('%d %b %H:%M IST')
-
-    st.markdown(f'''
-    <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:8px; border-bottom:1px solid #1e2c40; margin-bottom:12px;">
-        <div style="display:flex; align-items:center; gap:12px;">
-            <span style="font-size:1.85rem; font-weight:700; letter-spacing:-0.04em; color:#f8fafc;">Volatility Lab</span>
-            {status_pill}
-        </div>
-        <div style="color:#64748b; font-size:0.8rem; font-variant-numeric:tabular-nums;">
-            {ist_time}
-        </div>
-    </div>
-    ''', unsafe_allow_html=True)
-
-    from expiry_data import load_snapshot
-    import numpy as np
-    snap = load_snapshot(None, allow_saved=True) or {}
-    rows = snap.get('rows', [])
-    nifty = next((r for r in rows if r.get('Instrument') == 'NIFTY'), {})
-    bn = next((r for r in rows if r.get('Instrument') == 'BANKNIFTY'), {})
-
-    def _num(v):
-        if v is None:
-            return None
-        try:
-            f = float(v)
-            return f if np.isfinite(f) else None
-        except (ValueError, TypeError):
-            return None
-
-    vix_val = snap.get('india_vix', {}).get('value')
-    if vix_val is None:
-        vix_val = read_json(ROOT / 'data' / 'upstox' / 'india_vix.json').get('price')
-
-    info = read_json(ROOT / 'data' / 'google_archive' / 'status.json')
-    sync_state, sync_checked = drive_sync_label(info)
-    sync_count = info.get('total_files', 0)
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        spot = _num(nifty.get('Price'))
-        fut = _num(nifty.get('Month future LTP') or nifty.get('Listed future'))
-        syn = _num(nifty.get('Synthetic future'))
-        chg = _num(nifty.get('% change'))
-        iv = _num(nifty.get('IV'))
-        chg_color = '#10b981' if (chg is not None and chg >= 0) else ('#ef4444' if (chg is not None and chg < 0) else '#94a3b8')
-        chg_arrow = '▲' if (chg is not None and chg >= 0) else ('▼' if (chg is not None and chg < 0) else '')
-        chg_txt = f"{chg_arrow} {chg:+.2f}%" if chg is not None else "—"
-        st.markdown(f'''
-        <div style="background:#131f31; border:1px solid #26364d; border-radius:10px; padding:10px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:700; color:#f8fafc; font-size:0.88rem;">NIFTY</span>
-                <span style="color:{chg_color}; font-size:0.75rem; font-weight:700;">{chg_txt}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:2px;">
-                <span style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums;">
-                    {f"{spot:,.1f}" if spot is not None else "—"}
-                </span>
-                <span style="font-size:0.72rem; color:#94a3b8; font-variant-numeric:tabular-nums;">
-                    Fut: <b style="color:#38bdf8;">{f"{fut:,.1f}" if fut is not None else "—"}</b>
-                </span>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b; margin-top:4px;">
-                <span>Syn: <b style="color:#a78bfa;">{f"{syn:,.1f}" if syn is not None else "—"}</b></span>
-                <span>ATM IV: <b style="color:#38bdf8;">{f"{iv:.1f}%" if iv is not None else "—"}</b></span>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with c2:
-        spot_bn = _num(bn.get('Price'))
-        fut_bn = _num(bn.get('Month future LTP') or bn.get('Listed future'))
-        syn_bn = _num(bn.get('Synthetic future'))
-        chg_bn = _num(bn.get('% change'))
-        iv_bn = _num(bn.get('IV'))
-        chg_color_bn = '#10b981' if (chg_bn is not None and chg_bn >= 0) else ('#ef4444' if (chg_bn is not None and chg_bn < 0) else '#94a3b8')
-        chg_arrow_bn = '▲' if (chg_bn is not None and chg_bn >= 0) else ('▼' if (chg_bn is not None and chg_bn < 0) else '')
-        chg_txt_bn = f"{chg_arrow_bn} {chg_bn:+.2f}%" if chg_bn is not None else "—"
-        st.markdown(f'''
-        <div style="background:#131f31; border:1px solid #26364d; border-radius:10px; padding:10px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:700; color:#f8fafc; font-size:0.88rem;">BANKNIFTY</span>
-                <span style="color:{chg_color_bn}; font-size:0.75rem; font-weight:700;">{chg_txt_bn}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:2px;">
-                <span style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums;">
-                    {f"{spot_bn:,.1f}" if spot_bn is not None else "—"}
-                </span>
-                <span style="font-size:0.72rem; color:#94a3b8; font-variant-numeric:tabular-nums;">
-                    Fut: <b style="color:#38bdf8;">{f"{fut_bn:,.1f}" if fut_bn is not None else "—"}</b>
-                </span>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b; margin-top:4px;">
-                <span>Syn: <b style="color:#a78bfa;">{f"{syn_bn:,.1f}" if syn_bn is not None else "—"}</b></span>
-                <span>ATM IV: <b style="color:#38bdf8;">{f"{iv_bn:.1f}%" if iv_bn is not None else "—"}</b></span>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with c3:
-        vix_f = _num(vix_val)
-        vix_desc = 'Low Vol' if (vix_f is not None and vix_f < 13) else ('Normal' if (vix_f is not None and vix_f <= 18) else ('Elevated' if vix_f is not None else '—'))
-        vix_color = '#10b981' if (vix_f is not None and vix_f <= 15) else ('#f59e0b' if (vix_f is not None and vix_f <= 20) else ('#ef4444' if vix_f is not None else '#94a3b8'))
-        st.markdown(f'''
-        <div style="background:#131f31; border:1px solid #26364d; border-radius:10px; padding:10px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:700; color:#f8fafc; font-size:0.88rem;">INDIA VIX</span>
-                <span style="color:{vix_color}; font-size:0.72rem; font-weight:700;">{vix_desc}</span>
-            </div>
-            <div style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
-                {f"{vix_f:.2f}" if vix_f is not None else "—"}
-            </div>
-            <div style="font-size:0.72rem; color:#64748b; margin-top:4px;">
-                NSE Volatility Index
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with c4:
-        sync_badge_color = '#10b981' if sync_state == 'healthy' else ('#f59e0b' if sync_state == 'syncing' else '#64748b')
-        st.markdown(f'''
-        <div style="background:#131f31; border:1px solid #26364d; border-radius:10px; padding:10px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:700; color:#f8fafc; font-size:0.88rem;">CLOUD MIRROR</span>
-                <span style="color:{sync_badge_color}; font-size:0.72rem; font-weight:700; text-transform:uppercase;">● {sync_state}</span>
-            </div>
-            <div style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
-                {sync_count:,} <span style="font-size:0.76rem; font-weight:500; color:#64748b;">archives</span>
-            </div>
-            <div style="font-size:0.72rem; color:#64748b; margin-top:4px;">
-                Google Drive 5TB storage
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-render_executive_header()
+st.title('Volatility Lab')
 
 
 
@@ -304,12 +157,16 @@ def cloud_sync_status():
     elif info.get('status')=='waiting':st.caption('Waiting for Google Drive')
     else:
         count=info.get('total_files',0)
-        left,right=st.columns([5,1])
+        left,right=st.columns([4,1])
         state,checked=drive_sync_label(info)
         imported=info.get('imported',0)
-        summary=f"Drive · {state} · {count} archives"+(f" · {imported} new" if imported else '')+f" · checked {checked}"+(f" · {len(info.get('errors') or [])} errors" if info.get('errors') else '')
+        summary=f"Drive · {state} · {count:,} archives"+(f" · {imported} new" if imported else '')+f" · checked {checked}"+(f" · {len(info.get('errors') or [])} errors" if info.get('errors') else '')
         if state in ('stale','needs attention','status unavailable') or info.get('errors'):left.warning(summary)
         else:left.caption(summary)
+        now=datetime.now(IST)
+        is_open=(now.weekday()<5) and (555<=now.hour*60+now.minute<=930)
+        mkt_txt='● Market Live' if is_open else ('◑ Pre-Open' if (now.weekday()<5 and 540<=now.hour*60+now.minute<555) else '○ Market Closed')
+        right.caption(f"{mkt_txt} · {now:%H:%M IST}")
         previous=st.session_state.setdefault('_cloud_seen',count)
         if count!=previous:
             st.session_state['_cloud_seen']=count

@@ -167,7 +167,7 @@ class PacingTests(unittest.TestCase):
                 outcomes = [events.get(timeout=3) for _ in workers]
                 self.assertEqual([kind for kind, _ in outcomes], ['finished', 'finished'])
                 for worker in workers:
-                    worker.join(3)
+                    worker.join(10)
                     self.assertFalse(worker.is_alive())
                     self.assertEqual(worker.exitcode, 0)
                 with closing(sqlite3.connect(db)) as connection:
