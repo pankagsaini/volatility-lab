@@ -77,6 +77,7 @@ Volatility Lab/data/google_archive/
 # Exclude all databases, large audit archives, and temp files regardless of directory
 *.sqlite*
 **/*.sqlite*
+!Volatility Lab/data/monitor.sqlite
 *.lock
 *.tmp
 Volatility Lab/data/audit/
