@@ -818,12 +818,8 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
     engine=st.session_state.expiry_engine
 
-    top_a,top_b=st.columns([3,2])
-
-    with top_a:
-        st.subheader('Options overview')
-
-    with top_b:auto=st.toggle('Auto refresh',value=True,disabled=not ready,help='Refresh quotes during market hours; discover listed expiries hourly while this page is open.')
+    st.subheader('Options overview')
+    auto = True
 
     @st.fragment
 
@@ -848,10 +844,6 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             else:st.session_state.options_refresh_error=completed[1]
         if st.session_state.get('options_refresh_error'):st.warning(st.session_state.options_refresh_error)
 
-        a,b=st.columns([1,5])
-
-        pressed=a.button('Refresh quotes',disabled=not ready or background.pending(st.session_state,'options'),type='secondary',width='stretch')
-
         requested_config=config
         result=load_snapshot(config,allow_saved=True)
         if result is not None:st.session_state['_last_options_snapshot']=result
@@ -861,16 +853,16 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
         initial=not st.session_state.get('expiry_initial_attempted',False)
 
         from refresh_policy import refresh_due
-        timed=auto and refresh_due(datetime.now(IST),result,
+        timed=refresh_due(datetime.now(IST),result,
             time.monotonic()-st.session_state.get('expiry_last_attempt',0))
 
-        if ready and (pressed or initial or timed) and not background.pending(st.session_state,'options'):
+        if ready and (initial or timed) and not background.pending(st.session_state,'options'):
             st.session_state.expiry_initial_attempted=True
             st.session_state.expiry_last_attempt=time.monotonic()
             background.submit(st.session_state,'options',engine.refresh_all,
                 background.frozen_client(client),rate,dict(dividend) if isinstance(dividend,dict) else dividend,spread)
         def refresh_in_background():
-            if not auto or not ready or background.pending(st.session_state,'options'):return
+            if not ready or background.pending(st.session_state,'options'):return
             if refresh_due(datetime.now(IST),None,time.monotonic()-st.session_state.get('expiry_last_attempt',0)):
                 st.session_state.expiry_last_attempt=time.monotonic()
                 background.submit(st.session_state,'options',engine.refresh_all,
@@ -890,11 +882,11 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             dates=sorted({str(r.get('As of',''))[:10] for r in result['rows'] if r.get('As of')})
 
             action='last attempt' if any(r.get('Refresh status') for r in result['rows']) else 'refreshed'
-            b.caption(f"Quotes: {', '.join(dates)} · {action} {stamp:%d %b %H:%M} · {'Connected' if ready else 'Saved view'}")
+            st.caption(f"Quotes: {', '.join(dates)} · {action} {stamp:%d %b %H:%M} · {'Connected' if ready else 'Saved view'}")
 
         else:
 
-            b.caption('Refresh quotes to apply these settings.' if ready else 'Connect Upstox in the sidebar to load expiry quotes.')
+            st.caption('Loading options quotes...' if ready else 'Connect Upstox in the sidebar to load expiry quotes.')
 
             result={'rows':[],'details':[],'catalog':{},'india_vix':{}}
 

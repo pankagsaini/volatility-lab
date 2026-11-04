@@ -72,7 +72,15 @@ def config():
 @contextmanager
 def data_lock(timeout=120):
     """Serialize UI and collector writers; lock releases after process failure."""
-    import msvcrt
+    try:
+        import msvcrt
+    except ImportError:
+        msvcrt = None
+    try:
+        import fcntl
+    except ImportError:
+        fcntl = None
+
     with _mutex:
         if getattr(_local, 'held', False):
             yield
@@ -86,7 +94,10 @@ def data_lock(timeout=120):
             while True:
                 try:
                     handle.seek(0)
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    if msvcrt:
+                        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    elif fcntl:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                     break
                 except OSError:
                     if clock.monotonic() >= end:
@@ -98,7 +109,12 @@ def data_lock(timeout=120):
             finally:
                 _local.held = False
                 handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                if msvcrt:
+                    try: msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                    except OSError: pass
+                elif fcntl:
+                    try: fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                    except OSError: pass
 
 
 def serialized(fn):

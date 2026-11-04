@@ -2,7 +2,10 @@
 from pathlib import Path
 import argparse
 import json
-import msvcrt
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 import subprocess
 import time
 from datetime import datetime,timezone
@@ -13,7 +16,7 @@ ROOT=Path(__file__).resolve().parent
 def running(root=ROOT):
     """The downloader's OS lock, not a stale JSON status, determines liveness."""
     path=Path(root)/'data'/'backtest_1minute'/'download.lock'
-    if not path.exists():return False
+    if not path.exists() or msvcrt is None:return False
     with path.open('r+b') as handle:
         handle.seek(0)
         try:msvcrt.locking(handle.fileno(),msvcrt.LK_NBLCK,1)

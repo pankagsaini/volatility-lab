@@ -272,18 +272,38 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
     return count
 
 def sync_once(rate,dividend,spread,verify_receipt=False):
-    import msvcrt
+    try:
+        import msvcrt
+    except ImportError:
+        msvcrt = None
+    try:
+        import fcntl
+    except ImportError:
+        fcntl = None
+
     STORE.mkdir(parents=True,exist_ok=True)
     with (STORE/'sync.lock').open('a+b') as lock:
         lock.seek(0);lock.write(b'0');lock.flush();lock.seek(0)
-        try:msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
-        except OSError:return 0
-        try:return _sync_once(rate,dividend,spread,verify_receipt)
+        try:
+            if msvcrt:
+                msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
+            elif fcntl:
+                fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except OSError:
+            return 0
+        try:
+            return _sync_once(rate,dividend,spread,verify_receipt)
         except Exception as exc:
             atomic_json(STORE/'status.json',{'status':'partial','updated':pd.Timestamp.now(tz='UTC').isoformat(),'message':'Sync interrupted; retry scheduled','error':type(exc).__name__})
             raise
         finally:
-            lock.seek(0);msvcrt.locking(lock.fileno(),msvcrt.LK_UNLCK,1)
+            lock.seek(0)
+            if msvcrt:
+                try: msvcrt.locking(lock.fileno(),msvcrt.LK_UNLCK,1)
+                except OSError: pass
+            elif fcntl:
+                try: fcntl.flock(lock.fileno(),fcntl.LOCK_UN)
+                except OSError: pass
 
 def ensure_sync(rate,dividend,spread):
     global _future,_started

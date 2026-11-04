@@ -306,14 +306,11 @@ def cloud_sync_status():
         if state in ('stale','needs attention','status unavailable') or info.get('errors'):left.warning(summary)
         else:left.caption(summary)
         previous=st.session_state.setdefault('_cloud_seen',count)
-        if count!=previous and right.button('Show updates',key='cloud_show_updates'):
+        if count!=previous:
             st.session_state['_cloud_seen']=count
             st.rerun()
-# Cloud background sync
-try:
-    google_archive_sync.ensure_sync(rate,dividend,spread)
-except Exception:
-    pass
+
+cloud_sync_status()
 
 if capture.get('status') in ('failed','partial'):
     errors = capture.get('errors', [])
