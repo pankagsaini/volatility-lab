@@ -32,6 +32,138 @@ from quote_status import snapshot_status
 
 from expiry_forecast import expiry_forecast, VERSION as EXPIRY_VERSION,term_structure_forecast,TERM_VERSION
 
+def render_trade_decision_radar(selected_rows):
+    """Executive trade decision panel with regime, spread bias, expected move, and basis in classic classy styling."""
+    if not selected_rows:
+        return
+
+    def _safe_f(v):
+        if v is None:
+            return None
+        try:
+            f = float(v)
+            return f if np.isfinite(f) else None
+        except (ValueError, TypeError):
+            return None
+
+    st.markdown('<div style="margin-top:4px; margin-bottom:12px;"><span style="font-size:0.82rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#38bdf8;">◈ Volatility Radar</span></div>', unsafe_allow_html=True)
+    cols = st.columns(len(selected_rows))
+    for col, row in zip(cols, selected_rows):
+        symbol = str(row.get('Instrument', '—'))
+        exp = str(row.get('Expiry', '—'))
+        spot = _safe_f(row.get('Price'))
+        iv = _safe_f(row.get('IV'))
+        spread = _safe_f(row.get('IV-RV Spread'))
+        syn = _safe_f(row.get('Synthetic future'))
+        m_fut = _safe_f(row.get('Month future LTP'))
+        rev25 = _safe_f(row.get('25 Delta reversal'))
+
+        with col:
+            if spot is None or iv is None:
+                st.info(f"{symbol} ({exp}): Live quotes pending.")
+                continue
+
+            try:
+                exp_date = pd.Timestamp(exp).date()
+                today = datetime.now(IST).date()
+                dte = max(0.2, float((exp_date - today).days))
+            except Exception:
+                dte = 5.0
+
+            move_pts = spot * (iv / 100.0) * np.sqrt(dte / 365.0)
+            move_pct = (move_pts / spot) * 100.0 if spot > 0 else 0.0
+            lower_range = spot - move_pts
+            upper_range = spot + move_pts
+
+            if spread is not None:
+                if spread > 1.5:
+                    bias_badge = 'RICH VOLATILITY'
+                    bias_color = '#10b981'
+                    bias_bg = 'rgba(16, 185, 129, 0.12)'
+                    bias_border = '#10b981'
+                    bias_text = 'Premium Selling Favorable — IV trades at a premium over trailing realized volatility.'
+                elif spread < -1.5:
+                    bias_badge = 'COMPRESSED VOLATILITY'
+                    bias_color = '#38bdf8'
+                    bias_bg = 'rgba(56, 189, 248, 0.12)'
+                    bias_border = '#38bdf8'
+                    bias_text = 'Long Volatility Favorable — IV is discounted relative to realized movement.'
+                else:
+                    bias_badge = 'FAIR VALUE SPREAD'
+                    bias_color = '#94a3b8'
+                    bias_bg = 'rgba(148, 163, 184, 0.12)'
+                    bias_border = '#475569'
+                    bias_text = 'Spread Neutral — IV aligns with historical movement within normal bounds.'
+            else:
+                bias_badge = 'SPREAD PENDING'
+                bias_color = '#f59e0b'
+                bias_bg = 'rgba(245, 158, 11, 0.12)'
+                bias_border = '#b45309'
+                bias_text = 'Historical daily prices updating for RV alignment.'
+
+            if syn is not None and m_fut is not None:
+                basis = syn - m_fut
+                basis_threshold = 30.0 if symbol == 'NIFTY' else 75.0
+                if abs(basis) <= basis_threshold:
+                    basis_status = f'● Parity Normal ({basis:+.1f} pts)'
+                    basis_color = '#10b981'
+                else:
+                    basis_status = f'⚠️ Basis Dislocation ({basis:+.1f} pts)'
+                    basis_color = '#f59e0b'
+            else:
+                basis_status = 'Parity: Reference'
+                basis_color = '#94a3b8'
+
+            skew_text = f'Put Skew: {abs(rev25):.2f} pp' if rev25 is not None else 'Skew: —'
+
+            fut_txt = f"{m_fut:,.1f}" if m_fut is not None else "—"
+            syn_txt = f"{syn:,.1f}" if syn is not None else "—"
+
+            st.markdown(f'''
+            <div style="background:#131f31; border:1px solid #26364d; border-radius:12px; padding:14px 16px; margin-bottom:12px; box-shadow:0 4px 16px rgba(0,0,0,0.25);">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e2c40; padding-bottom:8px; margin-bottom:10px;">
+                    <div>
+                        <span style="font-weight:700; font-size:1.1rem; color:#f8fafc;">{symbol}</span>
+                        <span style="color:#94a3b8; font-size:0.8rem; margin-left:6px;">{exp} ({dte:.1f}d)</span>
+                    </div>
+                    <span style="background:{bias_bg}; color:{bias_color}; border:1px solid {bias_border}; font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:6px; letter-spacing:0.04em;">
+                        {bias_badge}
+                    </span>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+                    <div style="background:#0c1321; border:1px solid #1e2c40; border-radius:8px; padding:8px 12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="color:#94a3b8; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:600;">Spot & IV</span>
+                            <span style="color:#38bdf8; font-size:0.74rem; font-weight:700;">IV: {iv:.2f}%</span>
+                        </div>
+                        <div style="font-size:1.2rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
+                            {spot:,.1f}
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#94a3b8; margin-top:4px;">
+                            <span>Fut: <b style="color:#38bdf8;">{fut_txt}</b></span>
+                            <span>Syn: <b style="color:#a78bfa;">{syn_txt}</b></span>
+                        </div>
+                    </div>
+                    <div style="background:#0c1321; border:1px solid #1e2c40; border-radius:8px; padding:8px 12px;">
+                        <div style="color:#94a3b8; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:600;">Expected Expiry Move</div>
+                        <div style="font-size:1.2rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
+                            ±{move_pts:.0f} pts
+                        </div>
+                        <div style="color:#a855f7; font-size:0.74rem; font-weight:600; margin-top:4px;">
+                            ±{move_pct:.2f}% <span style="color:#64748b; font-weight:400;">({lower_range:,.0f} – {upper_range:,.0f})</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="font-size:0.78rem; line-height:1.45; color:#cbd5e1; background:#0e1726; border-left:3px solid {bias_color}; border-radius:4px; padding:7px 12px; margin-bottom:8px;">
+                    {bias_text}
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#94a3b8; padding-top:2px;">
+                    <span style="color:{basis_color}; font-weight:600;">{basis_status}</span>
+                    <span>{skew_text}</span>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
+
 def show_table(frame):
 
     numeric=frame.select_dtypes(include='number').columns
@@ -835,6 +967,8 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
         table['Underlying as of']=[pd.Timestamp(r['As of']).strftime('%d %b %H:%M') if r.get('As of') else 'Unavailable' for r in selected_rows]
 
 
+        render_trade_decision_radar(selected_rows)
+
         parity_columns=['ATM strike','ATM call LTP','ATM put LTP','Synthetic future',
                         'Month future LTP','Future contract','Future quote time',
                         'Future reference','Synthetic status']
@@ -973,6 +1107,35 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
                 st.caption('Spread = broker IV − HV30. When HV30 moves slowly, the spread can track IV closely.')
 
             render_relative_value(symbol, chart_selected, config)
+
+        with st.expander('🔬 Advanced Diagnostics & Secondary Research Models', expanded=False):
+            diag_tab = st.radio(
+                'Diagnostic module',
+                ['3D Vol Surface Mesh', 'Candidate Model Validation & Diagnostics', 'HAR-RV Realized Vol Cascades'],
+                horizontal=True,
+                key='diag_secondary_selector'
+            )
+            if diag_tab == '3D Vol Surface Mesh':
+                from vol_surface_3d import render_vol_surface_3d
+                render_vol_surface_3d(symbol, chart_selected, result, DATA)
+            elif diag_tab == 'Candidate Model Validation & Diagnostics':
+                from research_ui import render_research
+                render_research(DATA.parent, symbol, chart_selected)
+            elif diag_tab == 'HAR-RV Realized Vol Cascades':
+                st.subheader(f'{symbol} · HAR-RV Volatility Cascades')
+                st.caption('Heterogeneous Autoregressive realized volatility decomposing trailing daily (1d), weekly (5d), and monthly (22d) components.')
+                hist_path = DATA / f'{symbol.lower()}_daily.csv'
+                if not hist_path.exists():
+                    hist_path = DATA / f'{symbol.lower()}_one_year.csv'
+                if hist_path.exists():
+                    df = pd.read_csv(hist_path)
+                    from har_research import har_components_summary
+                    summary = har_components_summary(df)
+                    st.line_chart(summary.set_index('Date').tail(126)[['Daily RV %', 'Weekly (5d) RV %', 'Monthly (22d) RV %']])
+                    st.dataframe(summary.tail(10).round(2), hide_index=True, width='stretch')
+                else:
+                    st.info('Daily price history not found for HAR calculation.')
+
 
         if st.session_state.get('advanced_workspace'):
             from trade_review_ui import render_risk_context
