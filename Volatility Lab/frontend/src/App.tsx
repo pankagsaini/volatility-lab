@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box,
   Layers,
   Zap,
   Target,
@@ -8,7 +7,6 @@ import {
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { TickerRibbon } from './components/TickerRibbon';
-import { VolSurface3D } from './components/VolSurface3D';
 import { SmileChart } from './components/SmileChart';
 import { TermStructureChart } from './components/TermStructureChart';
 import { OptionChainTable } from './components/OptionChainTable';
@@ -223,7 +221,7 @@ export const App: React.FC = () => {
         {/* Tab Navigation Segmented Bar */}
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900/80 border border-slate-800/80 backdrop-blur-md overflow-x-auto">
           {[
-            { id: 'surface', label: 'Vol Surface', icon: Box },
+            { id: 'surface', label: 'Smile & Term Structure', icon: Layers },
             { id: 'chain', label: 'Option Chain', icon: Zap },
             { id: 'radar', label: 'Trade Radar', icon: Target },
             { id: 'backtest', label: 'Backtest', icon: FlaskConical },
@@ -250,18 +248,6 @@ export const App: React.FC = () => {
         {/* Tab Contents: Instant Seamless Switching */}
         {activeTab === 'surface' && (
           <div className="space-y-4 animate-fade-in">
-            {/* 3D Surface with Active Expiry Cross-Section Highlight */}
-            <VolSurface3D
-              data={surfaceData}
-              symbol={selectedSymbol}
-              isDark={isDark}
-              surfaceRange={surfaceRange}
-              ivMode={ivMode}
-              spaceMode={spaceMode}
-              includeZeroDte={includeZeroDte}
-              selectedExpiry={selectedExpiry}
-            />
-
             {/* 2D Smiles & Term Structure side-by-side */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <SmileChart data={surfaceData} isDark={isDark} selectedExpiry={selectedExpiry} />

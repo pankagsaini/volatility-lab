@@ -1098,34 +1098,6 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
             render_relative_value(symbol, chart_selected, config)
 
-        with st.expander('🔬 Advanced Diagnostics & Secondary Research Models', expanded=False):
-            diag_tab = st.radio(
-                'Diagnostic module',
-                ['3D Vol Surface Mesh', 'Candidate Model Validation & Diagnostics', 'HAR-RV Realized Vol Cascades'],
-                horizontal=True,
-                key='diag_secondary_selector'
-            )
-            if diag_tab == '3D Vol Surface Mesh':
-                from vol_surface_3d import render_vol_surface_3d
-                render_vol_surface_3d(symbol, chart_selected, result, DATA)
-            elif diag_tab == 'Candidate Model Validation & Diagnostics':
-                from research_ui import render_research
-                render_research(DATA.parent, symbol, chart_selected)
-            elif diag_tab == 'HAR-RV Realized Vol Cascades':
-                st.subheader(f'{symbol} · HAR-RV Volatility Cascades')
-                st.caption('Heterogeneous Autoregressive realized volatility decomposing trailing daily (1d), weekly (5d), and monthly (22d) components.')
-                hist_path = DATA / f'{symbol.lower()}_daily.csv'
-                if not hist_path.exists():
-                    hist_path = DATA / f'{symbol.lower()}_one_year.csv'
-                if hist_path.exists():
-                    df = pd.read_csv(hist_path)
-                    from har_research import har_components_summary
-                    summary = har_components_summary(df)
-                    st.line_chart(summary.set_index('Date').tail(126)[['Daily RV %', 'Weekly (5d) RV %', 'Monthly (22d) RV %']])
-                    st.dataframe(summary.tail(10).round(2), hide_index=True, width='stretch')
-                else:
-                    st.info('Daily price history not found for HAR calculation.')
-
         if st.session_state.get('advanced_workspace'):
             from trade_review_ui import render_risk_context
             render_risk_context(DATA,symbol,chart_selected)
