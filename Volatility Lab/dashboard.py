@@ -187,76 +187,85 @@ def render_terminal_header():
     rows=snap.get('rows',[])
     nifty=next((r for r in rows if r.get('Instrument')=='NIFTY'),{})
     bn=next((r for r in rows if r.get('Instrument')=='BANKNIFTY'),{})
+    def _num(v):
+        try:
+            return float(v) if v is not None else None
+        except (ValueError, TypeError):
+            return None
+
     vix_val=snap.get('india_vix',{}).get('value')
-    info=read_json(ROOT/'data'/'google_archive'/'status.json')
+    info=read_json(ROOT/'data'/'google_archive'/'status.json') or {}
     sync_state,_=drive_sync_label(info)
-    sync_count=info.get('total_files',0)
+    sync_count=int(info.get('total_files',0) or 0)
 
     c1,c2,c3,c4=st.columns(4)
 
     with c1:
-        spot=nifty.get('Price')
-        fut=nifty.get('Month future LTP') or nifty.get('Listed future')
-        syn=nifty.get('Synthetic future')
-        chg=nifty.get('% change')
-        iv=nifty.get('IV')
-        sprd=nifty.get('IV-RV Spread')
-        chg_color='#10b981' if chg and chg>=0 else '#ef4444'
-        chg_arrow='▲' if chg and chg>=0 else '▼'
+        spot=_num(nifty.get('Price'))
+        fut=_num(nifty.get('Month future LTP') or nifty.get('Listed future'))
+        syn=_num(nifty.get('Synthetic future'))
+        chg=_num(nifty.get('% change'))
+        iv=_num(nifty.get('IV'))
+        sprd=_num(nifty.get('IV-RV Spread'))
+        chg_color='#10b981' if (chg is not None and chg>=0) else ('#ef4444' if (chg is not None and chg<0) else '#94a3b8')
+        chg_arrow='▲' if (chg is not None and chg>=0) else ('▼' if (chg is not None and chg<0) else '')
+        chg_txt=f"{chg_arrow} {chg:+.2f}%" if chg is not None else "—"
         st.markdown(f'''
         <div style="background:#0f1726; border:1px solid #1a273e; border-radius:10px; padding:10px 14px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">NIFTY 50</span>
-                <span style="color:{chg_color}; font-size:0.75rem; font-weight:700;">{chg_arrow} {chg:+.2f}%</span>
+                <span style="color:{chg_color}; font-size:0.75rem; font-weight:700;">{chg_txt}</span>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:2px;">
                 <span style="font-size:1.22rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums;">
-                    {f"{spot:,.1f}" if spot else "—"}
+                    {f"{spot:,.1f}" if spot is not None else "—"}
                 </span>
                 <span style="font-size:0.72rem; color:#94a3b8; font-variant-numeric:tabular-nums;">
-                    Fut: <b style="color:#38bdf8;">{f"{fut:,.1f}" if fut else "—"}</b>
+                    Fut: <b style="color:#38bdf8;">{f"{fut:,.1f}" if fut is not None else "—"}</b>
                 </span>
             </div>
             <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b; margin-top:4px;">
-                <span>Syn: <b style="color:#a78bfa;">{f"{syn:,.1f}" if syn else "—"}</b></span>
-                <span>ATM IV: <b style="color:#38bdf8;">{f"{iv:.1f}%" if iv else "—"}</b></span>
+                <span>Syn: <b style="color:#a78bfa;">{f"{syn:,.1f}" if syn is not None else "—"}</b></span>
+                <span>ATM IV: <b style="color:#38bdf8;">{f"{iv:.1f}%" if iv is not None else "—"}</b></span>
             </div>
         </div>
         ''', unsafe_allow_html=True)
 
     with c2:
-        spot_bn=bn.get('Price')
-        fut_bn=bn.get('Month future LTP') or bn.get('Listed future')
-        syn_bn=bn.get('Synthetic future')
-        chg_bn=bn.get('% change')
-        iv_bn=bn.get('IV')
-        sprd_bn=bn.get('IV-RV Spread')
-        chg_color_bn='#10b981' if chg_bn and chg_bn>=0 else '#ef4444'
-        chg_arrow_bn='▲' if chg_bn and chg_bn>=0 else '▼'
+        spot_bn=_num(bn.get('Price'))
+        fut_bn=_num(bn.get('Month future LTP') or bn.get('Listed future'))
+        syn_bn=_num(bn.get('Synthetic future'))
+        chg_bn=_num(bn.get('% change'))
+        iv_bn=_num(bn.get('IV'))
+        sprd_bn=_num(bn.get('IV-RV Spread'))
+        chg_color_bn='#10b981' if (chg_bn is not None and chg_bn>=0) else ('#ef4444' if (chg_bn is not None and chg_bn<0) else '#94a3b8')
+        chg_arrow_bn='▲' if (chg_bn is not None and chg_bn>=0) else ('▼' if (chg_bn is not None and chg_bn<0) else '')
+        chg_txt_bn=f"{chg_arrow_bn} {chg_bn:+.2f}%" if chg_bn is not None else "—"
         st.markdown(f'''
         <div style="background:#0f1726; border:1px solid #1a273e; border-radius:10px; padding:10px 14px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-weight:700; color:#f8fafc; font-size:0.86rem;">BANKNIFTY</span>
-                <span style="color:{chg_color_bn}; font-size:0.75rem; font-weight:700;">{chg_arrow_bn} {chg_bn:+.2f}%</span>
+                <span style="color:{chg_color_bn}; font-size:0.75rem; font-weight:700;">{chg_txt_bn}</span>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:2px;">
                 <span style="font-size:1.22rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums;">
-                    {f"{spot_bn:,.1f}" if spot_bn else "—"}
+                    {f"{spot_bn:,.1f}" if spot_bn is not None else "—"}
                 </span>
                 <span style="font-size:0.72rem; color:#94a3b8; font-variant-numeric:tabular-nums;">
-                    Fut: <b style="color:#818cf8;">{f"{fut_bn:,.1f}" if fut_bn else "—"}</b>
+                    Fut: <b style="color:#818cf8;">{f"{fut_bn:,.1f}" if fut_bn is not None else "—"}</b>
                 </span>
             </div>
             <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b; margin-top:4px;">
-                <span>Syn: <b style="color:#a78bfa;">{f"{syn_bn:,.1f}" if syn_bn else "—"}</b></span>
-                <span>ATM IV: <b style="color:#818cf8;">{f"{iv_bn:.1f}%" if iv_bn else "—"}</b></span>
+                <span>Syn: <b style="color:#a78bfa;">{f"{syn_bn:,.1f}" if syn_bn is not None else "—"}</b></span>
+                <span>ATM IV: <b style="color:#818cf8;">{f"{iv_bn:.1f}%" if iv_bn is not None else "—"}</b></span>
             </div>
         </div>
         ''', unsafe_allow_html=True)
 
     with c3:
-        vix_desc='Low Vol' if vix_val and vix_val<13 else ('Normal' if vix_val and vix_val<=18 else 'Elevated')
-        vix_color='#10b981' if vix_val and vix_val<=15 else ('#f59e0b' if vix_val and vix_val<=20 else '#ef4444')
+        vix_f=_num(vix_val)
+        vix_desc='Low Vol' if (vix_f is not None and vix_f<13) else ('Normal' if (vix_f is not None and vix_f<=18) else ('Elevated' if vix_f is not None else '—'))
+        vix_color='#10b981' if (vix_f is not None and vix_f<=15) else ('#f59e0b' if (vix_f is not None and vix_f<=20) else ('#ef4444' if vix_f is not None else '#94a3b8'))
         st.markdown(f'''
         <div style="background:#0f1726; border:1px solid #1a273e; border-radius:10px; padding:10px 14px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -264,7 +273,7 @@ def render_terminal_header():
                 <span style="color:{vix_color}; font-size:0.72rem; font-weight:700;">{vix_desc}</span>
             </div>
             <div style="font-size:1.25rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">
-                {f"{vix_val:.2f}" if vix_val else "—"}
+                {f"{vix_f:.2f}" if vix_f is not None else "—"}
             </div>
             <div style="font-size:0.72rem; color:#64748b; margin-top:4px;">
                 NSE Volatility Index
