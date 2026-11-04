@@ -9,7 +9,7 @@
  * - No order routing, no public web deployment, no algorithmic fitting.
  * - UPSTOX_TOKEN stored exclusively in private Script Properties.
  * - Archives saved directly as gzip JSON (.json.gz) to a private Google Drive folder.
- * - Automatic weekly retention with cryptographic SHA-256 receipt verification.
+ * - Permanent retention on 5TB Google Drive storage (automated weekly cleanup & laptop receipt pruning disabled).
  * ==============================================================================
  */
 
@@ -736,21 +736,15 @@ function reconcilePriorSession() {
 }
 
 /**
- * Install the daily 20:00 trigger for weekly retention cleanup.
+ * Disable weekly cleanup and purge retention triggers (5TB permanent Google Drive storage).
  */
 function installWeeklyCleanup() {
-  const triggerExists = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'weeklyCleanup');
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'weeklyCleanup')
+    .forEach(t => ScriptApp.deleteTrigger(t));
 
-  if (!triggerExists) {
-    ScriptApp.newTrigger('weeklyCleanup')
-      .timeBased()
-      .everyDays(1)
-      .atHour(20)
-      .inTimezone(CONFIG.timeZone)
-      .create();
-  }
-
-  console.log('Weekly cleanup enabled: keep 14 days; checksum-verified local files moved to Trash.');
+  props_().setProperty('CLEANUP_ENABLED', 'false');
+  console.log('Weekly cleanup disabled: 5TB Google Drive capacity active. All historical captures are retained permanently in cloud.');
 }
 
 /**
@@ -822,6 +816,20 @@ function cleanupFiles_(folder, receipt, now) {
  */
 function weeklyCleanup() {
   const properties = props_();
+  if (properties.getProperty('CLEANUP_ENABLED') === 'false') {
+    ScriptApp.getProjectTriggers()
+      .filter(t => t.getHandlerFunction() === 'weeklyCleanup')
+      .forEach(t => ScriptApp.deleteTrigger(t));
+
+    properties.setProperty('LAST_CLEANUP', JSON.stringify({
+      checked: new Date().toISOString(),
+      status: 'disabled_5tb_permanent_storage',
+      reason: '5TB Google Drive enabled; all historical captures are retained permanently in cloud without deletion.'
+    }));
+    console.log('Weekly cleanup skipped: 5TB permanent retention active.');
+    return;
+  }
+
   const now = Date.now();
   const lastCleanup = Number(properties.getProperty('CLEANUP_COMPLETED') || 0);
 

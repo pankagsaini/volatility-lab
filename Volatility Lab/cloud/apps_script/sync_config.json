@@ -1,1 +1,1 @@
-{"cleanup_approved":true,"retention_days":14}
+{"cleanup_approved":false,"retention_days":"permanent","storage_tier":"5TB_Google_Workspace","require_laptop_download":false}
