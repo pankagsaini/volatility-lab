@@ -1,5 +1,5 @@
 {
-  "attempt": "2026-11-04T20:31:00.403646+05:30",
+  "attempt": "2026-11-04T20:50:59.644147+05:30",
   "stage": "eod",
   "status": "partial",
   "completed": {
@@ -31,5 +31,5 @@
     "BANKNIFTY: completed futures candles missing",
     "Upstox history publication pending: NIFTY day through 2026-11-03; NIFTY 1minute through 2026-11-03; BANKNIFTY day through 2026-11-03; BANKNIFTY 1minute through 2026-11-03"
   ],
-  "finished": "2026-11-04T20:31:45.375572+05:30"
+  "finished": "2026-11-04T20:51:39.401794+05:30"
 }
