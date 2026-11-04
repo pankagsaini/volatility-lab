@@ -607,6 +607,8 @@ def get_backtest_overview() -> dict:
             raw = json.loads(p.read_text(encoding='utf-8'))
             trades = raw.get('trades', [])
             settings = raw.get('settings', {})
+            if settings.get('engine') == 'dated_futures_v1':
+                continue
             name = settings.get('name', 'Strategy')
             sym = settings.get('symbol', 'NIFTY')
             

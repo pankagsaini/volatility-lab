@@ -58,13 +58,22 @@ def render_options():
    files=sorted(STORE.glob('*.json'),reverse=True) if STORE.exists() else []
    if files:
     summaries=[]
-    for file in files[:20]:
-     info=file.stat();summaries.append(saved_run_summary(str(file),(info.st_mtime_ns,info.st_size)))
-    st.dataframe(pd.DataFrame(summaries).round(2),hide_index=True,width='stretch')
-    st.caption('Latest 20 runs · compare matching dates, size, costs, and coverage.')
-    chosen=st.selectbox('Run',files,format_func=lambda p:p.stem)
-    if st.button('Open saved report'):
-     r=json.loads(chosen.read_text(encoding='utf-8'));st.session_state.builder_result=(pd.DataFrame(r['trades']),pd.DataFrame(r['skips']),r['settings'],r['coverage']);st.rerun()
+    opt_files=[]
+    for file in files:
+     try:
+      r=json.loads(file.read_text(encoding='utf-8'))
+      if r.get('settings',{}).get('engine')=='dated_futures_v1':continue
+      info=file.stat()
+      summaries.append(saved_run_summary(str(file),(info.st_mtime_ns,info.st_size)))
+      opt_files.append(file)
+     except Exception:continue
+    if opt_files:
+     st.dataframe(pd.DataFrame(summaries[:20]).round(2),hide_index=True,width='stretch')
+     st.caption('Latest options runs · compare matching dates, size, costs, and coverage.')
+     chosen=st.selectbox('Run',opt_files[:20],format_func=lambda p:p.stem)
+     if st.button('Open saved report'):
+      r=json.loads(chosen.read_text(encoding='utf-8'));st.session_state.builder_result=(pd.DataFrame(r['trades']),pd.DataFrame(r['skips']),r['settings'],r['coverage']);st.rerun()
+    else:st.caption('No saved options runs yet.')
    else:st.caption('No saved runs yet.')
 
 @st.cache_data(max_entries=40,show_spinner=False)
@@ -105,7 +114,7 @@ def render_run_status():
 def render():
  completed=st.session_state.pop('_backtest_completed_kind',None)
  if completed:st.session_state.backtest_market=completed
- kind=st.segmented_control('Backtest market',['Options','Futures'],default=None if 'backtest_market' in st.session_state else 'Options',key='backtest_market') or 'Options'
+ kind=st.session_state.get('backtest_market','Options')
  if st.session_state.get('_backtest_error'):st.error('Cannot run: '+st.session_state['_backtest_error'])
  checked_charges()
  assumptions=st.expander('Archive & execution assumptions',key='backtest_archive_details',on_change='rerun')
