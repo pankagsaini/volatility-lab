@@ -43,6 +43,7 @@ Volatility Lab/frontend/node_modules/
 Volatility Lab/web/plotly.min.js
 
 # Data subdirectories to ignore
+archive_to_verify_before_delete/
 Volatility Lab/data/upstox/chains/
 Volatility Lab/data/upstox/catalogues/
 Volatility Lab/data/experiments/
