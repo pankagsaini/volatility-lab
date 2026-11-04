@@ -19,6 +19,8 @@ from market_data import MarketDataError, IST
 from pricing_inputs import get_rate, get_yields
 
 ROOT=Path(__file__).resolve().parent
+if not (ROOT/'market_data.py').exists() and (ROOT/'Volatility Lab'/'market_data.py').exists():
+    ROOT=ROOT/'Volatility Lab'
 
 def latest_cloud_capture():
     from dashboard_cache import latest_cloud_capture as saved_summary
