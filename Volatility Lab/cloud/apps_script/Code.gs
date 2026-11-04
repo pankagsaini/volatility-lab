@@ -94,7 +94,8 @@ function api_(path, params) {
     const response = UrlFetchApp.fetch(url, {
       headers: {
         Authorization: 'Bearer ' + token,
-        Accept: 'application/json'
+        Accept: 'application/json',
+        'User-Agent': 'VolatilityLab/1.0 (read-only market-data client)'
       },
       muteHttpExceptions: true,
       followRedirects: false
@@ -155,7 +156,8 @@ function apiAll_(requests) {
         url: url,
         headers: {
           Authorization: 'Bearer ' + token,
-          Accept: 'application/json'
+          Accept: 'application/json',
+          'User-Agent': 'VolatilityLab/1.0 (read-only market-data client)'
         },
         muteHttpExceptions: true,
         followRedirects: false
