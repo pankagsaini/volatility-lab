@@ -148,8 +148,25 @@ def save_token(token):
 
 
 def saved_client():
-    try:return UpstoxDataClient(protect(TOKEN_PATH.read_bytes(),decrypt=True).decode())
-    except Exception:raise UpstoxDataError('No readable saved Upstox token. Connect it below.') from None
+    token = os.environ.get('UPSTOX_TOKEN')
+    if not token:
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and 'UPSTOX_TOKEN' in st.secrets:
+                token = st.secrets['UPSTOX_TOKEN']
+        except Exception:
+            token = None
+    if token:
+        try:
+            return UpstoxDataClient(token)
+        except Exception as err:
+            raise UpstoxDataError(f'Configured secret UPSTOX_TOKEN is invalid: {err}') from None
+    if TOKEN_PATH.exists():
+        try:
+            return UpstoxDataClient(protect(TOKEN_PATH.read_bytes(), decrypt=True).decode())
+        except Exception:
+            pass
+    raise UpstoxDataError('No readable saved Upstox token. Connect it below.')
 
 
 def connection_test(client):

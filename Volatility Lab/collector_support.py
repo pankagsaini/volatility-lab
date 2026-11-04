@@ -3,12 +3,22 @@ from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
 import ctypes
-from ctypes import wintypes
 import json
 import os
+import sys
 import threading
 import time as clock
 import uuid
+
+if sys.platform == 'win32':
+    try:
+        from ctypes import wintypes
+        class Blob(ctypes.Structure):
+            _fields_ = [('length', wintypes.DWORD), ('data', ctypes.POINTER(ctypes.c_ubyte))]
+    except Exception:
+        Blob = None
+else:
+    Blob = None
 
 from market_data import IST, MarketDataError
 
@@ -99,12 +109,10 @@ def serialized(fn):
     return call
 
 
-class Blob(ctypes.Structure):
-    _fields_ = [('length', wintypes.DWORD), ('data', ctypes.POINTER(ctypes.c_ubyte))]
-
-
 def protect(raw, decrypt=False):
-    """DPAPI CurrentUser: encrypted token works only for this Windows account."""
+    """DPAPI CurrentUser on Windows; passthrough on platforms without WinDLL/DPAPI."""
+    if sys.platform != 'win32' or Blob is None or not hasattr(ctypes, 'WinDLL'):
+        return raw
     buf = (ctypes.c_ubyte * len(raw)).from_buffer_copy(raw)
     source, dest = Blob(len(raw), buf), Blob()
     crypt = ctypes.WinDLL('crypt32', use_last_error=True)

@@ -10,6 +10,8 @@ Volatility Lab/.dependencies/
 
 # Encrypted Auth Credentials & Token Storage
 Volatility Lab/.auth/
+.streamlit/secrets.toml
+Volatility Lab/.streamlit/secrets.toml
 *.bin
 *.lock
 *.tmp
