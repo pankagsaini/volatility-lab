@@ -4,7 +4,6 @@ import {
   Layers,
   Zap,
   Target,
-  BarChart2,
   FlaskConical,
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
@@ -14,7 +13,6 @@ import { SmileChart } from './components/SmileChart';
 import { TermStructureChart } from './components/TermStructureChart';
 import { OptionChainTable } from './components/OptionChainTable';
 import { TradeRadarView } from './components/TradeRadarView';
-import { TradingViewChart } from './components/TradingViewChart';
 import { BacktestRunnerView } from './components/BacktestRunnerView';
 import { ContractInspectorModal } from './components/ContractInspectorModal';
 import { DrawerInspector } from './components/DrawerInspector';
@@ -24,7 +22,7 @@ export const App: React.FC = () => {
   // Global State
   const [selectedSymbol, setSelectedSymbol] = useState<'NIFTY' | 'BANKNIFTY'>('NIFTY');
   const [activeTab, setActiveTab] = useState<
-    'surface' | 'chain' | 'radar' | 'candles' | 'backtest'
+    'surface' | 'chain' | 'radar' | 'backtest'
   >('surface');
   const [isDark, setIsDark] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -228,7 +226,6 @@ export const App: React.FC = () => {
             { id: 'surface', label: 'Vol Surface', icon: Box },
             { id: 'chain', label: 'Option Chain', icon: Zap },
             { id: 'radar', label: 'Trade Radar', icon: Target },
-            { id: 'candles', label: 'Candlesticks', icon: BarChart2 },
             { id: 'backtest', label: 'Backtest', icon: FlaskConical },
           ].map((tab) => {
             const active = activeTab === tab.id;
@@ -293,12 +290,6 @@ export const App: React.FC = () => {
               expiries={expiries}
               onSelectExpiry={setSelectedExpiry}
             />
-          </div>
-        )}
-
-        {activeTab === 'candles' && (
-          <div className="animate-fade-in">
-            <TradingViewChart symbol={selectedSymbol} isDark={isDark} />
           </div>
         )}
 

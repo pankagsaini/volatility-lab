@@ -423,7 +423,7 @@ def render_vol_surface_3d(symbol: str, selected_row: Dict[str, Any], result: Dic
         camera_preset=camera_preset
     )
 
-    st.plotly_chart(fig, use_container_width=True, key=f'plotly_surf_{symbol}', config={'displaylogo': False, 'modeBarButtonsToRemove': ['lasso2d', 'select2d']})
+    st.plotly_chart(fig, width='stretch', key=f'plotly_surf_{symbol}', config={'displaylogo': False, 'modeBarButtonsToRemove': ['lasso2d', 'select2d']})
 
     st.caption('💡 **3D Projections**: Floor shows iso-volatility contours; Side wall shows Term Structure slices; Front wall shows Volatility Smile curvature. Click and drag in the chart to freely rotate in 3D.')
 
@@ -432,7 +432,7 @@ def render_vol_surface_3d(symbol: str, selected_row: Dict[str, Any], result: Dic
         x_col_names = [f"{v:.1f}%" if space_mode == 'moneyness' else f"{v:.0f}" for v in x_grid]
         df_export = pd.DataFrame(z_matrix, index=expiry_labels, columns=x_col_names)
         df_export.index.name = 'Expiry (DTE)'
-        st.dataframe(df_export.round(2), use_container_width=True)
+        st.dataframe(df_export.round(2), width='stretch')
         st.download_button(
             'Download Surface CSV',
             df_export.to_csv().encode('utf-8'),

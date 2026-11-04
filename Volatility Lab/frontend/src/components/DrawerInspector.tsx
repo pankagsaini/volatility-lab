@@ -84,18 +84,23 @@ export const DrawerInspector: React.FC<DrawerInspectorProps> = ({
                 <label className="text-xs font-mono text-slate-300 block mb-2 font-medium">
                   Implied Volatility Source:
                 </label>
-                <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-slate-900 border border-slate-800">
-                  {['otm', 'bid', 'ask'].map((m) => (
+                <div className="grid grid-cols-4 gap-1 p-1 rounded-lg bg-slate-900 border border-slate-800">
+                  {[
+                    { id: 'otm', label: 'OTM Skew' },
+                    { id: 'call', label: 'Call IV' },
+                    { id: 'put', label: 'Put IV' },
+                    { id: 'mid', label: 'Mid IV' },
+                  ].map((m) => (
                     <button
-                      key={m}
-                      onClick={() => onSetIvMode(m)}
-                      className={`py-1 text-xs font-mono uppercase rounded transition-all ${
-                        ivMode === m
-                          ? 'bg-cyan-500 text-slate-950 font-bold'
+                      key={m.id}
+                      onClick={() => onSetIvMode(m.id)}
+                      className={`py-1 text-[11px] font-mono uppercase rounded transition-all ${
+                        ivMode === m.id
+                          ? 'bg-cyan-500 text-slate-950 font-bold shadow'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
-                      {m}
+                      {m.label}
                     </button>
                   ))}
                 </div>

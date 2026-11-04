@@ -1035,7 +1035,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             elif res_view=='HAR-RV volatility cascades':
                 st.subheader(f'{symbol} · HAR-RV Volatility Cascades')
                 st.caption('Heterogeneous Autoregressive realized volatility decomposing trailing daily (1d), weekly (5d), and monthly (22d) components.')
-                hist_path=DATA.parent/'data'/f'{symbol.lower()}_daily.csv'
+                hist_path=DATA/f'{symbol.lower()}_daily.csv'
                 if not hist_path.exists():hist_path=DATA/f'{symbol.lower()}_one_year.csv'
                 if hist_path.exists():
                     df=pd.read_csv(hist_path)

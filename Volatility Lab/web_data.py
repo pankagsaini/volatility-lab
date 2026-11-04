@@ -455,10 +455,10 @@ def get_trade_radar(symbol: str, expiry: Optional[str] = None) -> Dict[str, Any]
             bias_action = 'LONG GAMMA / DEBIT SPREADS FAVORABLE'
             desc = 'Option IV is statistically discounted relative to historical price movement. Long Straddles, Calendars, and Debit Diagonal Spreads favored.'
         else:
-            bias_title = 'FAIR VALUE'
+            bias_title = 'FAIR VALUE SPREAD'
             bias_type = 'neutral'
-            bias_action = 'DIRECTIONAL / SKEW NEUTRAL'
-            desc = 'Implied volatility tracks realized volatility within normal statistical bounds. Favor directional trend or strike skew strategies.'
+            bias_action = 'DELTA-NEUTRAL / SKEW RELATIVE VALUE'
+            desc = 'Implied volatility tracks realized volatility within normal statistical bounds. Favor delta-neutral calendar spreads, gamma scalping, or strike skew relative-value arbitrage.'
     else:
         bias_title = 'PENDING ALIGNMENT'
         bias_type = 'pending'

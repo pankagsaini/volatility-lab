@@ -13,10 +13,13 @@ TEMPLATES={
  'Iron condor':[('Sell','CE',200,1),('Sell','PE',-200,1),('Buy','CE',700,1),('Buy','PE',-700,1)],
  'Iron butterfly':[('Sell','CE',0,1),('Sell','PE',0,1),('Buy','CE',500,1),('Buy','PE',-500,1)],
  'Long straddle':[('Buy','CE',0,1),('Buy','PE',0,1)],
- 'Bull put spread':[('Sell','PE',0,1),('Buy','PE',-500,1)],
- 'Bear call spread':[('Sell','CE',0,1),('Buy','CE',500,1)]}
+ 'Long strangle':[('Buy','CE',200,1),('Buy','PE',-200,1)]}
 
-def template(name):return [dict(Side=a,Type=b,Offset=c,Ratio=d) for a,b,c,d in TEMPLATES[name]]
+def template(name):
+ target=str(name).strip().lower()
+ for k,v in TEMPLATES.items():
+  if k.lower()==target:return [dict(Side=a,Type=b,Offset=c,Ratio=d) for a,b,c,d in v]
+ return [dict(Side=a,Type=b,Offset=c,Ratio=d) for a,b,c,d in TEMPLATES['Iron condor']]
 
 def valid_price(bar,index=0,fill=False):
  try:return math.isfinite(float(bar[index])) and float(bar[index])>0 and (not fill or float(bar[4])>0)
