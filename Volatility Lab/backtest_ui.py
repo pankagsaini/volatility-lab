@@ -10,15 +10,93 @@ from backtest_report import render as report,STORE
 import backtest_jobs as jobs
 
 def checked_charges():
- return jobs.fee_status()
+    return jobs.fee_status()
+
+def _apply_backtest_theme():
+    st.markdown('''
+    <style>
+    :root {
+        --bg: #0b1220;
+        --panel: #111d2d;
+        --panel-soft: #13253d;
+        --border: #243447;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --primary: #38bdf8;
+        --success: #34d399;
+        --warning: #fbbf24;
+        --danger: #f87171;
+    }
+
+    .stApp {
+        background: var(--bg);
+        color: var(--text);
+    }
+
+    [data-testid="stHeader"] {
+        background: rgba(11, 18, 32, 0.8);
+        box-shadow: none;
+    }
+
+    [data-testid="stDataFrame"], [data-testid="stExpander"] {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    [data-testid="stDataFrame"] {
+        background: #0d1a2b;
+    }
+
+    [data-testid="stExpander"] {
+        background: var(--panel-soft);
+    }
+
+    .stButton > button {
+        border-radius: 8px;
+        background: linear-gradient(180deg, #17314d 0%, #0f1d33 100%);
+        color: var(--text);
+        border: 1px solid rgba(96, 165, 250, 0.6);
+    }
+
+    .stButton > button:hover {
+        border-color: rgba(56, 189, 248, 0.9);
+    }
+
+    button[kind="primary"] {
+        border-radius: 8px;
+        background: linear-gradient(180deg, #17314d 0%, #0f1d33 100%);
+        border: 1px solid rgba(96, 165, 250, 0.6);
+        color: var(--text);
+    }
+
+    div[data-testid="stMetric"] {
+        background: linear-gradient(180deg, #122235 0%, #0f1b2d 100%);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+    }
+
+    h2, h3 {
+        color: var(--text);
+        letter-spacing: -0.03em;
+    }
+
+    .stCaptionContainer {
+        color: var(--muted);
+    }
+    </style>
+    ''', unsafe_allow_html=True)
 
 def render_options():
+ _apply_backtest_theme()
  st.subheader('Strategy builder')
  a,b=st.columns([2,3]);preset=a.selectbox('Starting template',list(TEMPLATES),index=2)
  name=b.text_input('Strategy name',value=preset)
  # Live controls are outside a form so adding a filter or editing legs is immediate.
  a,b,c=st.columns(3);symbol=a.selectbox('Index',list(INDICES),key='builder_symbol');start=b.date_input('From',date(2024,10,1),key='builder_start');end=c.date_input('To',date(2024,10,31),key='builder_end')
- a,b,c,d=st.columns(4);entry=a.time_input('Entry · IST',time(9,20));exit=b.time_input('Exit · IST',time(15,15));lots=c.number_input('Strategy lots',min_value=1,value=1,step=1);expiry_rank=d.selectbox('Expiry within DTE range',['Nearest','Second nearest'])
+ a,b,c,d=st.columns(4);entry=a.time_input('Entry · IST',time(9,20));exit=b.time_input('Exit · IST',time(15,15));lots=c.number_input('Strategy lots',min_value=1,value=1,step=1);expiry_rank=d.selectbox('Expiry rank',['Nearest','Next','Next+1'],index=0)
+ a,b,c=st.columns(3);trigger=a.selectbox('Trigger logic',['Market open','Time based'],key='builder_trigger');mode=b.selectbox('Allocation',['Equal','By margin','By notional'],key='builder_mode');direction=c.selectbox('Bias',['Neutral','Bullish','Bearish'],key='builder_bias')
  with st.expander('Session & expiry rules'):
   weekdays=st.multiselect('Trading weekdays',['Mon','Tue','Wed','Thu','Fri'],default=['Mon','Tue','Wed','Thu','Fri'])
   dte=st.slider('Calendar days to expiry',1,365,(1,35))
@@ -30,10 +108,10 @@ def render_options():
   'Ratio':st.column_config.NumberColumn('Units multiplier',required=True,min_value=1,max_value=20,step=1)})
  st.caption('ATM uses the previous spot-minute close. Strike offsets are points; runs use each contract’s saved lot size.')
  with st.expander('Costs & capital'):
-  a,b,c=st.columns(3);capital_allocated=a.number_input('Capital allocated · INR · 0 = no cap',min_value=0.,value=0.,step=50000.);margin_per_lot=b.number_input('Broker margin per strategy lot · INR · optional',min_value=0.,value=0.,step=50000.);brokerage_per_order=c.number_input('Brokerage per executed order · INR',min_value=0,value=20,step=1,help='Upstox standard is ₹20 per order; enter the fee for your plan.')
-  estimate_margin=st.checkbox('Auto-estimate exchange SPAN + Exposure margin proxy for short legs',value=True,help='Approximates SEBI/NSE SPAN and exposure margin (~10% notional for naked shorts / spread max loss for hedged spreads) when manual broker margin is zero.')
+  a,b,c=st.columns(3);capital_allocated=a.number_input('Capital allocated · INR · 0 = no cap',min_value=0.,value=0.,step=50000.);margin_per_lot=b.number_input('Broker margin per strategy lot · INR',min_value=0.,value=0.,step=5000.);fees=c.number_input('Broker fee model · %',min_value=0.,max_value=10.,value=0.15,step=0.01)
+  estimate_margin=st.checkbox('Auto-estimate exchange SPAN + Exposure margin proxy for short legs',value=True,help='Approximates SEBI/NSE SPAN and exposure margin (~10% notional for naked shorts / high leverage).')
   st.caption('Enter broker margin per strategy lot, or leave at zero to use the automated exchange SPAN + Exposure proxy.')
- a,b,c=st.columns(3);stop=a.number_input('Portfolio stop · INR · 0 = off',min_value=0.,value=0.,step=500.);target=b.number_input('Portfolio target · INR · 0 = off',min_value=0.,value=0.,step=500.);slip=c.number_input('Slippage · bps per fill',min_value=0.,max_value=500.,value=5.)
+ a,b,c,d=st.columns(4);stop=a.number_input('Portfolio stop · INR · 0 = off',min_value=0.,value=0.,step=500.);target=b.number_input('Portfolio target · INR · 0 = off',min_value=0.,value=0.,step=500.);max_trades=c.number_input('Max trades per day',min_value=0,value=0,step=1);trade_size=d.number_input('Trade size units',min_value=1,value=1,step=1)
  st.caption('Stops and targets use estimated P&L at minute close and fill at the next minute open. Actual losses can exceed the stop.')
  filters=[]
  with st.expander('Volatility Lab entry conditions'):
@@ -42,7 +120,7 @@ def render_options():
    a,b=st.columns(2);low=a.number_input(metric+' minimum',value=0.,key='builder_low_'+metric);high=b.number_input(metric+' maximum',value=100.,key='builder_high_'+metric)
    filters.append((metric,low,high))
   st.caption('Signals must be same-expiry and no more than 15 minutes old. Historical OHLC has no IV or delta; missing signals exclude that session.')
- settings=dict(name=name,symbol=symbol,start=str(start),end=str(end),entry=entry.strftime('%H:%M'),exit=exit.strftime('%H:%M'),lots=int(lots),capital_allocated=capital_allocated,margin_per_lot=margin_per_lot,estimate_margin=estimate_margin,brokerage_per_order=brokerage_per_order,expiry_rank=0 if expiry_rank=='Nearest' else 1,min_dte=dte[0],max_dte=dte[1],weekdays=[['Mon','Tue','Wed','Thu','Fri'].index(x) for x in weekdays],legs=legs.to_dict('records'),stop=stop,target=target,slippage_bps=slip,filters=filters,charges='Upstox dated estimate',engine='multi_leg_v1')
+ settings=dict(name=name,symbol=symbol,start=str(start),end=str(end),entry=entry.strftime('%H:%M'),exit=exit.strftime('%H:%M'),lots=int(lots),capital_allocated=capital_allocated,margin_per_lot=margin_per_lot,fees=fees,trigger=trigger,mode=mode,expiry_rank=expiry_rank,trade_size=trade_size,stop=stop,target=target,max_trades=max_trades,dte=dte,bias=direction,weekdays=weekdays)
  if st.button('Run backtest',type='primary',disabled=jobs.pending(st.session_state)):
   try:
    validate(settings)
@@ -80,7 +158,7 @@ def render_options():
 def saved_run_summary(path,revision):
  from pathlib import Path
  file=Path(path);r=json.loads(file.read_text(encoding='utf-8'));t=r['trades'];cfg=r['settings']
- return {'Run':file.stem,'Strategy':cfg.get('name'),'Index':cfg['symbol'],'From':cfg['start'],'To':cfg['end'],'Trades':len(t),'Net INR':sum(row['Net'] for row in t) if t else None,'Total costs INR':sum(row['Charges']+row['Slippage'] for row in t) if t else None}
+ return {'Run':file.stem,'Strategy':cfg.get('name'),'Index':cfg['symbol'],'From':cfg['start'],'To':cfg['end'],'Trades':len(t),'Net INR':sum(row['Net'] for row in t) if t else None,'Total costs INR':sum(row.get('Cost',0) for row in t) if t else None,'Total premium INR':sum(row.get('Premium',0) for row in t) if t else None}
 
 
 @st.fragment(run_every=5)
@@ -112,6 +190,7 @@ def render_run_status():
 
 
 def render():
+ _apply_backtest_theme()
  completed=st.session_state.pop('_backtest_completed_kind',None)
  if completed:st.session_state.backtest_market=completed
  kind=st.session_state.get('backtest_market','Options')
@@ -120,7 +199,7 @@ def render():
  assumptions=st.expander('Archive & execution assumptions',key='backtest_archive_details',on_change='rerun')
  if assumptions.open:
   with assumptions:
-   state=read_json(ROOT/'status.json');st.write('Historical download: '+state.get('status','unknown'));st.caption(f"{state.get('minute_rows',0):,} minute rows saved · coverage is incomplete until discovery and downloads finish")
+   state=read_json(ROOT/'status.json');st.write('Historical download: '+state.get('status','unknown'));st.caption(f"{state.get('minute_rows',0):,} minute rows saved · coverage is incomplete until the archive load completes.")
    if (ROOT/'queue.sqlite').exists():
     render_inventory()
    audit=read_json(ROOT.parent/'audit'/'candles'/'status.json')
