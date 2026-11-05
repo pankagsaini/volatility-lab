@@ -519,10 +519,10 @@ function installIntradaySchedule() {
     .everyMinutes(1)
     .create();
 
-  properties.setProperty('INTERVAL_MINUTES', '3');
+  properties.setProperty('INTERVAL_MINUTES', '1');
   properties.setProperty('SCHEDULE_MODE', 'intraday');
 
-  console.log('Enabled: three-minute snapshots, weekdays 09:00-16:00 IST; EOD retries 18:00-22:00 IST.');
+  console.log('Enabled: one-minute snapshots, weekdays 09:00-16:00 IST; EOD retries 18:00-22:00 IST.');
 }
 
 /**
@@ -583,7 +583,11 @@ function scheduledCapture() {
   let failureMessage = null;
 
   try {
-    const interval = Number(properties.getProperty('INTERVAL_MINUTES') || 1);
+    let interval = Number(properties.getProperty('INTERVAL_MINUTES') || 1);
+    if (interval !== 1) {
+      interval = 1;
+      properties.setProperty('INTERVAL_MINUTES', '1');
+    }
     const slot = today + '|' + Math.floor((mins - 540) / interval);
 
     // Snapshot slot deduplication
@@ -618,6 +622,9 @@ function scheduledCapture() {
 
     if (mode === 'snapshot' && result.status === 'complete') {
       properties.setProperty('LAST_SNAPSHOT_SLOT', slot);
+      if (result.file_id) {
+        properties.setProperty('LATEST_SNAPSHOT_FILE_ID', result.file_id);
+      }
     }
 
     properties.setProperty('COLLECTOR_STATUS', mode + ' ' + result.status + ' ' + new Date().toISOString());
@@ -894,4 +901,68 @@ function auditStatus() {
     last_snapshot: JSON.parse(properties.getProperty('LAST_SNAPSHOT') || 'null'),
     last_eod: JSON.parse(properties.getProperty('LAST_EOD') || 'null')
   }));
+}
+
+
+/**
+ * Public Web API endpoint for Streamlit Cloud & external lab dashboards.
+ * Returns the uncompressed JSON of the latest market snapshot in real-time.
+ */
+function doGet(e) {
+  try {
+    const properties = props_();
+    const action = e && e.parameter ? e.parameter.action : null;
+
+    if (action === 'status') {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: properties.getProperty('COLLECTOR_STATUS'),
+        last_snapshot: properties.getProperty('LAST_SNAPSHOT'),
+        last_snapshot_slot: properties.getProperty('LAST_SNAPSHOT_SLOT'),
+        mode: properties.getProperty('SCHEDULE_MODE'),
+        interval: properties.getProperty('INTERVAL_MINUTES') || '1'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    let fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
+    let file = null;
+
+    if (fileId) {
+      try {
+        file = DriveApp.getFileById(fileId);
+      } catch (err) {
+        file = null;
+      }
+    }
+
+    if (!file) {
+      const folder = folder_();
+      const files = folder.getFiles();
+      let latestTime = 0;
+      let count = 0;
+      while (files.hasNext() && count < 60) {
+        const f = files.next();
+        count++;
+        const name = f.getName();
+        if (name.endsWith('_complete.json.gz')) {
+          const time = f.getLastUpdated().getTime();
+          if (time > latestTime) {
+            latestTime = time;
+            file = f;
+          }
+        }
+      }
+    }
+
+    if (!file) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'No snapshot files found' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const uncompressed = Utilities.ungzip(file.getBlob());
+    return ContentService.createTextOutput(uncompressed.getDataAsString())
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: String(err) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }

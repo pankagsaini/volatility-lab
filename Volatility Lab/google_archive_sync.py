@@ -236,6 +236,20 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
     STORE.mkdir(parents=True,exist_ok=True)
     source=source_folder()
     if source is None:
+        # Cloud live feed fallback for Streamlit Community Cloud (no local Google Drive letter)
+        web_url = read_json(CONFIG).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpiRAE9ZRoGGWTyTncZhwUPmTnimv0HyejOiJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
+        try:
+            import requests
+            resp = requests.get(web_url, timeout=12, allow_redirects=True)
+            if resp.status_code == 200:
+                obj = resp.json()
+                if obj.get('schema') == 1 and obj.get('records'):
+                    with data_lock():
+                        import_report(obj, rate, dividend, spread)
+                    atomic_json(STORE/'status.json', {'status':'ready','mode':'web_cloud','updated':pd.Timestamp.now(tz='UTC').isoformat(),'total_files':1,'source':web_url})
+                    return 1
+        except Exception as exc:
+            pass
         atomic_json(STORE/'status.json',{'status':'waiting','message':'Sign in to Google Drive desktop to connect the private archive.'});return 0
     manifest=read_json(STORE/'manifest.json');count=0;errors=[]
     import re
@@ -309,7 +323,7 @@ def sync_once(rate,dividend,spread,verify_receipt=False):
 def ensure_sync(rate,dividend,spread):
     global _future,_started
     with _guard:
-        if _future is None or (_future.done() and time.monotonic()-_started>=180):
+        if _future is None or (_future.done() and time.monotonic()-_started>=45):
             _started=time.monotonic();_future=_pool.submit(sync_once,rate,dividend,spread)
     return _future
 

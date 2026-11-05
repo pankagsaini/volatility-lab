@@ -14,7 +14,6 @@ REQUIRED_IMPORTS = (
     "numpy",
     "pandas",
     "scipy",
-    "arch",
     "plotly",
     "requests",
     "pypdf",

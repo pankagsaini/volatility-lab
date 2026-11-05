@@ -177,11 +177,11 @@ st.session_state.market_workspace = workspace
 def cloud_sync_status():
     google_archive_sync.ensure_sync(rate, dividend, spread)
     info = read_json(ROOT / 'data' / 'google_archive' / 'status.json')
-    if info and info.get('total_files'):
-        count = info.get('total_files', 0)
-        previous = st.session_state.setdefault('_cloud_seen', count)
-        if count != previous:
-            st.session_state['_cloud_seen'] = count
+    if info and (info.get('total_files') or info.get('updated')):
+        sync_version = (info.get('total_files', 0), info.get('updated', ''))
+        previous = st.session_state.setdefault('_cloud_seen', sync_version)
+        if sync_version != previous:
+            st.session_state['_cloud_seen'] = sync_version
             st.rerun()
 
 cloud_sync_status()
