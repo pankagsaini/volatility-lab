@@ -1,9 +1,9 @@
 {
-  "last_attempt": "2026-11-04T15:26:01.327713+00:00",
+  "last_attempt": "2026-11-05T00:40:53.295640+00:00",
   "yield_percent": 5.897,
   "model_rate": 0.0585407108214125,
   "checked_at": "2026-11-04T15:26:01.327713+00:00",
   "source": "https://www.rbi.org.in/",
   "basis": "91-day T-bill auction cutoff",
-  "error": null
+  "error": "RBI update unavailable; using last verified rate."
 }

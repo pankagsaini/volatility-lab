@@ -61,19 +61,27 @@ Volatility Lab/data/backtest_futures/
 Volatility Lab/data/google_archive/
 !Volatility Lab/data/google_archive/*.json
 
-# Explicitly Keep Tracking Metadatas, Audits, Charges, Baseline Quotes, and Historical Prices
+# Explicitly Keep Tracking Metadatas, Baseline Quotes, and Historical Prices
 !Volatility Lab/data/*.json
 !Volatility Lab/data/*.csv
-!Volatility Lab/data/charges/
-!Volatility Lab/data/charges/**
-!Volatility Lab/data/daily_collector/
-!Volatility Lab/data/daily_collector/*.json
-!Volatility Lab/data/daily_collector/*.jsonl
 !Volatility Lab/data/dividend_sources/*.txt
-!Volatility Lab/data/upstox/*.json
-!Volatility Lab/data/upstox/*.jsonl
-!Volatility Lab/data/backtest_runs/
-!Volatility Lab/data/backtest_runs/*.json
+
+# Charges: Track active Upstox fee schedules only; ignore dated daily scrapes and legacy brokers
+Volatility Lab/data/charges/*
+!Volatility Lab/data/charges/upstox/
+Volatility Lab/data/charges/upstox/*
+!Volatility Lab/data/charges/upstox/current.json
+!Volatility Lab/data/charges/upstox/check_status.json
+
+# Upstox: Track contract lists & master catalogue; ignore transient event feeds and diagnostics
+Volatility Lab/data/upstox/*
+!Volatility Lab/data/upstox/master.json
+!Volatility Lab/data/upstox/NIFTY_expiries.json
+!Volatility Lab/data/upstox/BANKNIFTY_expiries.json
+
+# Ignore ephemeral backtest runs and daily collector logs
+Volatility Lab/data/backtest_runs/
+Volatility Lab/data/daily_collector/
 
 # Exclude all databases, large audit archives, and temp files regardless of directory
 *.sqlite*

@@ -1,8 +1,0 @@
-numpy>=1.26,<3
-pandas>=2.2,<4
-scipy>=1.13.0
-arch==8.0.0
-streamlit==1.64.0
-plotly==7.1.0
-requests>=2.31.0
-pypdf==6.20.1
