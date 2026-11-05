@@ -508,9 +508,9 @@ function installIntradaySchedule() {
 
   folder_();
 
-  // Purge any existing scheduledCapture triggers
+  // Purge any existing scheduledCapture or weeklyCleanup triggers
   ScriptApp.getProjectTriggers()
-    .filter(t => t.getHandlerFunction() === 'scheduledCapture')
+    .filter(t => t.getHandlerFunction() === 'scheduledCapture' || t.getHandlerFunction() === 'weeklyCleanup')
     .forEach(t => ScriptApp.deleteTrigger(t));
 
   // Install 1-minute time-driven trigger
@@ -748,130 +748,44 @@ function installWeeklyCleanup() {
 }
 
 /**
- * Prune archived files older than 14 days if cryptographically verified against laptop receipts.
+ * Cleanup disabled: 5TB Google Drive permanent retention active.
+ * No files are ever deleted or trashed from Google Drive.
  */
 function cleanupFiles_(folder, receipt, now) {
-  const validReceipt = (
-    receipt.schema === 1 &&
-    receipt.files &&
-    typeof receipt.files === 'object' &&
-    Number.isFinite(Date.parse(receipt.verified_at)) &&
-    now - Date.parse(receipt.verified_at) <= 8 * 86400000 &&
-    Date.parse(receipt.verified_at) <= now
-  );
-
-  if (!validReceipt) {
-    return { count: 0, completed: false, reason: 'receipt expired or invalid' };
-  }
-
-  const files = folder.getFiles();
-  let count = 0;
-
-  while (files.hasNext()) {
-    if (Date.now() - now > 200000) {
-      return { count: count, completed: false, reason: 'batch limit' };
-    }
-
-    const file = files.next();
-    const name = file.getName();
-
-    if (!/^\d{4}-\d{2}-\d{2}_(snapshot|test|eod)_\d{6}_(complete|partial)\.json\.gz$/.test(name)) {
-      continue;
-    }
-
-    const fileDate = Date.parse(name.slice(0, 10) + 'T23:59:59+05:30');
-    if (!Number.isFinite(fileDate) || now - fileDate < 14 * 86400000) {
-      continue;
-    }
-
-    const receiptEntry = receipt.files[name];
-    if (
-      !receiptEntry ||
-      !Number.isSafeInteger(receiptEntry.size) ||
-      receiptEntry.size <= 0 ||
-      !/^[a-f0-9]{64}$/.test(receiptEntry.sha256) ||
-      receiptEntry.size !== file.getSize()
-    ) {
-      continue;
-    }
-
-    const digestBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, file.getBlob().getBytes());
-    const fileDigest = digestBytes
-      .map(b => ('0' + ((b + 256) % 256).toString(16)).slice(-2))
-      .join('');
-
-    if (fileDigest !== receiptEntry.sha256) {
-      continue;
-    }
-
-    file.setTrashed(true);
-    count++;
-  }
-
-  return { count: count, completed: true };
+  return {
+    count: 0,
+    completed: true,
+    reason: '5TB Google Drive permanent retention active; file deletion permanently disabled'
+  };
 }
 
 /**
  * Weekly cleanup job handler.
+ * Decommissions any existing weeklyCleanup triggers and guarantees zero file deletions.
  */
 function weeklyCleanup() {
   const properties = props_();
-  if (properties.getProperty('CLEANUP_ENABLED') === 'false') {
+
+  // Purge any existing weeklyCleanup triggers immediately
+  if (typeof ScriptApp !== 'undefined' && ScriptApp.getProjectTriggers) {
     ScriptApp.getProjectTriggers()
       .filter(t => t.getHandlerFunction() === 'weeklyCleanup')
       .forEach(t => ScriptApp.deleteTrigger(t));
-
-    properties.setProperty('LAST_CLEANUP', JSON.stringify({
-      checked: new Date().toISOString(),
-      status: 'disabled_5tb_permanent_storage',
-      reason: '5TB Google Drive enabled; all historical captures are retained permanently in cloud without deletion.'
-    }));
-    console.log('Weekly cleanup skipped: 5TB permanent retention active.');
-    return;
   }
 
-  const now = Date.now();
-  const lastCleanup = Number(properties.getProperty('CLEANUP_COMPLETED') || 0);
-
-  if (now - lastCleanup < 7 * 86400000) {
-    console.log('Weekly cleanup not due yet');
-    return;
-  }
-
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(100)) {
-    return;
-  }
-
-  try {
-    const folder = folder_();
-    const receipts = folder.getFilesByName('local_verified_receipts.json');
-
-    if (!receipts.hasNext()) {
-      console.log('Cleanup skipped: laptop receipt not available');
-      return;
-    }
-
-    const receipt = JSON.parse(receipts.next().getBlob().getDataAsString());
-    const result = cleanupFiles_(folder, receipt, now);
-
-    properties.setProperty('LAST_CLEANUP', JSON.stringify({
-      checked: new Date(now).toISOString(),
-      ...result
-    }));
-
-    if (result.completed) {
-      properties.setProperty('CLEANUP_COMPLETED', String(now));
-    }
-
-    console.log(JSON.stringify(result));
-  } finally {
-    lock.releaseLock();
-  }
+  properties.setProperty('CLEANUP_ENABLED', 'false');
+  properties.setProperty('LAST_CLEANUP', JSON.stringify({
+    checked: new Date().toISOString(),
+    status: 'disabled_5tb_permanent_storage',
+    count: 0,
+    completed: true,
+    reason: '5TB Google Drive permanent retention active; file deletion permanently disabled'
+  }));
+  console.log('Weekly cleanup disabled: 5TB Google Drive capacity active. All historical captures are retained permanently.');
 }
 
 /**
- * Automated test ensuring cleanup isolation in a disposable test folder.
+ * Automated test ensuring cleanup isolation and permanent retention (no file is ever trashed).
  */
 function testCleanupIsolation() {
   const disposableFolder = DriveApp.createFolder('Volatility Lab DISPOSABLE cleanup test ' + new Date().toISOString());
@@ -881,41 +795,30 @@ function testCleanupIsolation() {
   const oldFile = disposableFolder.createFile('2026-09-01_test_120000_complete.json.gz', content);
   const recentFile = disposableFolder.createFile(day_(new Date()) + '_test_120000_complete.json.gz', content);
 
-  const receipt = { schema: 1, verified_at: new Date().toISOString(), files: {} };
-
-  // Guard test: missing receipt
-  const missing = cleanupFiles_(disposableFolder, receipt, Date.now());
-  if (oldFile.isTrashed()) {
-    throw new Error('Missing receipt guard failed');
-  }
-
-  // Guard test: wrong checksum
-  receipt.files[oldFile.getName()] = { size: oldFile.getSize(), sha256: '0'.repeat(64) };
-  const mismatch = cleanupFiles_(disposableFolder, receipt, Date.now());
-  if (oldFile.isTrashed()) {
-    throw new Error('Checksum guard failed');
-  }
-
-  // Verified eligible cleanup
-  receipt.files[oldFile.getName()].sha256 = expectedSha;
-  receipt.files[recentFile.getName()] = { size: recentFile.getSize(), sha256: expectedSha };
+  const receipt = {
+    schema: 1,
+    verified_at: new Date().toISOString(),
+    files: {
+      [oldFile.getName()]: { size: oldFile.getSize(), sha256: expectedSha },
+      [recentFile.getName()]: { size: recentFile.getSize(), sha256: expectedSha }
+    }
+  };
 
   const eligible = cleanupFiles_(disposableFolder, receipt, Date.now());
 
-  if (!DriveApp.getFileById(oldFile.getId()).isTrashed() ||
-      DriveApp.getFileById(recentFile.getId()).isTrashed() ||
-      eligible.count !== 1) {
-    throw new Error('Retention test failed');
+  if (oldFile.isTrashed() || recentFile.isTrashed() || eligible.count !== 0) {
+    throw new Error('Retention test failed: file was trashed or count > 0');
   }
+
+  // Clean up disposable test folder only
+  disposableFolder.setTrashed(true);
 
   console.log(JSON.stringify({
     test: 'PASS',
-    missing_receipt_retained: missing.count === 0,
-    wrong_checksum_retained: mismatch.count === 0,
-    verified_old_file_trashed: DriveApp.getFileById(oldFile.getId()).isTrashed(),
-    recent_file_retained: !DriveApp.getFileById(recentFile.getId()).isTrashed(),
-    folder: disposableFolder.getUrl(),
-    market_files_touched: 0
+    old_file_retained: !oldFile.isTrashed(),
+    recent_file_retained: !recentFile.isTrashed(),
+    deleted_count: eligible.count,
+    reason: eligible.reason
   }));
 }
 

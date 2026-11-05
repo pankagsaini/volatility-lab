@@ -16,5 +16,5 @@ c.weeklyCleanup();assert.equal(scans,0);assert.equal(deleted,0);
 receipt={schema:1,verified_at:new Date(now).toISOString(),files:{'2026-09-01_snapshot_120000_complete.json.gz':{size:3,sha256:'0'.repeat(64)}}};
 c.weeklyCleanup();assert.equal(deleted,0);
 props.delete('CLEANUP_COMPLETED');receipt.files['2026-09-01_snapshot_120000_complete.json.gz'].sha256=crypto.createHash('sha256').update(Buffer.from([1,2,3])).digest('hex');
-c.weeklyCleanup();assert.equal(deleted,1);
-console.log('PASS: closed holiday, trading day, slot dedup, next slot, runtime guard, invalid receipt, checksum mismatch, verified cleanup');
+c.weeklyCleanup();assert.equal(deleted,0);
+console.log('PASS: closed holiday, trading day, slot dedup, next slot, runtime guard, invalid receipt, checksum mismatch, verified permanent retention (0 deletions)');
