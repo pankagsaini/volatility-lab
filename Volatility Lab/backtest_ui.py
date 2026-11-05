@@ -196,20 +196,6 @@ def render():
  kind=st.session_state.get('backtest_market','Options')
  if st.session_state.get('_backtest_error'):st.error('Cannot run: '+st.session_state['_backtest_error'])
  checked_charges()
- assumptions=st.expander('Archive & execution assumptions',key='backtest_archive_details',on_change='rerun')
- if assumptions.open:
-  with assumptions:
-   if (ROOT/'queue.sqlite').exists():
-    render_inventory()
-   audit=read_json(ROOT.parent/'audit'/'candles'/'status.json')
-   if audit:
-    st.caption('Candle validation · '+audit.get('status','unknown')+' · '+str(audit.get('contracts_checked',0))+' instruments checked')
-    counts=audit.get('counts',{})
-    st.write({k:counts.get(k,0) for k in ('raw_rows','identical_duplicate_rows','conflicting_rows','invalid_values','invalid_timestamp','unreadable_files')})
-    st.caption('Zero-volume rows are retained; unobserved minute slots are not automatically classified as failures.')
-   info=checked_charges();st.caption('Upstox fee page checked '+info.get('checked','unavailable'))
-   if info.get('status')=='check_failed':st.warning(info.get('warning'))
-   st.caption('Charge estimates exclude financing, margin, contract-note rounding and expiry settlement. Historical candles have no wide-spread filter.')
  if kind=='Futures':
   from futures_backtest_ui import render as futures_render
   futures_render()
