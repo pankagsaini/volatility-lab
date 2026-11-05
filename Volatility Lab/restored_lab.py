@@ -73,7 +73,7 @@ def render_archived_intraday(data, symbol, selected, config):
     saved = load(data / 'monitor.sqlite', symbol, selected.get('Expiry'), config)
 
     if saved.empty:
-        st.info(f"Collecting intraday snapshots for {symbol} {selected.get('Expiry')}... Live calculations above update continuously with 3-minute Google Cloud captures.")
+        st.info(f"Collecting intraday snapshots for {symbol} {selected.get('Expiry')}... Live calculations above update continuously with 1-minute Google Cloud captures.")
         return
 
     # Filter to most recent captured session
@@ -82,7 +82,7 @@ def render_archived_intraday(data, symbol, selected, config):
     session_data = saved[saved['day'] == latest_day].copy().sort_values('As of').reset_index(drop=True)
 
     if len(session_data) < 2:
-        st.info(f"Captured {len(session_data)} snapshot for {latest_day:%d %b %Y}. Intraday progression chart activates after multiple 3-minute captures.")
+        st.info(f"Captured {len(session_data)} snapshot for {latest_day:%d %b %Y}. Intraday progression chart activates after multiple 1-minute captures.")
         return
 
     # Calculate Straddle Price and Net Delta for each historical snapshot
