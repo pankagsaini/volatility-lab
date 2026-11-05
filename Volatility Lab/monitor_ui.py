@@ -954,7 +954,6 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
                         'Future reference','Synthetic status']
         for column in parity_columns:
             if column not in table:table[column]=np.nan if column not in ('Future contract','Future quote time','Future reference','Synthetic status') else 'Unavailable'
-        show_table(table[['Instrument','Price','IV','IV-RV Spread','Synthetic future','Month future LTP','Quote status']])
         with st.expander('Quote details'):
             show_table(table[['Instrument','Expiry','% change','Call IV','Put IV','25 Delta reversal','Underlying as of']])
             st.markdown('**ATM synthetic future check**')
