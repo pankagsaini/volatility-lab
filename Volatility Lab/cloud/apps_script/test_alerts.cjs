@@ -30,20 +30,22 @@ const c = {
 vm.createContext(c);
 vm.runInContext(codeContent, c);
 
-// 3. Confirm watchdog functions are completely absent
+// 3. Confirm watchdog and cleanup functions are completely absent
 assert.equal(typeof c.failureWatchdog, 'undefined', 'failureWatchdog must be removed');
 assert.equal(typeof c.installFailureWatchdog, 'undefined', 'installFailureWatchdog must be removed');
 assert.equal(typeof c.removeFailureWatchdogTrigger, 'undefined', 'removeFailureWatchdogTrigger must be removed');
+assert.equal(typeof c.weeklyCleanup, 'undefined', 'weeklyCleanup must be removed');
+assert.equal(typeof c.installWeeklyCleanup, 'undefined', 'installWeeklyCleanup must be removed');
+assert.equal(typeof c.testCleanupIsolation, 'undefined', 'testCleanupIsolation must be removed');
 
 // 4. Confirm core production capture functions exist
 assert.equal(typeof c.scheduledCapture, 'function', 'scheduledCapture must be present');
 assert.equal(typeof c.reconcilePriorSession, 'function', 'reconcilePriorSession must be present');
-assert.equal(typeof c.weeklyCleanup, 'function', 'weeklyCleanup must be present');
 assert.equal(typeof c.installIntradaySchedule, 'function', 'installIntradaySchedule must be present');
-assert.equal(typeof c.installWeeklyCleanup, 'function', 'installWeeklyCleanup must be present');
 assert.equal(typeof c.testCapture, 'function', 'testCapture must be present');
 assert.equal(typeof c.verifyArchive, 'function', 'verifyArchive must be present');
 assert.equal(typeof c.auditStatus, 'function', 'auditStatus must be present');
+assert.equal(typeof c.doGet, 'function', 'doGet must be present');
 
 // 5. Preserved scheduledCapture trigger
 assert.equal(triggers.length, 1);

@@ -1,8 +1,6 @@
 {
-  "cleanup_approved": false,
   "retention_days": "permanent",
   "storage_tier": "5TB_Google_Workspace",
-  "require_laptop_download": false,
   "source_folder": "G:/My Drive/Historical Data/Volatility Lab - private Upstox archive",
   "web_app_url": "https://script.google.com/macros/s/AKfycbxDbTwpiRAE9ZRoGGWTyTncZhwUPmTnimv0HyejOiJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec"
 }

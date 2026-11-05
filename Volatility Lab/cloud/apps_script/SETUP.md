@@ -28,9 +28,11 @@ Run testCapture for a manual snapshot, verifyArchive for a read-back check, and 
 
 Drive for desktop is now connected. google_archive_sync.py downloads and checksum-verifies raw archives into data/google_archive and imports broker IV, smile/reversal observations, futures quotes, and EOD candles into the existing lab databases. The dashboard checks in the background every three minutes; Windows task "Volatility Lab Private Drive Sync" checks every ten minutes while the user is logged in, without waking the laptop. Changes appear when opening/switching views; a Show updates control preserves the chart while new data arrives. First catch-up can take longer while Drive hydrates files.
 
-The laptop does NOT need to remain on for cloud collection. If it is off, Google retains the backlog. Local imports resume when it is on, signed in, and Drive is connected. These are three-minute snapshots, not one-minute OHLC bars. Futures rolling charts use EOD candles, never intraday LTP presented as daily closes.
+The laptop does NOT need to remain on for cloud collection. Google Cloud runs 1-minute live intraday captures independently. Local imports resume when connected to Google Drive.
 
-Permanent local archives are outside the Drive sync folder. Weekly cloud cleanup keeps 14 days, and only moves a file to Drive Trash when a recent local receipt has an identical SHA-256 and size. Google permanently removes Trash after 30 days. A daily evening trigger checks whether weekly cleanup is due and resumes large batches within runtime limits. Missing/expired receipts, missing local copies, or mismatched hashes prevent deletion. This bounds this collector's usage while the laptop reconnects regularly; it cannot guarantee available storage if other Drive/Gmail/Photos data grows or the laptop remains offline indefinitely. No automatic deletion of local archives.
+Permanent cloud archives are preserved on 5TB Google Drive storage with zero deletions. All cleanup and trashing routines have been permanently decommissioned and removed from the codebase.
+
+
 
 Google official quota documentation: https://developers.google.com/apps-script/guides/services/quotas
 

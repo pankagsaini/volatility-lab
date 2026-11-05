@@ -254,7 +254,7 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
     manifest=read_json(STORE/'manifest.json');count=0;errors=[]
     import re
     pattern=re.compile(r'^\d{4}-\d{2}-\d{2}_(snapshot|test|eod)_\d{6}_(complete|partial)\.json\.gz$')
-    # No source files are deleted here. Cloud cleanup consumes verified receipts.
+    # Permanent 5TB cloud archive; all historical captures retained without deletion.
     for path in sorted(source.glob('*.json.gz'), reverse=True):
         if not pattern.fullmatch(path.name):continue
         try:
@@ -270,18 +270,6 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
             atomic_json(STORE/'manifest.json',manifest);count+=1
             atomic_json(STORE/'status.json',{'status':'syncing','total_files':len(manifest),'updated':pd.Timestamp.now(tz='UTC').isoformat()})
         except Exception as exc:errors.append({'file':path.name,'error':type(exc).__name__})
-    if read_json(CONFIG).get('cleanup_approved'):
-        receipt=read_json(STORE/'receipt_status.json')
-        checked=pd.Timestamp(receipt.get('verified_at','1970-01-01T00:00:00Z'))
-        if verify_receipt or (pd.Timestamp.now(tz='UTC')-checked).total_seconds()>=7*86400:
-            files={}
-            for remote in source.glob('*.json.gz'):
-                n=remote.name;v=manifest.get(n);local=STORE/n
-                if v and local.exists() and hashlib.sha256(local.read_bytes()).hexdigest()==v['sha256']:
-                    files[n]={'sha256':v['sha256'],'size':v['size']}
-            receipt={'schema':1,'verified_at':pd.Timestamp.now(tz='UTC').isoformat(),'files':files}
-            atomic_json(source/'local_verified_receipts.json',receipt)
-            atomic_json(STORE/'receipt_status.json',{'verified_at':receipt['verified_at']})
     reconcile_local_capture_status()
     atomic_json(STORE/'status.json',{'status':'partial' if errors else 'ready','updated':pd.Timestamp.now(tz='UTC').isoformat(),'imported':count,'total_files':len(manifest),'errors':errors[:10],'source':str(source)})
     return count

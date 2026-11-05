@@ -9,7 +9,7 @@
  * - No order routing, no public web deployment, no algorithmic fitting.
  * - UPSTOX_TOKEN stored exclusively in private Script Properties.
  * - Archives saved directly as gzip JSON (.json.gz) to a private Google Drive folder.
- * - Permanent retention on 5TB Google Drive storage (automated weekly cleanup & laptop receipt pruning disabled).
+ * - Permanent retention on 5TB Google Drive storage with continuous 1-minute live snapshots.
  * ==============================================================================
  */
 
@@ -742,92 +742,6 @@ function reconcilePriorSession() {
   }
 }
 
-/**
- * Disable weekly cleanup and purge retention triggers (5TB permanent Google Drive storage).
- */
-function installWeeklyCleanup() {
-  ScriptApp.getProjectTriggers()
-    .filter(t => t.getHandlerFunction() === 'weeklyCleanup')
-    .forEach(t => ScriptApp.deleteTrigger(t));
-
-  props_().setProperty('CLEANUP_ENABLED', 'false');
-  console.log('Weekly cleanup disabled: 5TB Google Drive capacity active. All historical captures are retained permanently in cloud.');
-}
-
-/**
- * Cleanup disabled: 5TB Google Drive permanent retention active.
- * No files are ever deleted or trashed from Google Drive.
- */
-function cleanupFiles_(folder, receipt, now) {
-  return {
-    count: 0,
-    completed: true,
-    reason: '5TB Google Drive permanent retention active; file deletion permanently disabled'
-  };
-}
-
-/**
- * Weekly cleanup job handler.
- * Decommissions any existing weeklyCleanup triggers and guarantees zero file deletions.
- */
-function weeklyCleanup() {
-  const properties = props_();
-
-  // Purge any existing weeklyCleanup triggers immediately
-  if (typeof ScriptApp !== 'undefined' && ScriptApp.getProjectTriggers) {
-    ScriptApp.getProjectTriggers()
-      .filter(t => t.getHandlerFunction() === 'weeklyCleanup')
-      .forEach(t => ScriptApp.deleteTrigger(t));
-  }
-
-  properties.setProperty('CLEANUP_ENABLED', 'false');
-  properties.setProperty('LAST_CLEANUP', JSON.stringify({
-    checked: new Date().toISOString(),
-    status: 'disabled_5tb_permanent_storage',
-    count: 0,
-    completed: true,
-    reason: '5TB Google Drive permanent retention active; file deletion permanently disabled'
-  }));
-  console.log('Weekly cleanup disabled: 5TB Google Drive capacity active. All historical captures are retained permanently.');
-}
-
-/**
- * Automated test ensuring cleanup isolation and permanent retention (no file is ever trashed).
- */
-function testCleanupIsolation() {
-  const disposableFolder = DriveApp.createFolder('Volatility Lab DISPOSABLE cleanup test ' + new Date().toISOString());
-  const content = 'cleanup-safe-test-2026-10-21';
-  const expectedSha = 'a13f2b8298438f15fab24c23e7a9f34222b608c07a1c72ce64a5009a97abd616';
-
-  const oldFile = disposableFolder.createFile('2026-09-01_test_120000_complete.json.gz', content);
-  const recentFile = disposableFolder.createFile(day_(new Date()) + '_test_120000_complete.json.gz', content);
-
-  const receipt = {
-    schema: 1,
-    verified_at: new Date().toISOString(),
-    files: {
-      [oldFile.getName()]: { size: oldFile.getSize(), sha256: expectedSha },
-      [recentFile.getName()]: { size: recentFile.getSize(), sha256: expectedSha }
-    }
-  };
-
-  const eligible = cleanupFiles_(disposableFolder, receipt, Date.now());
-
-  if (oldFile.isTrashed() || recentFile.isTrashed() || eligible.count !== 0) {
-    throw new Error('Retention test failed: file was trashed or count > 0');
-  }
-
-  // Clean up disposable test folder only
-  disposableFolder.setTrashed(true);
-
-  console.log(JSON.stringify({
-    test: 'PASS',
-    old_file_retained: !oldFile.isTrashed(),
-    recent_file_retained: !recentFile.isTrashed(),
-    deleted_count: eligible.count,
-    reason: eligible.reason
-  }));
-}
 
 /**
  * Authenticated query for Upstox annual exchange holiday calendar.
@@ -893,10 +807,8 @@ function auditStatus() {
   console.log(JSON.stringify({
     closed_today: marketClosed_(new Date()),
     sharing: String(folder_().getSharingAccess()),
-    cleanup_completed: properties.getProperty('CLEANUP_COMPLETED'),
-    last_cleanup: properties.getProperty('LAST_CLEANUP'),
     handlers: ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()),
-    interval: properties.getProperty('INTERVAL_MINUTES'),
+    interval: properties.getProperty('INTERVAL_MINUTES') || '1',
     status: properties.getProperty('COLLECTOR_STATUS'),
     last_snapshot: JSON.parse(properties.getProperty('LAST_SNAPSHOT') || 'null'),
     last_eod: JSON.parse(properties.getProperty('LAST_EOD') || 'null')
@@ -914,12 +826,19 @@ function doGet(e) {
     const action = e && e.parameter ? e.parameter.action : null;
 
     if (action === 'status') {
+      let triggers = [];
+      try {
+        triggers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+      } catch (err) {}
       return ContentService.createTextOutput(JSON.stringify({
         status: properties.getProperty('COLLECTOR_STATUS'),
         last_snapshot: properties.getProperty('LAST_SNAPSHOT'),
         last_snapshot_slot: properties.getProperty('LAST_SNAPSHOT_SLOT'),
         mode: properties.getProperty('SCHEDULE_MODE'),
-        interval: properties.getProperty('INTERVAL_MINUTES') || '1'
+        interval: properties.getProperty('INTERVAL_MINUTES') || '1',
+        triggers: triggers,
+        calendar: properties.getProperty('MARKET_CALENDAR'),
+        budget: properties.getProperty('RUNTIME_BUDGET')
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
