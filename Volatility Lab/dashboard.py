@@ -92,18 +92,18 @@ st.markdown('''<style>
 [data-testid="stPlotlyChart"]{border:1px solid #202e42;border-radius:14px;padding:8px;background:#0c1321}
 [data-testid="stExpander"]{border-color:#243348!important;border-radius:10px!important}
 
-.block-container{max-width:1450px;padding-top:0.6rem;padding-bottom:1.5rem;padding-left:1.5rem;padding-right:1.5rem}
-h1{font-size:1.8rem!important;letter-spacing:-.04em;margin:0!important;padding:0!important}
+.block-container{max-width:1450px;padding-top:4.5rem!important;padding-bottom:2rem;padding-left:1.5rem;padding-right:1.5rem}
+h1{font-size:2.2rem!important;font-weight:800!important;letter-spacing:-.04em;margin-top:0!important;margin-bottom:0.4rem!important;color:#e4ecf8!important}
 h2,h3{letter-spacing:-.025em}
 h3{font-size:1.2rem!important}
-[data-testid="stVerticalBlock"]{gap:.5rem}
+[data-testid="stVerticalBlock"]{gap:.6rem}
 section[data-testid="stSidebar"]{background:#111c2d}
 div[data-testid="stMetric"]{background:#131f31;border:1px solid #26364d;border-radius:12px;padding:12px 16px}
 div[data-testid="stMetricLabel"]{color:#a3b7d0}
 div[data-testid="stDataFrame"]{border:1px solid #26364d;border-radius:10px;overflow:hidden}
 div[data-testid="stExpander"]{border-color:#253247}
 div[data-testid="stCaptionContainer"]{color:#91a5c0}
-[data-testid="stHeader"]{background:#0c1321}
+[data-testid="stHeader"]{background:rgba(11,18,32,0.85)!important;backdrop-filter:blur(8px)!important}
 button[kind="primary"]{border-radius:8px;background-color:#10b981!important;border-color:#10b981!important;color:#ffffff!important}
 div[data-testid="stRadio"]{padding:4px 0 10px}
 div[data-testid="stRadio"] [role="radiogroup"]{gap:.45rem}

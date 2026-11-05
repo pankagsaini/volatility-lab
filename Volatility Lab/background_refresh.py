@@ -41,14 +41,11 @@ def status(key,on_tick=None):
         if completed is not None:st.session_state['_background_ready_'+key]=completed
         if on_tick is not None:on_tick()
         ready=st.session_state.get('_background_ready_'+key)
-        # Fixed footprint: notifications must not push the charts up or down.
-        with st.container(height=48,border=False):
+        if ready is not None:
             message,action=st.columns([4,1])
-            if ready is not None:
-                message.caption('New snapshot available' if ready[0] else ready[1])
-                if action.button('Show updates',key='_apply_'+key,width='stretch'):
-                    st.rerun()
-            elif pending(st.session_state,key):
-                message.caption('Updating quotes in background')
-            else:message.caption('Saved snapshot · updates appear when ready')
+            message.caption('New snapshot available' if ready[0] else ready[1])
+            if action.button('Show updates',key='_apply_'+key,width='stretch'):
+                st.rerun()
+        elif pending(st.session_state,key):
+            st.caption('Updating quotes in background...')
     poll()
