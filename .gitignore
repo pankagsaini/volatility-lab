@@ -16,7 +16,7 @@ Volatility Lab/.streamlit/secrets.toml
 *.lock
 *.tmp
 .clasprc.json
-.clasp.json
+# .clasp.json (tracked so project ID is preserved)
 
 # System Diagnostic Logs
 Volatility Lab/logs/

@@ -388,10 +388,9 @@ def render():
 
         pair_table['Quote time']=[pd.Timestamp(p['As of']).strftime('%d %b %H:%M IST') if p.get('As of') else 'Unavailable' for p in pairs]
 
-        table(pair_table[['Pair','Front expiry','Back expiry','Spread','Annualized carry %','Quote time','Status']])
+        table(pair_table[['Pair','Front expiry','Back expiry','Spread','Annualized carry %','Buy spread','Sell spread','Quote time','Status']])
 
-        with st.expander('Quotes, execution & contracts'):
-            table(pair_table[['Pair','Front expiry','Back expiry','Spread','Annualized carry %','Buy spread','Sell spread','Quote time','Status']])
+        with st.expander('Individual contract quotes & specifications'):
             table(pd.DataFrame([{'Month':name,'Expiry':leg['expiry'],'Contract':leg['contract'],'Price':leg['quote']['Price'],
                 'Bid':leg['quote']['Bid'],'Ask':leg['quote']['Ask'],'Lot size':leg['lot_size'],'Source':leg['quote']['Source'],'Status':leg['quote']['Status']}
                 for name,leg in zip(['Current','Next','Far'],legs)]))

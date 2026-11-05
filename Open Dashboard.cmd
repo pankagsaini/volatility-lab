@@ -1,2 +1,7 @@
 @echo off
-start "" "%~dp0Volatility Lab\.runtime\pythonw.exe" "%~dp0Volatility Lab\desktop.py"
+set "SCRIPT_DIR=%~dp0"
+if exist "%SCRIPT_DIR%Volatility Lab\.runtime\pythonw.exe" (
+    start "" "%SCRIPT_DIR%Volatility Lab\.runtime\pythonw.exe" "%SCRIPT_DIR%Volatility Lab\desktop.py"
+) else (
+    start "" python "%SCRIPT_DIR%run_local.py" --dashboard
+)
