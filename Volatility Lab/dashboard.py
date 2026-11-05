@@ -174,12 +174,6 @@ def cloud_sync_status():
 
 cloud_sync_status()
 
-if capture.get('status') in ('failed','partial'):
-    errors = capture.get('errors', [])
-    is_normal_catchup = all('pending' in e.lower() or 'missing' in e.lower() for e in errors)
-    if not is_normal_catchup and errors:
-        st.warning('Laptop history backup: ' + '; '.join(errors[:2]))
-
 workspace_labels={'Options':'Options','Backtest':'Backtest'}
 label_to_mode={v:k for k,v in workspace_labels.items()}
 raw_markets=['Options','Backtest']

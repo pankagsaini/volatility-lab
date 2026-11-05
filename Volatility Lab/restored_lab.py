@@ -51,7 +51,11 @@ def render_trade_tools(data,symbol,selected,rate,dividend,spread):
         days=st.number_input('Elapsed calendar days',min_value=0.,max_value=365.,value=1.,step=.25)
         costs=st.number_input('Additional costs per position (₹)',min_value=0.,value=0.,step=10.)
         scenarios,summary=stress_position(context,position,days,costs)
-        table(position.drop(columns=['Bid IV','Ask IV'],errors='ignore'));table(pd.DataFrame([{**summary,**position_greeks(context,position)}]))
+        st.markdown('**Position Legs**')
+        table(position.drop(columns=['Bid IV','Ask IV'],errors='ignore'))
+        st.markdown('**Position Greeks & Capital Summary**')
+        table(pd.DataFrame([{**summary,**position_greeks(context,position)}]))
+        st.markdown('**Scenario P&L Matrix (₹)**')
         grid=scenarios.pivot(index='Spot move %',columns='IV shock · pp',values='Unhedged P&L · ₹').reset_index()
         grid.columns=[str(c) if c=='Spot move %' else 'IV +'+str(c)+' pp' for c in grid.columns]
         table(grid)

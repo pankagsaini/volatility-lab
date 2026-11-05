@@ -697,11 +697,11 @@ def render_term_structure(symbol,result):
 
     view['IV − GARCH FRV · pp']=(pd.to_numeric(view.IV,errors='coerce')-pd.to_numeric(view['GARCH FRV %'],errors='coerce')).where(view['Comparison ready'])
     view['IV − EWMA FRV · pp']=(pd.to_numeric(view.IV,errors='coerce')-pd.to_numeric(view['EWMA FRV %'],errors='coerce')).where(view['Comparison ready'])
-    show_table(view[['Expiry','Type','DTE','IV','GARCH FRV %','EWMA FRV %','IV − GARCH FRV · pp',
-                     'IV − EWMA FRV · pp','Synthetic future','Month future LTP','Future reference',
-                     'Synthetic status','As of','Forecast as of','Forecast basis','GARCH status']])
-    with st.popover('Export'):
-        st.download_button('Term structure CSV',view.to_csv(index=False).encode(),
+    with st.expander('Term structure data table & CSV export'):
+        show_table(view[['Expiry','Type','DTE','IV','GARCH FRV %','EWMA FRV %','IV − GARCH FRV · pp',
+                         'IV − EWMA FRV · pp','Synthetic future','Month future LTP','Future reference',
+                         'Synthetic status','As of','Forecast as of','Forecast basis','GARCH status']])
+        st.download_button('Download Term structure CSV',view.to_csv(index=False).encode(),
             file_name=f'{symbol}_term_structure.csv',mime='text/csv')
 
 def render_smile(symbol,selected,config):
@@ -767,7 +767,14 @@ def render_relative_value(symbol,selected,config):
     try:
         path=regime_input(DATA,symbol)
         summary=regime_summary(pd.read_csv(path),selected.get('As of'))
-        show_table(summary[['Measure','HV %','Prior-year percentile','Regime','Prior sessions','As of']])
+        cols=st.columns(len(summary))
+        for col,row in zip(cols,summary.to_dict('records')):
+            measure=str(row.get('Measure',''))
+            hv_val=row.get('HV %')
+            pctile=row.get('Prior-year percentile')
+            regime=str(row.get('Regime',''))
+            pct_txt=f"{pctile:.0f}%ile" if pd.notna(pctile) else "—"
+            col.metric(measure,f"{hv_val:.2f}%" if pd.notna(hv_val) else "—",f"{regime} ({pct_txt})")
         st.caption('Historical HV percentile · low ≤20% · normal 20–80% · elevated ≥80%')
     except (OSError,ValueError,TypeError) as exc:
         st.info(f"Regime calculation: {exc}")
@@ -793,13 +800,13 @@ def render_relative_value(symbol,selected,config):
 
     ready=[m for m in measures if m['Percentile'] is not None]
 
-    if ready:
-        st.markdown('**Maturity-Matched Historical Ranking (±3 DTE cycles)**')
-        show_table(pd.DataFrame(ready))
-    else:
-        st.caption('Relative rankings unavailable · collecting comparable expiry cycles')
-
-    with st.expander('Research coverage details & CSV export'):
+    with st.expander('Volatility regime & maturity ranking data'):
+        try:
+            show_table(summary[['Measure','HV %','Prior-year percentile','Regime','Prior sessions','As of']])
+        except Exception:pass
+        if ready:
+            st.markdown('**Maturity-Matched Historical Ranking (±3 DTE cycles)**')
+            show_table(pd.DataFrame(ready))
         show_table(pd.DataFrame(measures)[['Measure','Prior days','Expiry cycles','Status']])
         st.caption('Volatility: annualized % · spreads: pp · historical DTE matched ±3 days')
         st.caption(f"Saved observations: {len(saved)} · latest snapshot: {current['As of']}")
@@ -948,17 +955,6 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
 
         render_trade_decision_radar(selected_rows)
-
-        parity_columns=['ATM strike','ATM call LTP','ATM put LTP','Synthetic future',
-                        'Month future LTP','Future contract','Future quote time',
-                        'Future reference','Synthetic status']
-        for column in parity_columns:
-            if column not in table:table[column]=np.nan if column not in ('Future contract','Future quote time','Future reference','Synthetic status') else 'Unavailable'
-        with st.expander('Quote details'):
-            show_table(table[['Instrument','Expiry','% change','Call IV','Put IV','25 Delta reversal','Underlying as of']])
-            st.markdown('**ATM synthetic future check**')
-            show_table(table[['Instrument','Expiry',*parity_columns]])
-            st.caption('Synthetic future = ATM strike + ATM call LTP − ATM put LTP. Monthly expiries use the same-expiry future; NIFTY weekly expiries use that calendar month’s listed monthly future. Option-chain LTP timestamps are not supplied by the broker, so these are displayed separately as a market-consistency reference, not an executable price or fair-value model.')
 
         issues=[f"{r['Instrument']}: {r.get('RV status')}" for r in selected_rows if r.get('RV status') not in (None,'Same-session close','Prior completed session')]
 

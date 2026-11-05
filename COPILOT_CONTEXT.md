@@ -81,6 +81,7 @@ The user has explicitly defined their aesthetic and architectural preferences:
 | **Nov 5, 2026** | GitHub repository bloat & duplication | Removed duplicate files (`requirements.txt`, `.streamlit/secrets.toml.example`, duplicate `.cmd` scripts). Deleted legacy Zerodha broker files, obsolete test proof screenshots, and daily charge scrape dumps. |
 | **Nov 5, 2026** | Database bloat in Git (`monitor.sqlite`) | Pruned expired October contracts from `monitor.sqlite`, reducing file size from **83 MB down to 27 MB** (67% reduction), well below GitHub's 50 MB warning threshold. |
 | **Nov 5, 2026** | Documentation cleanup | Removed legacy files: `PROJECT_AUDIT.md`, `DEVELOPMENT_PLAN_2026-10-23.md`, `VOLATILITY_LAB_INVENTORY.json`, and `historical_dedup_report.json`. Added clean [README.md](README.md) and simplified [START HERE.md](START HERE.md). |
+| **Nov 5, 2026** | Redundant tables & UI clutter removal | Removed duplicate overview table and Quote Details expander under Volatility Radar. Tucked 16-column Term Structure table into an expander. Replaced raw HV tables with metric badges in Vol Regime. Removed obsolete laptop capture warning. |
 
 ---
 
