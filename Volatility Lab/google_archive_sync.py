@@ -23,6 +23,7 @@ def source_folder():
     candidates=[Path(configured)] if configured else []
     for letter in 'DEFGHIJKLMNOPQRSTUVWXYZ':
         candidates.append(Path(letter+':/')/'My Drive'/'Volatility Lab - private Upstox archive')
+        candidates.append(Path(letter+':/')/'My Drive'/'Historical Data'/'Volatility Lab - private Upstox archive')
     for p in candidates:
         if p.is_dir() and p.resolve()!=STORE.resolve():return p
     return None
@@ -240,7 +241,7 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
     import re
     pattern=re.compile(r'^\d{4}-\d{2}-\d{2}_(snapshot|test|eod)_\d{6}_(complete|partial)\.json\.gz$')
     # No source files are deleted here. Cloud cleanup consumes verified receipts.
-    for path in sorted(source.glob('*.json.gz')):
+    for path in sorted(source.glob('*.json.gz'), reverse=True):
         if not pattern.fullmatch(path.name):continue
         try:
             info=path.stat();known=manifest.get(path.name)
