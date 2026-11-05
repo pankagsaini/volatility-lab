@@ -7,6 +7,18 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+REQUIRED_IMPORTS = (
+    "streamlit",
+    "fastapi",
+    "uvicorn",
+    "numpy",
+    "pandas",
+    "scipy",
+    "arch",
+    "plotly",
+    "requests",
+    "pypdf",
+)
 
 
 def check_python_version() -> None:
@@ -25,13 +37,15 @@ def ensure_import(name: str) -> None:
         print(f"Dependency OK: {name}")
     except ModuleNotFoundError as exc:
         raise SystemExit(
-            "Missing dependency '" + name + "'. Install with: python -m pip install -r requirements.txt"
+            f"Missing dependency '{name}'. Install with: python -m pip install -r requirements.txt"
         ) from exc
 
 
 def ensure_paths() -> None:
     required = [
         ROOT / "Volatility Lab",
+        ROOT / "Volatility Lab" / "dashboard.py",
+        ROOT / "Volatility Lab" / "web_server.py",
         ROOT / "Volatility Lab" / "data",
         ROOT / "Volatility Lab" / "frontend",
     ]
@@ -44,11 +58,8 @@ def ensure_paths() -> None:
 def main() -> None:
     print("Validating Volatility Lab environment...\n")
     check_python_version()
-    ensure_import("streamlit")
-    ensure_import("fastapi")
-    ensure_import("uvicorn")
-    ensure_import("pandas")
-    ensure_import("numpy")
+    for name in REQUIRED_IMPORTS:
+        ensure_import(name)
     ensure_paths()
     print("\nEnvironment looks ready. Use one of:")
     print("  python run_local.py --dashboard")
