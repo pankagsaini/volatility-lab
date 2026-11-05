@@ -156,34 +156,33 @@ else:current_label=workspace_labels['Options']
 
 if current_label not in markets:current_label=markets[0]
 
-# Sleek single-row header
-head_col, ws_col, status_col = st.columns([3, 2, 4], vertical_alignment="center")
-with head_col:
-    st.markdown("<span style='font-size:1.6rem; font-weight:800; letter-spacing:-0.03em; color:#e4ecf8;'>Volatility Lab</span>", unsafe_allow_html=True)
-with ws_col:
-    chosen_label=st.segmented_control('Workspace',markets,default=current_label,label_visibility='collapsed',key='market_workspace_label') or current_label
-    workspace=label_to_mode.get(chosen_label,'Options')
-    st.session_state.market_workspace=workspace
+# Prominent Main Title Header with aligned live market status
+title_col, badge_col = st.columns([5, 2], vertical_alignment="center")
+with title_col:
+    st.title('Volatility Lab')
+with badge_col:
+    now = datetime.now(IST)
+    is_open = (now.weekday() < 5) and (555 <= now.hour * 60 + now.minute <= 930)
+    mkt_color = "#34d399" if is_open else ("#f59e0b" if (now.weekday() < 5 and 540 <= now.hour * 60 + now.minute < 555) else "#94a3b8")
+    mkt_label = "● Market Live" if is_open else ("◑ Pre-Open" if (now.weekday() < 5 and 540 <= now.hour * 60 + now.minute < 555) else "○ Market Closed")
+    st.markdown(f"<div style='text-align:right;'><span style='display:inline-block; padding:5px 14px; border-radius:999px; font-size:0.75rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; border:1px solid rgba(52, 211, 153, 0.35); background:rgba(17, 29, 45, 0.9); color:{mkt_color};'>{mkt_label} · {now:%H:%M IST}</span></div>", unsafe_allow_html=True)
 
-with status_col:
-    @st.fragment(run_every=30)
-    def cloud_sync_status():
-        google_archive_sync.ensure_sync(rate,dividend,spread)
-        info=read_json(ROOT/'data'/'google_archive'/'status.json')
-        now=datetime.now(IST)
-        is_open=(now.weekday()<5) and (555<=now.hour*60+now.minute<=930)
-        mkt_txt='<span style="color:#34d399;">● Live</span>' if is_open else ('<span style="color:#f59e0b;">◑ Pre-Open</span>' if (now.weekday()<5 and 540<=now.hour*60+now.minute<555) else '<span style="color:#94a3b8;">○ Closed</span>')
-        if not info or info.get('status')=='waiting':
-            st.markdown(f"<div style='text-align:right; font-size:0.83rem; color:#94a3b8;'>☁️ 5TB Cloud Drive · {mkt_txt} {now:%H:%M IST}</div>", unsafe_allow_html=True)
-        else:
-            count=info.get('total_files',0)
-            st.markdown(f"<div style='text-align:right; font-size:0.83rem; color:#94a3b8;'>☁️ Drive · {count:,} captures · {mkt_txt} {now:%H:%M IST}</div>", unsafe_allow_html=True)
-            previous=st.session_state.setdefault('_cloud_seen',count)
-            if count!=previous:
-                st.session_state['_cloud_seen']=count
-                st.rerun()
+chosen_label = st.segmented_control('Workspace', markets, default=current_label, label_visibility='collapsed', key='market_workspace_label') or current_label
+workspace = label_to_mode.get(chosen_label, 'Options')
+st.session_state.market_workspace = workspace
 
-    cloud_sync_status()
+@st.fragment(run_every=30)
+def cloud_sync_status():
+    google_archive_sync.ensure_sync(rate, dividend, spread)
+    info = read_json(ROOT / 'data' / 'google_archive' / 'status.json')
+    if info and info.get('total_files'):
+        count = info.get('total_files', 0)
+        previous = st.session_state.setdefault('_cloud_seen', count)
+        if count != previous:
+            st.session_state['_cloud_seen'] = count
+            st.rerun()
+
+cloud_sync_status()
 
 from history_policy import register
 
