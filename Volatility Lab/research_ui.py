@@ -30,7 +30,7 @@ def render_research(root,symbol,selected):
             st.caption('HV30 variability · 20 / 60 sessions · volatility pp per session')
         except (ValueError,OSError) as error:st.info(str(error))
     with st.expander('Cross-index correlation & return dispersion'):
-        window=st.selectbox('Aligned return observations',[20,60,120,252],index=1)
+        window=st.selectbox('Aligned return observations',[20,60,120,245],index=1)
         try:
             frames={name:pd.read_csv(regime_input(data,name)) for name in ['NIFTY','BANKNIFTY']}
             corr,dispersion=cross_index(frames,as_of,window)

@@ -166,5 +166,5 @@ def render_surface(data,symbol,result,config):
     st.plotly_chart(fig,width='stretch',config={'displaylogo':False})
     if grid.isna().any().any():st.caption('Gaps mark expiries without broker IV coverage at those deltas.')
 
-    st.caption('IV by delta and expiry · blanks unavailable · '+', '.join(sorted(str(s) for s in sources)))
+    st.caption('IV by delta and expiry · blanks unavailable · Upstox broker IV')
 

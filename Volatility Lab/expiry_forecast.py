@@ -55,7 +55,7 @@ def expiry_forecast(frame, expiry, as_of, iv=None):
     if len(data) < 201:
         raise ValueError('Expiry models need at least 200 completed returns.')
     dates = sessions(last+timedelta(days=1), expiry)
-    if not dates or len(dates)>252:
+    if not dates or len(dates)>245:
         raise ValueError('Unsupported expiry forecast horizon.')
     weights = []
     for date in dates:
@@ -69,7 +69,7 @@ def expiry_forecast(frame, expiry, as_of, iv=None):
     weights = np.array(weights)
     if weights.sum() <= 0:raise ValueError('No remaining trading variance horizon.')
     training = data.reset_index()
-    ewma = rv_snapshot(training)['ewma_next_session_vol']**2/252
+    ewma = rv_snapshot(training)['ewma_next_session_vol']**2/245
     result = {'Expiry':str(expiry),'As of':now.isoformat(),'Training through':str(last),
               'DTE':years*365,'Trading sessions':int((weights>0).sum()),
               'Session equivalents':float(weights.sum()),'IV':iv,
@@ -77,7 +77,7 @@ def expiry_forecast(frame, expiry, as_of, iv=None):
               'GARCH expiry RV':np.nan,'GARCH status':'Ready','Version':VERSION}
     try:
         _, diagnostics, path, _ = fit_garch(training,(len(dates),),min_observations=200)
-        variances=(path['Daily conditional vol %'].to_numpy()/100)**2/252
+        variances=(path['Daily conditional vol %'].to_numpy()/100)**2/245
         result['GARCH expiry RV']=float(100*np.sqrt(np.dot(variances,weights)/years))
         result['GARCH status']='; '.join(diagnostics['warnings']) or 'Ready'
     except (ValueError,RuntimeError,FloatingPointError) as error:

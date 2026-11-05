@@ -14,13 +14,13 @@ MODELS = ('GARCH', 'EWMA', 'HV30')
 class ValidationConfig:
     horizons: tuple = (5, 10, 20, 30)
     min_returns: int = 200
-    annualization: int = 252
+    annualization: int = 245
     ewma_lambda: float = .94
 
     def __post_init__(self):
         if (not self.horizons or len(set(self.horizons)) != len(self.horizons)
-                or any(type(h) is not int or not 1 <= h <= 252 for h in self.horizons)):
-            raise ValueError('Use unique integer horizons from 1 to 252.')
+                or any(type(h) is not int or not 1 <= h <= 245 for h in self.horizons)):
+            raise ValueError('Use unique integer horizons from 1 to 245.')
         if type(self.min_returns) is not int or self.min_returns < 30:
             raise ValueError('At least 30 training returns are required.')
         if not np.isfinite(self.annualization) or self.annualization <= 0:

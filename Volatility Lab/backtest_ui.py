@@ -22,7 +22,7 @@ def _apply_backtest_theme():
         --border: #243447;
         --text: #e2e8f0;
         --muted: #94a3b8;
-        --primary: #38bdf8;
+        --primary: #10b981;
         --success: #34d399;
         --warning: #fbbf24;
         --danger: #f87171;
@@ -56,17 +56,17 @@ def _apply_backtest_theme():
         border-radius: 8px;
         background: linear-gradient(180deg, #17314d 0%, #0f1d33 100%);
         color: var(--text);
-        border: 1px solid rgba(96, 165, 250, 0.6);
+        border: 1px solid rgba(52, 211, 153, 0.6);
     }
 
     .stButton > button:hover {
-        border-color: rgba(56, 189, 248, 0.9);
+        border-color: rgba(16, 185, 129, 0.9);
     }
 
     button[kind="primary"] {
         border-radius: 8px;
         background: linear-gradient(180deg, #17314d 0%, #0f1d33 100%);
-        border: 1px solid rgba(96, 165, 250, 0.6);
+        border: 1px solid rgba(52, 211, 153, 0.6);
         color: var(--text);
     }
 
@@ -199,7 +199,6 @@ def render():
  assumptions=st.expander('Archive & execution assumptions',key='backtest_archive_details',on_change='rerun')
  if assumptions.open:
   with assumptions:
-   state=read_json(ROOT/'status.json');st.write('Historical download: '+state.get('status','unknown'));st.caption(f"{state.get('minute_rows',0):,} minute rows saved · coverage is incomplete until the archive load completes.")
    if (ROOT/'queue.sqlite').exists():
     render_inventory()
    audit=read_json(ROOT.parent/'audit'/'candles'/'status.json')

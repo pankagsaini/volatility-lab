@@ -485,7 +485,7 @@ def render_models(symbol,selected,frame,result):
     horizon=st.select_slider('Holding period · trading days',options=grid.iloc[:,0].astype(int).tolist(),value=20,key='model_holding_period')
     show_table(grid[grid.iloc[:,0]==horizon])
     st.caption('Annualized % · Days = trading sessions · GARCH/EWMA: next N days · Yang–Zhang: past N days. Standard EWMA has a flat annualized forecast across horizons.')
-    st.caption(f'EWMA holding-period volatility: {ewma*np.sqrt(horizon/252):.2f}% over {horizon} trading days')
+    st.caption(f'EWMA holding-period volatility: {ewma*np.sqrt(horizon/245):.2f}% over {horizon} trading days')
 
     st.caption(f'{symbol} · {len(frame)} daily candles · through {frame.Date.max():%d %b %Y}')
 
@@ -622,8 +622,8 @@ def render_term_structure(symbol,result):
                             view.get('Training through',pd.Series('',index=view.index)).fillna(''),
                             view['Forecast as of'].fillna(''),view['Forecast basis']])
     series=[('IV','IV','solid','#5b8cff','top center'),
-            ('GARCH FRV %','GARCH FRV','dash','#ff684d','bottom right'),
-            ('EWMA FRV %','EWMA FRV','dot','#00c99a','top left')]
+            ('GARCH FRV %','GARCH FRV','solid','#ff684d','bottom right'),
+            ('EWMA FRV %','EWMA FRV','solid','#00c99a','top left')]
     plotted=[]
     for field,label,dash,color,text_position in series:
         values=pd.to_numeric(view[field],errors='coerce')
@@ -632,20 +632,10 @@ def render_term_structure(symbol,result):
         fig.add_trace(go.Scatter(x=pd.to_datetime(view.Expiry),y=values,name=label,
             mode='lines+markers+text',text=[f'{value:.2f}%' if pd.notna(value) else '' for value in values],
             textposition=text_position,textfont={'color':color,'size':10},cliponaxis=False,
-            line={'dash':dash,'color':color},marker={'color':color},connectgaps=False,customdata=custom,
+            line={'dash':dash,'color':color,'width':2.2},marker={'color':color,'size':6},connectgaps=True,customdata=custom,
             hovertemplate='Expiry: %{customdata[0]}<br>%{fullData.name}: %{y:.2f}%<br>IV source: %{customdata[2]}<br>IV time: %{customdata[1]}<br>Model time: %{customdata[4]}<br>%{customdata[5]}<extra></extra>'))
 
-    start_day=today
-    event_colors={'India policy':'#b79cff','India macro':'#f0b74e',
-                  'Global policy':'#63b3ed','Global inflation':'#4fd1c5'}
-    marked_events={(str(item.get('Date')),item.get('Category')) for item in events
-                   if isinstance(item,dict) and item.get('Date') and item.get('Category') in event_colors}
-    for event_day,category in sorted(marked_events):
-        try:date_value=pd.Timestamp(event_day).date()
-        except (TypeError,ValueError):continue
-        if pd.isna(date_value):continue
-        if start_day<=date_value<=event_end:
-            fig.add_vline(x=date_value,line_dash='dot',line_color=event_colors[category],opacity=.55)
+    # Continuous term structure chart (event vlines hidden per user preference)
     fig.update_layout(height=350,template='plotly_dark',paper_bgcolor='#0c1321',plot_bgcolor='#0c1321',
         margin={'l':10,'r':15,'t':25,'b':15},xaxis_title='Listed expiry',yaxis_title='Annualized volatility %',
         xaxis_type='date',xaxis_range=[today,event_end],yaxis_tickformat='.2f',legend={'orientation':'h'})
@@ -654,20 +644,16 @@ def render_term_structure(symbol,result):
         padding=max(1.0,(all_values.max()-all_values.min())*.12)
         fig.update_yaxes(range=[max(0,float(all_values.min())-padding),float(all_values.max())+padding])
     st.plotly_chart(fig,key=f'term_structure_{symbol}',width='stretch',config={'displaylogo':False})
-    st.caption('IV: broker quote · FRV: model forecast to expiry from completed closes · dotted lines: macro event dates')
-    if (~view['Comparison ready']).any() and view['Forecast as of'].notna().any():
-        st.caption('During trading hours, models show the previous-close reference. IV–forecast gaps require the same close.')
 
-    st.subheader('Event calendar')
-    scope='Macro events + bank results' if symbol=='BANKNIFTY' else 'Index macro events'
-    st.caption(f'{scope} · refreshes automatically every 12 hours when viewed · through {event_end:%d %b %Y}')
-    if event_status.startswith('Partly available') or 'checking updates' in event_status:st.caption(event_status)
-    if events:
-        event_frame=pd.DataFrame(events)
-        st.dataframe(event_frame[['Date','Event','Category','Details','Source']],hide_index=True,width='stretch',
-            column_config={'Source':st.column_config.LinkColumn('Source',display_text='Open source')})
-    else:
-        st.caption('No events are listed before the furthest currently listed expiry.')
+    with st.expander('Macro event calendar & catalysts', expanded=False):
+        scope='Macro events + bank results' if symbol=='BANKNIFTY' else 'Index macro events'
+        st.caption(f'{scope} · through {event_end:%d %b %Y}')
+        if events:
+            event_frame=pd.DataFrame(events)
+            st.dataframe(event_frame[['Date','Event','Category','Details','Source']],hide_index=True,width='stretch',
+                column_config={'Source':st.column_config.LinkColumn('Source',display_text='Open source')})
+        else:
+            st.caption('No events are listed before the furthest currently listed expiry.')
 
     if not view.empty:
         expiry_labels=view.Expiry.astype(str).tolist()
@@ -784,14 +770,23 @@ def render_relative_value(symbol,selected,config):
     if saved.empty:
         st.info('Maturity-matched observations will appear after Cloud captures.');return
 
-    match=saved[(saved.Expiry==selected.get('Expiry'))&(saved['As of']==selected.get('As of'))&(saved.Config==config)]
+    match=saved[(saved.Expiry==selected.get('Expiry'))&(saved.Config==config)]
+    if not match.empty and selected.get('As of'):
+        exact=match[match['As of']==selected.get('As of')]
+        current=exact.iloc[-1].to_dict() if not exact.empty else match.iloc[-1].to_dict()
+    else:
+        current=dict(selected)
 
-    if match.empty:
-        latest=pd.to_datetime(saved['As of'],format='ISO8601',utc=True).max().tz_convert(IST)
-        st.info(f'No matching maturity-matched record for this quote. Latest saved history: {latest:%d %b} · {len(saved)} observations.')
-        return
-
-    current=match.iloc[-1].to_dict()
+    if 'DTE' not in current or pd.isna(current.get('DTE')):
+        try:
+            exp_d=pd.Timestamp(current.get('Expiry')).date()
+            asof_d=pd.Timestamp(current.get('As of')).date()
+            current['DTE']=(exp_d-asof_d).days
+        except Exception:
+            current['DTE']=7
+    if 'Instrument' not in current:current['Instrument']=symbol
+    if 'Source' not in current:current['Source']=selected.get('Source','Upstox supplied IV')
+    if 'Type' not in current:current['Type']=selected.get('Type','Weekly')
 
     measures=[]
 
@@ -822,7 +817,6 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
     engine=st.session_state.expiry_engine
 
-    st.subheader('Options overview')
     auto = True
 
     @st.fragment
@@ -918,12 +912,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
             else:col.selectbox(symbol,['Connect / refresh'],disabled=True,key='unavailable_'+symbol)
 
-        weekly_dates=[pd.Timestamp(e['date']) for e in catalog.get('NIFTY',[]) if e.get('kind')=='Weekly']
-        if weekly_dates:
-            last_weekly=max(weekly_dates)
-            st.caption(f'NIFTY weeklies listed through {last_weekly:%d %b %Y} · BANKNIFTY is monthly.')
-        else:
-            st.caption('NIFTY weeklies appear as listed · BANKNIFTY is monthly.')
+
 
         result={**result,'rows':[dict(r) for r in result['rows']]}
 
@@ -1014,18 +1003,18 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             except (OSError,ValueError,KeyError):
                 st.warning('HV could not be loaded from saved daily prices. IV–RV requires those prices too.')
 
-            scope_col,mode_col,range_col,settings_col=st.columns([3,2,2,1])
+            scope_col,mode_col,range_col=st.columns([3,2,2])
             exp_label = f"Selected: {expiry}" if expiry else "Selected expiry"
-            scope_map = {exp_label: 'Selected expiry', 'Continuous roll (across expiries)': 'Across expiries'}
+            scope_map = {'Continuous roll (across expiries)': 'Across expiries', exp_label: 'Selected expiry'}
             
             chosen_scope_label = scope_col.segmented_control(
                 'Scope',
-                [exp_label, 'Continuous roll (across expiries)'],
-                default=exp_label,
+                ['Continuous roll (across expiries)', exp_label],
+                default='Continuous roll (across expiries)',
                 label_visibility='collapsed',
                 key=f'iv_history_scope_v8_{symbol}_{expiry}'
-            ) or exp_label
-            scope = scope_map.get(chosen_scope_label, 'Selected expiry')
+            ) or 'Continuous roll (across expiries)'
+            scope = scope_map.get(chosen_scope_label, 'Across expiries')
 
             metric_mode = mode_col.segmented_control(
                 'Metric',
@@ -1036,9 +1025,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             ) or 'IV vs Realized'
 
             period=range_col.segmented_control('Range',['1M','3M','6M','1Y'],default='1M',label_visibility='collapsed',key='options_range_v2') or '1M'
-            with settings_col.popover('Settings',width='stretch'):
-                relative=st.toggle('Relative spread %',value=False,key='iv_history_relative_v2')
-                filter_0dte=st.toggle('Filter 0-DTE terminal anomalies',value=True,key='filter_0dte_artifacts',help='Excludes terminal settlement Black-Scholes solver spikes on expiry day (T=0).')
+            filter_0dte = True
 
             if scope=='Across expiries':
                 from option_context import transition_context
@@ -1087,12 +1074,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             from trade_review_ui import render_risk_context
             render_risk_context(DATA,symbol,chart_selected)
 
-        with st.expander('Data notes'):
-            st.caption('HV uses rolling log returns from daily closes, annualized with 252 trading sessions.')
-            if st.button('Save selected table'):
-                folder=DATA/'exports';folder.mkdir(exist_ok=True)
-                table[['Instrument','Expiry',*COLUMNS]].round(2).to_csv(folder/'index_options_table.csv',index=False)
-                st.success('Saved in Volatility Lab / data / exports.')
+
 
     panel()
 

@@ -48,9 +48,9 @@ def har_components_summary(frame):
     clean=validate_ohlc(frame)
     log_ret=np.log(clean.Close/clean.Close.shift(1)).dropna()
     daily_var=(log_ret**2)
-    rv_day=np.sqrt(daily_var*252)*100
-    rv_week=np.sqrt(daily_var.rolling(5).mean()*252)*100
-    rv_month=np.sqrt(daily_var.rolling(22).mean()*252)*100
+    rv_day=np.sqrt(daily_var*245)*100
+    rv_week=np.sqrt(daily_var.rolling(5).mean()*245)*100
+    rv_month=np.sqrt(daily_var.rolling(22).mean()*245)*100
     dates=clean.index[1:]
     date_str=dates.strftime('%Y-%m-%d') if hasattr(dates,'strftime') else dates.astype(str)
     df=pd.DataFrame({

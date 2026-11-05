@@ -8,8 +8,8 @@ from vol_lib import rv_snapshot
 def model_tables(frame,horizons=(5,10,20,30,60)):
     forecasts,diag,_,_=fit_garch(frame,horizons=horizons,min_observations=200)
     annual_ewma=rv_snapshot(frame,20)['ewma_next_session_vol']*100
-    forecasts['GARCH period %']=forecasts['GARCH forecast %']*np.sqrt(forecasts.Sessions/252)
-    forecasts['EWMA period %']=annual_ewma*np.sqrt(forecasts.Sessions/252)
+    forecasts['GARCH period %']=forecasts['GARCH forecast %']*np.sqrt(forecasts.Sessions/245)
+    forecasts['EWMA period %']=annual_ewma*np.sqrt(forecasts.Sessions/245)
     forecasts=forecasts.rename(columns={'Sessions':'Forward sessions','GARCH forecast %':'GARCH annualized %'})
     realized=pd.DataFrame([{'Trailing sessions':h,'Yang–Zhang RV %':rv_snapshot(frame,h)['yang_zhang_rv']*100} for h in horizons])
     return forecasts,realized,annual_ewma,diag
@@ -28,7 +28,7 @@ def fit_candidates(frame,horizons=(5,10,20,30,60)):
             if not fit.convergence_flag:
                 variance=fit.forecast(horizon=max(horizons),reindex=False).variance.iloc[-1].to_numpy()/10000
                 for h in horizons:
-                    ann=float(np.sqrt(max(0.,variance[:h].mean())*252)*100)
+                    ann=float(np.sqrt(max(0.,variance[:h].mean())*245)*100)
                     results[(name,h)]=ann
         except Exception:
             pass

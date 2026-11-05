@@ -18,7 +18,7 @@ def completed(frame,as_of):
 def vol_of_vol(frame,as_of):
     data=completed(frame,as_of)
     r=np.log(data.Close/data.Close.shift())
-    hv=r.rolling(30).std()*np.sqrt(252)*100
+    hv=r.rolling(30).std()*np.sqrt(245)*100
     change=hv.diff()
     out=pd.DataFrame({'Date':data.index,'HV30 %':hv.values,
         'VoV20 · pp per session':change.rolling(20).std().values,
@@ -27,7 +27,7 @@ def vol_of_vol(frame,as_of):
 
 
 def cross_index(frames,as_of,window=60):
-    if window not in (20,60,120,252):raise ValueError('Unsupported correlation window')
+    if window not in (20,60,120,245):raise ValueError('Unsupported correlation window')
     prices=pd.concat({s:completed(f,as_of).Close for s,f in frames.items()},axis=1).sort_index()
     # Union dates first: a missing price invalidates adjacent returns instead of
     # correlating a two-session return with another index's one-session return.

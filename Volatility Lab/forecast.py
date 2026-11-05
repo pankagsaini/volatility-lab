@@ -5,10 +5,10 @@ import pandas as pd
 from vol_lib import validate_ohlc
 
 
-def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=252, min_observations=250):
+def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=245, min_observations=250):
     from arch import arch_model
-    if not horizons or any(isinstance(h, bool) or not isinstance(h, int) or not 1 <= h <= 252 for h in horizons):
-        raise ValueError('Forecast horizons must be integers from 1 to 252 sessions.')
+    if not horizons or any(isinstance(h, bool) or not isinstance(h, int) or not 1 <= h <= 245 for h in horizons):
+        raise ValueError('Forecast horizons must be integers from 1 to 245 sessions.')
     if not np.isfinite(ann_factor) or ann_factor <= 0:
         raise ValueError('Annualization must be positive.')
     df = validate_ohlc(frame)
@@ -53,6 +53,6 @@ def rolling_rv(frame, window=20, lam=.94):
     rs = np.log(df.High/df.Close)*np.log(df.High/df.Open)+np.log(df.Low/df.Close)*np.log(df.Low/df.Open)
     k = .34/(1.34+(window+1)/(window-1))
     yz = gap.rolling(window).var()+k*oc.rolling(window).var()+(1-k)*rs.rolling(window).mean()
-    return pd.DataFrame({'Date':df.index, 'Close-to-close RV %':r.rolling(window).std().to_numpy()*np.sqrt(252)*100,
-                         'Yang–Zhang RV %':np.sqrt(yz.clip(lower=0).to_numpy()*252)*100,
-                         'EWMA next-session %':np.sqrt(r.pow(2).ewm(alpha=1-lam,adjust=False).mean().to_numpy()*252)*100})
+    return pd.DataFrame({'Date':df.index, 'Close-to-close RV %':r.rolling(window).std().to_numpy()*np.sqrt(245)*100,
+                         'Yang–Zhang RV %':np.sqrt(yz.clip(lower=0).to_numpy()*245)*100,
+                         'EWMA next-session %':np.sqrt(r.pow(2).ewm(alpha=1-lam,adjust=False).mean().to_numpy()*245)*100})

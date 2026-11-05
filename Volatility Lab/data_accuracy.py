@@ -64,7 +64,7 @@ def check_row(row,payload,prices):
         closes=pd.to_numeric(selected.Close,errors='coerce').tail(31).tolist()
         if len(closes)==31 and all(finite(v) and v>0 for v in closes) and selected.Date.iloc[-1]==cutoff:
             returns=[math.log(b/a) for a,b in zip(closes,closes[1:])]
-            hv=statistics.stdev(returns)*math.sqrt(252)*100
+            hv=statistics.stdev(returns)*math.sqrt(245)*100
     check('HV30 %',row.get('HV30'),hv)
     check('IV − HV30 · pp',row.get('IV-RV Spread'),mean-hv if mean is not None and hv is not None else None)
     future=next((item for item in payload.get('contracts',[]) if item.get('instrument_type')=='FUT'),None)
@@ -82,5 +82,5 @@ def comparison_context(row,payload):
     atm=min(raw,key=lambda r:(abs(float(r['strike_price'])-float(spot)),float(r['strike_price']))) if raw and finite(spot) else {}
     return {'Instrument':row.get('Instrument'),'Expiry':row.get('Expiry'),'ATM strike':atm.get('strike_price'),
             'IV basis':'Spot-nearest strike; mean of Upstox call/put IV',
-            'RV through':row.get('RV through'),'RV basis':'30 log returns; sample SD; sqrt(252)',
+            'RV through':row.get('RV through'),'RV basis':'30 log returns; sample SD; sqrt(245)',
             'Retrieved at':payload.get('broker_received_at'),'Greek exchange time':'Not supplied by chain API'}

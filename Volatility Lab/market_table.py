@@ -26,8 +26,8 @@ def historical_vol(frame):
     df=validate_ohlc(frame)
     returns=np.log(df.Close/df.Close.shift())
     return pd.DataFrame({'Date':df.index,'Price':df.Close.to_numpy(),
-                         'Historical vol 10D':returns.rolling(10).std().to_numpy()*np.sqrt(252)*100,
-                         'Historical vol 30D':returns.rolling(30).std().to_numpy()*np.sqrt(252)*100})
+                         'Historical vol 10D':returns.rolling(10).std().to_numpy()*np.sqrt(245)*100,
+                         'Historical vol 30D':returns.rolling(30).std().to_numpy()*np.sqrt(245)*100})
 
 
 
@@ -167,12 +167,12 @@ class Monitor:
         # Full future weekdays from the last completed candle. Skip elapsed dates;
         # remaining current-session variance is prorated by regular session time.
         dates=pd.bdate_range(frame.Date.iloc[-1]+pd.Timedelta(days=1),pd.Timestamp(expiry))
-        if not len(dates) or len(dates)>252:raise MarketDataError('Unsupported forecast tenor.')
+        if not len(dates) or len(dates)>245:raise MarketDataError('Unsupported forecast tenor.')
         key=(symbol,frame.Date.iloc[-1].isoformat(),len(frame),method,len(dates))
         if key not in self.paths:
             if method=='GARCH':
                 _,_,path,_=fit_garch(frame,(len(dates),),min_observations=200)
-                variances=(path['Daily conditional vol %'].to_numpy()/100)**2/252
+                variances=(path['Daily conditional vol %'].to_numpy()/100)**2/245
             else:
                 returns=np.log(frame.Close/frame.Close.shift()).dropna()
                 variances=np.full(len(dates),returns.tail(30).var())

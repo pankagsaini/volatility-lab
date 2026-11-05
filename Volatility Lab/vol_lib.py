@@ -26,7 +26,7 @@ def validate_ohlc(frame):
     return df.sort_values('Date').set_index('Date')
 
 
-def rv_snapshot(frame, window=20, lam=0.94, ann_factor=252):
+def rv_snapshot(frame, window=20, lam=0.94, ann_factor=245):
     if isinstance(window, bool) or not isinstance(window, int) or window < 2:
         raise ValueError('window must be an integer of at least 2 sessions')
     if not 0 < lam < 1 or not np.isfinite(ann_factor) or ann_factor <= 0:

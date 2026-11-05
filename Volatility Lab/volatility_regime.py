@@ -35,7 +35,7 @@ def regime_summary(frame,as_of):
     returns=np.log(data.Close/data.Close.shift())
     records=[]
     for window in (10,30):
-        hv=returns.rolling(window).std(ddof=1)*np.sqrt(252)*100
+        hv=returns.rolling(window).std(ddof=1)*np.sqrt(245)*100
         current=float(hv.iloc[-1])
         prior=hv[(hv.index>=start)&(hv.index<end)].dropna()
         percentile=None

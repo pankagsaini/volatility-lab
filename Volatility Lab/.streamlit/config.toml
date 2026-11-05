@@ -3,7 +3,7 @@ developmentMode = false
 
 [theme]
 base = "dark"
-primaryColor = "#50d5be"
+primaryColor = "#10b981"
 backgroundColor = "#0b1220"
 secondaryBackgroundColor = "#101b2b"
 textColor = "#e5edf5"
