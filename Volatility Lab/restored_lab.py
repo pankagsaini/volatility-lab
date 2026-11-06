@@ -63,10 +63,11 @@ def render_archived_intraday(data, symbol, selected, config):
     iv = _clean_float(selected.get('IV'))
     step = 50 if symbol == 'NIFTY' else 100
     atm_k = _clean_float(selected.get('ATM strike'))
-    if atm_k > 0:
+    true_atm = round(spot / step) * step if spot > 0 else 0.0
+    if atm_k > 0 and abs(atm_k - spot) <= step * 1.5:
         strike = atm_k
-    elif spot > 0:
-        strike = round(spot / step) * step
+    elif true_atm > 0:
+        strike = true_atm
     else:
         strike = 0.0
 
@@ -91,10 +92,12 @@ def render_archived_intraday(data, symbol, selected, config):
         valid_ivs = pd.to_numeric(saved['IV'], errors='coerce').dropna()
         if spot <= 0 and not valid_prices.empty:
             spot = float(valid_prices.iloc[-1])
-            if strike <= 0:
-                strike = round(spot / step) * step
         if iv <= 0 and not valid_ivs.empty:
             iv = float(valid_ivs.iloc[-1])
+
+    # Ensure strike is strictly consistent with spot price
+    if spot > 0 and (strike <= 0 or abs(strike - spot) > step * 1.5):
+        strike = round(spot / step) * step
 
     # 2. Top KPI Metric Cards for Live ATM Straddle & Greeks
     greeks = compute_straddle_greeks(spot, strike, dte, iv)
@@ -146,10 +149,11 @@ def render_archived_intraday(data, symbol, selected, config):
         s_price = _clean_float(row.get('Price'), spot)
         s_iv = _clean_float(row.get('IV'), iv)
         s_atm_k = _clean_float(row.get('ATM strike'))
-        if s_atm_k > 0:
+        s_true_atm = round(s_price / step) * step if s_price > 0 else strike
+        if s_atm_k > 0 and abs(s_atm_k - s_price) <= step * 1.5:
             s_strike = s_atm_k
-        elif s_price > 0:
-            s_strike = round(s_price / step) * step
+        elif s_true_atm > 0:
+            s_strike = s_true_atm
         else:
             s_strike = strike
         

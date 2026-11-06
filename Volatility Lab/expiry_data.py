@@ -381,18 +381,28 @@ def align_snapshot(result):
     for row in result.get('rows', []):
         sym = row.get('Instrument')
         exp = row.get('Expiry')
+        step = 50.0 if sym == 'NIFTY' else 100.0
+        row_price = row.get('Price')
+
+        # Guarantee mathematically accurate ATM strike for the row's underlying spot
+        if row_price and (row.get('ATM strike') is None or abs(float(row.get('ATM strike') or 0) - float(row_price)) > step * 1.5):
+            row['ATM strike'] = round(float(row_price) / step) * step
+
         if row.get('Synthetic future') is None and sym and exp:
             q_file = DATA / f'{sym.lower()}_option_quotes_{exp}.json'
             if q_file.exists():
                 try:
                     c = json.loads(q_file.read_text(encoding='utf-8'))
                     chain = c.get('broker_option_chain')
-                    spot = c.get('spot') or row.get('Price')
-                    if chain and spot:
+                    c_spot = c.get('spot')
+                    spot = row_price or c_spot
+                    # Only accept quote file if quotes belong to the same spot regime (within 2 strike steps)
+                    if chain and spot and (c_spot is None or row_price is None or abs(float(row_price) - float(c_spot)) <= step * 2.0):
                         p = calc_synthetic(chain, spot)
                         row['Synthetic future'] = p.get('Synthetic future')
-                        if row.get('ATM strike') is None:
-                            row['ATM strike'] = p.get('ATM strike')
+                        syn_atm = p.get('ATM strike')
+                        if syn_atm and abs(float(syn_atm) - float(spot)) <= step * 1.5:
+                            row['ATM strike'] = syn_atm
                 except Exception:
                     pass
 

@@ -326,7 +326,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
 
     def test_option_context_configurable_150_iv_ceiling(self):
         from types import SimpleNamespace
-        sys.modules.setdefault("history_policy", SimpleNamespace(compatible=lambda path, val: [val]))
+        sys.modules.setdefault("history_policy", SimpleNamespace(compatible=lambda path, val: [val], register=lambda *a, **kw: None))
         import option_context
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "iv.sqlite"
@@ -395,6 +395,37 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             self.assertNotIn("streamlit==1.64.0", req_text)
             self.assertNotIn("plotly==7.1.0", req_text)
             self.assertNotIn("pypdf==6.20.1", req_text)
+
+    def test_straddle_net_delta_neutral_and_atm_selection(self):
+        if "history_policy" in sys.modules and not hasattr(sys.modules["history_policy"], "__file__"): del sys.modules["history_policy"]
+        from restored_lab import compute_straddle_greeks
+        from expiry_data import load_snapshot
+
+        # 1. Mathematical neutrality of true ATM straddles
+        nifty_greeks = compute_straddle_greeks(spot=25030.35, strike=25050.0, dte=3.0, vol_pct=16.0)
+        self.assertIsNotNone(nifty_greeks)
+        self.assertAlmostEqual(nifty_greeks['net_delta'], 0.0, delta=0.05)
+        self.assertAlmostEqual(nifty_greeks['call_delta'], 0.50, delta=0.05)
+        self.assertAlmostEqual(nifty_greeks['put_delta'], -0.50, delta=0.05)
+
+        banknifty_greeks = compute_straddle_greeks(spot=59086.0, strike=59100.0, dte=17.0, vol_pct=14.0)
+        self.assertIsNotNone(banknifty_greeks)
+        self.assertAlmostEqual(banknifty_greeks['net_delta'], 0.0, delta=0.15)
+
+        # 2. Document the stale strike failure mode: deep ITM call causes net delta ~ 1.0
+        stale_greeks = compute_straddle_greeks(spot=25030.35, strike=23950.0, dte=3.0, vol_pct=16.0)
+        self.assertGreater(stale_greeks['net_delta'], 0.90)
+
+        # 3. Snapshot loader sanitization guarantees ATM strike matches spot
+        snap = load_snapshot({}, allow_saved=True)
+        self.assertIsNotNone(snap)
+        for r in snap.get('rows', []):
+            sym = r.get('Instrument')
+            price = r.get('Price')
+            atm = r.get('ATM strike')
+            step = 50.0 if sym == 'NIFTY' else 100.0
+            if price and atm:
+                self.assertLessEqual(abs(float(atm) - float(price)), step * 1.5)
 
 
 if __name__ == "__main__":
