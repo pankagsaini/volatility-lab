@@ -114,7 +114,7 @@ def render_trade_decision_radar(selected_rows):
                 basis_status = 'Parity: Reference'
                 basis_color = '#94a3b8'
 
-            skew_text = f'Put Skew: {abs(rev25):.2f} pp' if rev25 is not None else 'Skew: —'
+            skew_text = (f'Put Skew: +{rev25:.2f} pp' if rev25 > 0 else f'Call Skew: +{abs(rev25):.2f} pp' if rev25 < 0 else f'Skew: 0.00 pp') if rev25 is not None and np.isfinite(rev25) else 'Skew: —'
             fut_txt = f"{m_fut:,.1f}" if m_fut is not None else "—"
             syn_txt = f"{syn:,.1f}" if syn is not None else "—"
 
@@ -719,7 +719,7 @@ def render_smile(symbol,selected,config):
     points=pd.DataFrame(saved['points'])
 
     fig=go.Figure(go.Scatter(x=points.Point,y=points.IV,mode='lines+markers+text',connectgaps=False,
-        text=[f'{v:.2f}%' if pd.notna(v) else '' for v in points.IV],textposition='top center',cliponaxis=False,
+        text=[f'{v:.2f}%' if pd.notna(v) and np.isfinite(v) else '' for v in points.IV],textposition='top center',cliponaxis=False,
 
         line={'color':'#50c5b4'},hovertemplate='%{x}: %{y:.2f}%<extra></extra>'))
 
@@ -728,15 +728,30 @@ def render_smile(symbol,selected,config):
                       margin={'l':10,'r':15,'t':25,'b':15},yaxis_title='IV %',yaxis_tickformat='.2f')
 
     st.plotly_chart(fig,key=f'smile_{symbol}',width='stretch',config={'displaylogo':False})
-    cols=st.columns(len(saved['metrics']))
-    for col,(label,value) in zip(cols,saved['metrics'].items()):
-        measure='RR'+label.split('RR',1)[1].split(' ·',1)[0]+' risk reversal' if label.startswith('RR') else 'BF'+label.split('BF',1)[1].split(' ·',1)[0]+' butterfly'
-        col.metric(measure,'—' if value is None else f'{value:.2f} pp')
+    raw_metrics = saved.get('metrics', {})
+    clean_metrics = {}
+    order = [
+        ('25', 'RR', 'RR25 risk reversal'),
+        ('25', 'BF', 'BF25 butterfly'),
+        ('10', 'RR', 'RR10 risk reversal'),
+        ('10', 'BF', 'BF10 butterfly'),
+    ]
+    for delta_str, metric_type, title in order:
+        val = None
+        for k, v in raw_metrics.items():
+            if delta_str in k and metric_type in k:
+                val = v
+                break
+        clean_metrics[title] = val
+
+    cols = st.columns(len(clean_metrics))
+    for col, (measure, value) in zip(cols, clean_metrics.items()):
+        col.metric(measure, '—' if value is None or pd.isna(value) else f'{value:.2f} pp')
     st.caption('RR = put IV − call IV. BF = average wing IV − ATM IV. Values are volatility points.')
 
     with st.expander('Smile values & measures'):
         show_table(points)
-        show_table(pd.DataFrame([saved['metrics']]))
+        show_table(pd.DataFrame([clean_metrics]))
 
     st.caption('Broker IV and Greeks from Google Cloud · fixed-delta points interpolate between listed contracts')
 

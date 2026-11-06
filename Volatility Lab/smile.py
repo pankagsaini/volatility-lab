@@ -96,6 +96,9 @@ def load_smile(path, symbol, expiry, config, as_of):
             return None
         row = con.execute('SELECT payload FROM smile_observations WHERE symbol=? AND expiry=? AND config=? AND as_of=? AND version=?',
                           (symbol, str(expiry), config, str(as_of), VERSION)).fetchone()
+        if not row:
+            row = con.execute('SELECT payload FROM smile_observations WHERE symbol=? AND expiry=? AND as_of=? AND version=?',
+                              (symbol, str(expiry), str(as_of), VERSION)).fetchone()
     return json.loads(row[0]) if row else None
 
 

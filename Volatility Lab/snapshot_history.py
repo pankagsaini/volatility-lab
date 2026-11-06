@@ -21,17 +21,23 @@ def save(path, config, row):
             con.execute('INSERT INTO intraday_observations VALUES (?,?,?,?,?)',(*key,json.dumps(row)))
 
 
-def load(path, symbol, expiry, config):
+def load(path, symbol, expiry, config=None):
     if not path.exists():return pd.DataFrame()
     with closing(sqlite3.connect(path)) as con:
         if not con.execute("SELECT 1 FROM sqlite_master WHERE name='intraday_observations'").fetchone():return pd.DataFrame()
-        rows=con.execute('SELECT payload FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? ORDER BY as_of',
-                         (symbol,str(expiry),config)).fetchall()
+        rows=[]
+        if config:
+            rows=con.execute('SELECT payload FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? ORDER BY as_of',
+                             (symbol,str(expiry),config)).fetchall()
+        if not rows:
+            rows=con.execute('SELECT payload FROM intraday_observations WHERE symbol=? AND expiry=? ORDER BY as_of',
+                             (symbol,str(expiry))).fetchall()
     records=[]
     for (raw,) in rows:
         try:row=json.loads(raw)
         except (TypeError,ValueError):continue
-        if row.get('Capture source')=='Google Drive' and row.get('Source')=='Upstox supplied IV':records.append(row)
+        if row.get('Capture source') in ('Google Drive', 'Google Cloud', 'Local') or 'Upstox' in str(row.get('Source', '')):
+            records.append(row)
     frame=pd.DataFrame(records)
     if len(frame):
         from market_table import aligned_spread
