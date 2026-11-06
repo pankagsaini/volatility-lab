@@ -115,7 +115,13 @@ from collector_support import read_json, STATE
 from upstox_data import TOKEN_PATH
 from upstox_adapter import market_client
 
-has_upstox_token = TOKEN_PATH.exists() or bool(os.environ.get('UPSTOX_TOKEN')) or bool(hasattr(st, 'secrets') and 'UPSTOX_TOKEN' in st.secrets)
+def _has_upstox_secret():
+    try:
+        return bool(hasattr(st, 'secrets') and 'UPSTOX_TOKEN' in st.secrets)
+    except Exception:
+        return False
+
+has_upstox_token = TOKEN_PATH.exists() or bool(os.environ.get('UPSTOX_TOKEN')) or _has_upstox_secret()
 if has_upstox_token:
     token_mtime = TOKEN_PATH.stat().st_mtime_ns if TOKEN_PATH.exists() else 1
     version=(token_mtime,(ROOT/'upstox_data.py').stat().st_mtime_ns,(ROOT/'upstox_adapter.py').stat().st_mtime_ns)
