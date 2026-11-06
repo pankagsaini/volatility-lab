@@ -1,421 +1,433 @@
-"""Multi-leg minute-close research engine. All exits use subsequent open fills."""
+"""Multi-leg options strategy backtest engine with SOM margin floor, quiet-minute carry-forward, and 6 Trade Scenario Presets."""
+from datetime import datetime, timedelta
 import json
 import math
-from datetime import datetime, timedelta
 import pandas as pd
 from backtest_common import record_skip
 from broker_charges import charge
-from backtest_signals import decide
-from backtest_index import ContractIndex, SignalIndex
 
 TEMPLATES = {
-    'Short straddle': [('Sell', 'CE', 0, 1), ('Sell', 'PE', 0, 1)],
-    'Short strangle': [('Sell', 'CE', 200, 1), ('Sell', 'PE', -200, 1)],
-    'Iron condor': [('Sell', 'CE', 200, 1), ('Sell', 'PE', -200, 1), ('Buy', 'CE', 700, 1), ('Buy', 'PE', -700, 1)],
-    'Iron butterfly': [('Sell', 'CE', 0, 1), ('Sell', 'PE', 0, 1), ('Buy', 'CE', 500, 1), ('Buy', 'PE', -500, 1)],
-    'Long straddle': [('Buy', 'CE', 0, 1), ('Buy', 'PE', 0, 1)],
-    'Long strangle': [('Buy', 'CE', 200, 1), ('Buy', 'PE', -200, 1)],
+    'Short straddle': [
+        {'Side': 'Sell', 'Type': 'CE', 'Offset': 0, 'Ratio': 1, 'kind': 'CE', 'side': -1, 'offset': 0, 'ratio': 1},
+        {'Side': 'Sell', 'Type': 'PE', 'Offset': 0, 'Ratio': 1, 'kind': 'PE', 'side': -1, 'offset': 0, 'ratio': 1},
+    ],
+    'Short strangle': [
+        {'Side': 'Sell', 'Type': 'CE', 'Offset': 200, 'Ratio': 1, 'kind': 'CE', 'side': -1, 'offset': 200, 'ratio': 1},
+        {'Side': 'Sell', 'Type': 'PE', 'Offset': 200, 'Ratio': 1, 'kind': 'PE', 'side': -1, 'offset': 200, 'ratio': 1},
+    ],
+    'Iron butterfly': [
+        {'Side': 'Sell', 'Type': 'CE', 'Offset': 0, 'Ratio': 1, 'kind': 'CE', 'side': -1, 'offset': 0, 'ratio': 1},
+        {'Side': 'Sell', 'Type': 'PE', 'Offset': 0, 'Ratio': 1, 'kind': 'PE', 'side': -1, 'offset': 0, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'CE', 'Offset': 300, 'Ratio': 1, 'kind': 'CE', 'side': 1, 'offset': 300, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'PE', 'Offset': 300, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 300, 'ratio': 1},
+    ],
+    'Iron condor': [
+        {'Side': 'Sell', 'Type': 'CE', 'Offset': 200, 'Ratio': 1, 'kind': 'CE', 'side': -1, 'offset': 200, 'ratio': 1},
+        {'Side': 'Sell', 'Type': 'PE', 'Offset': 200, 'Ratio': 1, 'kind': 'PE', 'side': -1, 'offset': 200, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'CE', 'Offset': 500, 'Ratio': 1, 'kind': 'CE', 'side': 1, 'offset': 500, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'PE', 'Offset': 500, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 500, 'ratio': 1},
+    ],
+    'Scenario 1 · VRP Harvest Iron Condor (Calm HV)': [
+        {'Side': 'Sell', 'Type': 'CE', 'Offset': 200, 'Ratio': 1, 'kind': 'CE', 'side': -1, 'offset': 200, 'ratio': 1},
+        {'Side': 'Sell', 'Type': 'PE', 'Offset': 200, 'Ratio': 1, 'kind': 'PE', 'side': -1, 'offset': 200, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'CE', 'Offset': 500, 'Ratio': 1, 'kind': 'CE', 'side': 1, 'offset': 500, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'PE', 'Offset': 500, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 500, 'ratio': 1},
+    ],
+    'Scenario 2 · Gamma Expansion Long Straddle (Compressed IV)': [
+        {'Side': 'Buy', 'Type': 'CE', 'Offset': 0, 'Ratio': 1, 'kind': 'CE', 'side': 1, 'offset': 0, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'PE', 'Offset': 0, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 0, 'ratio': 1},
+    ],
+    'Scenario 3 · Post-Event Front-Week Crush (Iron Butterfly)': [
+        {'Side': 'Sell', 'Type': 'CE', 'Offset': 0, 'Ratio': 1, 'kind': 'CE', 'side': -1, 'offset': 0, 'ratio': 1},
+        {'Side': 'Sell', 'Type': 'PE', 'Offset': 0, 'Ratio': 1, 'kind': 'PE', 'side': -1, 'offset': 0, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'CE', 'Offset': 350, 'Ratio': 1, 'kind': 'CE', 'side': 1, 'offset': 350, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'PE', 'Offset': 350, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 350, 'ratio': 1},
+    ],
+    'Scenario 4 · Steep Put Skew Ratio Spread (RR25 ≥ +2.5 pp)': [
+        {'Side': 'Buy', 'Type': 'PE', 'Offset': 50, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 50, 'ratio': 1},
+        {'Side': 'Sell', 'Type': 'PE', 'Offset': 250, 'Ratio': 2, 'kind': 'PE', 'side': -1, 'offset': 250, 'ratio': 2},
+        {'Side': 'Buy', 'Type': 'PE', 'Offset': 550, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 550, 'ratio': 1},
+    ],
+    'Scenario 5 · Intraday Theta Decay Iron Butterfly (09:20–15:15)': [
+        {'Side': 'Sell', 'Type': 'CE', 'Offset': 0, 'Ratio': 1, 'kind': 'CE', 'side': -1, 'offset': 0, 'ratio': 1},
+        {'Side': 'Sell', 'Type': 'PE', 'Offset': 0, 'Ratio': 1, 'kind': 'PE', 'side': -1, 'offset': 0, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'CE', 'Offset': 250, 'Ratio': 1, 'kind': 'CE', 'side': 1, 'offset': 250, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'PE', 'Offset': 250, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 250, 'ratio': 1},
+    ],
+    'Scenario 6 · Synthetic Basis Skewed Condor (Call-Rich Parity)': [
+        {'Side': 'Sell', 'Type': 'CE', 'Offset': 150, 'Ratio': 1, 'kind': 'CE', 'side': -1, 'offset': 150, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'CE', 'Offset': 450, 'Ratio': 1, 'kind': 'CE', 'side': 1, 'offset': 450, 'ratio': 1},
+        {'Side': 'Sell', 'Type': 'PE', 'Offset': 250, 'Ratio': 1, 'kind': 'PE', 'side': -1, 'offset': 250, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'PE', 'Offset': 550, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 550, 'ratio': 1},
+    ],
+}
+
+SCENARIO_PRESETS = {
+    'Scenario 1 · VRP Harvest Iron Condor (Calm HV)': {
+        'hypothesis': 'Sell defined-risk wings when Volatility Radar shows RICH VOLATILITY (IV-RV Spread ≥ +2.0 pp) while trailing HV30 sits in a calm/normal regime (8%–16%) and IV trades above GARCH FRV.',
+        'streamlit_triggers': '◈ Volatility Radar: RICH VOLATILITY · Vol Regime: IV-RV Spread ≥ +2.0 pp & DTE Rank ≥ 75%ile · Term Structure: IV - GARCH FRV ≥ +2.0 pp · Parity Normal',
+        'entry': '09:20',
+        'exit': '15:15',
+        'dte': (2, 10),
+        'expiry_rank': 'Nearest',
+        'bias': 'Neutral',
+        'stop': 3000.0,
+        'target': 4500.0,
+        'filters': [('IV-RV Spread', 2.0, 15.0), ('HV30', 8.0, 16.0)],
+    },
+    'Scenario 2 · Gamma Expansion Long Straddle (Compressed IV)': {
+        'hypothesis': 'Buy ATM gamma convexity when Volatility Radar shows COMPRESSED VOLATILITY (IV-RV Spread ≤ -1.5 pp) and Term Structure shows IV discounted below the GARCH/EWMA forward variance floor.',
+        'streamlit_triggers': '◈ Volatility Radar: COMPRESSED VOLATILITY · Term Structure: IV - GARCH FRV ≤ -2.0 pp · Intraday Straddle: Breakeven ±% < 1.15%',
+        'entry': '09:25',
+        'exit': '15:15',
+        'dte': (3, 7),
+        'expiry_rank': 'Nearest',
+        'bias': 'Neutral',
+        'stop': 2200.0,
+        'target': 5500.0,
+        'filters': [('IV-RV Spread', -15.0, -1.5)],
+    },
+    'Scenario 3 · Post-Event Front-Week Crush (Iron Butterfly)': {
+        'hypothesis': 'Capture rapid front-week IV mean-reversion when a scheduled macro/earnings catalyst inflates the nearest weekly expiry ≥ +3.0 pp above HV30 and Next-Week IV (backwardation kink).',
+        'streamlit_triggers': 'Term Structure & Calendars: Front IV > Next IV by +2.5 pp & IV - GARCH FRV ≥ +3.0 pp · Macro Event Calendar: Catalyst listed before front expiry',
+        'entry': '09:30',
+        'exit': '15:15',
+        'dte': (1, 5),
+        'expiry_rank': 'Nearest',
+        'bias': 'Neutral',
+        'stop': 3500.0,
+        'target': 5000.0,
+        'filters': [('IV-RV Spread', 3.0, 20.0)],
+    },
+    'Scenario 4 · Steep Put Skew Ratio Spread (RR25 ≥ +2.5 pp)': {
+        'hypothesis': 'Monetize overpriced 25-delta put protection when Smile & Skew shows RR25 risk reversal ≥ +2.50 pp (≥85th percentile) by selling 2x 25Δ puts against 1x near-ATM put and 1x tail-hedge wing.',
+        'streamlit_triggers': 'Smile & Skew: RR25 risk reversal ≥ +2.50 pp · Vol Regime & Maturity Ranking: 25 Delta reversal ≥ 85%ile',
+        'entry': '09:20',
+        'exit': '15:15',
+        'dte': (3, 14),
+        'expiry_rank': 'Nearest',
+        'bias': 'Bullish',
+        'stop': 2800.0,
+        'target': 4200.0,
+        'filters': [('25 Delta reversal', 2.5, 12.0), ('IV-RV Spread', 1.0, 15.0)],
+    },
+    'Scenario 5 · Intraday Theta Decay Iron Butterfly (09:20–15:15)': {
+        'hypothesis': 'Harvest intraday theta and post-open vega compression when 1-minute Cloud captures show ATM Straddle Price drifting below the 09:20 IST open and Net Delta bounded within [-0.12, +0.12].',
+        'streamlit_triggers': 'Intraday Straddle & Greeks: Straddle Price (₹) below opening high · Implied Volatility (%) flat/falling · |Net Delta| ≤ 0.12',
+        'entry': '09:20',
+        'exit': '15:15',
+        'dte': (1, 6),
+        'expiry_rank': 'Nearest',
+        'bias': 'Neutral',
+        'stop': 2500.0,
+        'target': 4000.0,
+        'filters': [('IV-RV Spread', 1.0, 15.0)],
+    },
+    'Scenario 6 · Synthetic Basis Skewed Condor (Call-Rich Parity)': {
+        'hypothesis': 'Use Put-Call Parity Basis (Syn - Month Future LTP) as an execution gate and skew short call strikes closer (+150) and put strikes wider (-250) when call demand inflates IV alongside positive VRP.',
+        'streamlit_triggers': '◈ Volatility Radar: Parity Normal (Wait if ⚠️ Basis Dislocation > ±30 pts NIFTY / ±75 pts BANKNIFTY) · Term Structure: ATM synthetic future vs Month future LTP',
+        'entry': '09:25',
+        'exit': '15:15',
+        'dte': (2, 12),
+        'expiry_rank': 'Nearest',
+        'bias': 'Bearish',
+        'stop': 2800.0,
+        'target': 4200.0,
+        'filters': [('IV-RV Spread', 1.5, 15.0), ('25 Delta reversal', -5.0, 2.0)],
+    },
 }
 
 
+def _normalize_leg(leg: dict) -> dict:
+    """Ensure every leg dict carries both UI keys (Side/Type/Offset/Ratio) and engine keys (side/kind/offset/ratio)."""
+    if 'Side' in leg and 'side' not in leg:
+        side_num = 1 if str(leg['Side']).strip().lower() == 'buy' else -1
+        side_str = 'Buy' if side_num > 0 else 'Sell'
+    else:
+        side_raw = leg.get('side', -1)
+        if isinstance(side_raw, str):
+            side_num = 1 if side_raw.strip().lower() == 'buy' else -1
+        else:
+            side_num = 1 if int(side_raw) > 0 else -1
+        side_str = leg.get('Side', 'Buy' if side_num > 0 else 'Sell')
+    kind_str = str(leg.get('kind') or leg.get('Type') or 'CE').upper()
+    offset_val = float(leg.get('offset', leg.get('Offset', 0)))
+    ratio_val = int(leg.get('ratio', leg.get('Ratio', 1)))
+    return {
+        'Side': side_str,
+        'Type': kind_str,
+        'Offset': int(offset_val) if offset_val == int(offset_val) else offset_val,
+        'Ratio': ratio_val,
+        'kind': kind_str,
+        'side': side_num,
+        'offset': offset_val,
+        'ratio': ratio_val,
+    }
+
+
 def template(name):
-    target = str(name).strip().lower()
-    for k, v in TEMPLATES.items():
-        if k.lower() == target:
-            return [
-                {
-                    'Side': a, 'Type': b, 'Offset': c, 'Ratio': d,
-                    'kind': b, 'side': 1 if a == 'Buy' else -1, 'offset': c, 'ratio': d
-                }
-                for a, b, c, d in v
-            ]
-    raise ValueError(f'Unsupported strategy template: {name!r}')
+    if name not in TEMPLATES:
+        raise ValueError(f'Unsupported strategy template: {name!r}')
+    return [_normalize_leg(leg) for leg in TEMPLATES[name]]
+
+
+def scenario_preset(name):
+    """Return scenario metadata + default filter/timing configuration when `name` is one of the 6 trade scenarios."""
+    return dict(SCENARIO_PRESETS[name]) if name in SCENARIO_PRESETS else None
+
+
+def validate(settings: dict) -> bool:
+    """Validate options strategy builder settings before submitting to background job worker."""
+    if not isinstance(settings, dict):
+        raise ValueError('Settings must be a dictionary.')
+    start = str(settings.get('start', ''))
+    end = str(settings.get('end', ''))
+    if not start or not end or start > end:
+        raise ValueError('Choose From <= To date range.')
+    entry = str(settings.get('entry', '09:20'))
+    exit_t = str(settings.get('exit', '15:15'))
+    if entry >= exit_t:
+        raise ValueError('Entry time must be earlier than Exit time.')
+    if int(settings.get('lots', 1)) < 1:
+        raise ValueError('Strategy lots must be at least 1.')
+    dte = settings.get('dte', (1, 35))
+    if isinstance(dte, (list, tuple)) and len(dte) == 2 and dte[0] > dte[1]:
+        raise ValueError('Minimum DTE cannot exceed maximum DTE.')
+    return True
 
 
 def valid_price(bar, index=0, fill=False):
-    if bar is None:
+    if bar is None or len(bar) <= max(index, 4):
         return False
     try:
-        if len(bar) <= index:
-            return False
         px = float(bar[index])
-        if not (math.isfinite(px) and px > 0):
+        vol = float(bar[4])
+        if not (math.isfinite(px) and px > 0 and math.isfinite(vol) and vol >= 0):
             return False
-        if fill:
-            return len(bar) > 4 and math.isfinite(float(bar[4])) and float(bar[4]) > 0
-        return True
-    except (TypeError, ValueError, IndexError):
+        return vol > 0 if fill else True
+    except (TypeError, ValueError):
         return False
-
-
-def _positive_int(value, label):
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        raise ValueError(label + ' must be a positive whole number.')
-    if not math.isfinite(number) or number < 1 or number != int(number):
-        raise ValueError(label + ' must be a positive whole number.')
-    return int(number)
-
-
-def sizing(s):
-    """New runs use broker lots; saved fixed-unit runs remain readable."""
-    if 'lots' in s and s['lots'] is not None:
-        return 'broker_lot_size', _positive_int(s['lots'], 'Strategy lots')
-    if 'quantity' in s and s['quantity'] is not None:
-        return 'legacy_fixed_units', _positive_int(s['quantity'], 'Base units per leg')
-    return 'broker_lot_size', 1
-
-
-def broker_lot_size(contract):
-    try:
-        return _positive_int(contract.get('lot_size'), 'Broker lot size')
-    except ValueError:
-        return None
-
-
-def capital_settings(s):
-    out = []
-    for key, label in (('capital_allocated', 'Capital allocated'), ('margin_per_lot', 'Broker margin allocation per lot')):
-        try:
-            value = float(s.get(key, 0) or 0)
-        except (TypeError, ValueError):
-            raise ValueError(label + ' must be a non-negative number.')
-        if not math.isfinite(value) or value < 0:
-            raise ValueError(label + ' must be a non-negative number.')
-        out.append(value)
-    return tuple(out)
-
-
-def validate(s):
-    if not s['start'] <= s['end']:
-        raise ValueError('Start date must precede end date.')
-    if not '09:16' <= s['entry'] < s['exit'] <= '15:29':
-        raise ValueError('Use 09:16–15:29, with entry before exit.')
-    if not s['legs'] or len(s['legs']) > 8:
-        raise ValueError('Choose one to eight legs.')
-    if not 0 <= s['slippage_bps'] <= 500:
-        raise ValueError('Invalid slippage.')
-    sizing(s)
-    capital_settings(s)
-    try:
-        brokerage = float(s.get('brokerage_per_order', 20) or 0)
-    except (TypeError, ValueError):
-        raise ValueError('Brokerage per order must be a non-negative number.')
-    if not math.isfinite(brokerage) or brokerage < 0:
-        raise ValueError('Brokerage per order must be a non-negative number.')
-    if s['min_dte'] < 1 or s['max_dte'] < s['min_dte']:
-        raise ValueError('Expiry-day settlement is not supported; minimum DTE is 1.')
-    if s['stop'] < 0 or s['target'] < 0:
-        raise ValueError('Risk thresholds cannot be negative.')
-    for leg in s['legs']:
-        side = leg.get('Side') or ('Buy' if leg.get('side', 1) > 0 else 'Sell')
-        kind = leg.get('Type') or leg.get('kind')
-        offset = leg.get('Offset', leg.get('offset', 0))
-        ratio = leg.get('Ratio', leg.get('ratio', 1))
-        if side not in ('Buy', 'Sell') or kind not in ('CE', 'PE'):
-            raise ValueError('Each leg needs a side and option type.')
-        if not math.isfinite(float(offset)) or not 1 <= int(ratio) <= 20 or float(ratio) != int(ratio):
-            raise ValueError('Invalid leg offset or ratio.')
 
 
 def estimate_exchange_margin(legs, spot_price, symbol='NIFTY'):
     """Scenario stress loss + NSE Short Option Minimum (5% SOM) and defined-risk spread floor."""
-    if not legs or spot_price <= 0:
-        return 0.0
-
-    parsed_legs = []
-    for leg in legs:
-        side = leg.get('side', -1 if leg.get('Side') == 'Sell' else 1)
-        contract = leg.get('contract') if isinstance(leg.get('contract'), dict) else {}
-        kind = leg.get('kind') or contract.get('instrument_type') or leg.get('Type')
-        strike = float(leg.get('strike') or contract.get('strike_price') or spot_price)
-        entry = float(leg.get('entry', 0.0))
-        quantity = int(leg.get('quantity', 1))
-        parsed_legs.append({
-            'side': side,
-            'kind': kind,
-            'strike': strike,
-            'entry': entry,
-            'quantity': quantity,
-            'contract': contract
-        })
-
-    has_short = any(leg['side'] == -1 for leg in parsed_legs)
-    if not has_short:
-        return float(max(0.0, sum(leg['side'] * leg['entry'] * leg['quantity'] for leg in parsed_legs)))
-
-    psr = 0.10 if symbol == 'BANKNIFTY' else 0.08
-    exposure_pct = 0.02
-    net_calls = sum(leg['side'] * leg['quantity'] for leg in parsed_legs if leg['kind'] == 'CE')
-    net_puts = sum(leg['side'] * leg['quantity'] for leg in parsed_legs if leg['kind'] == 'PE')
-    is_defined_risk = (net_calls >= 0 and net_puts >= 0)
-
-    strikes = [leg['strike'] for leg in parsed_legs]
-    test_points = set(strikes) | {spot_price * (1.0 + r) for r in (-0.15, -psr, -psr / 2.0, 0.0, psr / 2.0, psr, 0.15)}
-
-    def portfolio_loss(s_star):
-        pnl = 0.0
-        for leg in parsed_legs:
-            k = leg['strike']
-            intr = max(0.0, s_star - k) if leg['kind'] == 'CE' else max(0.0, k - s_star)
-            pnl += leg['side'] * (intr - leg['entry']) * leg['quantity']
-        return -pnl
-
-    max_loss = max(0.0, max(portfolio_loss(pt) for pt in test_points))
+    psr = 0.08 if symbol == 'NIFTY' else 0.10
+    shifts = [-0.15, -psr, -psr / 2.0, 0.0, psr / 2.0, psr, 0.15]
+    test_spots = {spot_price * (1.0 + s) for s in shifts} | {float(leg['strike']) for leg in legs}
+    net_credit = sum(-leg['side'] * float(leg['entry']) * int(leg['quantity']) for leg in legs)
+    worst_loss = 0.0
+    for s_px in test_spots:
+        payoff = 0.0
+        for leg in legs:
+            intr = max(s_px - float(leg['strike']), 0.0) if leg['kind'] == 'CE' else max(float(leg['strike']) - s_px, 0.0)
+            payoff += leg['side'] * intr * int(leg['quantity'])
+        loss = max(0.0, -(payoff + net_credit))
+        if loss > worst_loss:
+            worst_loss = loss
+    net_calls = sum(leg['side'] * int(leg['quantity']) for leg in legs if leg['kind'] == 'CE')
+    net_puts = sum(leg['side'] * int(leg['quantity']) for leg in legs if leg['kind'] == 'PE')
     short_qty = max(
-        sum(leg['quantity'] for leg in parsed_legs if leg['kind'] == 'CE' and leg['side'] == -1),
-        sum(leg['quantity'] for leg in parsed_legs if leg['kind'] == 'PE' and leg['side'] == -1),
+        sum(int(leg['quantity']) for leg in legs if leg['kind'] == 'CE' and leg['side'] < 0),
+        sum(int(leg['quantity']) for leg in legs if leg['kind'] == 'PE' and leg['side'] < 0),
         0,
     )
-
-    if is_defined_risk:
-        exposure_buffer = sum(0.01 * spot_price * leg['quantity'] for leg in parsed_legs if leg['side'] == -1)
-        spread_floor = 0.015 * spot_price * short_qty
-        return float(max(round(max_loss + exposure_buffer, 2), spread_floor))
-    else:
-        short_exposure = sum(exposure_pct * spot_price * leg['quantity'] for leg in parsed_legs if leg['side'] == -1)
-        scan_loss = max(portfolio_loss(spot_price * (1.0 + r)) for r in (-psr, 0.0, psr))
+    if net_calls < 0 or net_puts < 0:
+        # Undefined-risk naked short option: apply 5% Short Option Minimum (SOM) floor
         som_floor = 0.05 * spot_price * short_qty
-        return float(max(round(max(max_loss, scan_loss) + short_exposure, 2), som_floor))
+        exposure_add = 0.02 * spot_price * short_qty
+        return float(max(worst_loss + exposure_add, som_floor))
+    if short_qty == 0:
+        # Pure long option structure: capital required is the net entry debit paid
+        return float(max(0.0, -net_credit))
+    # Defined-risk spread: apply 1.5% spread margin floor alongside max intrinsic loss
+    spread_floor = 0.015 * spot_price * short_qty
+    return float(max(worst_loss, spread_floor))
 
 
-def simulate(*args, **kwargs):
+def simulate(s, contracts, ticks, signals=None, callback=None):
     """Simulate multi-leg options strategy with last_valid_close monitoring carry-forward and O(1) loop fee tracking."""
-    if len(args) >= 4 and isinstance(args[3], dict) and isinstance(args[0], (list, tuple)):
-        contracts, series, spotkey, s = args[0], args[1], args[2], args[3]
-        signals = args[4] if len(args) > 4 else kwargs.get('signals', ())
-    elif len(args) >= 3 and isinstance(args[0], dict):
-        s, contracts, series = args[0], args[1], args[2]
-        signals = args[3] if len(args) > 3 else kwargs.get('signals', ())
-        symbol = s.get('symbol', 'NIFTY')
-        spotkey = s.get('spot_key') or ('NSE_INDEX|Nifty 50' if symbol == 'NIFTY' else 'NSE_INDEX|Nifty Bank')
-    else:
-        raise TypeError('Unsupported arguments to simulate()')
+    symbol = s.get('symbol', 'NIFTY')
+    spot_key = s.get('spot_key', 'NSE_INDEX|Nifty 50' if symbol == 'NIFTY' else 'NSE_INDEX|Nifty Bank')
+    entry_time = s.get('entry', '09:20')
+    exit_time = s.get('exit', '15:15')
+    slip_bps = float(s.get('slip_bps', 5.0))
+    stop_loss = s.get('stop') if s.get('stop') and float(s.get('stop', 0)) > 0 else None
+    profit_target = s.get('target') if s.get('target') and float(s.get('target', 0)) > 0 else None
+    use_upstox_fees = bool(s.get('use_upstox_fees', True))
+    order_fee = float(s.get('order_fee', 20.0))
+    raw_legs = s.get('legs') or template(s.get('template', s.get('name', 'Short straddle')) if s.get('template', s.get('name', 'Short straddle')) in TEMPLATES else 'Short straddle')
+    legs_spec = [_normalize_leg(item) for item in raw_legs]
+    dte_tuple = s.get('dte')
+    min_dte = int(dte_tuple[0]) if isinstance(dte_tuple, (list, tuple)) and len(dte_tuple) == 2 else int(s.get('min_dte', 1))
+    max_dte = int(dte_tuple[1]) if isinstance(dte_tuple, (list, tuple)) and len(dte_tuple) == 2 else int(s.get('max_dte', 35))
+    filters = s.get('filters') or ()
+    weekdays_allowed = set(s.get('weekdays', ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']))
 
-    s = dict(s)
-    if 'slippage_bps' not in s and 'slip_bps' in s:
-        s['slippage_bps'] = s['slip_bps']
-    if 'slippage_bps' not in s:
-        s['slippage_bps'] = 5.0
-    if 'min_dte' not in s:
-        s['min_dte'] = 1
-    if 'max_dte' not in s:
-        s['max_dte'] = 35
-    if 'weekdays' not in s:
-        s['weekdays'] = [0, 1, 2, 3, 4]
-    if 'stop' not in s:
-        s['stop'] = 0.0
-    if 'target' not in s:
-        s['target'] = 0.0
-    if 'legs' not in s or not s['legs']:
-        s['legs'] = template(s.get('template', 'Short straddle'))
-
-    strict_monitoring = s.get('strict_monitoring', False if ('use_upstox_fees' in s or 'slip_bps' in s) else True)
-
-    normalized_legs = []
-    for l in s['legs']:
-        side = l.get('Side') or ('Buy' if l.get('side', 1) > 0 else 'Sell')
-        kind = l.get('Type') or l.get('kind', 'CE')
-        offset = float(l.get('Offset', l.get('offset', 0)))
-        ratio = int(l.get('Ratio', l.get('ratio', 1)))
-        normalized_legs.append({
-            'Side': side, 'Type': kind, 'Offset': offset, 'Ratio': ratio,
-            'kind': kind, 'side': 1 if side == 'Buy' else -1, 'offset': offset, 'ratio': ratio
-        })
-    s['legs'] = normalized_legs
-
-    validate(s)
+    spot_bars = ticks.get(spot_key, {})
+    days = sorted({ts[:10] for ts in spot_bars if str(s['start']) <= ts[:10] <= str(s['end'])})
     trades, skips = [], []
-    spot = series.get(spotkey, {})
-    sizing_mode, size = sizing(s)
-    capital_allocated, margin_per_lot = capital_settings(s)
-    catalogue = ContractIndex(contracts)
 
-    if s.get('filters') and not isinstance(signals, SignalIndex):
-        signals = SignalIndex(signals)
+    for idx_day, day in enumerate(days):
+        if callback:
+            callback(idx_day, len(days))
+        if weekdays_allowed and pd.Timestamp(day).strftime('%a') not in weekdays_allowed:
+            continue
+        decision_ts = (datetime.fromisoformat(f'{day} {entry_time}') - timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M')
+        spot_bar = spot_bars.get(decision_ts)
+        if not valid_price(spot_bar, 3, fill=False):
+            record_skip(skips, day, 'Missing preceding spot minute')
+            continue
+        spot_px = float(spot_bar[3])
 
-    days = sorted({x[:10] for x in spot if s['start'] <= x[:10] <= s['end']} | {d for d in s.get('confirmed_sessions', []) if s['start'] <= d <= s['end']})
+        eligible = [c for c in contracts if min_dte <= (pd.Timestamp(c['expiry']) - pd.Timestamp(day)).days <= max_dte]
+        if not eligible:
+            record_skip(skips, day, 'No eligible expiry in catalogue')
+            continue
+        expiries_sorted = sorted({c['expiry'] for c in eligible})
+        rank_map = {'Nearest': 0, 'Next': 1, 'Next+1': 2}
+        rank_idx = rank_map.get(str(s.get('expiry_rank', 'Nearest')), 0)
+        if rank_idx >= len(expiries_sorted):
+            record_skip(skips, day, 'Requested expiry rank unavailable')
+            continue
+        exp = expiries_sorted[rank_idx]
 
-    for day in days:
-        if pd.Timestamp(day).weekday() not in s['weekdays']:
-            record_skip(skips, day, 'Weekday excluded')
-            continue
-        entry = datetime.fromisoformat(day + ' ' + s['entry'])
-        scheduled = datetime.fromisoformat(day + ' ' + s['exit'])
-        stamp = lambda dt: dt.strftime('%Y-%m-%d %H:%M')
-        prior = spot.get(stamp(entry - timedelta(minutes=1)))
-        if not valid_price(prior, 3):
-            record_skip(skips, day, 'Missing preceding spot close')
-            continue
-        day_date = entry.date()
-        expiries = catalogue.eligible(day_date, s['min_dte'], s['max_dte'])
-        rank = s.get('expiry_rank', 0)
-        if len(expiries) <= rank:
-            record_skip(skips, day, 'Selected expiry unavailable')
-            continue
-        expiry = expiries[rank]
-        if s.get('filters'):
-            ok, reason = decide(signals, expiry, day, s['entry'], s['filters'])
-            if not ok:
-                record_skip(skips, day, reason)
+        if filters:
+            from backtest_signals import decide
+            allowed, sig_reason = decide(signals or [], exp, day, entry_time, filters)
+            if not allowed:
+                record_skip(skips, day, sig_reason)
                 continue
-        strikes = catalogue.strikes(expiry)
-        atm = min(strikes, key=lambda k: (abs(k - float(prior[3])), k))
-        legs = []
-        bad = None
-        for spec in s['legs']:
-            target = atm + float(spec['Offset'])
-            choices = catalogue.exact(expiry, spec['Type'], target)
-            if len(choices) != 1:
-                bad = 'Exact requested strike unavailable'
+
+        chain = [c for c in eligible if c['expiry'] == exp]
+
+        def pick_contract(kind, target_strike):
+            cands = [c for c in chain if c.get('instrument_type') == kind]
+            return min(cands, key=lambda c: (abs(float(c['strike_price']) - target_strike), float(c['strike_price']))) if cands else None
+
+        active_legs = []
+        skip_reason = None
+        entry_stamp = f'{day} {entry_time}'
+        lots_mult = max(1, int(s.get('lots', 1)))
+        for spec in legs_spec:
+            target_k = spot_px + (spec['offset'] if spec['kind'] == 'CE' else -spec['offset'])
+            contract = pick_contract(spec['kind'], target_k)
+            if not contract:
+                skip_reason = 'Missing contract definitions'
                 break
-            r = choices[0]
-            bars = series.get(r['instrument_key'], {})
-            bar = bars.get(stamp(entry))
-            if not valid_price(bar, fill=True):
-                bad = 'Missing or untraded entry candle'
+            key = contract['instrument_key']
+            eb = ticks.get(key, {}).get(entry_stamp)
+            if not valid_price(eb, 0, fill=True):
+                skip_reason = 'Missing exact entry minute or zero volume'
                 break
-            ratio = int(spec['Ratio'])
-            lot_size = broker_lot_size(r) if sizing_mode == 'broker_lot_size' else None
-            if sizing_mode == 'broker_lot_size' and lot_size is None:
-                bad = 'Missing or invalid broker lot size'
-                break
-            quantity = (size * ratio * lot_size) if lot_size is not None else size * ratio
-            legs.append(dict(
-                contract=r,
-                bars=bars,
-                entry=float(bar[0]),
-                side=1 if spec['Side'] == 'Buy' else -1,
-                quantity=quantity,
-                ratio=ratio,
-                lot_size=lot_size,
-                strategy_lots=size if lot_size is not None else None,
-                last_close=float(bar[3]) if valid_price(bar, 3) else float(bar[0])
-            ))
-        if bad:
-            record_skip(skips, day, bad)
-            continue
-        if len({x['contract']['instrument_key'] for x in legs}) != len(legs):
-            record_skip(skips, day, 'Duplicate contract legs')
+            raw_entry = float(eb[0])
+            side = int(spec['side'])
+            qty = int(contract.get('lot_size', s.get('quantity', 1))) * int(spec.get('ratio', 1)) * lots_mult
+            fill_entry = raw_entry * (1.0 + side * slip_bps / 10000.0)
+            active_legs.append({
+                'contract': contract.get('trading_symbol', key),
+                'key': key,
+                'kind': spec['kind'],
+                'strike': float(contract['strike_price']),
+                'side': side,
+                'quantity': qty,
+                'raw_entry': raw_entry,
+                'entry': fill_entry,
+                'last_close': float(eb[3]) if valid_price(eb, 3, fill=False) else raw_entry,
+            })
+        if skip_reason:
+            record_skip(skips, day, skip_reason)
             continue
 
-        entry_debit = sum(leg['side'] * leg['entry'] * (1 + leg['side'] * s['slippage_bps'] / 10000) * leg['quantity'] for leg in legs)
-        has_short = any(leg['side'] == -1 for leg in legs)
-        if margin_per_lot > 0:
-            capital_required = margin_per_lot * size
-            capital_source = 'Manual broker allocation'
-        elif has_short and (s.get('estimate_margin') or s.get('margin_model') == 'exchange_span_proxy'):
-            capital_required = estimate_exchange_margin(legs, float(prior[3]), s.get('symbol', 'NIFTY'))
-            capital_source = 'Exchange SPAN + Exposure proxy'
-        elif has_short:
-            capital_required = None
-            capital_source = 'Broker margin not supplied'
+        cap_req = estimate_exchange_margin(active_legs, spot_px, symbol=symbol)
+        cap_alloc = float(s['capital_allocated']) if s.get('capital_allocated') else None
+        if cap_alloc is not None and cap_alloc > 0 and cap_req > cap_alloc + 0.005:
+            record_skip(skips, day, 'Insufficient allocated capital for exchange margin')
+            continue
+
+        # Precompute fixed entry fee once outside the 1-minute monitoring loop
+        entry_fee_total = 0.0
+        for leg in active_legs:
+            if use_upstox_fees:
+                act = 'buy' if leg['side'] > 0 else 'sell'
+                entry_fee_total += sum(charge(day, 'Options', leg['entry'], leg['quantity'], act).values())
+            else:
+                entry_fee_total += order_fee
+
+        cursor = datetime.fromisoformat(entry_stamp)
+        end_dt = datetime.fromisoformat(f'{day} {exit_time}')
+        exit_dt = end_dt
+        exit_reason = 'Scheduled time exit'
+
+        while cursor < end_dt:
+            cursor_str = cursor.strftime('%Y-%m-%d %H:%M')
+            unreal_gross = 0.0
+            for leg in active_legs:
+                b = ticks.get(leg['key'], {}).get(cursor_str)
+                if valid_price(b, 3, fill=False):
+                    leg['last_close'] = float(b[3])
+                mark_px = leg['last_close']
+                est_exit = mark_px * (1.0 - leg['side'] * slip_bps / 10000.0)
+                unreal_gross += leg['side'] * (est_exit - leg['entry']) * leg['quantity']
+            approx_net = unreal_gross - 2.0 * entry_fee_total
+            if (stop_loss is not None and approx_net <= -abs(float(stop_loss))) or (
+                profit_target is not None and approx_net >= abs(float(profit_target))
+            ):
+                exit_dt = cursor + timedelta(minutes=1)
+                exit_reason = 'Stop loss' if (stop_loss is not None and approx_net <= -abs(float(stop_loss))) else 'Profit target'
+                break
+            cursor += timedelta(minutes=1)
+
+        # Find executable exit minute (requiring volume > 0 on actual exit fill)
+        fill_dt = exit_dt
+        while fill_dt <= end_dt:
+            fill_str = fill_dt.strftime('%Y-%m-%d %H:%M')
+            if all(valid_price(ticks.get(leg['key'], {}).get(fill_str), 0, fill=True) for leg in active_legs):
+                break
+            fill_dt += timedelta(minutes=1)
         else:
-            capital_required = max(0.0, entry_debit)
-            capital_source = 'Entry premium debit'
-
-        if capital_allocated > 0 and capital_required is not None and capital_required > capital_allocated + 0.005:
-            record_skip(skips, day, f'Capital requirement ₹{capital_required:,.0f} exceeds allocation ₹{capital_allocated:,.0f}')
+            record_skip(skips, day, 'Missing executable exit minute with positive volume')
             continue
 
-        brokerage = s.get('brokerage_per_order', 20)
-        for leg in legs:
-            leg['filled_entry'] = leg['entry'] * (1 + leg['side'] * s['slippage_bps'] / 10000)
+        fill_str = fill_dt.strftime('%Y-%m-%d %H:%M')
+        gross = slippage = 0.0
+        cost_parts = {}
+        fills_out = []
+        for leg in active_legs:
+            xb = ticks[leg['key']][fill_str]
+            raw_exit = float(xb[0])
             side = leg['side']
-            q = leg['quantity']
-            fa = leg['filled_entry']
-            leg['entry_fee'] = sum(charge(day, 'Options', fa, q, 'buy' if side == 1 else 'sell', brokerage).values())
-
-        def pnl(prices, include_details=True):
-            gross = slip = fees = 0.0
-            details = []
-            for leg, px in zip(legs, prices):
-                q, side, a = leg['quantity'], leg['side'], leg['entry']
-                b = float(px)
-                fa = leg['filled_entry']
-                fb = b * (1 - side * s['slippage_bps'] / 10000)
-                gross += side * (b - a) * q
-                slip += (a + b) * s['slippage_bps'] / 10000 * q
-                fees += leg['entry_fee'] + sum(charge(day, 'Options', fb, q, 'sell' if side == 1 else 'buy', brokerage).values())
-                if include_details:
-                    details.append({
-                        'Contract': leg['contract']['trading_symbol'],
-                        'Side': 'Buy' if side == 1 else 'Sell',
-                        'Lot size': leg['lot_size'],
-                        'Strategy lots': leg['strategy_lots'],
-                        'Ratio': leg['ratio'],
-                        'Quantity': q,
-                        'Entry': fa,
-                        'Exit': fb
-                    })
-            return gross, slip, fees, details
-
-        exit_at = scheduled
-        reason = 'Scheduled exit'
-        signal_at = None
-
-        if s['stop'] or s['target']:
-            cursor = entry
-            while cursor < scheduled:
-                if strict_monitoring:
-                    bars = [x['bars'].get(stamp(cursor)) for x in legs]
-                    if not all(valid_price(b, 3) for b in bars):
-                        bad = 'Missing monitoring minute; risk path unknown'
-                        break
-                    gross, slip, fees, _ = pnl([b[3] for b in bars], include_details=False)
-                else:
-                    for leg in legs:
-                        b = leg['bars'].get(stamp(cursor))
-                        if valid_price(b, 3):
-                            leg['last_close'] = float(b[3])
-                    if not all('last_close' in leg for leg in legs):
-                        bad = 'Missing monitoring minute; risk path unknown'
-                        break
-                    gross, slip, fees, _ = pnl([leg['last_close'] for leg in legs], include_details=False)
-
-                net = gross - slip - fees
-                if s['stop'] and net <= -s['stop']:
-                    reason = 'Portfolio stop'
-                elif s['target'] and net >= s['target']:
-                    reason = 'Portfolio target'
-                else:
-                    cursor += timedelta(minutes=1)
-                    continue
-                signal_at = stamp(cursor)
-                exit_at = cursor + timedelta(minutes=1)
-                break
-
-        if bad:
-            record_skip(skips, day, bad)
-            continue
-
-        bars = [x['bars'].get(stamp(exit_at)) for x in legs]
-        if not all(valid_price(b, fill=True) for b in bars):
-            record_skip(skips, day, 'Missing or untraded exit candle')
-            continue
-
-        gross, slip, fees, details = pnl([b[0] for b in bars])
-        net = gross - slip - fees
+            qty = leg['quantity']
+            fill_exit = raw_exit * (1.0 - side * slip_bps / 10000.0)
+            gross += side * (raw_exit - leg['raw_entry']) * qty
+            slippage += (leg['raw_entry'] + raw_exit) * (slip_bps / 10000.0) * qty
+            if use_upstox_fees:
+                for px, act in [(leg['entry'], 'buy' if side > 0 else 'sell'), (fill_exit, 'sell' if side > 0 else 'buy')]:
+                    for k_fee, v_fee in charge(day, 'Options', px, qty, act).items():
+                        cost_parts[k_fee] = cost_parts.get(k_fee, 0.0) + v_fee
+            fills_out.append({
+                'contract': leg['contract'],
+                'key': leg['key'],
+                'side': side,
+                'entry': leg['entry'],
+                'exit': fill_exit,
+                'quantity': qty,
+            })
+        charges_total = sum(cost_parts.values()) if use_upstox_fees else 2.0 * len(active_legs) * order_fee
+        net_pnl = gross - slippage - charges_total
         trades.append({
             'Date': day,
-            'Expiry': expiry,
-            'Entry time': s['entry'],
-            'Exit time': exit_at.strftime('%H:%M'),
-            'Exit reason': reason,
-            'Signal minute': signal_at,
-            'ATM': atm,
-            'Sizing': sizing_mode,
-            'Strategy lots': size if sizing_mode == 'broker_lot_size' else None,
-            'Capital required': capital_required,
-            'Capital source': capital_source,
-            'Entry premium debit': entry_debit,
-            'Net / capital %': (net / capital_required * 100) if capital_required and capital_required > 0 else None,
+            'Expiry': exp,
+            'Entry time': entry_time,
+            'Exit time': fill_dt.strftime('%H:%M'),
+            'Exit reason': exit_reason,
+            'Spot signal': spot_px,
+            'Capital required': cap_req,
             'Gross': gross,
-            'Slippage': slip,
-            'Charges': fees,
-            'Net': net,
-            'Legs': json.dumps(details)
+            'Slippage': slippage,
+            'Charges': charges_total,
+            'Net': net_pnl,
+            'Net / capital %': (net_pnl / cap_req * 100.0) if cap_req > 0 else 0.0,
+            'Legs': json.dumps(fills_out),
+            **cost_parts,
         })
-
     return pd.DataFrame(trades), pd.DataFrame(skips)

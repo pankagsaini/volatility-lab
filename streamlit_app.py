@@ -5,6 +5,7 @@ from pathlib import Path
 
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
 
 lab_dir = Path(__file__).resolve().parent / "Volatility Lab"
 if str(lab_dir) not in sys.path:

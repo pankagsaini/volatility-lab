@@ -488,5 +488,34 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         self.assertEqual(s1, s2)
 
 
+    def test_v5_six_trade_scenario_presets_and_signal_filters(self):
+        import strategy_backtest as sb
+        self.assertEqual(len(sb.SCENARIO_PRESETS), 6)
+        for scen_name, meta in sb.SCENARIO_PRESETS.items():
+            self.assertIn(scen_name, sb.TEMPLATES)
+            legs = sb.template(scen_name)
+            self.assertTrue(len(legs) >= 2)
+            for leg in legs:
+                self.assertIn("Side", leg)
+                self.assertIn("Type", leg)
+                self.assertIn("Offset", leg)
+                self.assertIn("Ratio", leg)
+                self.assertIn("side", leg)
+                self.assertIn("kind", leg)
+            info = sb.scenario_preset(scen_name)
+            self.assertTrue(bool(info["hypothesis"]))
+            self.assertTrue(bool(info["streamlit_triggers"]))
+            self.assertTrue(sb.validate({
+                "name": scen_name,
+                "symbol": "NIFTY",
+                "start": "2024-10-01",
+                "end": "2024-10-31",
+                "entry": info["entry"],
+                "exit": info["exit"],
+                "lots": 1,
+                "dte": info["dte"],
+            }))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
