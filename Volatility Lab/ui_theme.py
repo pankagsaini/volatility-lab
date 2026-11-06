@@ -363,7 +363,60 @@ div[data-testid="stAlert"] {
     border-radius: 9999px;
     padding: 4px 12px;
 }
+
+/* Universal Any-Device Responsive Breakpoints (Mobile Phones, iPads/Tablets, Ultrawide) */
+.vl-radar-subgrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+@media (max-width: 768px) {
+    .block-container {
+        padding-top: 1.1rem !important;
+        padding-bottom: 1.5rem !important;
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+    }
+    .vl-masthead {
+        padding: 11px 14px !important;
+        gap: 8px !important;
+    }
+    .vl-brand-crest {
+        font-size: 1.38rem !important;
+    }
+    .vl-brand-sub {
+        font-size: 0.65rem !important;
+        padding: 2px 7px !important;
+    }
+    .vl-radar-subgrid {
+        grid-template-columns: 1fr !important;
+    }
+    [data-testid="stSegmentedControl"] {
+        display: flex !important;
+        overflow-x: auto !important;
+        max-width: 100% !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    [data-testid="stSegmentedControl"] button {
+        padding: 7px 12px !important;
+        font-size: 0.78rem !important;
+        white-space: nowrap !important;
+        min-height: 38px !important;
+    }
+    div[data-testid="stMetric"] {
+        padding: 10px 13px !important;
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 1.18rem !important;
+    }
+    [data-testid="stPlotlyChart"] {
+        padding: 6px 6px !important;
+    }
+}
 </style>
+
 """
 
 
@@ -504,3 +557,49 @@ def market_session_badge_html(now: datetime | None = None) -> str:
         f"font-family:var(--vl-font-mono); font-weight:600; font-size:0.74rem; "
         f"letter-spacing:0.04em; {style}'>{label}</span>"
     )
+
+
+def get_lan_ip() -> str:
+    """Detect local Wi-Fi / LAN IPv4 address for mobile/tablet access on the same network."""
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(0.2)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            if ip and not ip.startswith("127."):
+                return ip
+    except Exception:
+        pass
+    try:
+        ip = socket.gethostbyname(socket.gethostname())
+        if ip and not ip.startswith("127."):
+            return ip
+    except Exception:
+        pass
+    return "127.0.0.1"
+
+
+def render_any_device_access_popover() -> None:
+    """Render a compact 📱 Any-Device Access popover with clickable Cloud URL, LAN URL, and QR code."""
+    import urllib.parse
+    cloud_url = "https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/"
+    lan_ip = get_lan_ip()
+    lan_url = f"http://{lan_ip}:8501"
+    qr_api = f"https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=6&data={urllib.parse.quote(cloud_url)}"
+    with st.popover("📱 Open on Any Device"):
+        st.markdown("**1. Global Cloud URL (Any Phone, Tablet, or Laptop — 24/7)**")
+        st.caption("Synced every 1 minute from your Google Cloud / Apps Script Upstox archive:")
+        st.code(cloud_url, language=None)
+        st.markdown(
+            f'<div style="display:flex; align-items:center; gap:14px; background:rgba(15,23,42,0.85); border:1px solid #1e293b; border-radius:10px; padding:10px 12px; margin-bottom:10px;">'
+            f'<img src="{qr_api}" width="96" height="96" style="border-radius:6px; border:1px solid #334155;" alt="Scan QR Code" />'
+            f'<div style="font-size:0.78rem; color:#cbd5e1; line-height:1.45;">'
+            f'<b style="color:#d4af37;">Scan with Phone Camera</b><br/>'
+            f'Opens your live Volatility Lab directly on iOS / Android Chrome or Safari (<a href="{cloud_url}" target="_blank" style="color:#38bdf8;">open link</a>).'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown("**2. Local Wi-Fi / LAN URL (When Running on Your PC)**")
+        st.caption("Server binds to `0.0.0.0:8501` — open this on any phone/tablet on your Wi-Fi:")
+        st.code(lan_url, language=None)

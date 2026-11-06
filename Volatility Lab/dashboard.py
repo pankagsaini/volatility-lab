@@ -174,7 +174,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-chosen_label = st.segmented_control('Workspace', markets, default=current_label, label_visibility='collapsed', key='market_workspace_label') or current_label
+ws_col, dev_col = st.columns([5, 1.35], vertical_alignment="center")
+with ws_col:
+    chosen_label = st.segmented_control('Workspace', markets, default=current_label, label_visibility='collapsed', key='market_workspace_label') or current_label
+with dev_col:
+    try:
+        ui_theme.render_any_device_access_popover()
+    except Exception:
+        pass
 workspace = label_to_mode.get(chosen_label, 'Options')
 st.session_state.market_workspace = workspace
 

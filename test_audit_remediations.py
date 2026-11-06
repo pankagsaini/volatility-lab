@@ -517,5 +517,23 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             }))
 
 
+    def test_v6_any_device_network_binding_and_responsive_theme(self):
+        cfg_path = Path(__file__).resolve().parent / ".streamlit" / "config.toml"
+        if cfg_path.exists():
+            cfg_txt = cfg_path.read_text(encoding="utf-8")
+            self.assertIn('address = "0.0.0.0"', cfg_txt)
+            self.assertIn("headless = true", cfg_txt)
+        import importlib.util
+        ui_p = Path(__file__).resolve().parent / "ui_theme.py"
+        if not ui_p.exists():
+            ui_p = Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py"
+        spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
+        ui_theme = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ui_theme)
+        self.assertTrue(hasattr(ui_theme, "get_lan_ip"))
+        self.assertTrue(hasattr(ui_theme, "render_any_device_access_popover"))
+        self.assertIn("@media (max-width: 768px)", ui_theme.CLASSIC_MODERN_CSS)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

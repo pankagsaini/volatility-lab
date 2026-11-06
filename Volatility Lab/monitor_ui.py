@@ -193,7 +193,7 @@ def render_trade_decision_radar(selected_rows):
                 f'<div><span style="font-family:var(--vl-font-serif, Georgia, serif); font-weight:400; font-size:1.35rem; color:#f8fafc; letter-spacing:0.01em;">{symbol}</span><span style="font-family:var(--vl-font-mono, monospace); color:#94a3b8; font-size:0.76rem; margin-left:8px;">{exp} · {dte:.1f}d</span></div>'
                 f'<span style="font-family:var(--vl-font-mono, monospace); background:{bias_bg}; color:{bias_color}; border:1px solid {bias_border}; font-size:0.70rem; font-weight:600; padding:3px 10px; border-radius:999px; letter-spacing:0.05em;">{bias_badge}</span>'
                 f'</div>'
-                f'<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">'
+                f'<div class="vl-radar-subgrid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">'
                 f'<div style="background:rgba(9,13,22,0.75); border:1px solid #1e293b; border-radius:9px; padding:9px 13px;">'
                 f'<div style="display:flex; justify-content:space-between; align-items:center;"><span style="color:#94a3b8; font-size:0.69rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:600;">Spot &amp; IV</span><span style="font-family:var(--vl-font-mono, monospace); color:#38bdf8; font-size:0.74rem; font-weight:600;">IV: {iv:.2f}%</span></div>'
                 f'<div style="font-family:var(--vl-font-mono, monospace); font-size:1.24rem; font-weight:600; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:3px;">{spot:,.1f}</div>'
