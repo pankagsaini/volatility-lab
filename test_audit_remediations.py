@@ -20,6 +20,8 @@ for mod_name in ("streamlit", "plotly", "plotly.graph_objects", "plotly.subplots
         m = SimpleNamespace()
         if mod_name == "streamlit":
             m.fragment = lambda *a, **kw: (lambda fn: fn)
+            m.cache_data = lambda *a, **kw: (lambda fn: fn)
+            m.cache_resource = lambda *a, **kw: (lambda fn: fn)
             m.session_state = {}
         sys.modules[mod_name] = m
 sys.modules["plotly.graph_objects"].Figure = object
@@ -457,6 +459,33 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             step = 50.0 if sym == 'NIFTY' else 100.0
             if price and atm:
                 self.assertLessEqual(abs(float(atm) - float(price)), step * 1.5)
+
+
+    def test_v4_vectorized_intraday_greeks_and_garch_horizon_cache(self):
+        from types import SimpleNamespace
+        sys.modules["plotly"] = SimpleNamespace(graph_objects=SimpleNamespace(Figure=object, Scatter=object))
+        sys.modules["plotly.graph_objects"] = SimpleNamespace(Figure=object, Scatter=object)
+        sys.modules["streamlit"] = SimpleNamespace(
+            cache_data=lambda *a, **k: (lambda f: f),
+            cache_resource=lambda *a, **k: (lambda f: f),
+            fragment=lambda *a, **k: (lambda f: f),
+            session_state={},
+        )
+        sys.modules["trade_review_ui"] = SimpleNamespace(table=lambda *a, **k: None)
+        import restored_lab as rl
+        import expiry_forecast as ef
+        prices = np.array([24400.0, 24450.0, 24500.0])
+        strikes = np.array([24400.0, 24450.0, 24500.0])
+        dtes = np.array([6.0, 6.0, 6.0])
+        ivs = np.array([14.1, 14.3, 14.5])
+        vec_s, vec_d = rl._compute_straddle_series_vectorized(prices, strikes, dtes, ivs)
+        for idx in range(len(prices)):
+            g = rl.compute_straddle_greeks(prices[idx], strikes[idx], dtes[idx], ivs[idx])
+            self.assertAlmostEqual(float(vec_s[idx]), float(g["straddle"]), places=10)
+            self.assertAlmostEqual(float(vec_d[idx]), float(g["net_delta"]), places=10)
+        s1 = ef.sessions("2026-11-01", "2026-11-30")
+        s2 = ef.sessions("2026-11-01", "2026-11-30")
+        self.assertEqual(s1, s2)
 
 
 if __name__ == "__main__":

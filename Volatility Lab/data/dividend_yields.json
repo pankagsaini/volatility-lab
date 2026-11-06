@@ -6,9 +6,9 @@
     "basis": "Published index dividend yield proxy; not expiry-specific expected dividends",
     "source": "https://www.niftyindices.com/Factsheet/ind_nifty50.pdf",
     "sha256": "3c98909d1e06ec7887f9288250edf7f88b20d069e84748eb1dfbbd998246c642",
-    "checked_at": "2026-11-06T08:21:04.114534+05:30",
+    "checked_at": "2026-11-07T00:03:32.579618+05:30",
     "error": null,
-    "attempt_day": "2026-11-06"
+    "attempt_day": "2026-11-07"
   },
   "BANKNIFTY": {
     "yield_percent": 1.14,
@@ -17,8 +17,8 @@
     "basis": "Published index dividend yield proxy; not expiry-specific expected dividends",
     "source": "https://www.niftyindices.com/Factsheet/ind_nifty_bank.pdf",
     "sha256": "e2f07b6a30e07fc29f8cd2f4f27476b6e0af9709830d6e4d37c1affb89c379e5",
-    "checked_at": "2026-11-06T08:21:04.114534+05:30",
+    "checked_at": "2026-11-07T00:03:32.579618+05:30",
     "error": null,
-    "attempt_day": "2026-11-06"
+    "attempt_day": "2026-11-07"
   }
 }

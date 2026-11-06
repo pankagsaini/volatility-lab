@@ -1,8 +1,10 @@
-"""Compact options, expiry-specific history, and volatility model views."""
+"""Compact options, expiry-specific history, and volatility model views (Accelerated v4)."""
 
 from datetime import datetime,timedelta
 
 from pathlib import Path
+
+import io
 
 import json
 
@@ -31,6 +33,67 @@ from smile import has_usable_points,load_smile,load_latest_smile
 from quote_status import snapshot_status
 
 from expiry_forecast import expiry_forecast, VERSION as EXPIRY_VERSION,term_structure_forecast,TERM_VERSION
+
+
+def _file_rev(*paths: Path) -> tuple:
+    """Return revision tuple (st_mtime_ns, st_size) across paths + SQLite WAL sidecars."""
+    revs = []
+    for p in paths:
+        p_obj = Path(p)
+        for cand in (p_obj, Path(str(p_obj) + "-wal")):
+            try:
+                st_info = cand.stat()
+                revs.append((str(cand), st_info.st_mtime_ns, st_info.st_size))
+            except OSError:
+                revs.append((str(cand), None, None))
+    return tuple(revs)
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _cached_load_snapshot(config: str, allow_saved: bool, rev: tuple):
+    return load_snapshot(config, allow_saved=allow_saved)
+
+
+@st.cache_data(show_spinner=False, max_entries=32)
+def _cached_transition_context(db_path_str: str, symbol: str, config: str, rev: tuple):
+    from option_context import transition_context
+    return transition_context(Path(db_path_str), symbol, config)
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def _cached_expiry_history(symbol: str, expiry: str, config: str, rev: tuple):
+    return history(symbol, expiry, config)
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def _cached_smile_bundle(db_path_str: str, symbol: str, expiry: str, config: str, as_of: str | None, capture_source: str | None, rev: tuple):
+    db_path = Path(db_path_str)
+    saved = load_smile(db_path, symbol, expiry, config, as_of)
+    saved_as_of = as_of
+    exact_capture_unusable = saved is not None and not has_usable_points(saved)
+    exact_cloud_capture_missing = saved is None and bool(as_of) and capture_source == 'Google Drive'
+    if saved is not None and exact_capture_unusable:
+        saved = None
+    if saved is None:
+        latest = load_latest_smile(db_path, symbol, expiry, config)
+        if latest is not None:
+            latest = dict(latest)
+            saved_as_of = latest.pop('as_of', None)
+            saved = latest
+    return saved, saved_as_of, exact_capture_unusable, exact_cloud_capture_missing
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _cached_regime_summary(path_str: str, as_of: str | None, rev: tuple):
+    from volatility_regime import regime_summary
+    return regime_summary(pd.read_csv(path_str), as_of)
+
+
+@st.cache_data(show_spinner=False, max_entries=32)
+def _cached_research_history(db_path_str: str, symbol: str, config: str, rev: tuple):
+    from relative_value import history as research_history
+    return research_history(Path(db_path_str), symbol, config, comparable=True)
+
 
 def render_trade_decision_radar(selected_rows):
     """Executive trade decision panel with regime, spread bias, expected move, and basis in Classic & Modern styling."""
@@ -272,8 +335,15 @@ def history_figure(symbol,expiry,hv,iv,period,relative=False,spread_only=False):
                 continue
             first,last=pd.Timestamp(left.Date).normalize(),pd.Timestamp(right.Date).normalize()
             missing=set(sessions[(sessions>first)&(sessions<last)])
-            # Split only the drawn connector at midnight; no synthetic observations.
             left_time,right_time=pd.Timestamp(left.Date),pd.Timestamp(right.Date)
+            # Fast path: when there are no missing sessions between adjacent points, connect directly as solid
+            # without allocating pd.date_range on every single consecutive day pair (~245x speedup in loop).
+            if not missing:
+                xs,ys=paths['solid']
+                xs.extend([left_time,right_time,None])
+                ys.extend([float(left[name]),float(right[name]),None])
+                continue
+            # Split only the drawn connector at midnight; no synthetic observations.
             boundaries=[left_time]+list(pd.date_range(first+pd.Timedelta(days=1),right_time,freq='D'))
             if boundaries[-1]!=right_time:boundaries.append(right_time)
             duration=(right_time-left_time).total_seconds()
@@ -306,7 +376,6 @@ def history_figure(symbol,expiry,hv,iv,period,relative=False,spread_only=False):
     fig.update_yaxes(title_text=('Relative spread %' if relative else 'IV-RV Spread · pp') if spread_only else 'Volatility %',row=1,col=1,zeroline=spread_only,zerolinecolor='rgba(148, 163, 184, 0.25)')
 
     # Fit each panel to this date window, not the full-year extremes.
-
     # A minimum margin also makes constant / single-point series readable.
 
     for axis,row in [('y',1)]:
@@ -350,13 +419,13 @@ def history_figure(symbol,expiry,hv,iv,period,relative=False,spread_only=False):
 
 @st.cache_data(show_spinner=False)
 def analyze_models(raw):
-    frame=one_year(pd.read_csv(__import__('io').BytesIO(raw)),history_cutoff())
+    frame=one_year(pd.read_csv(io.BytesIO(raw)),history_cutoff())
     from model_view import model_tables
     return model_tables(frame)
 
 @st.cache_data(show_spinner=False)
 def analyze_candidates(raw):
-    frame=one_year(pd.read_csv(__import__('io').BytesIO(raw)),history_cutoff())
+    frame=one_year(pd.read_csv(io.BytesIO(raw)),history_cutoff())
     from model_view import fit_candidates
     return fit_candidates(frame)
 
@@ -410,15 +479,15 @@ def render_validation(symbol):
         else:st.info('No completed validation. Needs a training year plus subsequent history.')
 
 @st.cache_data(show_spinner=False)
-
 def matched_expiry(raw,expiry,as_of,iv,version):
-
-    return expiry_forecast(pd.read_csv(__import__('io').BytesIO(raw)),expiry,as_of,iv)
+    df = pd.read_csv(io.BytesIO(raw)) if isinstance(raw, (bytes, bytearray)) else raw
+    return expiry_forecast(df,expiry,as_of,iv)
 
 
 @st.cache_data(show_spinner=False,max_entries=96)
 def _cached_term_forecast(raw,expiry,valuation_bucket,version):
-    return term_structure_forecast(pd.read_csv(__import__('io').BytesIO(raw)),expiry,valuation_bucket)
+    df = pd.read_csv(io.BytesIO(raw)) if isinstance(raw, (bytes, bytearray)) else raw
+    return term_structure_forecast(df,expiry,valuation_bucket)
 
 
 def term_forecast(raw,expiry,as_of,version):
@@ -429,7 +498,10 @@ def term_forecast(raw,expiry,as_of,version):
     stamp=stamp.tz_convert(IST)
     closed=(stamp.hour,stamp.minute)>=(15,40)
     bucket=stamp.normalize()+pd.Timedelta(hours=15,minutes=40) if closed else stamp.normalize()
-    result=_cached_term_forecast(raw,expiry,bucket.isoformat(),(version,EXPIRY_VERSION))
+    if isinstance(raw, pd.DataFrame):
+        result=dict(term_structure_forecast(raw,expiry,bucket.isoformat()))
+    else:
+        result=dict(_cached_term_forecast(raw,expiry,bucket.isoformat(),(version,EXPIRY_VERSION)))
     result['Quote as of']=stamp.isoformat()
     return result
 
@@ -503,7 +575,7 @@ def render_models(symbol,selected,frame,result):
         comparison,using_close=comparison_snapshot(DATA/'monitor.sqlite',symbol,selected)
         matched=matched_expiry(full_price_history(symbol).to_csv(index=False).encode(),comparison['Expiry'],
                                comparison['As of'],comparison.get('IV'),EXPIRY_VERSION)
-        if using_close:st.caption('Last matched end-of-day comparison · '+str(comparison['As of'])+" · not today's live IV")
+        if using_close:st.caption('Last matched end-of-day comparison · '+str(comparison['As of'])+' · not today\'s live IV')
 
         show_table(pd.DataFrame([matched])[['DTE','Trading sessions','IV','GARCH expiry RV',
 
@@ -585,28 +657,28 @@ def render_term_structure(symbol,result):
     forecastable=curve[curve['As of'].notna()&pd.to_numeric(curve.DTE,errors='coerce').gt(0)]
     forecasts=[]
     if not forecastable.empty:
-        try:price_bytes=full_price_history(symbol).to_csv(index=False).encode()
+        try:
+            price_df=full_price_history(symbol)
         except (OSError,ValueError,KeyError) as error:
-            price_bytes=None
+            price_df=None
             st.info(f'GARCH/EWMA FRV unavailable: {error}')
-        if price_bytes:
-            with st.spinner('Calculating FRV through each listed expiry...'):
-                for row in curve.to_dict('records'):
-                    item=dict(row)
-                    item.update({'GARCH FRV %':np.nan,'EWMA FRV %':np.nan,
-                                 'Training through':None,'GARCH status':'Unavailable',
-                                 'Forecast as of':None,'Comparison ready':False,'Forecast basis':'Unavailable'})
-                    if row.get('As of') and pd.to_numeric(row.get('DTE'),errors='coerce')>0:
-                        try:
-                            model=term_forecast(price_bytes,row['Expiry'],row['As of'],TERM_VERSION)
-                            item.update({'GARCH FRV %':model.get('GARCH expiry RV',np.nan),
-                                         'EWMA FRV %':model.get('EWMA expiry RV',np.nan),
-                                         'Training through':model.get('Training through'),
-                                         'GARCH status':model.get('GARCH status','Unavailable'),
-                                         'Forecast as of':model['Forecast as of'],
-                                         'Comparison ready':model['Comparison ready'],'Forecast basis':model['Forecast basis']})
-                        except Exception as error:item['GARCH status']=str(error)
-                    forecasts.append(item)
+        if price_df is not None:
+            for row in curve.to_dict('records'):
+                item=dict(row)
+                item.update({'GARCH FRV %':np.nan,'EWMA FRV %':np.nan,
+                             'Training through':None,'GARCH status':'Unavailable',
+                             'Forecast as of':None,'Comparison ready':False,'Forecast basis':'Unavailable'})
+                if row.get('As of') and pd.to_numeric(row.get('DTE'),errors='coerce')>0:
+                    try:
+                        model=term_forecast(price_df,row['Expiry'],row['As of'],TERM_VERSION)
+                        item.update({'GARCH FRV %':model.get('GARCH expiry RV',np.nan),
+                                     'EWMA FRV %':model.get('EWMA expiry RV',np.nan),
+                                     'Training through':model.get('Training through'),
+                                     'GARCH status':model.get('GARCH status','Unavailable'),
+                                     'Forecast as of':model['Forecast as of'],
+                                     'Comparison ready':model['Comparison ready'],'Forecast basis':model['Forecast basis']})
+                    except Exception as error:item['GARCH status']=str(error)
+                forecasts.append(item)
     else:
         forecasts=curve.assign(**{'GARCH FRV %':np.nan,'EWMA FRV %':np.nan,
                                   'Training through':None,'GARCH status':'IV unavailable'}).to_dict('records')
@@ -700,15 +772,11 @@ def render_term_structure(symbol,result):
 def render_smile(symbol,selected,config):
 
     as_of=selected.get('As of')
-    saved=load_smile(DATA/'monitor.sqlite',symbol,selected.get('Expiry'),config,as_of)
-    saved_as_of=as_of
-    exact_capture_unusable=saved is not None and not has_usable_points(saved)
-    exact_cloud_capture_missing=saved is None and bool(as_of) and selected.get('Capture source')=='Google Drive'
-    if saved is not None:
-        if exact_capture_unusable:saved=None
-    if saved is None:
-        saved=load_latest_smile(DATA/'monitor.sqlite',symbol,selected.get('Expiry'),config)
-        if saved is not None:saved_as_of=saved.pop('as_of',None)
+    db_file=DATA/'monitor.sqlite'
+    saved, saved_as_of, exact_capture_unusable, exact_cloud_capture_missing = _cached_smile_bundle(
+        str(db_file), symbol, str(selected.get('Expiry') or ''), str(config or ''),
+        as_of, selected.get('Capture source'), _file_rev(db_file)
+    )
 
     if saved is None:
         if exact_capture_unusable or exact_cloud_capture_missing:
@@ -765,8 +833,8 @@ def render_smile(symbol,selected,config):
 
 def render_relative_value(symbol,selected,config):
 
-    from relative_value import history as research_history,maturity_stats
-    from volatility_regime import regime_input,regime_summary
+    from relative_value import maturity_stats
+    from volatility_regime import regime_input
 
     st.markdown(
         '<div style="margin-top:16px; margin-bottom:8px; display:flex; align-items:center; gap:8px;">'
@@ -776,9 +844,10 @@ def render_relative_value(symbol,selected,config):
         unsafe_allow_html=True,
     )
 
+    summary = None
     try:
         path=regime_input(DATA,symbol)
-        summary=regime_summary(pd.read_csv(path),selected.get('As of'))
+        summary=_cached_regime_summary(str(path),selected.get('As of'),_file_rev(path))
         cols=st.columns(len(summary))
         for col,row in zip(cols,summary.to_dict('records')):
             measure=str(row.get('Measure',''))
@@ -791,7 +860,8 @@ def render_relative_value(symbol,selected,config):
     except (OSError,ValueError,TypeError) as exc:
         st.info(f"Regime calculation: {exc}")
 
-    saved=research_history(DATA/'monitor.sqlite',symbol,config,comparable=True)
+    db_file = DATA/'monitor.sqlite'
+    saved=_cached_research_history(str(db_file),symbol,str(config or ''),_file_rev(db_file))
 
     if saved.empty:
         st.info('Maturity-matched observations will appear after Cloud captures.');return
@@ -823,7 +893,8 @@ def render_relative_value(symbol,selected,config):
 
     with st.expander('Volatility regime & maturity ranking data'):
         try:
-            show_table(summary[['Measure','HV %','Prior-year percentile','Regime','Prior sessions','As of']])
+            if summary is not None:
+                show_table(summary[['Measure','HV %','Prior-year percentile','Regime','Prior sessions','As of']])
         except Exception:pass
         if ready:
             st.markdown('**Maturity-Matched Historical Ranking (±3 DTE cycles)**')
@@ -843,20 +914,9 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
     engine=st.session_state.expiry_engine
 
-    auto = True
-
     @st.fragment
 
     def panel():
-
-        from pricing_inputs import get_rate
-
-        from pricing_inputs import get_yields
-        current_dividends={k:v.get('model_yield') for k,v in get_yields().items()}
-        if isinstance(dividend,dict) and current_dividends!=dividend:st.rerun()
-        current_rate=get_rate().get('model_rate')
-
-        if current_rate is not None and current_rate!=rate:st.rerun()
 
         config=calculation_key(rate,dividend,spread)
         import background_refresh as background
@@ -869,7 +929,8 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
         if st.session_state.get('options_refresh_error'):st.warning(st.session_state.options_refresh_error)
 
         requested_config=config
-        result=load_snapshot(config,allow_saved=True)
+        snap_rev=_file_rev(DATA/'expiry_latest.json',DATA/'monitor.sqlite') + _price_history_revision('NIFTY') + _price_history_revision('BANKNIFTY')
+        result=_cached_load_snapshot(config,allow_saved=True,rev=snap_rev)
         if result is not None:st.session_state['_last_options_snapshot']=result
         else:result=st.session_state.get('_last_options_snapshot')
         earlier_settings=bool(result and result.get('config')!=requested_config)
@@ -895,7 +956,10 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
                 background.submit(st.session_state, 'options', engine.refresh_all,
                     background.frozen_client(client), rate, dict(dividend) if isinstance(dividend, dict) else dividend, spread)
 
-        background.status('options', refresh_in_background)
+        # Only run the 2-second status polling fragment when an authenticated live feed is active during market hours
+        # or a background refresh job is currently in-flight (eliminates idle 2s reruns when browsing saved data).
+        if (ready and is_market_open) or background.pending(st.session_state, 'options'):
+            background.status('options', refresh_in_background)
 
         if result:
 
@@ -1054,11 +1118,12 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             period=range_col.segmented_control('Range',['1M','3M','6M','1Y'],default='1M',label_visibility='collapsed',key='options_range_v2') or '1M'
             filter_0dte = True
 
+            db_file = DATA/'monitor.sqlite'
+            db_rev = _file_rev(db_file)
             if scope=='Across expiries':
-                from option_context import transition_context
-                hist=transition_context(DATA/'monitor.sqlite',symbol,config)
+                hist=_cached_transition_context(str(db_file),symbol,str(config or ''),db_rev).copy()
             else:
-                hist=history(symbol,expiry,config) if expiry else pd.DataFrame(columns=['Date','IV','Spread','Source'])
+                hist=_cached_expiry_history(symbol,str(expiry),str(config or ''),db_rev).copy() if expiry else pd.DataFrame(columns=['Date','IV','Spread','Source'])
 
             if not hist.empty:
                 sources=hist.Source.fillna('')

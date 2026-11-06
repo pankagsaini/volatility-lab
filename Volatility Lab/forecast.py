@@ -1,4 +1,6 @@
-"""GARCH(1,1) forecasts: zero mean, normal innovations, daily returns."""
+"""GARCH(1,1) forecasts: zero mean, normal innovations, daily returns (with LRU-cached MLE)."""
+from functools import lru_cache
+import hashlib
 import warnings
 import numpy as np
 import pandas as pd
@@ -6,9 +8,8 @@ from scipy.optimize import minimize
 from vol_lib import validate_ohlc, rolling_rv_suite
 
 
-def _scipy_garch11_fallback(returns: pd.Series, max_h: int):
+def _scipy_garch11_fallback(r: np.ndarray, max_h: int):
     """Exact Gaussian zero-mean GARCH(1,1) MLE via SciPy L-BFGS-B when `arch` package is absent."""
-    r = returns.to_numpy(dtype=float)
     r2 = r * r
     n = len(r)
     var0 = float(np.var(r))
@@ -49,7 +50,42 @@ def _scipy_garch11_fallback(returns: pd.Series, max_h: int):
         'll': ll,
         'aic': float(aic),
         'bic': float(bic),
+        'notes': [],
     }
+
+
+@lru_cache(maxsize=32)
+def _cached_garch_mle(returns_digest: str, returns_bytes: bytes, n_obs: int):
+    """Fit GARCH(1,1) once per unique return series and project all 245 forward sessions."""
+    r_arr = np.frombuffer(returns_bytes, dtype=np.float64)
+    r_series = pd.Series(r_arr)
+    max_h = 245
+    try:
+        from arch import arch_model
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            fit = arch_model(r_series, mean='Zero', vol='GARCH', p=1, q=1,
+                             dist='normal', rescale=False).fit(disp='off', options={'maxiter': 1000})
+        if fit.convergence_flag != 0:
+            raise ValueError('GARCH optimizer did not converge; forecasts are withheld.')
+        parameters = {k: float(v) for k, v in fit.params.items()}
+        daily_variance = fit.forecast(horizon=max_h, method='analytic', reindex=False).variance.iloc[-1].to_numpy(dtype=float) / 10000.0
+        nobs = int(fit.nobs)
+        ll, aic, bic = float(fit.loglikelihood), float(fit.aic), float(fit.bic)
+        cond_vol = np.asarray(fit.conditional_volatility, dtype=float)
+        notes = sorted(set(type(w.message).__name__ for w in caught))
+        return {
+            'nobs': nobs,
+            'params': parameters,
+            'daily_variance': daily_variance,
+            'cond_vol': cond_vol,
+            'll': ll,
+            'aic': aic,
+            'bic': bic,
+            'notes': notes,
+        }
+    except ImportError:
+        return _scipy_garch11_fallback(r_arr, max_h)
 
 
 def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=245, min_observations=250):
@@ -64,44 +100,36 @@ def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=245, min_observati
     if returns.std() < 1e-8:
         raise ValueError('GARCH cannot fit a constant or near-constant return series.')
 
-    notes = []
-    try:
-        from arch import arch_model
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter('always')
-            fit = arch_model(returns, mean='Zero', vol='GARCH', p=1, q=1,
-                             dist='normal', rescale=False).fit(disp='off', options={'maxiter': 1000})
-        if fit.convergence_flag != 0:
-            raise ValueError('GARCH optimizer did not converge; forecasts are withheld.')
-        parameters = {k: float(v) for k, v in fit.params.items()}
-        daily_variance = fit.forecast(horizon=max(horizons), method='analytic', reindex=False).variance.iloc[-1].to_numpy() / 10000
-        nobs = int(fit.nobs)
-        ll, aic, bic = float(fit.loglikelihood), float(fit.aic), float(fit.bic)
-        cond_vol = np.asarray(fit.conditional_volatility)
-        notes = sorted(set(type(w.message).__name__ for w in caught))
-    except ImportError:
-        fb = _scipy_garch11_fallback(returns, max(horizons))
-        parameters = fb['params']
-        daily_variance = fb['daily_variance']
-        nobs, ll, aic, bic = fb['nobs'], fb['ll'], fb['aic'], fb['bic']
-        cond_vol = fb['cond_vol']
+    r_contig = np.ascontiguousarray(returns.to_numpy(dtype=np.float64))
+    r_bytes = r_contig.tobytes()
+    r_digest = hashlib.blake2b(r_bytes, digest_size=16).hexdigest()
 
+    cached = _cached_garch_mle(r_digest, r_bytes, len(r_contig))
+    parameters = cached['params']
+    max_req = max(horizons)
+    daily_variance = cached['daily_variance'][:max_req]
     if not np.isfinite(daily_variance).all() or (daily_variance <= 0).any():
         raise ValueError('GARCH produced invalid forecast variance.')
+
     persistence = parameters['alpha[1]'] + parameters['beta[1]']
+    notes = list(cached['notes'])
     if persistence >= .999:
         notes.append('Persistence is near one; long-run variance is not reported.')
-    forecasts = pd.DataFrame([{'Sessions': h, 'GARCH forecast %': float(np.sqrt(daily_variance[:h].mean() * ann_factor) * 100)} for h in horizons])
+
+    forecasts = pd.DataFrame([
+        {'Sessions': h, 'GARCH forecast %': float(np.sqrt(daily_variance[:h].mean() * ann_factor) * 100)}
+        for h in horizons
+    ])
     diagnostics = {
-        'observations': nobs,
+        'observations': cached['nobs'],
         'converged': True,
         'omega_pct_squared': parameters['omega'],
         'alpha': parameters['alpha[1]'],
         'beta': parameters['beta[1]'],
         'persistence': persistence,
-        'log_likelihood': ll,
-        'AIC': aic,
-        'BIC': bic,
+        'log_likelihood': cached['ll'],
+        'AIC': cached['aic'],
+        'BIC': cached['bic'],
         'warnings': notes,
         'long_run_vol_pct': float(np.sqrt(parameters['omega'] / (1 - persistence) * ann_factor)) if persistence < .999 else None,
     }
@@ -112,7 +140,7 @@ def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=245, min_observati
     })
     history = pd.DataFrame({
         'Date': returns.index,
-        'Fitted conditional vol %': cond_vol * np.sqrt(ann_factor),
+        'Fitted conditional vol %': cached['cond_vol'] * np.sqrt(ann_factor),
     })
     return forecasts, diagnostics, path, history
 

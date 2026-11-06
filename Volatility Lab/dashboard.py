@@ -1,10 +1,11 @@
-"""Standalone local options dashboard; no trading actions."""
+"""Standalone local options dashboard; no trading actions (Accelerated v4)."""
 
 from pathlib import Path
 import importlib
 import os
 import gzip
 import json
+import time
 from datetime import datetime, timezone
 import streamlit as st
 from market_data import MarketDataError, IST
@@ -13,6 +14,32 @@ from pricing_inputs import get_rate, get_yields
 ROOT=Path(__file__).resolve().parent
 if not (ROOT/'market_data.py').exists() and (ROOT/'Volatility Lab'/'market_data.py').exists():
     ROOT=ROOT/'Volatility Lab'
+
+def _cached_pricing_inputs(ttl_seconds: float = 60.0):
+    """Cache risk-free rate and dividend yields in session_state with file-mtime + TTL check."""
+    now_mono = time.monotonic()
+    r_path = ROOT / 'data' / 'risk_free_rate.json'
+    d_path = ROOT / 'data' / 'dividend_yields.json'
+    try:
+        r_mtime = r_path.stat().st_mtime_ns if r_path.exists() else 0
+    except OSError:
+        r_mtime = 0
+    try:
+        d_mtime = d_path.stat().st_mtime_ns if d_path.exists() else 0
+    except OSError:
+        d_mtime = 0
+    cache_entry = st.session_state.get('_pricing_inputs_cache')
+    if cache_entry and (now_mono - cache_entry['ts'] < ttl_seconds) and cache_entry['mtimes'] == (r_mtime, d_mtime):
+        return cache_entry['rate_info'], cache_entry['dividend_info']
+    rate_info = get_rate()
+    dividend_info = get_yields()
+    st.session_state['_pricing_inputs_cache'] = {
+        'ts': now_mono,
+        'mtimes': (r_mtime, d_mtime),
+        'rate_info': rate_info,
+        'dividend_info': dividend_info,
+    }
+    return rate_info, dividend_info
 
 def latest_cloud_capture():
     from dashboard_cache import latest_cloud_capture as saved_summary
@@ -97,12 +124,9 @@ if client is not None:
     client.__class__=UpstoxAdapter
 
 ready=bool(client and client.authenticated)
-capture=read_json(STATE/'status.json')
-backfill=read_json(ROOT/'data'/'upstox'/'collection_status.json')
 
-rate_info=get_rate()
+rate_info, dividend_info = _cached_pricing_inputs()
 rate=rate_info.get('model_rate')
-dividend_info=get_yields()
 dividend={symbol:item.get('model_yield') for symbol,item in dividend_info.items()}
 spread=3.0  # Stored-history compatibility; this does not filter broker IV.
 
@@ -170,7 +194,11 @@ cloud_sync_status()
 from history_policy import register
 
 dividend_ready=all(v is not None for v in dividend.values())
-if dividend_ready:register(ROOT/'data'/'monitor.sqlite',rate,dividend,spread)
+if dividend_ready:
+    reg_sig = (rate, tuple(sorted(dividend.items())), spread)
+    if st.session_state.get('_registered_pricing_sig') != reg_sig:
+        register(ROOT/'data'/'monitor.sqlite',rate,dividend,spread)
+        st.session_state['_registered_pricing_sig'] = reg_sig
 
 if workspace=='Backtest':
     import backtest_ui

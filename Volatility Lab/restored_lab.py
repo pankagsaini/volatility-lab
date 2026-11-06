@@ -1,14 +1,19 @@
-"""Recovered research views; no data fabrication or trading operations."""
+"""Recovered research views; no data fabrication or trading operations (Vectorized & Cached)."""
 import json
 import math
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 import pandas as pd
 import numpy as np
+from scipy.special import ndtr
 import plotly.graph_objects as go
 import streamlit as st
 from market_data import IST
 from trade_review_ui import table
+
+_INV_SQRT_2PI = 0.3989422804014327
+
 
 def _clean_float(val, fallback=0.0):
     try:
@@ -16,6 +21,25 @@ def _clean_float(val, fallback=0.0):
         return f if np.isfinite(f) else fallback
     except (TypeError, ValueError):
         return fallback
+
+
+def _sqlite_rev(db_path: Path):
+    """Return revision tuple for SQLite database + WAL sidecar so cache invalidates on any write."""
+    revs = []
+    for p in (Path(db_path), Path(str(db_path) + "-wal")):
+        try:
+            st_info = p.stat()
+            revs.append((st_info.st_mtime_ns, st_info.st_size))
+        except OSError:
+            revs.append(None)
+    return tuple(revs)
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _cached_intraday_snapshots(db_path_str: str, symbol: str, expiry: str, config: str, db_rev: tuple):
+    from snapshot_history import load
+    return load(Path(db_path_str), symbol, expiry, config)
+
 
 def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065):
     try:
@@ -30,19 +54,22 @@ def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065):
     T = max(0.2, dte) / 365.0
     sigma = max(0.01, vol_pct / 100.0)
     try:
-        d1 = (math.log(spot / strike) + (rate + 0.5 * sigma * sigma) * T) / (sigma * math.sqrt(T))
-        d2 = d1 - sigma * math.sqrt(T)
-        norm_cdf = lambda x: (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0
-        norm_pdf = lambda x: math.exp(-0.5 * x * x) / math.sqrt(2.0 * math.pi)
-        call_p = spot * norm_cdf(d1) - strike * math.exp(-rate * T) * norm_cdf(d2)
-        put_p = strike * math.exp(-rate * T) * norm_cdf(-d2) - spot * norm_cdf(-d1)
+        sqrt_t = math.sqrt(T)
+        d1 = (math.log(spot / strike) + (rate + 0.5 * sigma * sigma) * T) / (sigma * sqrt_t)
+        d2 = d1 - sigma * sqrt_t
+        nd1 = float(ndtr(d1))
+        nd2 = float(ndtr(d2))
+        pdf_d1 = _INV_SQRT_2PI * math.exp(-0.5 * d1 * d1)
+        df_r = math.exp(-rate * T)
+        call_p = spot * nd1 - strike * df_r * nd2
+        put_p = strike * df_r * (1.0 - nd2) - spot * (1.0 - nd1)
         straddle_p = call_p + put_p
-        call_d = norm_cdf(d1)
+        call_d = nd1
         put_d = call_d - 1.0
-        gamma = norm_pdf(d1) / (spot * sigma * math.sqrt(T))
-        call_vega = spot * norm_pdf(d1) * math.sqrt(T) / 100.0
+        gamma = pdf_d1 / (spot * sigma * sqrt_t)
+        call_vega = spot * pdf_d1 * sqrt_t / 100.0
         straddle_vega = call_vega * 2.0
-        theta_day = -(spot * norm_pdf(d1) * sigma / (2.0 * math.sqrt(T))) / 365.0
+        theta_day = -(spot * pdf_d1 * sigma / (2.0 * sqrt_t)) / 365.0
         straddle_theta = theta_day * 2.0
     except (ValueError, ZeroDivisionError, OverflowError):
         return None
@@ -57,6 +84,32 @@ def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065):
         'vega': straddle_vega,
         'theta_day': straddle_theta
     }
+
+
+def _compute_straddle_series_vectorized(prices: np.ndarray, strikes: np.ndarray, dtes: np.ndarray, ivs: np.ndarray, rate: float = 0.065):
+    """Vectorized BSM ATM Straddle Price and Net Delta across an entire intraday session array."""
+    valid = np.isfinite(prices) & (prices > 0) & np.isfinite(strikes) & (strikes > 0) & np.isfinite(ivs) & (ivs > 0)
+    straddle_out = np.full(len(prices), np.nan, dtype=float)
+    delta_out = np.full(len(prices), np.nan, dtype=float)
+    if not np.any(valid):
+        return straddle_out, delta_out
+
+    s = prices[valid]
+    k = strikes[valid]
+    t = np.maximum(0.2, dtes[valid]) / 365.0
+    sigma = np.maximum(0.01, ivs[valid] / 100.0)
+    sqrt_t = np.sqrt(t)
+    d1 = (np.log(s / k) + (rate + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t)
+    d2 = d1 - sigma * sqrt_t
+    nd1 = ndtr(d1)
+    nd2 = ndtr(d2)
+    df_r = np.exp(-rate * t)
+    call_p = s * nd1 - k * df_r * nd2
+    put_p = k * df_r * (1.0 - nd2) - s * (1.0 - nd1)
+    straddle_out[valid] = call_p + put_p
+    delta_out[valid] = 2.0 * nd1 - 1.0
+    return straddle_out, delta_out
+
 
 def render_archived_intraday(data, symbol, selected, config):
     spot = _clean_float(selected.get('Price'))
@@ -82,16 +135,19 @@ def render_archived_intraday(data, symbol, selected, config):
         except Exception:
             dte = 7.0
 
-    # 1. Load Intraday History from monitor.sqlite
-    from snapshot_history import load
-    saved = load(data / 'monitor.sqlite', symbol, selected.get('Expiry'), config)
+    # 1. Load Intraday History from monitor.sqlite (cached by WAL revision)
+    db_file = data / 'monitor.sqlite'
+    saved = _cached_intraday_snapshots(
+        str(db_file), symbol, str(selected.get('Expiry') or ''), str(config or ''), _sqlite_rev(db_file)
+    ).copy()
 
-    # If spot or iv is missing from selected, retrieve latest available from saved snapshots
     if (spot <= 0 or iv <= 0) and not saved.empty:
         valid_prices = pd.to_numeric(saved['Price'], errors='coerce').dropna()
         valid_ivs = pd.to_numeric(saved['IV'], errors='coerce').dropna()
         if spot <= 0 and not valid_prices.empty:
             spot = float(valid_prices.iloc[-1])
+            if strike <= 0:
+                strike = round(spot / step) * step
         if iv <= 0 and not valid_ivs.empty:
             iv = float(valid_ivs.iloc[-1])
 
@@ -142,34 +198,25 @@ def render_archived_intraday(data, symbol, selected, config):
         st.info(f"Captured {len(session_data)} snapshot for {chosen_day:%d %b %Y}. Intraday progression chart activates after multiple 1-minute captures.")
         return
 
-    # Calculate Straddle Price and Net Delta for each historical snapshot
-    straddle_pts = []
-    deltas = []
-    for _, row in session_data.iterrows():
-        s_price = _clean_float(row.get('Price'), spot)
-        s_iv = _clean_float(row.get('IV'), iv)
-        s_atm_k = _clean_float(row.get('ATM strike'))
-        s_true_atm = round(s_price / step) * step if s_price > 0 else strike
-        if s_atm_k > 0 and abs(s_atm_k - s_price) <= step * 1.5:
-            s_strike = s_atm_k
-        elif s_true_atm > 0:
-            s_strike = s_true_atm
-        else:
-            s_strike = strike
-        
-        try:
-            row_dte = max(0.2, float((pd.Timestamp(selected.get('Expiry')).date() - pd.Timestamp(row.get('As of')).date()).days))
-        except Exception:
-            row_dte = dte
-            
-        res = compute_straddle_greeks(s_price, s_strike, row_dte, s_iv)
-        if res:
-            straddle_pts.append(res['straddle'])
-            deltas.append(res['net_delta'])
-        else:
-            straddle_pts.append(np.nan)
-            deltas.append(np.nan)
+    # Vectorized calculation of Straddle Price and Net Delta across all session snapshots
+    s_prices = pd.to_numeric(session_data['Price'], errors='coerce').fillna(spot).to_numpy(dtype=float)
+    s_ivs = pd.to_numeric(session_data['IV'], errors='coerce').fillna(iv).to_numpy(dtype=float)
+    if 'ATM strike' in session_data:
+        raw_k = pd.to_numeric(session_data['ATM strike'], errors='coerce').to_numpy(dtype=float)
+    else:
+        raw_k = np.full(len(session_data), np.nan)
+    fallback_k = np.where(s_prices > 0, np.round(s_prices / step) * step, strike)
+    valid_k = np.isfinite(raw_k) & (raw_k > 0) & (np.abs(raw_k - s_prices) <= step * 1.5)
+    s_strikes = np.where(valid_k, raw_k, fallback_k)
 
+    try:
+        exp_date = pd.Timestamp(selected.get('Expiry')).date()
+        row_dates = pd.to_datetime(session_data['As of']).dt.date
+        s_dtes = np.array([max(0.2, float((exp_date - d).days)) for d in row_dates], dtype=float)
+    except Exception:
+        s_dtes = np.full(len(session_data), dte, dtype=float)
+
+    straddle_pts, deltas = _compute_straddle_series_vectorized(s_prices, s_strikes, s_dtes, s_ivs)
     session_data['Straddle Price'] = straddle_pts
     session_data['Net Delta'] = deltas
 

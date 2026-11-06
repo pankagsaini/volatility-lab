@@ -1,5 +1,6 @@
-"""Expiry variance matching; consistent trading-session horizon annualization."""
+"""Expiry variance matching; consistent trading-session horizon annualization (with fast horizon caching)."""
 from datetime import datetime, time, timedelta
+from functools import lru_cache
 import numpy as np
 import pandas as pd
 from forecast import fit_garch
@@ -12,26 +13,97 @@ TERM_VERSION = 'term-v1-last-completed-close'
 CALENDAR_SOURCE = 'https://nsearchives.nseindia.com/content/circulars/FAOP71777.pdf'
 SPECIAL = pd.Timestamp('2026-11-08').date()
 
+_MODEL_BASE_CACHE: dict[tuple[str, int, float], tuple[float, np.ndarray | None, str]] = {}
+_VALIDATED_SLICE_CACHE: dict[tuple[int, str, str, float], tuple[pd.DataFrame, object]] = {}
+
+
+@lru_cache(maxsize=512)
+def _cached_sessions(start_iso: str, end_iso: str) -> tuple:
+    start_d = pd.Timestamp(start_iso).date()
+    end_d = pd.Timestamp(end_iso).date()
+    if start_d > end_d:
+        return ()
+    supported_years = {d.year for d in HOLIDAYS} | {2025, 2026, 2027}
+    if start_d.year not in supported_years or end_d.year not in supported_years:
+        raise ValueError(f'Verified trading calendar currently covers {sorted(supported_years)} only.')
+    return tuple(
+        d.date() for d in pd.date_range(start_d, end_d)
+        if (d.weekday() < 5 and d.date() not in HOLIDAYS) or d.date() == SPECIAL
+    )
+
 
 def sessions(start, end):
     start_d = pd.Timestamp(start).date()
     end_d = pd.Timestamp(end).date()
     if start_d > end_d:
         return []
-    supported_years = {d.year for d in HOLIDAYS} | {2025, 2026, 2027}
-    if start_d.year not in supported_years or end_d.year not in supported_years:
-        raise ValueError(f'Verified trading calendar currently covers {sorted(supported_years)} only.')
-    return [d.date() for d in pd.date_range(start_d, end_d)
-            if (d.weekday() < 5 and d.date() not in HOLIDAYS) or d.date() == SPECIAL]
+    return list(_cached_sessions(start_d.isoformat(), end_d.isoformat()))
+
+
+def _prepare_one_year_slice(frame: pd.DataFrame, cutoff_date) -> tuple[pd.DataFrame, object]:
+    """Validate OHLC and extract the 1-year training window once per unique (frame, cutoff_date)."""
+    cutoff_iso = str(cutoff_date)
+    try:
+        last_close = float(frame['Close'].iloc[-1])
+        first_dt = str(frame['Date'].iloc[0]) if 'Date' in frame.columns else str(frame.index[0])
+        cache_key = (len(frame), first_dt, cutoff_iso, last_close)
+    except Exception:
+        cache_key = None
+
+    if cache_key is not None:
+        cached = _VALIDATED_SLICE_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
+    data = validate_ohlc(frame)
+    cutoff_ts = pd.Timestamp(cutoff_date)
+    data = data[data.index <= cutoff_ts]
+    if data.empty:
+        raise ValueError('No completed candles available at the quote time.')
+    last = data.index[-1].date()
+    elapsed = sessions(last + timedelta(days=1), cutoff_date)
+    if elapsed:
+        raise ValueError('Latest completed session is missing; refresh underlying history.')
+    data = data[data.index > data.index[-1] - pd.DateOffset(years=1)]
+    if len(data) < 201:
+        raise ValueError('Expiry models need at least 200 completed returns.')
+    data._ohlc_validated = True
+
+    if cache_key is not None:
+        if len(_VALIDATED_SLICE_CACHE) >= 32:
+            _VALIDATED_SLICE_CACHE.clear()
+        _VALIDATED_SLICE_CACHE[cache_key] = (data, last)
+    return data, last
+
+
+def _get_base_expiry_models(data: pd.DataFrame, last_str: str) -> tuple[float, np.ndarray | None, str]:
+    """Compute or retrieve cached EWMA RV % and 245-session GARCH variance path for `data`."""
+    cache_key = (last_str, len(data), float(data['Close'].iloc[-1]))
+    cached = _MODEL_BASE_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    data._ohlc_validated = True
+    ewma_daily_var = (rv_snapshot(data)['ewma_next_session_vol'] ** 2) / 245.0
+    ewma_rv_pct = float(100.0 * np.sqrt(ewma_daily_var * 245.0))
+
+    garch_vars = None
+    garch_status = 'Ready'
+    try:
+        _, diagnostics, path, _ = fit_garch(data, (245,), min_observations=200)
+        garch_vars = (path['Daily conditional vol %'].to_numpy(dtype=float) / 100.0) ** 2 / 245.0
+        garch_status = '; '.join(diagnostics['warnings']) or 'Ready'
+    except (ValueError, RuntimeError, FloatingPointError, ImportError) as error:
+        garch_status = str(error)
+
+    if len(_MODEL_BASE_CACHE) >= 32:
+        _MODEL_BASE_CACHE.clear()
+    _MODEL_BASE_CACHE[cache_key] = (ewma_rv_pct, garch_vars, garch_status)
+    return ewma_rv_pct, garch_vars, garch_status
 
 
 def expiry_forecast(frame, expiry, as_of, iv=None):
-    """Condition on completed daily closes only; partial day is a stated approximation.
-
-    Full future sessions each receive one daily variance, including Muhurat.
-    Annualizes weighted mean session variance by 245 trading sessions/year so
-    multi-day and weekend horizons are free of 365/245 calendar-ratio distortion.
-    """
+    """Condition on completed daily closes only; partial day is a stated approximation."""
     now = pd.Timestamp(as_of)
     if now.tzinfo is None:
         raise ValueError('Quote valuation requires an explicit timezone.')
@@ -48,19 +120,10 @@ def expiry_forecast(frame, expiry, as_of, iv=None):
         raise ValueError('Muhurat intraday timings require a verified special-session schedule.')
     if expiry not in sessions(expiry, expiry):
         raise ValueError('Expiry is not a verified trading date.')
-    data = validate_ohlc(frame)
-    # Today's candle is available only after the completed-session boundary (15:40 IST).
+
     cutoff = now.date() if now.time() >= time(15, 40) else now.date() - timedelta(days=1)
-    data = data[data.index.date <= cutoff]
-    if data.empty:
-        raise ValueError('No completed candles available at the quote time.')
-    last = data.index[-1].date()
-    elapsed = sessions(last + timedelta(days=1), cutoff)
-    if elapsed:
-        raise ValueError('Latest completed session is missing; refresh underlying history.')
-    data = data[data.index > data.index[-1] - pd.DateOffset(years=1)]
-    if len(data) < 201:
-        raise ValueError('Expiry models need at least 200 completed returns.')
+    data, last = _prepare_one_year_slice(frame, cutoff)
+
     dates = sessions(last + timedelta(days=1), expiry)
     if not dates or len(dates) > 245:
         raise ValueError('Unsupported expiry forecast horizon.')
@@ -78,9 +141,9 @@ def expiry_forecast(frame, expiry, as_of, iv=None):
     total_weights = float(weights.sum())
     if total_weights <= 0:
         raise ValueError('No remaining trading variance horizon.')
-    data._ohlc_validated = True
-    ewma_daily_var = (rv_snapshot(data)['ewma_next_session_vol'] ** 2) / 245.0
-    ewma_rv_pct = float(100.0 * np.sqrt(ewma_daily_var * 245.0))
+
+    ewma_rv_pct, garch_vars_245, garch_status = _get_base_expiry_models(data, str(last))
+
     result = {
         'Expiry': str(expiry),
         'As of': now.isoformat(),
@@ -91,18 +154,15 @@ def expiry_forecast(frame, expiry, as_of, iv=None):
         'IV': iv,
         'EWMA expiry RV': ewma_rv_pct,
         'GARCH expiry RV': np.nan,
-        'GARCH status': 'Ready',
+        'GARCH status': garch_status,
         'Version': VERSION,
     }
 
-    try:
-        _, diagnostics, path, _ = fit_garch(data, (len(dates),), min_observations=200)
-        variances = (path['Daily conditional vol %'].to_numpy() / 100.0) ** 2 / 245.0
+    if garch_vars_245 is not None and len(garch_vars_245) >= len(dates):
+        variances = garch_vars_245[:len(dates)]
         mean_session_var = float(np.dot(variances, weights) / total_weights)
         result['GARCH expiry RV'] = float(100.0 * np.sqrt(mean_session_var * 245.0))
-        result['GARCH status'] = '; '.join(diagnostics['warnings']) or 'Ready'
-    except (ValueError, RuntimeError, FloatingPointError, ImportError) as error:
-        result['GARCH status'] = str(error)
+
     for model in ('GARCH', 'EWMA'):
         result[f'IV - {model}'] = (
             float(iv - result[f'{model} expiry RV'])
@@ -167,12 +227,7 @@ def term_structure_forecast(frame, expiry, as_of):
     if same_day(expiry, quote):
         raise ValueError(SAME_DAY_STATUS)
     cutoff = quote.date() if quote.time() >= time(15, 40) else quote.date() - timedelta(days=1)
-    data = validate_ohlc(frame)
-    data = data[data.index.date <= cutoff]
-    if data.empty:
-        raise ValueError('No completed candles available at the quote time.')
-    data._ohlc_validated = True
-    last = data.index[-1].date()
+    data, last = _prepare_one_year_slice(frame, cutoff)
     expected_prior = last_trading_day_on_or_before(quote.date() - timedelta(days=1))
     if last < expected_prior:
         raise ValueError('Latest completed session is missing; refresh underlying history.')
