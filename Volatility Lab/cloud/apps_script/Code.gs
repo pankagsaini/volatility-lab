@@ -351,6 +351,11 @@ function capture_(mode, recovery) {
 
       let data = res.data;
       if (res.error) {
+        // Do not retry on HTTP 401/403 authentication errors to avoid burning runtime budget
+        if (res.error === 'Broker HTTP 401' || res.error === 'Broker HTTP 403') {
+          report.errors.push({ item: res.label, reason: res.error });
+          continue;
+        }
         // Fallback retry for single failing request
         try {
           data = api_(res.path, res.params);
@@ -539,14 +544,14 @@ function scheduledCapture() {
     return;
   }
 
-  // Pre-market reconciliation window: 07:00 - 09:00 IST (minutes 420 to 540)
-  if (mins >= 420 && mins < 540) {
-    reconcilePriorSession();
+  // Skip weekends (Saturday=6, Sunday=7) before any reconciliation or capture
+  if (weekday > 5) {
     return;
   }
 
-  // Skip weekends (Saturday=6, Sunday=7)
-  if (weekday > 5) {
+  // Pre-market reconciliation window: 07:00 - 09:00 IST (minutes 420 to 540)
+  if (mins >= 420 && mins < 540) {
+    reconcilePriorSession();
     return;
   }
 
@@ -649,7 +654,7 @@ function scheduledCapture() {
       if (b.day !== today) {
         b = { day: today, ms: 0 };
       }
-      b.ms += Date.now() - started + 1000;
+      b.ms += Date.now() - started;
       properties.setProperty('RUNTIME_BUDGET', JSON.stringify(b));
     }
     lock.releaseLock();
@@ -734,7 +739,7 @@ function reconcilePriorSession() {
         if (b.day !== today) {
           b = { day: today, ms: 0 };
         }
-        b.ms += Date.now() - started + 1000;
+        b.ms += Date.now() - started;
         properties.setProperty(key, JSON.stringify(b));
       }
     }
@@ -823,6 +828,12 @@ function auditStatus() {
 function doGet(e) {
   try {
     const properties = props_();
+    const requiredKey = properties.getProperty('WEBHOOK_KEY');
+    const providedKey = e && e.parameter ? e.parameter.key : null;
+    if (requiredKey && providedKey !== requiredKey) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     const action = e && e.parameter ? e.parameter.action : null;
 
     if (action === 'status') {

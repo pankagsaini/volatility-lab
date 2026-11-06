@@ -1,3 +1,7 @@
+# Backups & Temporary Fixes
+.audit_backups/
+apply_volatility_lab_fixes.py
+
 # Byte-compiled / optimized / cache files
 __pycache__/
 *.py[cod]

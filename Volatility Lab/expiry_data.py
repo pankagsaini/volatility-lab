@@ -376,6 +376,26 @@ def align_snapshot(result):
 
                 detail.update(alignment)
 
+    from synthetic_future import calculate as calc_synthetic
+
+    for row in result.get('rows', []):
+        sym = row.get('Instrument')
+        exp = row.get('Expiry')
+        if row.get('Synthetic future') is None and sym and exp:
+            q_file = DATA / f'{sym.lower()}_option_quotes_{exp}.json'
+            if q_file.exists():
+                try:
+                    c = json.loads(q_file.read_text(encoding='utf-8'))
+                    chain = c.get('broker_option_chain')
+                    spot = c.get('spot') or row.get('Price')
+                    if chain and spot:
+                        p = calc_synthetic(chain, spot)
+                        row['Synthetic future'] = p.get('Synthetic future')
+                        if row.get('ATM strike') is None:
+                            row['ATM strike'] = p.get('ATM strike')
+                except Exception:
+                    pass
+
     # Fill an older saved snapshot immediately from its own monthly quote rows.
     # This avoids a blank weekly reference until the next broker refresh while
     # keeping the reference inside the same calendar month.
@@ -394,6 +414,29 @@ def align_snapshot(result):
         else:
             row['Month future LTP']=row.get('Month future LTP',row.get('Listed future'))
             row['Future reference']=row.get('Future reference','Same-expiry monthly future' if row.get('Type')=='Monthly' else 'Unavailable')
+
+    # Fallback: if Month future LTP is still unpopulated, check latest futures snapshots
+    fut_db = DATA / 'futures/futures.sqlite'
+    if fut_db.exists() and any(r.get('Month future LTP') is None for r in result.get('rows', [])):
+        try:
+            import sqlite3
+            latest_futs = {}
+            with sqlite3.connect(fut_db, timeout=5) as con:
+                for sym in ('NIFTY', 'BANKNIFTY'):
+                    r_fut = con.execute('SELECT payload FROM snapshots WHERE symbol=? ORDER BY rowid DESC LIMIT 1', (sym,)).fetchone()
+                    if r_fut:
+                        d_fut = json.loads(r_fut[0])
+                        for leg in d_fut.get('legs', []):
+                            p = (leg.get('quote') or {}).get('Price')
+                            if p and np.isfinite(float(p)):
+                                latest_futs[sym] = float(p)
+                                break
+            for row in result.get('rows', []):
+                sym = row.get('Instrument')
+                if row.get('Month future LTP') is None and sym in latest_futs:
+                    row['Month future LTP'] = latest_futs[sym]
+        except Exception:
+            pass
 
     result['spread_version']='session-aligned-v2'
 

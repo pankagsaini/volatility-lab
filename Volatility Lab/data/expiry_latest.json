@@ -36,7 +36,14 @@
       "Capture source": "Google Drive",
       "Timestamp note": "Underlying feed timestamp; broker Greeks have no separate exchange timestamp",
       "IV method": "Lab arithmetic mean of broker ATM call and put IV",
-      "Greeks source": "Upstox supplied Greeks"
+      "Greeks source": "Upstox supplied Greeks",
+      "Synthetic future": 23910.25,
+      "ATM strike": 23950.0,
+      "Month future LTP": 24585.0,
+      "Future contract": null,
+      "Future quote time": null,
+      "Future reference": "Monthly future for weekly expiry month",
+      "Synthetic status": "Ready \u00b7 monthly future reference"
     },
     {
       "Provider": "Upstox",
@@ -62,7 +69,14 @@
       "Capture source": "Google Drive",
       "Timestamp note": "Underlying feed timestamp; broker Greeks have no separate exchange timestamp",
       "IV method": "Lab arithmetic mean of broker ATM call and put IV",
-      "Greeks source": "Upstox supplied Greeks"
+      "Greeks source": "Upstox supplied Greeks",
+      "Synthetic future": 23927.1,
+      "ATM strike": 23950.0,
+      "Month future LTP": 24585.0,
+      "Future contract": null,
+      "Future quote time": null,
+      "Future reference": "Monthly future for weekly expiry month",
+      "Synthetic status": "Ready \u00b7 monthly future reference"
     },
     {
       "Provider": "Upstox",
@@ -88,7 +102,11 @@
       "Capture source": "Google Drive",
       "Timestamp note": "Underlying feed timestamp; broker Greeks have no separate exchange timestamp",
       "IV method": "Lab arithmetic mean of broker ATM call and put IV",
-      "Greeks source": "Upstox supplied Greeks"
+      "Greeks source": "Upstox supplied Greeks",
+      "Synthetic future": 23958.35,
+      "ATM strike": 23950.0,
+      "Month future LTP": 24585.0,
+      "Future reference": "Same-expiry monthly future"
     },
     {
       "Provider": "Upstox",
@@ -114,7 +132,14 @@
       "Capture source": "Google Drive",
       "Timestamp note": "Underlying feed timestamp; broker Greeks have no separate exchange timestamp",
       "IV method": "Lab arithmetic mean of broker ATM call and put IV",
-      "Greeks source": "Upstox supplied Greeks"
+      "Greeks source": "Upstox supplied Greeks",
+      "Synthetic future": 23989.1,
+      "ATM strike": 23950.0,
+      "Month future LTP": 24585.0,
+      "Future contract": null,
+      "Future quote time": null,
+      "Future reference": "Monthly future for weekly expiry month",
+      "Synthetic status": "Ready \u00b7 monthly future reference"
     },
     {
       "Provider": "Upstox",
@@ -140,7 +165,13 @@
       "Capture source": "Google Drive",
       "Timestamp note": "Underlying feed timestamp; broker Greeks have no separate exchange timestamp",
       "IV method": "Lab arithmetic mean of broker ATM call and put IV",
-      "Greeks source": "Upstox supplied Greeks"
+      "Greeks source": "Upstox supplied Greeks",
+      "Synthetic future": null,
+      "ATM strike": 23950.0,
+      "Month future LTP": 24585.0,
+      "Future contract": null,
+      "Future quote time": null,
+      "Future reference": "Monthly future for weekly expiry month"
     },
     {
       "Provider": "Upstox",
@@ -166,7 +197,11 @@
       "Capture source": "Google Drive",
       "Timestamp note": "Underlying feed timestamp; broker Greeks have no separate exchange timestamp",
       "IV method": "Lab arithmetic mean of broker ATM call and put IV",
-      "Greeks source": "Upstox supplied Greeks"
+      "Greeks source": "Upstox supplied Greeks",
+      "Synthetic future": 24105.9,
+      "ATM strike": 23950.0,
+      "Month future LTP": 24585.0,
+      "Future reference": "Same-expiry monthly future"
     },
     {
       "Provider": "Upstox",
@@ -192,7 +227,11 @@
       "Capture source": "Google Drive",
       "Timestamp note": "Underlying feed timestamp; broker Greeks have no separate exchange timestamp",
       "IV method": "Lab arithmetic mean of broker ATM call and put IV",
-      "Greeks source": "Upstox supplied Greeks"
+      "Greeks source": "Upstox supplied Greeks",
+      "Synthetic future": 24236.6,
+      "ATM strike": 23950.0,
+      "Month future LTP": 24585.0,
+      "Future reference": "Same-expiry monthly future"
     },
     {
       "Provider": "Upstox",
@@ -218,7 +257,11 @@
       "Capture source": "Google Drive",
       "Timestamp note": "Underlying feed timestamp; broker Greeks have no separate exchange timestamp",
       "IV method": "Lab arithmetic mean of broker ATM call and put IV",
-      "Greeks source": "Upstox supplied Greeks"
+      "Greeks source": "Upstox supplied Greeks",
+      "Synthetic future": 56001.85,
+      "ATM strike": 55900.0,
+      "Month future LTP": 57757.0,
+      "Future reference": "Same-expiry monthly future"
     },
     {
       "Provider": "Upstox",
@@ -244,7 +287,11 @@
       "Capture source": "Google Drive",
       "Timestamp note": "Underlying feed timestamp; broker Greeks have no separate exchange timestamp",
       "IV method": "Lab arithmetic mean of broker ATM call and put IV",
-      "Greeks source": "Upstox supplied Greeks"
+      "Greeks source": "Upstox supplied Greeks",
+      "Synthetic future": 56402.75,
+      "ATM strike": 55900.0,
+      "Month future LTP": 57757.0,
+      "Future reference": "Same-expiry monthly future"
     },
     {
       "Provider": "Upstox",
@@ -270,7 +317,11 @@
       "Capture source": "Google Drive",
       "Timestamp note": "Underlying feed timestamp; broker Greeks have no separate exchange timestamp",
       "IV method": "Lab arithmetic mean of broker ATM call and put IV",
-      "Greeks source": "Upstox supplied Greeks"
+      "Greeks source": "Upstox supplied Greeks",
+      "Synthetic future": 55632.3,
+      "ATM strike": 55900.0,
+      "Month future LTP": 57757.0,
+      "Future reference": "Same-expiry monthly future"
     }
   ],
   "details": [
@@ -424,5 +475,6 @@
   "india_vix": {
     "value": 15.19,
     "timestamp": "2026-11-04T20:49:17.311000+05:30"
-  }
+  },
+  "spread_version": "session-aligned-v2"
 }

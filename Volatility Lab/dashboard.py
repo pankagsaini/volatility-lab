@@ -198,3 +198,8 @@ else:
     if not dividend_ready:st.info('Dividend inputs unavailable; broker data remains available, model scenarios are withheld.')
     monitor_ui.render_monitor(rate,dividend,spread)
 
+
+
+def main():
+    """Entrypoint hook for direct module execution from streamlit_app.py."""
+    pass

@@ -851,21 +851,25 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
         initial=not st.session_state.get('expiry_initial_attempted',False)
 
         from refresh_policy import refresh_due
-        timed=refresh_due(datetime.now(IST),result,
-            time.monotonic()-st.session_state.get('expiry_last_attempt',0))
+        is_market_open = refresh_due(datetime.now(IST), None, 0)
+        timed = refresh_due(datetime.now(IST), result,
+            time.monotonic() - st.session_state.get('expiry_last_attempt', 0))
 
-        if ready and (initial or timed) and not background.pending(st.session_state,'options'):
-            st.session_state.expiry_initial_attempted=True
-            st.session_state.expiry_last_attempt=time.monotonic()
-            background.submit(st.session_state,'options',engine.refresh_all,
-                background.frozen_client(client),rate,dict(dividend) if isinstance(dividend,dict) else dividend,spread)
+        if ready and is_market_open and (initial or timed) and not background.pending(st.session_state, 'options'):
+            st.session_state.expiry_initial_attempted = True
+            st.session_state.expiry_last_attempt = time.monotonic()
+            background.submit(st.session_state, 'options', engine.refresh_all,
+                background.frozen_client(client), rate, dict(dividend) if isinstance(dividend, dict) else dividend, spread)
+
         def refresh_in_background():
-            if not ready or background.pending(st.session_state,'options'):return
-            if refresh_due(datetime.now(IST),None,time.monotonic()-st.session_state.get('expiry_last_attempt',0)):
-                st.session_state.expiry_last_attempt=time.monotonic()
-                background.submit(st.session_state,'options',engine.refresh_all,
-                    background.frozen_client(client),rate,dict(dividend) if isinstance(dividend,dict) else dividend,spread)
-        background.status('options',refresh_in_background)
+            if not ready or not is_market_open or background.pending(st.session_state, 'options'):
+                return
+            if refresh_due(datetime.now(IST), None, time.monotonic() - st.session_state.get('expiry_last_attempt', 0)):
+                st.session_state.expiry_last_attempt = time.monotonic()
+                background.submit(st.session_state, 'options', engine.refresh_all,
+                    background.frozen_client(client), rate, dict(dividend) if isinstance(dividend, dict) else dividend, spread)
+
+        background.status('options', refresh_in_background)
 
         if result:
 

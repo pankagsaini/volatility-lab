@@ -1,50 +1,50 @@
 """Draft intraday backtest: exact-minute open fills, explicit missing-data skips."""
 from pathlib import Path
 from datetime import datetime,timedelta,timezone
-import json,gzip,sqlite3,math
-from contextlib import closing
+import json,gzip,sqlite3,math,threading
+from collections import OrderedDict
 import pandas as pd
-from backtest_common import record_skip, is_blacklisted_option
+from backtest_common import record_skip
 ROOT=Path(__file__).resolve().parent/'data/backtest_1minute'
+_CACHE_LOCK=threading.RLock()
+_FILE_CACHE=OrderedDict()
+_MAX_CACHE_FILES=2048
+
+def _read_gzip_json(path):
+ key=str(path)
+ with _CACHE_LOCK:
+  if key in _FILE_CACHE:
+   _FILE_CACHE.move_to_end(key)
+   return _FILE_CACHE[key]
+ with gzip.open(path,'rt',encoding='utf-8') as f:obj=json.load(f)
+ with _CACHE_LOCK:
+  _FILE_CACHE[key]=obj
+  while len(_FILE_CACHE)>_MAX_CACHE_FILES:_FILE_CACHE.popitem(last=False)
+ return obj
 
 def load(symbol,start,end):
- first,last=str(start),str(end)
- db_path = ROOT/'queue.sqlite'
- if not db_path.exists():
-  raise OSError('1-minute backtest database (queue.sqlite) is stored locally on desktop. Saved backtest runs are viewable below.')
- # Apply the same metadata predicates in SQLite, rather than deserializing every
- # completed request from the five-year archive for each selected date range.
- with closing(sqlite3.connect(db_path.resolve().as_uri()+'?mode=ro',uri=True,timeout=30)) as con:
-  jobs=con.execute('''SELECT kind,meta,file FROM jobs WHERE state="done" AND kind IN ("contracts","minute")
-   AND json_extract(meta,'$.symbol')=? AND (kind='contracts' OR
-   (COALESCE(json_extract(meta,'$.end'),'9999')>=? AND COALESCE(json_extract(meta,'$.start'),'0000')<=?))''',(symbol,first,last)).fetchall()
+ con=sqlite3.connect(ROOT/'queue.sqlite',timeout=30)
+ jobs=con.execute('SELECT kind,meta,file FROM jobs WHERE state="done" AND kind IN ("contracts","minute")').fetchall();con.close()
  contracts={};series={};conflicts=set()
  for kind,metastr,file in jobs:
   meta=json.loads(metastr)
-  key=meta.get('key')
-  if key and is_blacklisted_option(key,symbol,(meta.get('contract') or {}).get('weekly') is True):continue
-  with gzip.open(ROOT/file,'rt',encoding='utf-8') as f:o=json.load(f)
+  if meta.get('symbol')!=symbol:continue
+  if kind=='minute' and (meta.get('end','9999')<str(start) or meta.get('start','0000')>str(end)):continue
+  o=_read_gzip_json(ROOT/file)
   if kind=='contracts':
    for r in o['data']:
-    if r.get('instrument_type') in ('CE','PE'):
-     k=r.get('instrument_key')
-     if not is_blacklisted_option(k,symbol,r.get('weekly') is True):contracts[k]=r
+    if r.get('instrument_type') in ('CE','PE'):contracts[r['instrument_key']]=r
   else:
-   dest=series.setdefault(key,{})
+   key=meta['key'];dest=series.setdefault(key,{})
    for row in o['data']['candles']:
     dt=datetime.fromisoformat(row[0])
     if dt.tzinfo is None:continue
-    local=dt.astimezone(_IST)
-    # Chunks commonly span weeks. Avoid strftime for rows outside the requested
-    # sessions, while still parsing/validating every timestamp as before.
-    if not first<=local.date().isoformat()<=last:continue
-    stamp=local.strftime('%Y-%m-%d %H:%M')
+    stamp=dt.astimezone(timezone(timedelta(hours=5,minutes=30))).strftime('%Y-%m-%d %H:%M')
+    if not str(start)<=stamp[:10]<=str(end):continue
     if stamp in dest and dest[stamp]!=row[1:]:conflicts.add((key,stamp))
     dest[stamp]=row[1:]
  for key,stamp in conflicts:series[key].pop(stamp,None)
  return list(contracts.values()),series,len(conflicts)
-
-_IST=timezone(timedelta(hours=5,minutes=30))
 
 def simulate(contracts,series,spotkey,start,end,entry='09:20',exit='15:15',offset=0,wings=0,quantity=1,slip_bps=5,order_fee=25,turnover_bps=0,min_dte=1,max_dte=35,use_upstox_fees=False,signal_rows=None,filters=()):
  if entry>=exit or not 0<=slip_bps<10000 or quantity<=0 or offset<0 or wings<0:raise ValueError('Invalid strategy settings')

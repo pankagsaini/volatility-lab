@@ -23,7 +23,7 @@ def load_expiry_chains(symbol: str, data_dir: Path, today: Optional[date] = None
     """Scan and load option chains across all listed expiries for a symbol."""
     if today is None:
         today = datetime.now(IST).date()
-    
+
     files = sorted(data_dir.glob(f'{symbol.lower()}_option_quotes_*.json'))
     expiries_data = []
 
@@ -33,11 +33,11 @@ def load_expiry_chains(symbol: str, data_dir: Path, today: Optional[date] = None
             exp_date = datetime.strptime(exp_str, '%Y-%m-%d').date()
         except ValueError:
             continue
-        
+
         # Keep expiries on or after today
         if exp_date < today:
             continue
-        
+
         try:
             with path.open('r', encoding='utf-8') as f:
                 content = json.load(f)
@@ -48,10 +48,23 @@ def load_expiry_chains(symbol: str, data_dir: Path, today: Optional[date] = None
         chain = content.get('broker_option_chain', [])
         if not spot or not chain:
             continue
-        
-        # Calculate DTE in calendar days
-        dte = max(0.2, float((exp_date - today).days))
-        
+
+        # Calculate DTE from saved quote valuation timestamp when available
+        val_str = content.get('valuation', '')
+        if today is not None:
+            val_date = today
+        elif val_str:
+            try:
+                val_ts = pd.Timestamp(val_str)
+                if val_ts.tzinfo is not None:
+                    val_ts = val_ts.tz_convert(IST)
+                val_date = val_ts.date()
+            except Exception:
+                val_date = datetime.now(IST).date()
+        else:
+            val_date = datetime.now(IST).date()
+        dte = max(0.2, float((exp_date - val_date).days))
+
         expiries_data.append({
             'expiry': exp_str,
             'expiry_date': exp_date,
@@ -76,7 +89,7 @@ def extract_surface_mesh(
     iv_cap: float = 120.0
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[str], Dict[str, Any]]:
     """Build a uniform 2D mesh grid (Strikes/Moneyness x DTE -> IV%).
-    
+
     Returns:
         x_grid: 1D array of strike or moneyness values (shape: [N])
         y_grid: 1D array of DTEs (shape: [M])
@@ -101,7 +114,8 @@ def extract_surface_mesh(
         x_grid = np.linspace(100.0 - moneyness_range_pct, 100.0 + moneyness_range_pct, n_strikes)
     else:
         # Absolute strike space centered around ATM
-        strike_step = 50.0 if ref_spot < 35000 else 100.0
+        raw_strikes = sorted({float(item['strike_price']) for item in filtered[0].get('chain', []) if item.get('strike_price')})
+        strike_step = float(np.median(np.diff(raw_strikes))) if len(raw_strikes) >= 2 else (50.0 if ref_spot < 35000 else 100.0)
         atm_strike = round(ref_spot / strike_step) * strike_step
         half_span = ref_spot * (moneyness_range_pct / 100.0)
         x_grid = np.linspace(atm_strike - half_span, atm_strike + half_span, n_strikes)
@@ -123,7 +137,7 @@ def extract_surface_mesh(
             k = item.get('strike_price')
             if k is None or not np.isfinite(k):
                 continue
-            
+
             # Check moneyness boundary
             m_pct = (k / spot) * 100.0
             if abs(m_pct - 100.0) > (moneyness_range_pct * 1.35):
@@ -131,7 +145,7 @@ def extract_surface_mesh(
 
             c_iv = item.get('call_options', {}).get('option_greeks', {}).get('iv', 0.0) or 0.0
             p_iv = item.get('put_options', {}).get('option_greeks', {}).get('iv', 0.0) or 0.0
-            
+
             # Select IV based on mode
             if iv_mode == 'otm':
                 # Institutional standard: Puts below ATM, Calls above ATM
@@ -188,11 +202,12 @@ def extract_surface_mesh(
     front_atm_iv = float(z_matrix[0, atm_idx])
     back_atm_iv = float(z_matrix[-1, atm_idx])
     term_slope = back_atm_iv - front_atm_iv
-    
-    # Skew steepness: 96% Moneyness IV minus 104% Moneyness IV at front expiry
-    left_idx = max(0, int(len(x_grid) * 0.2))
-    right_idx = min(len(x_grid) - 1, int(len(x_grid) * 0.8))
-    front_skew = float(z_matrix[0, left_idx] - z_matrix[0, right_idx])
+
+    # Skew steepness: explicitly interpolate at 96% and 104% moneyness (or equivalent strikes)
+    target_left = 96.0 if space_mode == 'moneyness' else ref_spot * 0.96
+    target_right = 104.0 if space_mode == 'moneyness' else ref_spot * 1.04
+    iv_left, iv_right = np.interp([target_left, target_right], x_grid, z_matrix[0])
+    front_skew = float(iv_left - iv_right)
 
     diagnostics = {
         'num_expiries': len(y_arr),
@@ -220,7 +235,7 @@ def build_surface_figure(
 ) -> go.Figure:
     """Create a Plotly 3D Surface figure with terminal styling and contour projections."""
     x_title = 'Moneyness % (Strike / Spot)' if space_mode == 'moneyness' else 'Strike Price (₹)'
-    
+
     # Custom hover template
     hover_template = (
         '<b>%{text}</b><br>' +
@@ -316,7 +331,7 @@ def build_surface_figure(
                 zerolinecolor='#334155'
             ),
             camera=chosen_camera,
-            aspectratio=dict(x=1.3, y=1.1, z=0.85)
+            aspectratio=dict(x=1.1, y=1.2, z=0.7)
         )
     )
 
@@ -343,74 +358,97 @@ def render_vol_surface_3d(symbol: str, selected_row: Dict[str, Any], result: Dic
         st.info(f"No multi-expiry option chains found on disk for {symbol}. Chains sync automatically during market hours.")
         return
 
-    # Surface Controls Row
-    c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.2, 1.5])
-    
-    space_label = c1.segmented_control(
-        'X-Axis Space',
-        ['Moneyness %', 'Absolute Strike (₹)'],
-        default='Moneyness %',
-        key=f'surf_space_{symbol}',
-        label_visibility='collapsed'
-    ) or 'Moneyness %'
-    space_mode = 'moneyness' if space_label == 'Moneyness %' else 'strike'
+    # Surface configuration controls
+    ctrl_col1, ctrl_col2, ctrl_col3, ctrl_col4 = st.columns([1.2, 1.2, 1.2, 1.4])
 
-    iv_label = c2.segmented_control(
-        'IV Skew Metric',
-        ['OTM Skew', 'Call IV', 'Put IV', 'Call/Put Mid'],
-        default='OTM Skew',
-        key=f'surf_iv_mode_{symbol}',
-        label_visibility='collapsed'
-    ) or 'OTM Skew'
-    iv_mode_map = {'OTM Skew': 'otm', 'Call IV': 'call', 'Put IV': 'put', 'Call/Put Mid': 'mid'}
-    iv_mode = iv_mode_map.get(iv_label, 'otm')
+    with ctrl_col1:
+        iv_mode = st.selectbox(
+            "IV Selection",
+            options=['otm', 'mid', 'call', 'put'],
+            format_func=lambda x: {
+                'otm': 'OTM Standard (P-Put / C-Call)',
+                'mid': 'Mid-Market (Avg Call/Put)',
+                'call': 'Calls Only',
+                'put': 'Puts Only'
+            }.get(x, x),
+            key=f"3d_iv_mode_{symbol}"
+        )
 
-    preset_label = c3.selectbox(
-        'Camera View',
-        ['3D Isometric', 'Smile Profile (Strike)', 'Term Profile (DTE)', 'Top-Down Heatmap'],
-        key=f'surf_cam_{symbol}'
-    )
-    cam_preset_map = {
-        '3D Isometric': 'default',
-        'Smile Profile (Strike)': 'smile',
-        'Term Profile (DTE)': 'term',
-        'Top-Down Heatmap': 'topdown'
-    }
-    camera_preset = cam_preset_map.get(preset_label, 'default')
+    with ctrl_col2:
+        space_mode = st.selectbox(
+            "Strike Axis",
+            options=['moneyness', 'strike'],
+            format_func=lambda x: "Moneyness % (Strike/Spot)" if x == 'moneyness' else "Absolute Strike (₹)",
+            key=f"3d_space_mode_{symbol}"
+        )
 
-    with c4.popover('⚙️ Surface Settings'):
-        moneyness_range = st.slider('Strike Range Around ATM (±%)', 4.0, 15.0, 8.0, 0.5, key=f'surf_mrange_{symbol}')
-        colorscale = st.selectbox('Palette', ['Tealgrn', 'Viridis', 'Turbo', 'Plasma', 'Electric'], key=f'surf_color_{symbol}')
-        include_zero_dte = st.toggle('Include 0-DTE Expiry', value=True, key=f'surf_0dte_{symbol}', help='Near-expiry deep wings can have solver artifacts.')
-        iv_cap = st.slider('IV Outlier Cap (%)', 60.0, 250.0, 120.0, 10.0, key=f'surf_ivcap_{symbol}')
+    with ctrl_col3:
+        colorscale = st.selectbox(
+            "Color Theme",
+            options=['Tealgrn', 'Viridis', 'Plasma', 'Turbo', 'Spectral'],
+            key=f"3d_colorscale_{symbol}"
+        )
 
-    # Extract mesh
-    x_grid, y_grid, z_matrix, expiry_labels, diags = extract_surface_mesh(
+    with ctrl_col4:
+        camera_preset = st.selectbox(
+            "Camera Angle",
+            options=['default', 'smile', 'term', 'topdown'],
+            format_func=lambda x: {
+                'default': '3D Isometric',
+                'smile': 'Smile Profile (Strike vs IV)',
+                'term': 'Term Structure (DTE vs IV)',
+                'topdown': 'Top-Down Heatmap'
+            }.get(x, x),
+            key=f"3d_camera_{symbol}"
+        )
+
+    # Advanced filter toggles inside expander
+    with st.expander("Surface Mesh Settings & Range Filters", expanded=False):
+        exp_col1, exp_col2, exp_col3 = st.columns(3)
+
+        with exp_col1:
+            moneyness_range_pct = st.slider(
+                "Moneyness Span (±%)",
+                min_value=3.0,
+                max_value=15.0,
+                value=8.0,
+                step=1.0,
+                key=f"3d_m_span_{symbol}"
+            )
+
+        with exp_col2:
+            include_zero_dte = st.checkbox(
+                "Include 0-DTE Expiry",
+                value=True,
+                help="Include same-day expiring option chain if available",
+                key=f"3d_0dte_{symbol}"
+            )
+
+        with exp_col3:
+            iv_cap = st.slider(
+                "Max IV Cap (%)",
+                min_value=40.0,
+                max_value=200.0,
+                value=120.0,
+                step=10.0,
+                help="Cap extreme out-of-the-money IV solver spikes near expiry",
+                key=f"3d_iv_cap_{symbol}"
+            )
+
+    # Extract surface mesh
+    x_grid, y_grid, z_matrix, expiry_labels, diag = extract_surface_mesh(
         expiries_data=expiries_data,
         iv_mode=iv_mode,
         space_mode=space_mode,
-        moneyness_range_pct=moneyness_range,
-        n_strikes=27,
+        moneyness_range_pct=moneyness_range_pct,
+        n_strikes=25,
         include_zero_dte=include_zero_dte,
         iv_cap=iv_cap
     )
 
-    if z_matrix.size == 0 or len(y_grid) < 2:
-        st.warning('Insufficient multi-expiry quotes to render a 3D surface mesh (at least 2 expiries required).')
+    if z_matrix.size == 0:
+        st.warning("Insufficient valid option chain data across expiries to construct 3D surface.")
         return
-
-    # Metrics Strip
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric('Expiries Mapped', f"{diags['num_expiries']} listed dates", f"{diags['min_dte']:.1f}d to {diags['max_dte']:.0f}d")
-    
-    slope = diags['term_slope']
-    slope_desc = 'Contango (Normal)' if slope > 0.5 else ('Backwardation (Inverted)' if slope < -0.5 else 'Flat Term')
-    m2.metric('ATM Term Slope', f"{slope:+.2f} pp", slope_desc, delta_color='normal' if slope >= 0 else 'inverse')
-    
-    skew = diags['front_skew']
-    m3.metric('Front Skew (Put−Call)', f"{skew:+.2f} pp", 'Downside Put Premium' if skew > 0 else 'Call Wing Premium')
-    
-    m4.metric('Reference Spot', f"{diags['ref_spot']:,.2f}", f"ATM IV: {diags['front_atm_iv']:.2f}%")
 
     # Render Plotly 3D Figure
     fig = build_surface_figure(
@@ -423,20 +461,15 @@ def render_vol_surface_3d(symbol: str, selected_row: Dict[str, Any], result: Dic
         camera_preset=camera_preset
     )
 
-    st.plotly_chart(fig, width='stretch', key=f'plotly_surf_{symbol}', config={'displaylogo': False, 'modeBarButtonsToRemove': ['lasso2d', 'select2d']})
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True})
 
-    st.caption('💡 **3D Projections**: Floor shows iso-volatility contours; Side wall shows Term Structure slices; Front wall shows Volatility Smile curvature. Click and drag in the chart to freely rotate in 3D.')
-
-    # Export Popover
-    with st.popover('Export 3D Surface Matrix'):
-        x_col_names = [f"{v:.1f}%" if space_mode == 'moneyness' else f"{v:.0f}" for v in x_grid]
-        df_export = pd.DataFrame(z_matrix, index=expiry_labels, columns=x_col_names)
-        df_export.index.name = 'Expiry (DTE)'
-        st.dataframe(df_export.round(2), width='stretch')
-        st.download_button(
-            'Download Surface CSV',
-            df_export.to_csv().encode('utf-8'),
-            file_name=f'{symbol.lower()}_vol_surface_3d.csv',
-            mime='text/csv',
-            key=f'dl_surf_{symbol}'
-        )
+    # Metric Badges
+    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+    with m_col1:
+        st.metric("Expiries Mesh", f"{diag['num_expiries']} Expiries", f"{diag['min_dte']:.1f}d to {diag['max_dte']:.1f}d DTE")
+    with m_col2:
+        st.metric("Front ATM IV", f"{diag['front_atm_iv']:.2f}%")
+    with m_col3:
+        st.metric("Term Structure Slope", f"{diag['term_slope']:+.2f}%", help="Back ATM IV minus Front ATM IV")
+    with m_col4:
+        st.metric("Front Skew (96%-104%)", f"{diag['front_skew']:+.2f}%", help="Front expiry OTM Put IV minus OTM Call IV")
