@@ -396,6 +396,37 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             self.assertNotIn("plotly==7.1.0", req_text)
             self.assertNotIn("pypdf==6.20.1", req_text)
 
+    def test_data_consistency_and_sync_integrity(self):
+        from expiry_data import load_snapshot
+        from smile import load_smile, has_usable_points
+        from market_table import atm_values
+
+        DATA = Path(__file__).resolve().parent / "Volatility Lab" / "data"
+        snap = load_snapshot("", allow_saved=True)
+        self.assertIsNotNone(snap)
+        for r in snap.get("rows", []):
+            self.assertIsNotNone(r.get("DTE"), f"Missing DTE in {r.get('Instrument')} {r.get('Expiry')}")
+            self.assertGreater(float(r["DTE"]), 0)
+
+        r0 = snap["rows"][0]
+        self.assertIsNotNone(r0.get("Month future LTP"))
+        self.assertIsNotNone(r0.get("Synthetic future"))
+        diff = abs(float(r0["Synthetic future"]) - float(r0["Month future LTP"]))
+        self.assertLess(diff, 100.0)
+
+        # Guard against dict config in load_smile
+        smile_dict = load_smile(DATA / "monitor.sqlite", "NIFTY", r0["Expiry"], {"dict": 1}, r0.get("As of"))
+        self.assertIsNotNone(smile_dict)
+        self.assertTrue(has_usable_points(smile_dict))
+
+        # Test single-sided option liquidity
+        dummy_chain = pd.DataFrame([
+            {"strike": 25050.0, "option_type": "CE", "iv": 0.155},
+            {"strike": 25050.0, "option_type": "PE", "iv": 0.0}
+        ])
+        c_iv, p_iv, atm_iv = atm_values(dummy_chain, [25050.0], 25050.0)
+        self.assertEqual(atm_iv, 15.5)
+
     def test_straddle_net_delta_neutral_and_atm_selection(self):
         if "history_policy" in sys.modules and not hasattr(sys.modules["history_policy"], "__file__"): del sys.modules["history_policy"]
         from restored_lab import compute_straddle_greeks

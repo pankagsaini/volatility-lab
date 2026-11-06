@@ -388,6 +388,15 @@ def align_snapshot(result):
         if row_price and (row.get('ATM strike') is None or abs(float(row.get('ATM strike') or 0) - float(row_price)) > step * 1.5):
             row['ATM strike'] = round(float(row_price) / step) * step
 
+        # Ensure DTE is always populated for consistent display across radar & term structure
+        if row.get('DTE') is None and exp and row.get('As of'):
+            try:
+                exp_date = pd.Timestamp(exp).date()
+                asof_date = pd.Timestamp(row['As of']).date()
+                row['DTE'] = max(0.2, float((exp_date - asof_date).days))
+            except Exception:
+                pass
+
         if row.get('Synthetic future') is None and sym and exp:
             q_file = DATA / f'{sym.lower()}_option_quotes_{exp}.json'
             if q_file.exists():
@@ -424,6 +433,9 @@ def align_snapshot(result):
         else:
             row['Month future LTP']=row.get('Month future LTP',row.get('Listed future'))
             row['Future reference']=row.get('Future reference','Same-expiry monthly future' if row.get('Type')=='Monthly' else 'Unavailable')
+            try:
+                if np.isfinite(float(row.get('Synthetic future'))):row['Synthetic status']='Ready · same-expiry monthly future'
+            except (TypeError,ValueError):pass
 
     # Fallback: if Month future LTP is still unpopulated, check latest futures snapshots
     fut_db = DATA / 'futures/futures.sqlite'

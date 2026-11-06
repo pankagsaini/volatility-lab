@@ -106,6 +106,13 @@ def import_report(obj,rate,dividend,spread):
                         continue
             save_intraday(DATA/'monitor.sqlite',config,row)
             save_smile(DATA/'monitor.sqlite',symbol,e,config,row['As of'],smile_points(chain,strikes,spot),capture_source='Google Drive')
+            try:
+                target_q = DATA / f'{symbol.lower()}_option_quotes_{e}.json'
+                q_payload = {'provider':'Upstox','valuation':asof.isoformat(),'spot':spot,'broker_option_chain':raw,'broker_received_at':rec.get('retrieved_at',asof.isoformat()),'iv_source':'Upstox supplied IV (Google Cloud)'}
+                tmp_q = target_q.with_suffix('.tmp')
+                tmp_q.write_text(json.dumps(q_payload, default=str), encoding='utf-8')
+                tmp_q.replace(target_q)
+            except Exception:pass
             from expiry_data import db
             with closing(db()) as con:
                 prior=con.execute('SELECT MAX(as_of) FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND substr(as_of,1,10)=?', (symbol,e,config,str(asof.date()))).fetchone()[0]

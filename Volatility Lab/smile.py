@@ -94,8 +94,13 @@ def load_smile(path, symbol, expiry, config, as_of):
     with closing(sqlite3.connect(path)) as con:
         if not con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='smile_observations'").fetchone():
             return None
-        row = con.execute('SELECT payload FROM smile_observations WHERE symbol=? AND expiry=? AND config=? AND as_of=? AND version=?',
-                          (symbol, str(expiry), config, str(as_of), VERSION)).fetchone()
+        row = None
+        if isinstance(config, str) and config:
+            try:
+                row = con.execute('SELECT payload FROM smile_observations WHERE symbol=? AND expiry=? AND config=? AND as_of=? AND version=?',
+                                  (symbol, str(expiry), config, str(as_of), VERSION)).fetchone()
+            except sqlite3.ProgrammingError:
+                row = None
         if not row:
             row = con.execute('SELECT payload FROM smile_observations WHERE symbol=? AND expiry=? AND as_of=? AND version=?',
                               (symbol, str(expiry), str(as_of), VERSION)).fetchone()

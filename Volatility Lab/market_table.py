@@ -98,8 +98,10 @@ def atm_values(chain,strikes,spot):
     vals=[]
     for kind in ['CE','PE']:
         side=chain[(chain.strike==strike)&(chain.option_type==kind)]
-        vals.append(float(side.iv.iloc[0])*100 if len(side) else np.nan)
-    return vals[0],vals[1],float(np.mean(vals))
+        v = float(side.iv.iloc[0])*100 if len(side) and np.isfinite(side.iv.iloc[0]) and side.iv.iloc[0]>0 else np.nan
+        vals.append(v)
+    valid_vals = [v for v in vals if np.isfinite(v) and v > 0]
+    return vals[0],vals[1],float(np.mean(valid_vals)) if valid_vals else np.nan
 
 
 class Monitor:

@@ -268,12 +268,21 @@ def render_trade_tools(data, symbol, selected, rate, dividend, spread):
     from trade_review_ui import atm_pair, freshness, make_position, option_book, parity_forward, position_greeks, stress_position
     from history_policy import assumptions
     from dividend_yield import for_symbol
-    paths = sorted(data.glob(symbol.lower() + '_option_quotes_*.json'), reverse=True)
-    if not paths:
-        st.info('Live scenario stress testing requires local option book JSON archives.')
-        return
+    chosen_exp = selected.get('Expiry') if selected else None
+    candidate = (data / f"{symbol.lower()}_option_quotes_{chosen_exp}.json") if chosen_exp else None
+    if candidate and candidate.exists():
+        path = candidate
+    else:
+        now_date = datetime.now(IST).strftime('%Y-%m-%d')
+        active_paths = [p for p in sorted(data.glob(symbol.lower() + '_option_quotes_*.json'))
+                        if p.stem.replace(symbol.lower() + '_option_quotes_', '') >= now_date]
+        if not active_paths:
+            active_paths = sorted(data.glob(symbol.lower() + '_option_quotes_*.json'))
+        if not active_paths:
+            st.info('Live scenario stress testing requires local option book JSON archives.')
+            return
+        path = active_paths[0]
     try:
-        path = paths[0]
         payload = json.loads(path.read_text(encoding='utf-8'))
         settings = assumptions(data / 'monitor.sqlite', payload.get('config'))
         if not settings:
