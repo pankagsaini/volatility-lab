@@ -1,3 +1,4 @@
+"""Unified backtest cockpit: builder, charge validation, and run review."""
 from datetime import date,time
 import json
 import pandas as pd
@@ -9,15 +10,14 @@ from strategy_backtest import TEMPLATES,SCENARIO_PRESETS,scenario_preset,templat
 from backtest_report import render as report,STORE
 import backtest_jobs as jobs
 
-def checked_charges():
-    return jobs.fee_status()
-
 def _apply_backtest_theme():
-    try:
-        import ui_theme
-        ui_theme.install_classic_modern_theme()
-    except Exception:
-        pass
+    import ui_theme
+    ui_theme.install_classic_modern_theme()
+
+def checked_charges():
+    c=read_json(ROOT.parent/'charges'/'upstox'/'current.json')
+    if not c:
+        st.warning('Broker charge configuration is missing; backtests will default to flat 0.15% fee model.')
 
 def render_options():
     _apply_backtest_theme()
@@ -81,17 +81,28 @@ def render_options():
             def_lo, def_hi = preset_filters.get(metric, (0., 100.))
             a,b=st.columns(2);low=a.number_input(metric+' minimum',value=float(def_lo),key=f'builder_low_{preset}_{metric}');high=b.number_input(metric+' maximum',value=float(def_hi),key=f'builder_high_{preset}_{metric}')
             filters.append((metric,low,high))
-        st.caption('Signals must be same-expiry and no more than 15 minutes old. Historical OHLC has no IV or delta; missing signals exclude that session.')
+        st.caption('Signals must be same-expiry and no more than 15 minutes old. Live Greek signals are available for Oct 20–Nov 6, 2026. For 2022–2025 backtests, leave signal filters empty to run on pure 1-minute OHLC candles.')
 
     settings=dict(name=name,template=preset,symbol=symbol,start=str(start),end=str(end),entry=entry.strftime('%H:%M'),exit=exit.strftime('%H:%M'),lots=int(lots),capital_allocated=capital_allocated,margin_per_lot=margin_per_lot,fees=fees,trigger=trigger,mode=mode,expiry_rank=expiry_rank,trade_size=trade_size,stop=stop,target=target,max_trades=max_trades,dte=dte,bias=direction,weekdays=weekdays,legs=legs.to_dict('records'),filters=filters)
-    if st.button('Run backtest',type='primary',disabled=jobs.pending(st.session_state)):
+    
+    btn_col, stat_col = st.columns([1.5, 3.5])
+    with btn_col:
+        run_clicked = st.button('Run backtest', type='primary', disabled=jobs.pending(st.session_state))
+    if run_clicked:
         try:
             validate(settings)
             if not weekdays:raise ValueError('Select at least one weekday.')
             if any(low>high for _,low,high in filters):raise ValueError('Filter minimum must not exceed maximum.')
             st.session_state.pop('_backtest_error',None)
             jobs.submit(st.session_state,'Options',settings)
+            try:
+                st.rerun(scope='app')
+            except TypeError:
+                st.rerun()
         except (ValueError,KeyError,TypeError,OSError) as exc:st.error('Cannot run: '+str(exc))
+
+    render_run_status()
+
     if 'builder_result' in st.session_state:report(*st.session_state.builder_result)
     saved=st.expander('Saved runs',key='backtest_saved_runs',on_change='rerun')
     if saved.open:
@@ -143,11 +154,17 @@ def render_run_status():
         st.caption('Settings for this run are frozen. You can keep using the lab.')
     else:
         left,right=st.columns([4,1])
-        left.success(task.kind+' backtest finished') if task.future.exception() is None else left.warning('Backtest needs attention')
+        if task.future.exception() is None:
+            left.success(task.kind+' backtest finished')
+        else:
+            left.warning(f"Backtest needs attention: {task.future.exception()}")
         if right.button('View results',key='view_completed_backtest',width='stretch'):
             outcome=jobs.collect(st.session_state)
             if outcome and not outcome[0]:st.session_state['_backtest_error']=outcome[1]
-            st.rerun()
+            try:
+                st.rerun(scope='app')
+            except TypeError:
+                st.rerun()
 
 def render():
     _apply_backtest_theme()
@@ -160,4 +177,3 @@ def render():
         from futures_backtest_ui import render as futures_render
         futures_render()
     else:render_options()
-    render_run_status()
