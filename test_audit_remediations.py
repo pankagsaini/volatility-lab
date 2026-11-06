@@ -32,18 +32,13 @@ if "msvcrt" not in sys.modules:
 
 
 # Add patched directory to sys.path when running in sandbox or local repo
-PATCH_DIR = Path("/tmp/vol_lab_patched")
-lab_dir = Path(__file__).resolve().parent / "Volatility Lab"
-if PATCH_DIR.exists() and str(PATCH_DIR) not in sys.path:
-    sys.path.insert(0, str(PATCH_DIR))
-    CODE_GS_PATH = PATCH_DIR / "Code.gs"
-    BTD_PATH = PATCH_DIR / "backtest_download.py"
-else:
-    PATCH_DIR = lab_dir
-    if lab_dir.exists() and str(lab_dir) not in sys.path:
-        sys.path.insert(0, str(lab_dir))
-    CODE_GS_PATH = lab_dir / "cloud" / "apps_script" / "Code.gs"
-    BTD_PATH = lab_dir / "backtest_download.py"
+HERE_DIR = Path(__file__).resolve().parent
+PATCH_DIR = Path("/working_dir/c_e735eeeacddd5439/artifacts/file_generation/ttl=63d/intermediate/patched")
+for candidate in (PATCH_DIR, HERE_DIR, HERE_DIR / "Volatility Lab"):
+    if candidate.exists() and str(candidate) not in sys.path:
+        sys.path.insert(0, str(candidate))
+if not PATCH_DIR.exists():
+    PATCH_DIR = HERE_DIR / "Volatility Lab"
 
 import vol_lib
 import option_math
@@ -196,7 +191,8 @@ class TestTrack2CloudAndDownloaders(unittest.TestCase):
     """Track 2: Cloud Capture (Code.gs) and Background Downloaders tests."""
 
     def test_code_gs_weekend_guard_and_budget_fixes(self):
-        code_gs = CODE_GS_PATH.read_text(encoding="utf-8")
+        code_gs_path = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs") if (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").exists() else (PATCH_DIR / "Code.gs")
+        code_gs = code_gs_path.read_text(encoding="utf-8")
         # 1. Weekend guard appears before reconcilePriorSession() in scheduledCapture()
         sched_idx = code_gs.index("function scheduledCapture()")
         sched_body = code_gs[sched_idx:sched_idx + 1200]
@@ -221,7 +217,7 @@ class TestTrack2CloudAndDownloaders(unittest.TestCase):
             self.assertEqual(first, second)
 
     def test_backtest_download_db_pragmas_and_3_strike_isolation(self):
-        btd_code = BTD_PATH.read_text(encoding="utf-8")
+        btd_code = (PATCH_DIR / "backtest_download.py").read_text(encoding="utf-8")
         self.assertIn("PRAGMA busy_timeout=30000", btd_code)
         self.assertIn('WHERE state IN ("failed","running")', btd_code)
         self.assertNotIn("if attempts>=2:status(c,'paused_error',error_type=type(exc).__name__);return", btd_code)
@@ -306,6 +302,99 @@ class TestTrack4UIAndCloudCaching(unittest.TestCase):
         # Now state should NOT be stale within the 60s TTL window
         self.assertFalse(background_refresh.is_stale(state, "quotes", ttl=60.0))
         self.assertTrue(background_refresh.is_stale(state, "quotes", ttl=0.0))
+
+
+
+
+class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
+    """Track 5: Secondary Modules (google_archive_sync, futures_view_cache, option_context,
+    options_context_cache, web_server), requirements.txt, and Classic & Modern UI Theme Engine.
+    """
+
+    def test_futures_view_cache_no_st_ino_and_defensive_copy(self):
+        import futures_view_cache
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "sample.txt"
+            p.write_text("hello", encoding="utf-8")
+            rev = futures_view_cache.file_revision(p)
+            self.assertEqual(len(rev), 2)  # (st_mtime_ns, st_size) without st_ino
+
+            rev1 = futures_view_cache.rolling_revision(tmp, "NIFTY")
+            rev2 = futures_view_cache.rolling_revision(tmp, "NIFTY")
+            self.assertEqual(rev1, rev2)
+            self.assertEqual(rev1[0], "missing")
+
+    def test_option_context_configurable_150_iv_ceiling(self):
+        from types import SimpleNamespace
+        sys.modules.setdefault("history_policy", SimpleNamespace(compatible=lambda path, val: [val]))
+        import option_context
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "iv.sqlite"
+            with sqlite3.connect(db_path) as conn:
+                conn.execute(
+                    "CREATE TABLE expiry_observations (symbol TEXT, date TEXT, expiry TEXT, iv REAL, spread REAL, source TEXT, config TEXT)"
+                )
+                conn.execute("INSERT INTO expiry_observations VALUES ('NIFTY', '2026-10-15', '2026-10-22', 95.0, 0.2, 'Upstox supplied IV (Google Cloud)', 'v1')")
+                conn.execute("INSERT INTO expiry_observations VALUES ('NIFTY', '2026-10-15', '2026-10-22', 250.0, 0.2, 'Upstox supplied IV (Google Cloud)', 'v1')")
+            res = option_context.recorded_context(db_path, "NIFTY", "v1")
+            self.assertEqual(len(res), 1)
+            self.assertAlmostEqual(float(res["IV"].iloc[0]), 95.0, places=4)
+            del conn, res
+            import gc; gc.collect()
+
+    def test_options_context_cache_lock_free_disk_read(self):
+        import options_context_cache
+        from types import SimpleNamespace
+        sys.modules["corporate_event_calendar"] = SimpleNamespace(
+            _read_cache=lambda p: {"sources": {"rbi": {"events": [{"Date": "2026-10-20", "Event": "RBI MPC", "Category": "Macro", "Source": "RBI"}]}}},
+            _filter=lambda rows, s, e: rows,
+            _bank_results=lambda rows: rows,
+            _index_macro_events=lambda rows: rows,
+            automatic_events=lambda root, sym, s, e: ([], "Ready"),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = options_context_cache.CalendarCache(fetcher=lambda r, s, st, en: ([], "Ready"))
+            rows, status = cache.get(tmp, "NIFTY", "2026-10-01", "2026-10-31")
+            self.assertTrue(len(rows) >= 1)
+            self.assertEqual(rows[0]["Event"], "RBI MPC")
+            cache.close()
+
+    def test_ui_theme_figure_styling_and_session_badge(self):
+        import importlib.util
+        ui_p = Path(__file__).resolve().parent / "ui_theme.py"
+        if not ui_p.exists():
+            ui_p = Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py"
+        spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
+        ui_theme = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ui_theme)
+        badge_live = ui_theme.market_session_badge_html(datetime(2026, 10, 16, 10, 30, tzinfo=ZoneInfo("Asia/Kolkata")))
+        self.assertIn("NSE LIVE", badge_live)
+        badge_closed = ui_theme.market_session_badge_html(datetime(2026, 10, 18, 12, 0, tzinfo=ZoneInfo("Asia/Kolkata")))
+        self.assertIn("NSE CLOSED", badge_closed)
+
+        called = {}
+        class DummyFig:
+            layout = SimpleNamespace(margin=SimpleNamespace(l=10, r=10, t=20, b=15))
+            data = []
+            def update_layout(self, **kw):
+                called["layout"] = kw
+            def update_xaxes(self, **kw):
+                called["xaxes"] = kw
+            def update_yaxes(self, **kw):
+                called["yaxes"] = kw
+        fig = DummyFig()
+        ui_theme.style_plotly_figure(fig)
+        self.assertIn("layout", called)
+        self.assertGreaterEqual(called["layout"]["margin"]["t"], 38)
+        self.assertEqual(called["xaxes"]["griddash"], "dot")
+
+    def test_requirements_txt_valid_pypi_specifiers(self):
+        req_path = Path(__file__).resolve().parent / "requirements.txt"
+        if req_path.exists():
+            req_text = req_path.read_text(encoding="utf-8")
+            self.assertNotIn("streamlit==1.64.0", req_text)
+            self.assertNotIn("plotly==7.1.0", req_text)
+            self.assertNotIn("pypdf==6.20.1", req_text)
 
 
 if __name__ == "__main__":

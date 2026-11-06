@@ -1,14 +1,14 @@
 [server]
-headless = true
 fileWatcherType = "auto"
-folderWatchBlacklist = [".runtime", ".dependencies", "data", "logs", "__pycache__", ".auth"]
+folderWatchBlacklist = [".runtime", ".dependencies", "data", "logs", "__pycache__", ".auth", ".audit_backups"]
 
 [browser]
 gatherUsageStats = false
 
 [theme]
 base = "dark"
-primaryColor = "#10b981"
-backgroundColor = "#0b1220"
-secondaryBackgroundColor = "#111c2d"
-textColor = "#e5edf5"
+primaryColor = "#38bdf8"
+backgroundColor = "#090d16"
+secondaryBackgroundColor = "#111827"
+textColor = "#f1f5f9"
+font = "sans serif"

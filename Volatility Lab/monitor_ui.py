@@ -33,7 +33,7 @@ from quote_status import snapshot_status
 from expiry_forecast import expiry_forecast, VERSION as EXPIRY_VERSION,term_structure_forecast,TERM_VERSION
 
 def render_trade_decision_radar(selected_rows):
-    """Executive trade decision panel with regime, spread bias, expected move, and basis in classic classy styling."""
+    """Executive trade decision panel with regime, spread bias, expected move, and basis in Classic & Modern styling."""
     if not selected_rows:
         return
 
@@ -46,11 +46,17 @@ def render_trade_decision_radar(selected_rows):
         except (ValueError, TypeError):
             return None
 
-    st.markdown('<div style="margin-top:2px; margin-bottom:10px;"><span style="font-size:0.82rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#38bdf8;">◈ Volatility Radar</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="margin-top:4px; margin-bottom:10px; display:flex; align-items:center; gap:8px;">'
+        '<span style="color:#d4af37; font-size:0.95rem;">◈</span>'
+        '<span style="font-family:var(--vl-font-sans, sans-serif); font-size:0.80rem; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#e2e8f0;">Volatility Radar</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
     cols = st.columns(len(selected_rows))
     for col, row in zip(cols, selected_rows):
-        symbol = str(row.get('Instrument', '—'))
-        exp = str(row.get('Expiry', '—'))
+        symbol = str(row.get('Instrument', '-'))
+        exp = str(row.get('Expiry', '-'))
         spot = _safe_f(row.get('Price'))
         iv = _safe_f(row.get('IV'))
         spread = _safe_f(row.get('IV-RV Spread'))
@@ -78,66 +84,66 @@ def render_trade_decision_radar(selected_rows):
             if spread is not None:
                 if spread > 1.5:
                     bias_badge = 'RICH VOLATILITY'
-                    bias_color = '#10b981'
-                    bias_bg = 'rgba(16, 185, 129, 0.12)'
-                    bias_border = '#10b981'
+                    bias_color = '#34d399'
+                    bias_bg = 'rgba(16, 185, 129, 0.14)'
+                    bias_border = 'rgba(16, 185, 129, 0.45)'
                     bias_text = 'Premium Selling Favorable — IV trades at a premium over trailing realized volatility.'
                 elif spread < -1.5:
                     bias_badge = 'COMPRESSED VOLATILITY'
                     bias_color = '#38bdf8'
-                    bias_bg = 'rgba(56, 189, 248, 0.12)'
-                    bias_border = '#38bdf8'
+                    bias_bg = 'rgba(56, 189, 248, 0.14)'
+                    bias_border = 'rgba(56, 189, 248, 0.45)'
                     bias_text = 'Long Volatility Favorable — IV is discounted relative to realized movement.'
                 else:
                     bias_badge = 'FAIR VALUE SPREAD'
-                    bias_color = '#94a3b8'
+                    bias_color = '#cbd5e1'
                     bias_bg = 'rgba(148, 163, 184, 0.12)'
-                    bias_border = '#475569'
+                    bias_border = 'rgba(148, 163, 184, 0.35)'
                     bias_text = 'Spread Neutral — IV aligns with historical movement within normal bounds.'
             else:
                 bias_badge = 'SPREAD PENDING'
-                bias_color = '#f59e0b'
-                bias_bg = 'rgba(245, 158, 11, 0.12)'
-                bias_border = '#b45309'
+                bias_color = '#fbbf24'
+                bias_bg = 'rgba(245, 158, 11, 0.14)'
+                bias_border = 'rgba(245, 158, 11, 0.45)'
                 bias_text = 'Historical daily prices updating for RV alignment.'
 
             if syn is not None and m_fut is not None:
                 basis = syn - m_fut
                 basis_threshold = 30.0 if symbol == 'NIFTY' else 75.0
                 if abs(basis) <= basis_threshold:
-                    basis_status = f'● Parity Normal ({basis:+.1f} pts)'
-                    basis_color = '#10b981'
+                    basis_status = f'• Parity Normal ({basis:+.1f} pts)'
+                    basis_color = '#34d399'
                 else:
                     basis_status = f'⚠️ Basis Dislocation ({basis:+.1f} pts)'
-                    basis_color = '#f59e0b'
+                    basis_color = '#fbbf24'
             else:
                 basis_status = 'Parity: Reference'
                 basis_color = '#94a3b8'
 
-            skew_text = (f'Put Skew: +{rev25:.2f} pp' if rev25 > 0 else f'Call Skew: +{abs(rev25):.2f} pp' if rev25 < 0 else f'Skew: 0.00 pp') if rev25 is not None and np.isfinite(rev25) else 'Skew: —'
-            fut_txt = f"{m_fut:,.1f}" if m_fut is not None else "—"
-            syn_txt = f"{syn:,.1f}" if syn is not None else "—"
+            skew_text = (f'Put Skew: +{rev25:.2f} pp' if rev25 > 0 else f'Call Skew: +{abs(rev25):.2f} pp' if rev25 < 0 else f'Skew: 0.00 pp') if rev25 is not None and np.isfinite(rev25) else 'Skew: -'
+            fut_txt = f"{m_fut:,.1f}" if m_fut is not None else "-"
+            syn_txt = f"{syn:,.1f}" if syn is not None else "-"
 
             card_html = (
-                f'<div style="background:#131f31; border:1px solid #26364d; border-radius:12px; padding:14px 16px; margin-bottom:12px; box-shadow:0 4px 16px rgba(0,0,0,0.25);">'
-                f'<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e2c40; padding-bottom:8px; margin-bottom:10px;">'
-                f'<div><span style="font-weight:700; font-size:1.1rem; color:#f8fafc;">{symbol}</span><span style="color:#94a3b8; font-size:0.8rem; margin-left:6px;">{exp} ({dte:.1f}d)</span></div>'
-                f'<span style="background:{bias_bg}; color:{bias_color}; border:1px solid {bias_border}; font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:6px; letter-spacing:0.04em;">{bias_badge}</span>'
+                f'<div style="background:linear-gradient(180deg, rgba(22,32,51,0.78) 0%, rgba(17,24,39,0.95) 100%); border:1px solid #1e293b; border-top:2px solid #d4af37; border-radius:12px; padding:15px 18px; margin-bottom:12px; box-shadow:0 6px 22px -6px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04);">'
+                f'<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(30,41,59,0.9); padding-bottom:9px; margin-bottom:11px;">'
+                f'<div><span style="font-family:var(--vl-font-serif, Georgia, serif); font-weight:400; font-size:1.35rem; color:#f8fafc; letter-spacing:0.01em;">{symbol}</span><span style="font-family:var(--vl-font-mono, monospace); color:#94a3b8; font-size:0.76rem; margin-left:8px;">{exp} · {dte:.1f}d</span></div>'
+                f'<span style="font-family:var(--vl-font-mono, monospace); background:{bias_bg}; color:{bias_color}; border:1px solid {bias_border}; font-size:0.70rem; font-weight:600; padding:3px 10px; border-radius:999px; letter-spacing:0.05em;">{bias_badge}</span>'
                 f'</div>'
                 f'<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">'
-                f'<div style="background:#0c1321; border:1px solid #1e2c40; border-radius:8px; padding:8px 12px;">'
-                f'<div style="display:flex; justify-content:space-between; align-items:center;"><span style="color:#94a3b8; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:600;">Spot & IV</span><span style="color:#38bdf8; font-size:0.74rem; font-weight:700;">IV: {iv:.2f}%</span></div>'
-                f'<div style="font-size:1.2rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">{spot:,.1f}</div>'
-                f'<div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#94a3b8; margin-top:4px;"><span>Fut: <b style="color:#38bdf8;">{fut_txt}</b></span><span>Syn: <b style="color:#a78bfa;">{syn_txt}</b></span></div>'
+                f'<div style="background:rgba(9,13,22,0.75); border:1px solid #1e293b; border-radius:9px; padding:9px 13px;">'
+                f'<div style="display:flex; justify-content:space-between; align-items:center;"><span style="color:#94a3b8; font-size:0.69rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:600;">Spot &amp; IV</span><span style="font-family:var(--vl-font-mono, monospace); color:#38bdf8; font-size:0.74rem; font-weight:600;">IV: {iv:.2f}%</span></div>'
+                f'<div style="font-family:var(--vl-font-mono, monospace); font-size:1.24rem; font-weight:600; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:3px;">{spot:,.1f}</div>'
+                f'<div style="display:flex; justify-content:space-between; font-family:var(--vl-font-mono, monospace); font-size:0.72rem; color:#94a3b8; margin-top:4px;"><span>Fut: <b style="color:#38bdf8;">{fut_txt}</b></span><span>Syn: <b style="color:#d4af37;">{syn_txt}</b></span></div>'
                 f'</div>'
-                f'<div style="background:#0c1321; border:1px solid #1e2c40; border-radius:8px; padding:8px 12px;">'
-                f'<div style="color:#94a3b8; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:600;">Expected Expiry Move</div>'
-                f'<div style="font-size:1.2rem; font-weight:700; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:2px;">±{move_pts:.0f} pts</div>'
-                f'<div style="color:#a855f7; font-size:0.74rem; font-weight:600; margin-top:4px;">±{move_pct:.2f}% <span style="color:#64748b; font-weight:400;">({lower_range:,.0f} – {upper_range:,.0f})</span></div>'
+                f'<div style="background:rgba(9,13,22,0.75); border:1px solid #1e293b; border-radius:9px; padding:9px 13px;">'
+                f'<div style="color:#94a3b8; font-size:0.69rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:600;">Expected Expiry Move</div>'
+                f'<div style="font-family:var(--vl-font-mono, monospace); font-size:1.24rem; font-weight:600; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:3px;">±{move_pts:.0f} pts</div>'
+                f'<div style="font-family:var(--vl-font-mono, monospace); color:#d4af37; font-size:0.73rem; font-weight:600; margin-top:4px;">±{move_pct:.2f}% <span style="color:#64748b; font-weight:400;">({lower_range:,.0f} – {upper_range:,.0f})</span></div>'
                 f'</div>'
                 f'</div>'
-                f'<div style="font-size:0.78rem; line-height:1.45; color:#cbd5e1; background:#0e1726; border-left:3px solid {bias_color}; border-radius:4px; padding:7px 12px; margin-bottom:8px;">{bias_text}</div>'
-                f'<div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#94a3b8; padding-top:2px;">'
+                f'<div style="font-size:0.78rem; line-height:1.45; color:#cbd5e1; background:rgba(13,19,32,0.85); border-left:3px solid {bias_color}; border-radius:4px; padding:7px 12px; margin-bottom:8px;">{bias_text}</div>'
+                f'<div style="display:flex; justify-content:space-between; font-family:var(--vl-font-mono, monospace); font-size:0.72rem; color:#94a3b8; padding-top:2px;">'
                 f'<span style="color:{basis_color}; font-weight:600;">{basis_status}</span><span>{skew_text}</span>'
                 f'</div>'
                 f'</div>'
@@ -176,7 +182,7 @@ def _load_full_price_history(symbol):
             frames.insert(0,candidate)
             if len(candidate)>=300:break
         except (OSError,ValueError,KeyError):continue
-    for path in [DATA/f'{symbol.lower()}_one_year.csv']+([DATA/'nifty_daily.csv'] if symbol=='NIFTY' else []):
+    for path in [DATA/f'{symbol.lower()}_one_year.csv'] + ([DATA/'nifty_daily.csv'] if symbol=='NIFTY' else []):
         try:frames.append(validate_ohlc(pd.read_csv(path)).reset_index())
         except (OSError,ValueError,KeyError):continue
     archive=DATA/'upstox'/'research.sqlite'
@@ -239,9 +245,9 @@ def history_figure(symbol,expiry,hv,iv,period,relative=False,spread_only=False):
 
     if hv is not None and not spread_only:
 
-        for column,name,color in [('Historical vol 10D','HV 10D','#50c5b4'),('Historical vol 30D','HV 30D','#939cec')]:
+        for column,name,color in [('Historical vol 10D','HV 10D','#10b981'),('Historical vol 30D','HV 30D','#38bdf8')]:
 
-            fig.add_trace(go.Scatter(x=hv.Date,y=hv[column],name=name,mode='lines',line={'color':color,'width':1.8},hovertemplate=name+': %{y:.2f}%<extra></extra>'),row=1,col=1)
+            fig.add_trace(go.Scatter(x=hv.Date,y=hv[column],name=name,mode='lines',line={'color':color,'width':1.9},hovertemplate=name+': %{y:.2f}%<extra></extra>'),row=1,col=1)
 
     # Underlying candles identify actual sessions, including special sessions.
     # Weekends and holidays without candles do not create missing-data gaps.
@@ -252,7 +258,7 @@ def history_figure(symbol,expiry,hv,iv,period,relative=False,spread_only=False):
 
     spread_name='Relative spread · 5-session %' if relative else 'IV-RV Spread'
 
-    series=[(spread_name,'#f17e91',1,'%' if relative else ' pp')] if spread_only else [('IV','#f4bc64',1,'%')]
+    series=[(spread_name,'#f43f5e',1,'% ' if relative else ' pp')] if spread_only else [('IV','#d4af37',1,'%')]
     for name,color,row,unit in series:
         observed=iv.copy()
         if len(observed):
@@ -283,21 +289,21 @@ def history_figure(symbol,expiry,hv,iv,period,relative=False,spread_only=False):
             fig.add_trace(go.Scatter(x=xs,y=ys,name=name,legendgroup=name,showlegend=False,
                 mode='lines',line={'color':color,'width':2.3,'dash':dash},
                 connectgaps=False,hoverinfo='skip'),row=row,col=1)
-        metadata=observed.get('Source',pd.Series('',index=observed.index)).fillna('').astype(str)
-        symbols=['circle']*len(observed)
-        if 'Series' in observed:
-            symbols=['diamond' if i and observed.Series.iloc[i]!=observed.Series.iloc[i-1] else 'circle' for i in range(len(observed))]
-        # Points are captured observations; connector lines never populate missing values.
-        fig.add_trace(go.Scatter(customdata=metadata,x=observed.Date if len(observed) else [],
-            y=observed[name] if len(observed) else [],name=name,legendgroup=name,
-            mode='markers',marker={'size':6,'color':color,'symbol':symbols},
-            hovertemplate=name+': %{y:.2f}'+unit+'<br>%{customdata}<extra></extra>'),row=row,col=1)
+    metadata=observed.get('Source',pd.Series('',index=observed.index)).fillna('').astype(str)
+    symbols=['circle']*len(observed)
+    if 'Series' in observed:
+        symbols=['diamond' if i and observed.Series.iloc[i]!=observed.Series.iloc[i-1] else 'circle' for i in range(len(observed))]
+    # Points are captured observations; connector lines never populate missing values.
+    fig.add_trace(go.Scatter(customdata=metadata,x=observed.Date if len(observed) else [],
+        y=observed[name] if len(observed) else [],name=name,legendgroup=name,
+        mode='markers',marker={'size':6,'color':color,'symbol':symbols},
+        hovertemplate=name+': %{y:.2f}'+unit+'<br>%{customdata}<extra></extra>'),row=row,col=1)
 
-    fig.update_layout(height=470,template='plotly_dark',paper_bgcolor='#0c1321',plot_bgcolor='#0c1321',hovermode='x unified',margin={'l':10,'r':15,'t':45,'b':15},legend={'orientation':'h','y':1.12,'x':0},font={'family':'Arial','size':12,'color':'#bccbdf'})
+    fig.update_layout(height=470,template='plotly_dark',paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(13, 19, 32, 0.55)',hovermode='x unified',margin={'l':46,'r':20,'t':45,'b':55},legend={'orientation':'h','y':1.12,'x':0},font={'family':'Plus Jakarta Sans, JetBrains Mono, sans-serif','size':12,'color':'#cbd5e1'})
 
-    fig.update_yaxes(tickformat='.2f',gridcolor='#202c40',zeroline=False)
+    fig.update_yaxes(tickformat='.2f',gridcolor='rgba(148, 163, 184, 0.10)',zeroline=False)
 
-    fig.update_yaxes(title_text=('Relative spread %' if relative else 'IV–RV Spread · pp') if spread_only else 'Volatility %',row=1,col=1,zeroline=spread_only,zerolinecolor='#46566e')
+    fig.update_yaxes(title_text=('Relative spread %' if relative else 'IV-RV Spread · pp') if spread_only else 'Volatility %',row=1,col=1,zeroline=spread_only,zerolinecolor='rgba(148, 163, 184, 0.25)')
 
     # Fit each panel to this date window, not the full-year extremes.
 
@@ -334,9 +340,7 @@ def history_figure(symbol,expiry,hv,iv,period,relative=False,spread_only=False):
 
         else:fig.update_yaxes(autorange=True,row=row,col=1)
 
-    fig.add_annotation(text='Dotted: missing observations · expiry changes retain recorded points',xref='paper',yref='paper',x=0,y=-.20,showarrow=False,font={'size':10})
-
-    fig.update_layout(margin={'b':55})
+    fig.add_annotation(text='Dotted: missing observations · expiry changes retain recorded points',xref='paper',yref='paper',x=0,y=-.20,showarrow=False,font={'size':10,'color':'#94a3b8'})
 
     fig.update_layout(uirevision=f'{symbol}:{expiry}:{period}:{relative}:{spread_only}')
 
@@ -391,11 +395,11 @@ def render_validation(symbol):
 
             if not any(pd.isna(d) for d in dates):
 
-                st.caption(f'Forecast origins: {dates[0]:%d %b %Y}–{dates[1]:%d %b %Y} · rolling one-year training')
+                st.caption(f'Forecast origins: {dates[0]:%d %b %Y}-{dates[1]:%d %b %Y} · rolling one-year training')
 
             st.caption('Lower scores are better · positive bias = overprediction · daily samples overlap')
             if metadata.get('evaluation_start'):
-                st.caption(f"Evaluation window: {metadata['evaluation_start']} to {metadata.get('data_through','—')} · recent forecasts without a completed outcome are excluded from scores. Yang–Zhang is a historical baseline.")
+                st.caption(f"Evaluation window: {metadata['evaluation_start']} to {metadata.get('data_through','-')} · recent forecasts without a completed outcome are excluded from scores. Yang-Zhang is a historical baseline.")
 
             st.download_button('Download validation scores',data=(manifest.parent/'metrics.csv').read_bytes(),
 
@@ -428,7 +432,6 @@ def term_forecast(raw,expiry,as_of,version):
     result=_cached_term_forecast(raw,expiry,bucket.isoformat(),(version,EXPIRY_VERSION))
     result['Quote as of']=stamp.isoformat()
     return result
-
 
 @st.cache_resource(show_spinner=False)
 def _calendar_cache():
@@ -467,15 +470,15 @@ def render_models(symbol,selected,frame,result):
 
     iv=selected.get('IV')
 
-    a.metric('Selected expiry IV','—' if iv is None or not np.isfinite(iv) else f'{iv:.2f}%')
+    a.metric('Selected expiry IV','-' if iv is None or not np.isfinite(iv) else f'{iv:.2f}%')
 
     garch20=float(forecasts.loc[forecasts['Forward sessions']==20,'GARCH annualized %'].iloc[0])
     b.metric('GARCH · next 20 trading days',f'{garch20:.2f}%')
 
     vix=result.get('india_vix',{}).get('value')
 
-    yz20=float(realized.loc[realized['Trailing sessions']==20,'Yang–Zhang RV %'].iloc[0])
-    c.metric('INDIA VIX' if symbol=='NIFTY' else 'Yang–Zhang · past 20 trading days',(f'{vix:.2f}%' if vix is not None else '—') if symbol=='NIFTY' else f'{yz20:.2f}%')
+    yz20=float(realized.loc[realized['Trailing sessions']==20,'Yang-Zhang RV %'].iloc[0])
+    c.metric('INDIA VIX' if symbol=='NIFTY' else 'Yang-Zhang · past 20 trading days',(f'{vix:.2f}%' if vix is not None else '-') if symbol=='NIFTY' else f'{yz20:.2f}%')
 
     st.markdown('**Volatility by horizon**')
     show_candidates=st.checkbox('Include candidate models (GJR-GARCH leverage, GARCH-t)',value=False,key='show_candidate_models',help='Fits asymmetric GJR-GARCH and fat-tailed Student-t models alongside baseline normal GARCH(1,1).')
@@ -484,7 +487,8 @@ def render_models(symbol,selected,frame,result):
     grid=horizon_grid(forecasts,realized,ewma,candidates=candidates)
     horizon=st.select_slider('Holding period · trading days',options=grid.iloc[:,0].astype(int).tolist(),value=20,key='model_holding_period')
     show_table(grid[grid.iloc[:,0]==horizon])
-    st.caption('Annualized % · Days = trading sessions · GARCH/EWMA: next N days · Yang–Zhang: past N days. Standard EWMA has a flat annualized forecast across horizons.')
+    st.caption('Annualized % · Days = trading sessions · GARCH/EWMA: next N days · Yang-Zhang: past N days. Standard EWMA has a flat annualized forecast across horizons.')
+
     st.caption(f'EWMA holding-period volatility: {ewma*np.sqrt(horizon/245):.2f}% over {horizon} trading days')
 
     st.caption(f'{symbol} · {len(frame)} daily candles · through {frame.Date.max():%d %b %Y}')
@@ -499,14 +503,17 @@ def render_models(symbol,selected,frame,result):
         comparison,using_close=comparison_snapshot(DATA/'monitor.sqlite',symbol,selected)
         matched=matched_expiry(full_price_history(symbol).to_csv(index=False).encode(),comparison['Expiry'],
                                comparison['As of'],comparison.get('IV'),EXPIRY_VERSION)
-        if using_close:st.caption('Last matched end-of-day comparison · '+str(comparison['As of'])+' · not today’s live IV')
+        if using_close:st.caption('Last matched end-of-day comparison · '+str(comparison['As of'])+" · not today's live IV")
 
         show_table(pd.DataFrame([matched])[['DTE','Trading sessions','IV','GARCH expiry RV',
 
                                             'EWMA expiry RV','IV - GARCH','IV - EWMA']].rename(columns={
+
             'DTE':'Calendar days left','Trading sessions':'Trading days left','IV':'IV %',
+
             'GARCH expiry RV':'GARCH to expiry %','EWMA expiry RV':'EWMA to expiry %',
-            'IV - GARCH':'IV − GARCH (pp)','IV - EWMA':'IV − EWMA (pp)'}))
+
+            'IV - GARCH':'IV - GARCH (pp)','IV - EWMA':'IV - EWMA (pp)'}))
 
         st.caption(f"Quotes: {matched['As of']} · prices through {matched['Training through']} · spreads: pp")
 
@@ -520,7 +527,7 @@ def render_models(symbol,selected,frame,result):
 
     with st.expander('Model status'):
 
-        st.caption('GARCH / EWMA: forecasts · Yang–Zhang: historical volatility')
+        st.caption('GARCH / EWMA: forecasts · Yang-Zhang: historical volatility')
 
         for message in diag['warnings']:st.warning(message)
 
@@ -532,7 +539,7 @@ def _volatility_gap_reason(row,event_rows,calendar_status):
 
     if not row.get('Comparison ready',False):
         return (str(row.get('GARCH status','Forecast unavailable')) if not row.get('Forecast as of') else
-                'Models start at the previous completed close. IV is newer; the IV–forecast gap is withheld until both refer to the same close.')
+                'Models start at the previous completed close. IV is newer; the IV-forecast gap is withheld until both refer to the same close.')
     iv=pd.to_numeric(row.get('IV'),errors='coerce')
     garch=pd.to_numeric(row.get('GARCH FRV %'),errors='coerce')
     ewma=pd.to_numeric(row.get('EWMA FRV %'),errors='coerce')
@@ -543,13 +550,13 @@ def _volatility_gap_reason(row,event_rows,calendar_status):
         return 'FRV forecast is unavailable for this quote time or price history.'
     low,high=min(forecasts),max(forecasts)
     if iv>high+2:
-        reason=f'IV ({iv:.2f}%) is above the GARCH/EWMA FRV range ({low:.2f}–{high:.2f}%). Possible contributors include scheduled results or meetings, option demand, and uncertainty not reflected in past prices.'
+        reason=f'IV ({iv:.2f}%) is above the GARCH/EWMA FRV range ({low:.2f}-{high:.2f}%). Possible contributors include scheduled results or meetings, option demand, and uncertainty not reflected in past prices.'
     elif iv<low-2:
-        reason=f'IV ({iv:.2f}%) is below the GARCH/EWMA FRV range ({low:.2f}–{high:.2f}%). The models may be carrying recent turbulence forward while option prices imply calmer movement.'
+        reason=f'IV ({iv:.2f}%) is below the GARCH/EWMA FRV range ({low:.2f}-{high:.2f}%). The models may be carrying recent turbulence forward while option prices imply calmer movement.'
     else:
-        reason=f'IV ({iv:.2f}%) is close to the GARCH/EWMA FRV range ({low:.2f}–{high:.2f}%).'
+        reason=f'IV ({iv:.2f}%) is close to the GARCH/EWMA FRV range ({low:.2f}-{high:.2f}%).'
     if event_rows:
-        names=', '.join(f"{item.get('Event') or item.get('Company') or 'Scheduled event'} ({item['Date']})" for item in event_rows[:3])
+        names=', '.join([f"{item.get('Event') or item.get('Company') or 'Scheduled event'} ({item['Date']})" for item in event_rows[:3]])
         reason+=f' Scheduled event dates before this expiry: {names}. Dates are context and do not establish causation.'
     elif 'unavailable' in str(calendar_status).lower():
         reason+=' Some event calendars could not be refreshed, so event context may be incomplete.'
@@ -563,12 +570,12 @@ def render_term_structure(symbol,result):
     today=datetime.now(IST).date()
     catalog=result.get('catalog',{}).get(symbol,[])
     listed=sorted({pd.Timestamp(item.get('date')).date() for item in catalog
-                   if item.get('date') and pd.Timestamp(item['date']).date()>=today})
+                    if item.get('date') and pd.Timestamp(item['date']).date()>=today})
     if not listed:
         st.info('Refresh quotes to load currently listed expiries for this index.');return
     listed_text={day.isoformat() for day in listed}
     rows=[row for row in result.get('rows',[]) if row.get('Instrument')==symbol
-          and str(row.get('Expiry','')) in listed_text]
+            and str(row.get('Expiry','')) in listed_text]
     curve=term_structure(rows,symbol)
     if curve.empty:
         st.info('No quote rows are saved for the currently listed expiries. Refresh quotes to update them.');return
@@ -583,7 +590,7 @@ def render_term_structure(symbol,result):
             price_bytes=None
             st.info(f'GARCH/EWMA FRV unavailable: {error}')
         if price_bytes:
-            with st.spinner('Calculating FRV through each listed expiry…'):
+            with st.spinner('Calculating FRV through each listed expiry...'):
                 for row in curve.to_dict('records'):
                     item=dict(row)
                     item.update({'GARCH FRV %':np.nan,'EWMA FRV %':np.nan,
@@ -593,16 +600,16 @@ def render_term_structure(symbol,result):
                         try:
                             model=term_forecast(price_bytes,row['Expiry'],row['As of'],TERM_VERSION)
                             item.update({'GARCH FRV %':model.get('GARCH expiry RV',np.nan),
-                                'EWMA FRV %':model.get('EWMA expiry RV',np.nan),
-                                'Training through':model.get('Training through'),
-                                'GARCH status':model.get('GARCH status','Unavailable'),
-                                'Forecast as of':model['Forecast as of'],
-                                'Comparison ready':model['Comparison ready'],'Forecast basis':model['Forecast basis']})
+                                         'EWMA FRV %':model.get('EWMA expiry RV',np.nan),
+                                         'Training through':model.get('Training through'),
+                                         'GARCH status':model.get('GARCH status','Unavailable'),
+                                         'Forecast as of':model['Forecast as of'],
+                                         'Comparison ready':model['Comparison ready'],'Forecast basis':model['Forecast basis']})
                         except Exception as error:item['GARCH status']=str(error)
                     forecasts.append(item)
     else:
         forecasts=curve.assign(**{'GARCH FRV %':np.nan,'EWMA FRV %':np.nan,
-            'Training through':None,'GARCH status':'IV unavailable'}).to_dict('records')
+                                  'Training through':None,'GARCH status':'IV unavailable'}).to_dict('records')
 
     view=pd.DataFrame(forecasts)
     if view.empty:view=curve.assign(**{'GARCH FRV %':np.nan,'EWMA FRV %':np.nan,'Training through':None,'GARCH status':'Unavailable'})
@@ -621,9 +628,9 @@ def render_term_structure(symbol,result):
     custom=np.column_stack([view.Expiry,view['As of'].fillna(''),view['Source'].fillna(''),
                             view.get('Training through',pd.Series('',index=view.index)).fillna(''),
                             view['Forecast as of'].fillna(''),view['Forecast basis']])
-    series=[('IV','IV','solid','#5b8cff','top center'),
-            ('GARCH FRV %','GARCH FRV','solid','#ff684d','bottom right'),
-            ('EWMA FRV %','EWMA FRV','solid','#00c99a','top left')]
+    series=[('IV','IV','solid','#38bdf8','top center'),
+            ('GARCH FRV %','GARCH FRV','solid','#d4af37','bottom right'),
+            ('EWMA FRV %','EWMA FRV','solid','#10b981','top left')]
     plotted=[]
     for field,label,dash,color,text_position in series:
         values=pd.to_numeric(view[field],errors='coerce')
@@ -632,12 +639,12 @@ def render_term_structure(symbol,result):
         fig.add_trace(go.Scatter(x=pd.to_datetime(view.Expiry),y=values,name=label,
             mode='lines+markers+text',text=[f'{value:.2f}%' if pd.notna(value) else '' for value in values],
             textposition=text_position,textfont={'color':color,'size':10},cliponaxis=False,
-            line={'dash':dash,'color':color,'width':2.2},marker={'color':color,'size':6},connectgaps=True,customdata=custom,
+            line={'dash':dash,'color':color,'width':2.3},marker={'color':color,'size':6},connectgaps=True,customdata=custom,
             hovertemplate='Expiry: %{customdata[0]}<br>%{fullData.name}: %{y:.2f}%<br>IV source: %{customdata[2]}<br>IV time: %{customdata[1]}<br>Model time: %{customdata[4]}<br>%{customdata[5]}<extra></extra>'))
 
     # Continuous term structure chart (event vlines hidden per user preference)
-    fig.update_layout(height=350,template='plotly_dark',paper_bgcolor='#0c1321',plot_bgcolor='#0c1321',
-        margin={'l':10,'r':15,'t':25,'b':15},xaxis_title='Listed expiry',yaxis_title='Annualized volatility %',
+    fig.update_layout(height=360,template='plotly_dark',paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(13, 19, 32, 0.55)',
+        margin={'l':46,'r':20,'t':38,'b':34},xaxis_title='Listed expiry',yaxis_title='Annualized volatility %',
         xaxis_type='date',xaxis_range=[today,event_end],yaxis_tickformat='.2f',legend={'orientation':'h'})
     if plotted:
         all_values=pd.concat(plotted).dropna()
@@ -645,7 +652,7 @@ def render_term_structure(symbol,result):
         fig.update_yaxes(range=[max(0,float(all_values.min())-padding),float(all_values.max())+padding])
     st.plotly_chart(fig,key=f'term_structure_{symbol}',width='stretch',config={'displaylogo':False})
 
-    with st.expander('Macro event calendar & catalysts', expanded=False):
+    with st.expander('Macro event calendar & catalysts',expanded=False):
         scope='Macro events + bank results' if symbol=='BANKNIFTY' else 'Index macro events'
         st.caption(f'{scope} · through {event_end:%d %b %Y}')
         if events:
@@ -667,28 +674,28 @@ def render_term_structure(symbol,result):
         garch=pd.to_numeric(selected.get('GARCH FRV %'),errors='coerce')
         ewma=pd.to_numeric(selected.get('EWMA FRV %'),errors='coerce')
         a,b,c,d=st.columns(4)
-        a.metric('IV',f'{iv:.2f}%' if pd.notna(iv) else '—')
-        b.metric('GARCH FRV',f'{garch:.2f}%' if pd.notna(garch) else '—')
-        c.metric('EWMA FRV',f'{ewma:.2f}%' if pd.notna(ewma) else '—')
+        a.metric('IV',f'{iv:.2f}%' if pd.notna(iv) else '-')
+        b.metric('GARCH FRV',f'{garch:.2f}%' if pd.notna(garch) else '-')
+        c.metric('EWMA FRV',f'{ewma:.2f}%' if pd.notna(ewma) else '-')
         gap=iv-garch if selected.get('Comparison ready') and pd.notna(iv) and pd.notna(garch) else np.nan
-        d.metric('IV − GARCH FRV',f'{gap:+.2f} pp' if pd.notna(gap) else '—')
+        d.metric('IV - GARCH FRV',f'{gap:+.2f} pp' if pd.notna(gap) else '-')
         st.caption(f"IV: {selected.get('As of','unavailable')} · model: {selected.get('Forecast as of') or 'unavailable'} · {selected.get('Forecast basis','Unavailable')}")
         st.info(_volatility_gap_reason(selected,event_context,event_status))
         synthetic=pd.to_numeric(selected.get('Synthetic future'),errors='coerce')
         monthly=pd.to_numeric(selected.get('Month future LTP'),errors='coerce')
         a,b=st.columns(2)
-        a.metric('ATM synthetic future',f'{synthetic:.2f}' if pd.notna(synthetic) else '—')
-        b.metric('Month future LTP',f'{monthly:.2f}' if pd.notna(monthly) else '—')
+        a.metric('ATM synthetic future',f'{synthetic:.2f}' if pd.notna(synthetic) else '-')
+        b.metric('Month future LTP',f'{monthly:.2f}' if pd.notna(monthly) else '-')
         st.caption(f"ATM strike: {selected.get('ATM strike') if selected.get('ATM strike') is not None else 'unavailable'} · {selected.get('Future reference','Future reference unavailable')} · {selected.get('Synthetic status','Synthetic future not captured yet')}")
 
-    view['IV − GARCH FRV · pp']=(pd.to_numeric(view.IV,errors='coerce')-pd.to_numeric(view['GARCH FRV %'],errors='coerce')).where(view['Comparison ready'])
-    view['IV − EWMA FRV · pp']=(pd.to_numeric(view.IV,errors='coerce')-pd.to_numeric(view['EWMA FRV %'],errors='coerce')).where(view['Comparison ready'])
+    view['IV - GARCH FRV · pp']=(pd.to_numeric(view.IV,errors='coerce')-pd.to_numeric(view['GARCH FRV %'],errors='coerce')).where(view['Comparison ready'])
+    view['IV - EWMA FRV · pp']=(pd.to_numeric(view.IV,errors='coerce')-pd.to_numeric(view['EWMA FRV %'],errors='coerce')).where(view['Comparison ready'])
     with st.expander('Term structure data table & CSV export'):
-        show_table(view[['Expiry','Type','DTE','IV','GARCH FRV %','EWMA FRV %','IV − GARCH FRV · pp',
-                         'IV − EWMA FRV · pp','Synthetic future','Month future LTP','Future reference',
-                         'Synthetic status','As of','Forecast as of','Forecast basis','GARCH status']])
+        show_table(view[['Expiry','Type','DTE','IV','GARCH FRV %','EWMA FRV %','IV - GARCH FRV · pp',
+                        'IV - EWMA FRV · pp','Synthetic future','Month future LTP','Future reference',
+                        'Synthetic status','As of','Forecast as of','Forecast basis','GARCH status']])
         st.download_button('Download Term structure CSV',view.to_csv(index=False).encode(),
-            file_name=f'{symbol}_term_structure.csv',mime='text/csv')
+                           file_name=f'{symbol}_term_structure.csv',mime='text/csv')
 
 def render_smile(symbol,selected,config):
 
@@ -720,12 +727,10 @@ def render_smile(symbol,selected,config):
 
     fig=go.Figure(go.Scatter(x=points.Point,y=points.IV,mode='lines+markers+text',connectgaps=False,
         text=[f'{v:.2f}%' if pd.notna(v) and np.isfinite(v) else '' for v in points.IV],textposition='top center',cliponaxis=False,
+        line={'color':'#38bdf8','width':2.4},marker={'color':'#d4af37','size':7},hovertemplate='%{x}: %{y:.2f}%<extra></extra>'))
 
-        line={'color':'#50c5b4'},hovertemplate='%{x}: %{y:.2f}%<extra></extra>'))
-
-    fig.update_layout(height=300,template='plotly_dark',paper_bgcolor='#0c1321',plot_bgcolor='#0c1321',
-
-                      margin={'l':10,'r':15,'t':25,'b':15},yaxis_title='IV %',yaxis_tickformat='.2f')
+    fig.update_layout(height=320,template='plotly_dark',paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(13, 19, 32, 0.55)',
+        margin={'l':46,'r':20,'t':38,'b':34},yaxis_title='IV %',yaxis_tickformat='.2f')
 
     st.plotly_chart(fig,key=f'smile_{symbol}',width='stretch',config={'displaylogo':False})
     raw_metrics = saved.get('metrics', {})
@@ -746,8 +751,8 @@ def render_smile(symbol,selected,config):
 
     cols = st.columns(len(clean_metrics))
     for col, (measure, value) in zip(cols, clean_metrics.items()):
-        col.metric(measure, '—' if value is None or pd.isna(value) else f'{value:.2f} pp')
-    st.caption('RR = put IV − call IV. BF = average wing IV − ATM IV. Values are volatility points.')
+        col.metric(measure, '-' if value is None or pd.isna(value) else f'{value:.2f} pp')
+    st.caption('RR = put IV - call IV. BF = average wing IV - ATM IV. Values are volatility points.')
 
     with st.expander('Smile values & measures'):
         show_table(points)
@@ -763,7 +768,13 @@ def render_relative_value(symbol,selected,config):
     from relative_value import history as research_history,maturity_stats
     from volatility_regime import regime_input,regime_summary
 
-    st.markdown('<div style="margin-top:16px; margin-bottom:6px;"><span style="font-size:0.82rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#38bdf8;">◈ Historical Volatility Regime & Maturity Relative Value</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="margin-top:16px; margin-bottom:8px; display:flex; align-items:center; gap:8px;">'
+        '<span style="color:#d4af37; font-size:0.95rem;">◈</span>'
+        '<span style="font-family:var(--vl-font-sans, sans-serif); font-size:0.80rem; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#e2e8f0;">Historical Volatility Regime &amp; Maturity Relative Value</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     try:
         path=regime_input(DATA,symbol)
@@ -774,9 +785,9 @@ def render_relative_value(symbol,selected,config):
             hv_val=row.get('HV %')
             pctile=row.get('Prior-year percentile')
             regime=str(row.get('Regime',''))
-            pct_txt=f"{pctile:.0f}%ile" if pd.notna(pctile) else "—"
-            col.metric(measure,f"{hv_val:.2f}%" if pd.notna(hv_val) else "—",f"{regime} ({pct_txt})")
-        st.caption('Historical HV percentile · low ≤20% · normal 20–80% · elevated ≥80%')
+            pct_txt=f"{pctile:.0f}%ile" if pd.notna(pctile) else "-"
+            col.metric(measure,f"{hv_val:.2f}%" if pd.notna(hv_val) else "-",f"{regime} ({pct_txt})")
+        st.caption('Historical HV percentile · low ≤20% · normal 20-80% · elevated ≥80%')
     except (OSError,ValueError,TypeError) as exc:
         st.info(f"Regime calculation: {exc}")
 
@@ -819,7 +830,7 @@ def render_relative_value(symbol,selected,config):
             show_table(pd.DataFrame(ready))
         show_table(pd.DataFrame(measures)[['Measure','Prior days','Expiry cycles','Status']])
         st.caption('Volatility: annualized % · spreads: pp · historical DTE matched ±3 days')
-        st.caption(f"Saved observations: {len(saved)} · latest snapshot: {current['As of']}")
+        st.caption(f'Saved observations: {len(saved)} · latest snapshot: {current["As of"]}')
         st.download_button('Download research history CSV',saved.to_csv(index=False).encode(),file_name=f'{symbol}_research_history.csv',mime='text/csv')
 
 def render_monitor(rate=.065,dividend=0.,spread=3.):
@@ -896,7 +907,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
             stamp=pd.Timestamp(result['timestamp'])
 
-            dates=sorted({str(r.get('As of',''))[:10] for r in result['rows'] if r.get('As of')})
+            dates=sorted({(str(r.get('As of',''))[:10]) for r in result['rows'] if r.get('As of')})
 
             action='last attempt' if any(r.get('Refresh status') for r in result['rows']) else 'refreshed'
             st.caption(f"Quotes: {', '.join(dates)} · {action} {stamp:%d %b %H:%M} · {'Connected' if ready else 'Saved view'}")
@@ -931,8 +942,6 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
             else:col.selectbox(symbol,['Connect / refresh'],disabled=True,key='unavailable_'+symbol)
 
-
-
         result={**result,'rows':[dict(r) for r in result['rows']]}
 
         selected_rows=[]
@@ -943,7 +952,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
             if row:selected_rows.append(dict(row))
 
-            else:selected_rows.append({'Instrument':symbol,'Expiry':chosen.get(symbol,'—'),**{c:np.nan for c in COLUMNS}})
+            else:selected_rows.append({'Instrument':symbol,'Expiry':chosen.get(symbol,'-'),**{c:np.nan for c in COLUMNS}})
 
         chart_rows=[dict(r) for r in selected_rows]
         # Keep verified captured values readable; age is explicit, not hidden.
@@ -961,12 +970,11 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
         table['Underlying as of']=[pd.Timestamp(r['As of']).strftime('%d %b %H:%M') if r.get('As of') else 'Unavailable' for r in selected_rows]
 
-
         render_trade_decision_radar(selected_rows)
 
         issues=[f"{r['Instrument']}: {r.get('RV status')}" for r in selected_rows if r.get('RV status') not in (None,'Same-session close','Prior completed session')]
 
-        if issues:st.warning('IV–RV unavailable · '+ ' · '.join(issues) + '. Refresh quotes to fetch completed candles.')
+        if issues:st.warning('IV-RV unavailable · '+ ' · '.join(issues) + '. Refresh quotes to fetch completed candles.')
 
         if result.get('catalog_incomplete'):st.caption('The saved expiry list is incomplete; refresh quotes to reload Upstox-listed contracts.')
 
@@ -983,7 +991,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
         views=['Vol Regime & History','Term Structure & Calendars','Smile & Skew','Intraday Straddle & Greeks']
         view_aliases={
             'Volatility history':'Vol Regime & History',
-            'IV–RV Spread':'Vol Regime & History',
+            'IV-RV Spread':'Vol Regime & History',
             'Term structure':'Term Structure & Calendars',
             'Smile & skew':'Smile & Skew',
             'Intraday':'Intraday Straddle & Greeks',
@@ -1020,12 +1028,12 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             frame=None;hv=None
             try:frame,hv=chart_prices(symbol)
             except (OSError,ValueError,KeyError):
-                st.warning('HV could not be loaded from saved daily prices. IV–RV requires those prices too.')
+                st.warning('HV could not be loaded from saved daily prices. IV-RV requires those prices too.')
 
             scope_col,mode_col,range_col=st.columns([3,2,2])
             exp_label = f"Selected: {expiry}" if expiry else "Selected expiry"
             scope_map = {'Continuous roll (across expiries)': 'Across expiries', exp_label: 'Selected expiry'}
-            
+
             chosen_scope_label = scope_col.segmented_control(
                 'Scope',
                 ['Continuous roll (across expiries)', exp_label],
@@ -1037,7 +1045,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
             metric_mode = mode_col.segmented_control(
                 'Metric',
-                ['IV vs Realized', 'IV–RV Spread'],
+                ['IV vs Realized', 'IV-RV Spread'],
                 default='IV vs Realized',
                 label_visibility='collapsed',
                 key=f'regime_metric_mode_{symbol}'
@@ -1071,21 +1079,21 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             data=chart_iv_spread(hist,hv)
 
             relative=st.session_state.get('iv_history_relative_v2', False)
-            spread_only = (metric_mode == 'IV–RV Spread')
+            spread_only = (metric_mode == 'IV-RV Spread')
 
             st.plotly_chart(history_figure(symbol,expiry,hv,data,period,relative,spread_only=spread_only),key=f'history_{symbol}_{expiry}_{period}_{metric_mode}',width='stretch',config={'displaylogo':False})
 
             start=pd.Timestamp(datetime.now(IST).date())-pd.DateOffset(months={'1M':1,'3M':3,'6M':6,'1Y':12}[period])
             visible=data[data.Date>=start]
             spread_days=int(visible['IV-RV Spread'].notna().sum())
-            available_hv=hv[(hv.Date>=start)&hv['Historical vol 30D'].notna()] if hv is not None else pd.DataFrame()
+            available_hv=hv[(hv.Date>=start)&(hv['Historical vol 30D'].notna())] if hv is not None else pd.DataFrame()
             hv_text=f'HV: {len(available_hv)} sessions through {available_hv.Date.max():%d %b %Y}' if len(available_hv) else 'HV: unavailable'
-            st.caption(hv_text+f' · IV–RV: {spread_days} sessions')
+            st.caption(hv_text+f' · IV-RV: {spread_days} sessions')
             if not visible.empty and visible['IV-RV Spread'].isna().any():
                 reasons=visible.loc[visible['IV-RV Spread'].isna(),'RV status'].value_counts()
-                if len(reasons):st.caption('Spread gaps: '+', '.join(str(k)+' ('+str(v)+')' for k,v in reasons.items()))
+                if len(reasons):st.caption('Spread gaps: '+' · '.join(str(k)+' ('+str(v)+')' for k,v in reasons.items()))
             if spread_only:
-                st.caption('Spread = broker IV − HV30. When HV30 moves slowly, the spread can track IV closely.')
+                st.caption('Spread = broker IV - HV30. When HV30 moves slowly, the spread can track IV closely.')
 
             render_relative_value(symbol, chart_selected, config)
 
@@ -1093,7 +1101,4 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
             from trade_review_ui import render_risk_context
             render_risk_context(DATA,symbol,chart_selected)
 
-
-
     panel()
-

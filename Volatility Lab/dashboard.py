@@ -1,21 +1,13 @@
 """Standalone local options dashboard; no trading actions."""
 
 from pathlib import Path
-
 import importlib
-
 import os
-
 import gzip
-
 import json
-
 from datetime import datetime, timezone
-
 import streamlit as st
-
 from market_data import MarketDataError, IST
-
 from pricing_inputs import get_rate, get_yields
 
 ROOT=Path(__file__).resolve().parent
@@ -45,71 +37,38 @@ def drive_sync_label(info,now=None):
     label={'ready':'healthy','partial':'needs attention','syncing':'syncing','waiting':'waiting','stale':'stale','unknown':'status unavailable'}.get(status,status)
     return label,checked
 
-st.set_page_config(page_title='Volatility Lab',page_icon='◈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Volatility Lab',page_icon='❖',layout='wide',initial_sidebar_state='collapsed')
+
+try:
+    import ui_theme
+    ui_theme.install_classic_modern_theme()
+except Exception:
+    pass
 
 st.session_state.pop('login_notice', None)
 
-# Keep browser authentication intact while reloading changed calculation modules.
-
-# Dependency order ensures from-import references see the updated implementation.
-
-MODULES=('market_data','dashboard_cache','catalogue_fetch','refresh_policy','upstox_data','upstox_adapter','broker_options','quote_status','data_accuracy','option_math','quote_quality','vol_lib','forecast','volatility_regime',
-
-         'research_extensions','har_research','experimental_models','forecast_validation',
-
-         'history_policy','option_context','dividend_yield','expiry_forecast','term_structure','corporate_event_calendar','smile','trade_review','snapshot_history',
-
-         'market_table','relative_value','synthetic_future','expiry_data','model_view','research_ui',
-
-         'trade_review_ui','research_health','restored_lab','options_context_cache','vol_surface_3d','monitor_ui','futures_data','futures_rolling','futures_sync','futures_view_cache','futures_ui','broker_charges','backtest_index','backtest_engine','backtest_signals','strategy_backtest','backtest_report','futures_backtest','backtest_jobs','futures_backtest_ui','backtest_ui')
+# Keep browser authentication intact while reloading changed calculation modules in local dev mode.
+MODULES=(
+    'market_data','dashboard_cache','catalogue_fetch','refresh_policy','upstox_data','upstox_adapter','broker_options','quote_status','data_accuracy','option_math','quote_quality','vol_lib','forecast','volatility_regime',
+    'research_extensions','har_research','experimental_models','forecast_validation',
+    'history_policy','option_context','dividend_yield','expiry_forecast','term_structure','corporate_event_calendar','smile','trade_review','snapshot_history',
+    'market_table','relative_value','synthetic_future','expiry_data','model_view','research_ui',
+    'trade_review_ui','research_health','restored_lab','options_context_cache','vol_surface_3d','monitor_ui','futures_data','futures_rolling','futures_sync','futures_view_cache','futures_ui','broker_charges','backtest_index','backtest_engine','backtest_signals','strategy_backtest','backtest_report','futures_backtest','backtest_jobs','futures_backtest_ui','backtest_ui'
+)
 
 import monitor_ui
 
-revision=tuple((ROOT/(name+'.py')).stat().st_mtime_ns for name in MODULES)
-
-if getattr(monitor_ui,'_revision',None)!=revision:
-
-    if getattr(monitor_ui,'_revision',None) is not None:
-        import sys
-        for name in MODULES:
-            if name in sys.modules:importlib.reload(sys.modules[name])
-
-    monitor_ui._revision=revision
-
-if st.session_state.get('dashboard_revision')!=revision:
-
-    st.session_state.dashboard_revision=revision
-
-    st.session_state.expiry_initial_attempted=False
-
-st.markdown('''<style>
-.stApp{background:#0c1321;color:#e4ecf8}
-[data-testid="stPopoverButton"]{border-radius:10px!important;background:#131e2d!important}
-[data-testid="stSegmentedControl"] button{border-radius:8px!important;font-size:.85rem!important}
-[data-testid="stSegmentedControl"] button[aria-checked="true"]{background:#064e3b!important;border-color:#10b981!important;color:#34d399!important}
-[data-testid="stSegmentedControl"] button[aria-checked="true"] p{color:#34d399!important;font-weight:600}
-[data-testid="stDataFrame"]{border:1px solid #243348;border-radius:12px;overflow:hidden}
-[data-testid="stPlotlyChart"]{border:1px solid #202e42;border-radius:14px;padding:8px;background:#0c1321}
-[data-testid="stExpander"]{border-color:#243348!important;border-radius:10px!important}
-
-.block-container{max-width:1450px;padding-top:4.5rem!important;padding-bottom:2rem;padding-left:1.5rem;padding-right:1.5rem}
-h1{font-size:2.2rem!important;font-weight:800!important;letter-spacing:-.04em;margin-top:0!important;margin-bottom:0.4rem!important;color:#e4ecf8!important}
-h2,h3{letter-spacing:-.025em}
-h3{font-size:1.2rem!important}
-[data-testid="stVerticalBlock"]{gap:.6rem}
-section[data-testid="stSidebar"]{background:#111c2d}
-div[data-testid="stMetric"]{background:#131f31;border:1px solid #26364d;border-radius:12px;padding:12px 16px}
-div[data-testid="stMetricLabel"]{color:#a3b7d0}
-div[data-testid="stDataFrame"]{border:1px solid #26364d;border-radius:10px;overflow:hidden}
-div[data-testid="stExpander"]{border-color:#253247}
-div[data-testid="stCaptionContainer"]{color:#91a5c0}
-[data-testid="stHeader"]{background:rgba(11,18,32,0.85)!important;backdrop-filter:blur(8px)!important}
-button[kind="primary"]{border-radius:8px;background-color:#10b981!important;border-color:#10b981!important;color:#ffffff!important}
-div[data-testid="stRadio"]{padding:4px 0 10px}
-div[data-testid="stRadio"] [role="radiogroup"]{gap:.45rem}
-div[data-testid="stRadio"] label{border:1px solid #26364d;border-radius:8px;padding:7px 14px;background:#131f31;font-size:.88rem}
-div[data-testid="stRadio"] label:has(input:checked){border-color:#10b981;background:#064e3b;color:#34d399}
-</style>''',unsafe_allow_html=True)
+if os.environ.get('VOL_LAB_DEV') == '1':
+    revision=tuple((ROOT/(name+'.py')).stat().st_mtime_ns for name in MODULES if (ROOT/(name+'.py')).exists())
+    if getattr(monitor_ui,'_revision',None)!=revision:
+        if getattr(monitor_ui,'_revision',None) is not None:
+            import sys
+            for name in MODULES:
+                if name in sys.modules:importlib.reload(sys.modules[name])
+        monitor_ui._revision=revision
+    if st.session_state.get('dashboard_revision')!=revision:
+        st.session_state.dashboard_revision=revision
+        st.session_state.expiry_initial_attempted=False
 
 from collector_support import read_json, STATE
 from upstox_data import TOKEN_PATH
@@ -122,6 +81,7 @@ def _has_upstox_secret():
         return False
 
 has_upstox_token = TOKEN_PATH.exists() or bool(os.environ.get('UPSTOX_TOKEN')) or _has_upstox_secret()
+
 if has_upstox_token:
     token_mtime = TOKEN_PATH.stat().st_mtime_ns if TOKEN_PATH.exists() else 1
     version=(token_mtime,(ROOT/'upstox_data.py').stat().st_mtime_ns,(ROOT/'upstox_adapter.py').stat().st_mtime_ns)
@@ -164,16 +124,31 @@ else:current_label=workspace_labels['Options']
 
 if current_label not in markets:current_label=markets[0]
 
-# Prominent Main Title Header with aligned live market status
-title_col, badge_col = st.columns([5, 2], vertical_alignment="center")
-with title_col:
-    st.title('Volatility Lab')
-with badge_col:
-    now = datetime.now(IST)
-    is_open = (now.weekday() < 5) and (555 <= now.hour * 60 + now.minute <= 930)
-    mkt_color = "#34d399" if is_open else ("#f59e0b" if (now.weekday() < 5 and 540 <= now.hour * 60 + now.minute < 555) else "#94a3b8")
-    mkt_label = "● Market Live" if is_open else ("◑ Pre-Open" if (now.weekday() < 5 and 540 <= now.hour * 60 + now.minute < 555) else "○ Market Closed")
-    st.markdown(f"<div style='text-align:right;'><span style='display:inline-block; padding:5px 14px; border-radius:999px; font-size:0.75rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; border:1px solid rgba(52, 211, 153, 0.35); background:rgba(17, 29, 45, 0.9); color:{mkt_color};'>{mkt_label} · {now:%H:%M IST}</span></div>", unsafe_allow_html=True)
+# Classic & Modern Institutional Masthead Header with aligned live market status
+now = datetime.now(IST)
+is_open = (now.weekday() < 5) and (555 <= now.hour * 60 + now.minute <= 930)
+is_pre = (now.weekday() < 5) and (540 <= now.hour * 60 + now.minute < 555)
+mkt_color = "#34d399" if is_open else ("#fbbf24" if is_pre else "#94a3b8")
+mkt_border = "rgba(16, 185, 129, 0.42)" if is_open else ("rgba(245, 158, 11, 0.42)" if is_pre else "rgba(148, 163, 184, 0.28)")
+mkt_bg = "rgba(16, 185, 129, 0.12)" if is_open else ("rgba(245, 158, 11, 0.12)" if is_pre else "rgba(15, 23, 42, 0.85)")
+mkt_label = "● Market Live" if is_open else ("◐ Pre-Open" if is_pre else "○ Market Closed")
+
+st.markdown(
+    f"""
+    <div class="vl-masthead">
+      <div class="vl-masthead-left">
+        <span class="vl-brand-crest"><span class="vl-brand-gold">❖</span>Volatility Lab</span>
+        <span class="vl-brand-sub">NSE Index Volatility &amp; Relative Value</span>
+      </div>
+      <div class="vl-pill-row">
+        <span style="display:inline-block; padding:5px 14px; border-radius:999px; font-family:var(--vl-font-mono, monospace); font-size:0.74rem; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; border:1px solid {mkt_border}; background:{mkt_bg}; color:{mkt_color};">
+          {mkt_label} · {now:%H:%M IST}
+        </span>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 chosen_label = st.segmented_control('Workspace', markets, default=current_label, label_visibility='collapsed', key='market_workspace_label') or current_label
 workspace = label_to_mode.get(chosen_label, 'Options')
@@ -203,8 +178,6 @@ if workspace=='Backtest':
 else:
     if not dividend_ready:st.info('Dividend inputs unavailable; broker data remains available, model scenarios are withheld.')
     monitor_ui.render_monitor(rate,dividend,spread)
-
-
 
 def main():
     """Entrypoint hook for direct module execution from streamlit_app.py."""

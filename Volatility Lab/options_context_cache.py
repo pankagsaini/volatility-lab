@@ -19,7 +19,7 @@ def saved_events(root,symbol,start,end):
         rows.extend(_bank_results(corporate.get('indices',{}).get(symbol,{}).get('events',[])))
     rows=_filter(rows,start,end)
     unique={(row['Date'],row['Event'],row['Category'],row['Source']):row for row in rows}
-    return sorted(unique.values(),key=lambda row:(row['Date'],row['Category'],row['Event']))
+    return sorted(unique.values(),key=lambda row:(row['Date'],row['Category'],row['Source']))
 
 
 class CalendarCache:
@@ -37,6 +37,13 @@ class CalendarCache:
     def get(self,root,symbol,start,end):
         key=(str(Path(root)),symbol,start,end)
         with self._lock:
+            entry=self._entries.get(key)
+        # Perform synchronous disk read outside self._lock when cache misses
+        initial_saved = None
+        if entry is None:
+            initial_saved = saved_events(root,symbol,start,end)
+
+        with self._lock:
             now=self._clock()
             entry=self._entries.get(key)
             if entry is None:
@@ -45,9 +52,9 @@ class CalendarCache:
                     pending=self._entries[old]['future']
                     if pending is None or pending.done():del self._entries[old]
                 if len(self._entries)>=8:
-                    return saved_events(root,symbol,start,end),'Saved calendar · checking updates in background'
-                entry={'value':(saved_events(root,symbol,start,end),'Saved calendar'),
-                       'attempt':float('-inf'),'future':None}
+                    return initial_saved,'Saved calendar · checking updates in background'
+                entry={'value':(initial_saved,'Saved calendar'),
+                        'attempt':float('-inf'),'future':None}
                 self._entries[key]=entry
             future=entry['future']
             if future is not None and future.done():
@@ -56,7 +63,6 @@ class CalendarCache:
                     entry['value']=(entry['value'][0],'Partly available · calendar refresh failed; saved dates retained')
                 entry['future']=None
             if entry['future'] is None and now-entry['attempt']>=300:
-                # Provider caches enforce their own 12-hour refresh and failure cooldown.
                 entry['attempt']=now
                 entry['future']=self._executor.submit(self._fetch,Path(root),symbol,start,end)
             rows,status=deepcopy(entry['value'])

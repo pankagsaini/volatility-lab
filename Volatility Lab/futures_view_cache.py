@@ -1,5 +1,6 @@
 """Read-only revisions for futures view caches; no TTL can hide a new close."""
 from contextlib import closing
+from copy import deepcopy
 from functools import lru_cache
 import hashlib
 import json
@@ -10,7 +11,7 @@ import sqlite3
 def file_revision(path):
     try:
         stat=Path(path).stat()
-        return (stat.st_mtime_ns,stat.st_size,stat.st_ino)
+        return (stat.st_mtime_ns,stat.st_size)
     except FileNotFoundError:
         return None
 
@@ -26,7 +27,6 @@ def database_revision(root):
 def _rolling_content(root,symbol,db_revision,calendar_revision):
     path=Path(root)/'futures.sqlite'
     if not path.exists():return 'missing'
-    # A single read transaction keeps the candle/provenance fingerprint coherent.
     with closing(sqlite3.connect('file:'+path.resolve().as_posix()+'?mode=ro',uri=True,timeout=5)) as con:
         con.execute('BEGIN')
         prices=con.execute('SELECT rank,day,close,volume FROM continuous WHERE symbol=? ORDER BY rank,day',(symbol,)).fetchall()
@@ -37,15 +37,13 @@ def _rolling_content(root,symbol,db_revision,calendar_revision):
         values=json.loads(calendar.read_text(encoding='utf-8')).get(symbol,{})
         expiries=sorted((month,row.get('expiry')) for month,row in values.items())
     else:expiries=[]
-    # Changes to quote snapshots, audit timestamps and acquisition metadata do not
-    # alter rolling prices. Hash every consumed value, including interior corrections.
     return hashlib.sha256(repr((prices,provenance,expiries)).encode('utf-8')).hexdigest()
 
 
 def rolling_revision(root,symbol):
     root=Path(root).resolve()
     calendar=root.parent/'listed_monthly_expiries.json'
-    content=_rolling_content(str(root),symbol,database_revision(root),file_revision(calendar))
+    content=deepcopy(_rolling_content(str(root),symbol,database_revision(root),file_revision(calendar)))
     source=Path(__file__).parent
     return (content,*(file_revision(source/name) for name in
-                      ('futures_rolling.py','futures_data.py','market_calendar.py')))
+                     ('futures_rolling.py','futures_data.py','market_calendar.py')))

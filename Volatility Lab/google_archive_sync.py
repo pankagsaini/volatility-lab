@@ -13,6 +13,7 @@ ROOT=Path(__file__).resolve().parent
 DATA=ROOT/'data'
 STORE=DATA/'google_archive'
 CONFIG=ROOT/'cloud'/'apps_script'/'sync_config.json'
+STREAM_SETTLE_SECONDS=3.0
 _pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='drive-import')
 _guard=threading.Lock()
 _future=None
@@ -67,7 +68,6 @@ def import_report(obj,rate,dividend,spread):
         if stamp.date() in HOLIDAYS or stamp.weekday()>4 or not 555<=stamp.hour*60+stamp.minute<=940:
             valuation=trade
         if valuation and (stamp-pd.Timestamp(valuation)).total_seconds()>7*86400:valuation=None
-        # A retrieval on a holiday must never create a fictional trading session.
         if not valuation:continue
         asof=pd.Timestamp(valuation)
         try:frame=pd.read_csv(DATA/f'{symbol.lower()}_one_year.csv')
@@ -81,66 +81,51 @@ def import_report(obj,rate,dividend,spread):
             spot=spots.pop()
             if not np.isfinite(spot) or spot<=0:continue
             chain=chain_from_response(raw,e)
-            chain.attrs.clear()  # Raw broker payload is archived; avoid copying its audit on every pandas slice.
+            chain.attrs.clear()
             strikes=sorted({float(r['strike_price']) for r in raw})
             call,put,iv=atm_values(chain,strikes,spot)
             align={**base_alignment,'IV-RV Spread':iv-base_alignment['HV30']}
             prev=float(q.get('last_price',0))-float(q.get('net_change',0))
-            row={'Provider':'Upstox','Instrument':symbol,'Expiry':e,'Type':'Monthly' if e in monthly else 'Weekly','Price':spot,'% change':100*(spot/prev-1) if prev>0 else None,'Call IV':call,'Put IV':put,'IV':iv,**reversal_values(chain,symbol),**align,'As of':asof.isoformat(),'Retrieved at':rec['retrieved_at'],'Source':'Upstox supplied IV','Capture source':'Google Drive','Timestamp note':'Underlying feed timestamp; broker Greeks have no separate exchange timestamp','IV method':'Lab arithmetic mean of broker ATM call and put IV','Greeks source':'Upstox supplied Greeks'}
-            # A repeated feed timestamp cannot silently replace the smile while the
-            # intraday table retains its first observation. Preserve one coherent row.
-            with closing(sqlite3.connect(DATA/'monitor.sqlite',timeout=20)) as existing_con:
+            row={'Provider':'Upstox','Instrument':symbol,'Expiry':e,'Type':'Monthly' if e in monthly else 'Weekly','Price':spot,'% change':100*(spot/prev-1) if prev>0 else None,'Call IV':call,'Put IV':put,'IV':iv,**reversal_values(chain,symbol),**align,'As of':asof.isoformat(),'Retrieved at':rec['retrieved_at'],'Source':'Upstox supplied IV','Timestamp note':'Underlying feed timestamp; broker Greeks have no separate exchange timestamp','IV method':'Lab arithmetic mean of broker ATM call and put IV','Capture source':'Google Drive','Greeks source':'Upstox supplied Greeks'}
+            with closing(sqlite3.connect(DATA/'monitor.sqlite',timeout=30)) as existing_con:
+                existing_con.execute('PRAGMA journal_mode=WAL')
+                existing_con.execute('PRAGMA busy_timeout=30000')
                 exists=existing_con.execute("SELECT 1 FROM sqlite_master WHERE name='intraday_observations'").fetchone()
-                saved=existing_con.execute('SELECT payload FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND as_of=?',(symbol,e,config,row['As of'])).fetchone() if exists else None
-            if saved:
-                previous=json.loads(saved[0])
-                if (previous.get('Capture source')=='Google Drive' and previous.get('IV') is not None
-                        and np.isfinite(previous['IV']) and previous['IV']>0):
-                    from expiry_data import db
-                    with closing(db()) as con:
-                        prior=con.execute('SELECT MAX(as_of) FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND substr(as_of,1,10)=?',(symbol,e,config,str(asof.date()))).fetchone()[0]
-                    if prior==row['As of']:
-                        save_observation(symbol,e,config,asof.date(),previous['IV'],
-                            previous.get('IV-RV Spread') if previous.get('IV-RV Spread') is not None else np.nan,
-                            'Upstox supplied IV (Google Cloud)')
-                        # Repair a missing smile when an already-saved Cloud
-                        # observation is encountered again. This only consumes
-                        # the broker chain in the validated Drive archive.
-                        save_smile(DATA/'monitor.sqlite',symbol,e,config,row['As of'],
-                                   smile_points(chain,strikes,spot),capture_source='Google Drive')
-                    rows.append(previous)
-                    details.append({'Instrument':symbol,'Expiry':e,'Status':'Existing timestamp retained','As of':previous['As of']})
-                    continue
+                saved=existing_con.execute('SELECT payload FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND as_of=?', (symbol,e,config,row['As of'])).fetchone() if exists else None
+                if saved:
+                    previous=json.loads(saved[0])
+                    if (previous.get('Capture source')=='Google Drive' and previous.get('IV') is not None and np.isfinite(previous['IV']) and previous['IV']>0):
+                        from expiry_data import db
+                        with closing(db()) as con:
+                            prior=con.execute('SELECT MAX(as_of) FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND substr(as_of,1,10)=?', (symbol,e,config,str(asof.date()))).fetchone()[0]
+                            if prior==row['As of']:
+                                save_observation(symbol,e,config,asof.date(),previous['IV'], previous.get('IV-RV Spread') if previous.get('IV-RV Spread') is not None else np.nan, 'Upstox supplied IV (Google Cloud)')
+                                save_smile(DATA/'monitor.sqlite',symbol,e,config,row['As of'], smile_points(chain,strikes,spot),capture_source='Google Drive')
+                        rows.append(previous)
+                        details.append({'Instrument':symbol,'Expiry':e,'Status':'Existing timestamp retained','As of':previous['As of']})
+                        continue
             save_intraday(DATA/'monitor.sqlite',config,row)
             save_smile(DATA/'monitor.sqlite',symbol,e,config,row['As of'],smile_points(chain,strikes,spot),capture_source='Google Drive')
-            # Save a daily history point only when this is the latest Cloud capture.
             from expiry_data import db
             with closing(db()) as con:
-                prior=con.execute('SELECT MAX(as_of) FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND substr(as_of,1,10)=?',(symbol,e,config,str(asof.date()))).fetchone()[0]
-            if prior==row['As of']:save_observation(symbol,e,config,asof.date(),iv,align['IV-RV Spread'],'Upstox supplied IV (Google Cloud)')
+                prior=con.execute('SELECT MAX(as_of) FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND substr(as_of,1,10)=?', (symbol,e,config,str(asof.date()))).fetchone()[0]
+                if prior==row['As of']:save_observation(symbol,e,config,asof.date(),iv,align['IV-RV Spread'],'Upstox supplied IV (Google Cloud)')
             rows.append(row);details.append({'Instrument':symbol,'Expiry':e,'Status':'Cloud capture','As of':row['As of'],**align})
     if rows:
         old=load_snapshot(config,allow_saved=True) or {}
         if pd.Timestamp(old.get('timestamp','1970-01-01T00:00:00Z'))<stamp:
-            if old.get('config')==config:
-                combined={(r['Instrument'],r['Expiry']):r for r in old.get('rows',[])}
-                for r in rows:
-                    key=(r['Instrument'],r['Expiry']);previous=combined.get(key,{})
-                    if not previous.get('As of') or pd.Timestamp(previous['As of'])<=pd.Timestamp(r['As of']):combined[key]=r
-                rows=list(combined.values())
-                catalog={**old.get('catalog',{}),**catalog}
-            cloud_snapshot={'provider':'Upstox','schema':SCHEMA,'config':config,
-                'parameters':{'rate':rate,'dividend':dividend,'max_spread':spread},
-                'timestamp':stamp.isoformat(),'rows':rows,'details':details,
-                'catalog':catalog,'india_vix':old.get('india_vix',{})}
+            combined={(r['Instrument'],r['Expiry']):r for r in old.get('rows',[])}
+            for r in rows:
+                key=(r['Instrument'],r['Expiry']);previous=combined.get(key,{})
+                if not previous.get('As of') or pd.Timestamp(previous['As of'])<=pd.Timestamp(r['As of']):combined[key]=r
+            rows=list(combined.values())
+            catalog={**old.get('catalog',{}),**catalog}
+            cloud_snapshot={'provider':'Upstox','schema':SCHEMA,'config':config, 'parameters':{'rate':rate,'dividend':dividend,'max_spread':spread}, 'timestamp':stamp.isoformat(),'rows':rows,'details':details, 'catalog':catalog,'india_vix':old.get('india_vix',{})}
             write_snapshot(cloud_snapshot)
         else:
-            cloud_snapshot={'provider':'Upstox','schema':SCHEMA,'config':config,
-                'parameters':{'rate':rate,'dividend':dividend,'max_spread':spread},
-                'timestamp':stamp.isoformat(),'rows':rows,'details':details,
-                'catalog':catalog,'india_vix':old.get('india_vix',{})}
-        from relative_value import capture
-        capture(DATA,cloud_snapshot)
+            cloud_snapshot={'provider':'Upstox','schema':SCHEMA,'config':config, 'parameters':{'rate':rate,'dividend':dividend,'max_spread':spread}, 'timestamp':stamp.isoformat(),'rows':rows,'details':details, 'catalog':catalog,'india_vix':old.get('india_vix',{})}
+            from relative_value import capture
+            capture(DATA,cloud_snapshot)
     import_futures(obj,quotes,stamp)
     return len(rows)
 
@@ -163,7 +148,7 @@ def import_futures(obj,quotes,stamp):
             pairs=[{'Pair':n,**quote_pair(legs[i],legs[i+1])} for i,n in enumerate(['Current - Next','Next - Far'])]
             if any(p['Spread'] is not None for p in pairs):
                 result={'provider':'Upstox','symbol':symbol,'collected':stamp.isoformat(),'legs':legs,'pairs':pairs,'history_errors':[],'history_pending':[],'capture_source':'Google Drive'}
-                with closing(connection(root)) as con,con:con.execute('INSERT OR IGNORE INTO snapshots VALUES(?,?,?)',(symbol,stamp.isoformat(),json.dumps(result)))
+                with closing(connection(root)) as con,con:con.execute('INSERT OR IGNORE INTO snapshots VALUES(?,?,?)', (symbol,stamp.isoformat(),json.dumps(result)))
     if obj['mode']!='eod':return
     mapping={f['instrument_key']:(s,f['expiry']) for s,e in cat.items() for f in e['futures'] if s in INDICES}
     with closing(research()) as con,con,closing(connection(root)) as fut,fut:
@@ -174,7 +159,7 @@ def import_futures(obj,quotes,stamp):
                 t=pd.Timestamp(c[0]);vals=[float(v) for v in c[1:6]]
                 if t.tzinfo is None or not np.isfinite(vals).all() or min(vals[:4])<=0 or vals[1]<max(vals[:4]) or vals[2]>min(vals[:4]):continue
                 t=t.tz_convert('Asia/Kolkata');oi=float(c[6] or 0) if len(c)>6 else None
-                con.execute('INSERT OR REPLACE INTO candles VALUES(?,?,?,?,?,?,?,?,?)',(key,'day',t.isoformat(),*vals,oi))
+                con.execute('INSERT OR REPLACE INTO candles VALUES(?,?,?,?,?,?,?,?)',(key,'day',t.isoformat(),*vals,oi))
                 if key in mapping:
                     symbol,expiry=mapping[key]
                     fut.execute('INSERT OR REPLACE INTO candles VALUES(?,?,?,?,?,?)',(symbol,expiry,str(t.date()),vals[3],vals[4],oi))
@@ -187,8 +172,7 @@ def import_futures(obj,quotes,stamp):
                 active=group[group.expiry>=day].sort_values('expiry').head(3)
                 if len(active)!=3:continue
                 for rank,r in enumerate(active.itertuples(),1):
-                    con.execute('INSERT OR IGNORE INTO continuous VALUES(?,?,?,?,?,?,?,?,?)',(symbol,rank,day,r.close,r.volume,r.oi,0,r.expiry,stamp.isoformat()))
-    # Refresh local index CSVs used by HV and preserve older rows.
+                    con.execute('INSERT OR IGNORE INTO continuous VALUES(?,?,?,?,?,?,?,?)', (symbol,rank,day,r.close,r.volume,r.oi,0,r.expiry,stamp.isoformat()))
     from collector_support import atomic_csv
     with closing(research()) as con:
         for symbol,key in INDICES.items():
@@ -197,7 +181,6 @@ def import_futures(obj,quotes,stamp):
             f['Date']=pd.to_datetime(f.Date,utc=True).dt.tz_convert('Asia/Kolkata').dt.strftime('%Y-%m-%d')
             path=DATA/f'{symbol.lower()}_one_year.csv'
             old=pd.read_csv(path) if path.exists() else pd.DataFrame()
-            # Existing file schema governs column names; don't replace unknown formats.
             if not old.empty and set(old.columns)-set(f.columns):continue
             atomic_csv(pd.concat([old,f[list(old.columns)] if not old.empty else f]).drop_duplicates('Date',keep='last').sort_values('Date'),path,index=False)
 
@@ -226,9 +209,7 @@ def reconcile_local_capture_status():
         for symbol in ('NIFTY','BANKNIFTY'):
             tails=dict(con.execute('SELECT rank,MAX(day) FROM continuous WHERE symbol=? GROUP BY rank',(symbol,)))
             if any(tails.get(rank,'')<str(target) for rank in (1,2,3)):return False
-    state.update(status='recovered',original_status=state['status'],original_errors=errors,errors=[],
-                 recovered_through=str(target),recovered_by='Complete Google Drive EOD archive',
-                 recovery_file=candidates[0].name,recovered_at=pd.Timestamp.now(tz='Asia/Kolkata').isoformat())
+    state.update(status='recovered',original_status=state['status'],original_errors=errors,errors=[], recovered_through=str(target),recovered_by='Complete Google Drive EOD archive', recovery_file=candidates[0].name,recovered_at=pd.Timestamp.now(tz='Asia/Kolkata').isoformat())
     atomic_json(STATE/'status.json',state)
     return True
 
@@ -236,39 +217,43 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
     STORE.mkdir(parents=True,exist_ok=True)
     source=source_folder()
     if source is None:
-        # Cloud live feed fallback for Streamlit Community Cloud (no local Google Drive letter)
-        web_url = read_json(CONFIG).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpiRAE9ZRoGGWTyTncZhwUPmTnimv0HyejOiJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
+        web_url = read_json(CONFIG).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpIRAEOZRoGGwTyTncZhwUPmTnimv0Hyej0iJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
         try:
             import requests
             resp = requests.get(web_url, timeout=12, allow_redirects=True)
             if resp.status_code == 200:
                 obj = resp.json()
                 if obj.get('schema') == 1 and obj.get('records'):
-                    with data_lock():
+                    with data_lock(timeout=120):
                         import_report(obj, rate, dividend, spread)
-                    atomic_json(STORE/'status.json', {'status':'ready','mode':'web_cloud','updated':pd.Timestamp.now(tz='UTC').isoformat(),'total_files':1,'source':web_url})
+                    atomic_json(STORE/'status.json',{'status':'ready','mode':'web_cloud','updated':str(obj.get('retrieved_at') or pd.Timestamp.now(tz='UTC').isoformat()),'total_files':1,'source':web_url})
                     return 1
         except Exception as exc:
             pass
         atomic_json(STORE/'status.json',{'status':'waiting','message':'Sign in to Google Drive desktop to connect the private archive.'});return 0
     manifest=read_json(STORE/'manifest.json');count=0;errors=[]
     import re
-    pattern=re.compile(r'^\d{4}-\d{2}-\d{2}_(snapshot|test|eod)_\d{6}_(complete|partial)\.json\.gz$')
-    # Permanent 5TB cloud archive; all historical captures retained without deletion.
+    pattern=re.compile(r'^\d{4}\-\d{2}\-\d{2}_(snapshot|test|eod)_\d{6}_(complete|partial)\.json\.gz$')
     for path in sorted(source.glob('*.json.gz'), reverse=True):
         if not pattern.fullmatch(path.name):continue
         try:
-            info=path.stat();known=manifest.get(path.name)
+            info=path.stat()
+            if (time.time() - info.st_mtime) < STREAM_SETTLE_SECONDS:
+                continue
+            known=manifest.get(path.name)
             if known and known.get('size')==info.st_size and known.get('mtime')==info.st_mtime_ns and (STORE/path.name).is_file() and (STORE/path.name).stat().st_size==known['size']:
                 if not verify_receipt or hashlib.sha256((STORE/path.name).read_bytes()).hexdigest()==known['sha256']:continue
             raw=path.read_bytes();obj=validated(raw);digest=hashlib.sha256(raw).hexdigest()
             dest=STORE/path.name
             temp=dest.with_suffix('.tmp');temp.write_bytes(raw);os.replace(temp,dest)
             if hashlib.sha256(dest.read_bytes()).hexdigest()!=digest:raise ValueError('Local verification failed')
-            with data_lock():import_report(obj,rate,dividend,spread)
+            with data_lock(timeout=120):import_report(obj,rate,dividend,spread)
             manifest[path.name]={'sha256':digest,'size':len(raw),'mtime':info.st_mtime_ns,'saved_at':pd.Timestamp.now(tz='UTC').isoformat()}
             atomic_json(STORE/'manifest.json',manifest);count+=1
             atomic_json(STORE/'status.json',{'status':'syncing','total_files':len(manifest),'updated':pd.Timestamp.now(tz='UTC').isoformat()})
+        except (EOFError, gzip.BadGzipFile):
+            # Transient Google Drive stream still flushing; retry on next cycle without error penalty
+            continue
         except Exception as exc:errors.append({'file':path.name,'error':type(exc).__name__})
     reconcile_local_capture_status()
     atomic_json(STORE/'status.json',{'status':'partial' if errors else 'ready','updated':pd.Timestamp.now(tz='UTC').isoformat(),'imported':count,'total_files':len(manifest),'errors':errors[:10],'source':str(source)})
@@ -314,9 +299,3 @@ def ensure_sync(rate,dividend,spread):
         if _future is None or (_future.done() and time.monotonic()-_started>=45):
             _started=time.monotonic();_future=_pool.submit(sync_once,rate,dividend,spread)
     return _future
-
-
-if __name__=='__main__':
-    from pricing_inputs import get_rate,get_yields
-    import sys
-    sync_once(get_rate().get('model_rate'),{s:v.get('model_yield') for s,v in get_yields().items()},3.,verify_receipt='--verify-receipt' in sys.argv)

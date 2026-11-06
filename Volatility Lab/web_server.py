@@ -10,7 +10,6 @@ import sys
 import asyncio
 import json
 
-# Ensure local runtime dependencies are discoverable
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -28,7 +27,21 @@ import web_data
 
 WEB_DIR = ROOT / 'web'
 WEB_DIR.mkdir(parents=True, exist_ok=True)
-LOCAL_PLOTLY = ROOT / '.dependencies/plotly/package_data/plotly.min.js'
+
+
+def _resolve_plotly_bundle() -> Path:
+    """Resolve plotly.min.js from installed plotly package first, falling back to .dependencies."""
+    try:
+        import plotly
+        pkg_path = Path(plotly.__file__).resolve().parent / 'package_data' / 'plotly.min.js'
+        if pkg_path.exists():
+            return pkg_path
+    except Exception:
+        pass
+    return ROOT / '.dependencies/plotly/package_data/plotly.min.js'
+
+
+LOCAL_PLOTLY = _resolve_plotly_bundle()
 WEB_PLOTLY = WEB_DIR / 'plotly.min.js'
 if LOCAL_PLOTLY.exists() and not WEB_PLOTLY.exists():
     import shutil
@@ -55,12 +68,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/api/health")
 async def api_health():
     """Health check endpoint."""
     return {"status": "ok", "app": "Volatility Lab Modern SaaS Workstation", "engine": "FastAPI + Starlette"}
-
 
 @app.get("/api/market-summary")
 async def api_market_summary():
@@ -70,7 +81,6 @@ async def api_market_summary():
         return data
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)
-
 
 @app.get("/api/expiries")
 async def api_expiries(symbol: str = Query("NIFTY")):
@@ -82,7 +92,6 @@ async def api_expiries(symbol: str = Query("NIFTY")):
     except Exception as exc:
         return JSONResponse({"symbol": sym, "error": str(exc)}, status_code=500)
 
-
 @app.get("/api/option-chain")
 async def api_option_chain(symbol: str = Query("NIFTY"), expiry: str = Query(None)):
     """Opstra-style option chain table with Call Greeks, Strike, Put Greeks, PCR, and Max Pain."""
@@ -92,7 +101,6 @@ async def api_option_chain(symbol: str = Query("NIFTY"), expiry: str = Query(Non
         return data
     except Exception as exc:
         return JSONResponse({"symbol": sym, "error": str(exc)}, status_code=500)
-
 
 @app.get("/api/vol-surface")
 async def api_vol_surface(
@@ -118,7 +126,6 @@ async def api_vol_surface(
     except Exception as exc:
         return JSONResponse({"symbol": sym, "error": str(exc)}, status_code=500)
 
-
 @app.get("/api/trade-radar")
 async def api_trade_radar(symbol: str = Query("NIFTY"), expiry: str = Query(None)):
     """Trade opportunity signals, expected move, range bounds, and synthetic basis."""
@@ -129,7 +136,6 @@ async def api_trade_radar(symbol: str = Query("NIFTY"), expiry: str = Query(None
     except Exception as exc:
         return JSONResponse({"symbol": sym, "error": str(exc)}, status_code=500)
 
-
 @app.get("/api/futures-carry")
 async def api_futures_carry():
     """Futures basis, roll spreads, and annualized carry."""
@@ -138,7 +144,6 @@ async def api_futures_carry():
         return data
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)
-
 
 @app.get("/api/candles")
 async def api_candles(symbol: str = Query("NIFTY")):
@@ -150,7 +155,6 @@ async def api_candles(symbol: str = Query("NIFTY")):
     except Exception as exc:
         return JSONResponse({"symbol": sym, "error": str(exc)}, status_code=500)
 
-
 @app.get("/api/backtest-summary")
 async def api_backtest_summary():
     """Recent backtest reports with win rate, net PnL, drawdowns, and trade records."""
@@ -159,7 +163,6 @@ async def api_backtest_summary():
         return data
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)
-
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -179,10 +182,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except (WebSocketDisconnect, asyncio.CancelledError):
         pass
 
-
-# Mount built production frontend assets
 app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
-
 
 def main():
     port = 8000
@@ -202,7 +202,6 @@ def main():
 
     print(f"Starting Volatility Lab FastAPI Workstation on http://127.0.0.1:{port}...")
     uvicorn.run(app, host='127.0.0.1', port=port, log_level='info')
-
 
 if __name__ == '__main__':
     main()

@@ -10,14 +10,12 @@ import streamlit as st
 from market_data import IST
 from trade_review_ui import table
 
-
 def _clean_float(val, fallback=0.0):
     try:
         f = float(val)
         return f if np.isfinite(f) else fallback
     except (TypeError, ValueError):
         return fallback
-
 
 def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065):
     try:
@@ -59,7 +57,6 @@ def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065):
         'vega': straddle_vega,
         'theta_day': straddle_theta
     }
-
 
 def render_archived_intraday(data, symbol, selected, config):
     spot = _clean_float(selected.get('Price'))
@@ -103,14 +100,14 @@ def render_archived_intraday(data, symbol, selected, config):
     greeks = compute_straddle_greeks(spot, strike, dte, iv)
     if greeks:
         c1, c2, c3, c4, c5, c6 = st.columns(6)
-        c1.metric('ATM Strike', f"{int(round(greeks['strike'])):,}")
-        c2.metric('Straddle Price', f"₹{greeks['straddle']:.2f}")
-        c3.metric('Breakeven ±%', f"±{greeks['straddle_pct']:.2f}%")
-        c4.metric('Net Delta', f"{greeks['net_delta']:+.3f}")
-        c5.metric('Theta Decay', f"{greeks['theta_day']:.2f} ₹/d")
-        c6.metric('Straddle Vega', f"{greeks['vega']:.2f} ₹/pt")
+        c1.metric("ATM Strike", f"{int(round(greeks['strike'])):,}")
+        c2.metric("Straddle Price", f"₹{greeks['straddle']:.2f}")
+        c3.metric("Breakeven ±%", f"±{greeks['straddle_pct']:.2f}%")
+        c4.metric("Net Delta", f"{greeks['net_delta']:+.3f}")
+        c5.metric("Theta Decay", f"₹{greeks['theta_day']:.2f} ₹/d")
+        c6.metric("Straddle Vega", f"{greeks['vega']:.2f} ₹/pt")
     else:
-        st.info(f"ATM Straddle pricing & Greeks will update when valid spot and IV quotes are captured.")
+        st.info("ATM Straddle pricing & Greeks will update when valid spot and IV quotes are captured.")
 
     if saved.empty:
         st.info(f"Collecting intraday snapshots for {symbol} {selected.get('Expiry')}... Live calculations above update continuously with 1-minute Google Cloud captures.")
@@ -126,10 +123,10 @@ def render_archived_intraday(data, symbol, selected, config):
     if len(available_days) > 1:
         with col_day:
             chosen_day = st.selectbox(
-                'Session Date',
+                "Session Date",
                 available_days,
                 format_func=lambda d: d.strftime('%d %b %Y'),
-                key=f'straddle_session_day_{symbol}_{selected.get("Expiry")}'
+                key=f"straddle_session_day_{symbol}_{selected.get('Expiry')}"
             )
     else:
         chosen_day = available_days[0]
@@ -155,12 +152,12 @@ def render_archived_intraday(data, symbol, selected, config):
             s_strike = round(s_price / step) * step
         else:
             s_strike = strike
-
+        
         try:
             row_dte = max(0.2, float((pd.Timestamp(selected.get('Expiry')).date() - pd.Timestamp(row.get('As of')).date()).days))
         except Exception:
             row_dte = dte
-
+            
         res = compute_straddle_greeks(s_price, s_strike, row_dte, s_iv)
         if res:
             straddle_pts.append(res['straddle'])
@@ -174,91 +171,97 @@ def render_archived_intraday(data, symbol, selected, config):
 
     with col_metric:
         view_metric = st.segmented_control(
-            'Intraday Metric',
-            ['Straddle Price (₹)', 'Implied Volatility (%)', 'Net Delta', 'Underlying Spot'],
-            default='Straddle Price (₹)',
-            label_visibility='collapsed',
-            key=f'straddle_intraday_metric_{symbol}'
-        ) or 'Straddle Price (₹)'
+            "Intraday Metric",
+            ["Straddle Price (₹)", "Implied Volatility (%)", "Net Delta", "Underlying Spot"],
+            default="Straddle Price (₹)",
+            label_visibility="collapsed",
+            key=f"straddle_intraday_metric_{symbol}"
+        ) or "Straddle Price (₹)"
 
     fig = go.Figure()
     time_series = pd.to_datetime(session_data['As of'])
 
-    if view_metric == 'Straddle Price (₹)':
+    if view_metric == "Straddle Price (₹)":
         fig.add_trace(go.Scatter(
-            x=time_series, y=session_data['Straddle Price'],
-            name='ATM Straddle Price', mode='lines+markers',
+            x=time_series,
+            y=session_data['Straddle Price'],
+            name="ATM Straddle Price",
+            mode="lines+markers",
             connectgaps=False,
-            line={'color': '#10b981', 'width': 2.4},
-            marker={'color': '#34d399', 'size': 5},
-            hovertemplate='%{x|%H:%M IST}<br>Straddle: ₹%{y:.2f}<extra></extra>'
+            line=dict(color="#10b981", width=2.4),
+            marker=dict(color="#34d399", size=5),
+            hovertemplate="%{x|%H:%M IST}<br>Straddle: ₹%{y:.2f}<extra></extra>"
         ))
-        y_title = 'Straddle Price (₹)'
-    elif view_metric == 'Implied Volatility (%)':
+        y_title = "Straddle Price (₹)"
+    elif view_metric == "Implied Volatility (%)":
         fig.add_trace(go.Scatter(
-            x=time_series, y=pd.to_numeric(session_data['IV'], errors='coerce'),
-            name='ATM IV', mode='lines+markers',
+            x=time_series,
+            y=pd.to_numeric(session_data['IV'], errors='coerce'),
+            name="ATM IV",
+            mode="lines+markers",
             connectgaps=False,
-            line={'color': '#38bdf8', 'width': 2.4},
-            marker={'color': '#60a5fa', 'size': 5},
-            hovertemplate='%{x|%H:%M IST}<br>IV: %{y:.2f}%<extra></extra>'
+            line=dict(color="#38bdf8", width=2.4),
+            marker=dict(color="#60a5fa", size=5),
+            hovertemplate="%{x|%H:%M IST}<br>IV: %{y:.2f}%<extra></extra>"
         ))
-        y_title = 'Implied Volatility (%)'
-    elif view_metric == 'Net Delta':
+        y_title = "Implied Volatility (%)"
+    elif view_metric == "Net Delta":
         fig.add_trace(go.Scatter(
-            x=time_series, y=session_data['Net Delta'],
-            name='Straddle Net Delta', mode='lines+markers',
+            x=time_series,
+            y=session_data['Net Delta'],
+            name="Straddle Net Delta",
+            mode="lines+markers",
             connectgaps=False,
-            line={'color': '#f59e0b', 'width': 2.4},
-            marker={'color': '#fbbf24', 'size': 5},
-            hovertemplate='%{x|%H:%M IST}<br>Delta: %{y:+.3f}<extra></extra>'
+            line=dict(color="#d4af37", width=2.4),
+            marker=dict(color="#fbbf24", size=5),
+            hovertemplate="%{x|%H:%M IST}<br>Delta: %{y:+.3f}<extra></extra>"
         ))
-        y_title = 'Net Straddle Delta'
+        y_title = "Net Straddle Delta"
     else:
         fig.add_trace(go.Scatter(
-            x=time_series, y=pd.to_numeric(session_data['Price'], errors='coerce'),
-            name='Spot Price', mode='lines+markers',
+            x=time_series,
+            y=pd.to_numeric(session_data['Price'], errors='coerce'),
+            name="Spot Price",
+            mode="lines+markers",
             connectgaps=False,
-            line={'color': '#a78bfa', 'width': 2.4},
-            marker={'color': '#c084fc', 'size': 5},
-            hovertemplate='%{x|%H:%M IST}<br>Spot: %{y:,.2f}<extra></extra>'
+            line=dict(color="#a78bfa", width=2.4),
+            marker=dict(color="#c084fc", size=5),
+            hovertemplate="%{x|%H:%M IST}<br>Spot: %{y:,.2f}<extra></extra>"
         ))
-        y_title = 'Spot Price'
+        y_title = "Spot Price"
 
     fig.update_layout(
         height=350,
-        template='plotly_dark',
-        paper_bgcolor='#0c1321',
-        plot_bgcolor='#0c1321',
-        margin={'l': 10, 'r': 15, 't': 20, 'b': 15},
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(13, 19, 32, 0.55)",
+        margin=dict(l=46, r=20, t=34, b=34),
         yaxis_title=y_title,
-        yaxis_tickformat='.2f',
-        xaxis_tickformat='%H:%M',
-        hovermode='x unified'
+        yaxis_tickformat=".2f",
+        xaxis_tickformat="%H:%M",
+        hovermode="x unified"
     )
-    st.plotly_chart(fig, key=f'intraday_straddle_chart_{symbol}', width='stretch', config={'displaylogo': False})
+    st.plotly_chart(fig, key=f"intraday_straddle_chart_{symbol}", width="stretch", config={'displaylogo': False})
     st.caption(f"{len(session_data)} intraday snapshots for {chosen_day.strftime('%d %b %Y')} · 1-minute Google Cloud capture sync")
 
-    with st.expander('Intraday session data table & CSV export'):
+    with st.expander("Intraday session data table & CSV export"):
         export_df = session_data[['As of', 'Price', 'IV', 'Straddle Price', 'Net Delta', 'Source']].copy()
         export_df['As of'] = export_df['As of'].dt.strftime('%Y-%m-%d %H:%M:%S IST')
-        st.dataframe(export_df, hide_index=True, width='stretch')
+        st.dataframe(export_df, hide_index=True, width="stretch")
         st.download_button(
-            'Download Intraday CSV',
+            "Download Intraday CSV",
             export_df.to_csv(index=False).encode(),
-            file_name=f'{symbol}_{selected.get("Expiry")}_intraday_{chosen_day}.csv',
-            mime='text/csv'
+            file_name=f"{symbol}_{selected.get('Expiry')}_intraday_{chosen_day}.csv",
+            mime="text/csv"
         )
-
 
 def render_research_tools(data, symbol, selected, result, config):
     from monitor_ui import render_relative_value
     render_relative_value(symbol, selected, config)
 
-
 def render_trade_tools(data, symbol, selected, rate, dividend, spread):
     from trade_review_ui import render_review
-    from trade_review import option_book, atm_pair, parity_forward, make_position, position_greeks, stress_position, freshness
+    from trade_review_ui import atm_pair, freshness, make_position, option_book, parity_forward, position_greeks, stress_position
     from history_policy import assumptions
     from dividend_yield import for_symbol
     paths = sorted(data.glob(symbol.lower() + '_option_quotes_*.json'), reverse=True)
@@ -281,8 +284,8 @@ def render_trade_tools(data, symbol, selected, rate, dividend, spread):
         put = call = None
         if protected:
             book = context['book']
-            puts = sorted(book.loc[(book.Kind == 'PE') & (book.Strike < context['strike']), 'Strike'].unique())
-            calls = sorted(book.loc[(book.Kind == 'CE') & (book.Strike > context['strike']), 'Strike'].unique())
+            puts = sorted(book.loc[(book.Kind == 'PE') & (book.Strike < context['strike'])]['Strike'].unique())
+            calls = sorted(book.loc[(book.Kind == 'CE') & (book.Strike > context['strike'])]['Strike'].unique())
             if not puts or not calls:
                 raise ValueError('No valid protective wing quotes in the saved book.')
             put = st.selectbox('Put wing', puts, index=len(puts) - 1)

@@ -2,55 +2,53 @@
 import warnings
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize
 from vol_lib import validate_ohlc, rolling_rv_suite
 
 
-def _scipy_garch11_fallback(returns_pct, max_h):
-    from scipy.optimize import minimize
-    r = returns_pct.to_numpy(dtype=float)
+def _scipy_garch11_fallback(returns: pd.Series, max_h: int):
+    """Exact Gaussian zero-mean GARCH(1,1) MLE via SciPy L-BFGS-B when `arch` package is absent."""
+    r = returns.to_numpy(dtype=float)
+    r2 = r * r
     n = len(r)
     var0 = float(np.var(r))
+
     def neg_loglik(params):
         omega, alpha, beta = params
-        if omega <= 1e-8 or alpha < 0 or beta < 0 or alpha + beta >= 0.9999:
+        if omega <= 1e-8 or alpha < 0 or beta < 0 or (alpha + beta) >= 0.9995:
             return 1e12
         sigma2 = np.empty(n, dtype=float)
         sigma2[0] = var0
-        r2 = r * r
         for t in range(1, n):
             sigma2[t] = omega + alpha * r2[t - 1] + beta * sigma2[t - 1]
-        return float(0.5 * np.sum(np.log(2.0 * np.pi) + np.log(sigma2) + r2 / sigma2))
-    res = minimize(
-        neg_loglik,
-        x0=np.array([0.05 * var0, 0.08, 0.87]),
-        bounds=[(1e-6, 10.0 * var0), (1e-4, 0.50), (0.10, 0.998)],
-        method="L-BFGS-B",
-    )
-    omega, alpha, beta = map(float, res.x)
+        return 0.5 * float(np.sum(np.log(2.0 * np.pi) + np.log(sigma2) + r2 / sigma2))
+
+    x0 = np.array([max(var0 * 0.05, 1e-4), 0.08, 0.87])
+    bounds = [(1e-6, var0 * 5.0 + 10.0), (1e-4, 0.50), (0.10, 0.995)]
+    res = minimize(neg_loglik, x0, method='L-BFGS-B', bounds=bounds)
+    omega, alpha, beta = (float(v) for v in res.x)
+    persistence = min(alpha + beta, 0.999)
     sigma2 = np.empty(n, dtype=float)
     sigma2[0] = var0
-    r2 = r * r
     for t in range(1, n):
         sigma2[t] = omega + alpha * r2[t - 1] + beta * sigma2[t - 1]
-    persistence = alpha + beta
-    h1 = omega + alpha * r2[-1] + beta * sigma2[-1]
-    fcast_var = np.empty(max_h, dtype=float)
-    fcast_var[0] = h1
+
+    f_var = np.empty(max_h, dtype=float)
+    f_var[0] = omega + alpha * r2[-1] + beta * sigma2[-1]
     for h in range(1, max_h):
-        fcast_var[h] = omega + persistence * fcast_var[h - 1]
+        f_var[h] = omega + persistence * f_var[h - 1]
+
     ll = -float(res.fun)
-    k = 3
-    aic = 2 * k - 2 * ll
-    bic = k * np.log(n) - 2 * ll
+    aic = 2 * 3 - 2 * ll
+    bic = 3 * np.log(n) - 2 * ll
     return {
-        "converged": bool(res.success),
-        "params": {"omega": omega, "alpha[1]": alpha, "beta[1]": beta},
-        "daily_variance": fcast_var / 10000.0,
-        "cond_vol": np.sqrt(sigma2),
-        "nobs": n,
-        "ll": ll,
-        "aic": aic,
-        "bic": bic,
+        'nobs': n,
+        'params': {'omega': omega, 'alpha[1]': alpha, 'beta[1]': beta},
+        'daily_variance': f_var / 10000.0,
+        'cond_vol': np.sqrt(sigma2),
+        'll': ll,
+        'aic': float(aic),
+        'bic': float(bic),
     }
 
 
@@ -65,6 +63,8 @@ def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=245, min_observati
         raise ValueError(f'GARCH requires at least {min_observations} daily returns.')
     if returns.std() < 1e-8:
         raise ValueError('GARCH cannot fit a constant or near-constant return series.')
+
+    notes = []
     try:
         from arch import arch_model
         with warnings.catch_warnings(record=True) as caught:
@@ -75,18 +75,17 @@ def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=245, min_observati
             raise ValueError('GARCH optimizer did not converge; forecasts are withheld.')
         parameters = {k: float(v) for k, v in fit.params.items()}
         daily_variance = fit.forecast(horizon=max(horizons), method='analytic', reindex=False).variance.iloc[-1].to_numpy() / 10000
-        notes = sorted(set(type(w.message).__name__ for w in caught))
-        nobs, ll, aic, bic = int(fit.nobs), float(fit.loglikelihood), float(fit.aic), float(fit.bic)
+        nobs = int(fit.nobs)
+        ll, aic, bic = float(fit.loglikelihood), float(fit.aic), float(fit.bic)
         cond_vol = np.asarray(fit.conditional_volatility)
+        notes = sorted(set(type(w.message).__name__ for w in caught))
     except ImportError:
         fb = _scipy_garch11_fallback(returns, max(horizons))
-        if not fb["converged"]:
-            raise ValueError('GARCH optimizer did not converge; forecasts are withheld.')
-        parameters = fb["params"]
-        daily_variance = fb["daily_variance"]
-        notes = []
-        nobs, ll, aic, bic = fb["nobs"], fb["ll"], fb["aic"], fb["bic"]
-        cond_vol = fb["cond_vol"]
+        parameters = fb['params']
+        daily_variance = fb['daily_variance']
+        nobs, ll, aic, bic = fb['nobs'], fb['ll'], fb['aic'], fb['bic']
+        cond_vol = fb['cond_vol']
+
     if not np.isfinite(daily_variance).all() or (daily_variance <= 0).any():
         raise ValueError('GARCH produced invalid forecast variance.')
     persistence = parameters['alpha[1]'] + parameters['beta[1]']
