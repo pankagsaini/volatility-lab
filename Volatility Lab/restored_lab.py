@@ -116,11 +116,10 @@ def render_archived_intraday(data, symbol, selected, config):
     iv = _clean_float(selected.get('IV'))
     step = 50 if symbol == 'NIFTY' else 100
     atm_k = _clean_float(selected.get('ATM strike'))
-    true_atm = round(spot / step) * step if spot > 0 else 0.0
-    if atm_k > 0 and abs(atm_k - spot) <= step * 1.5:
+    if atm_k > 0:
         strike = atm_k
-    elif true_atm > 0:
-        strike = true_atm
+    elif spot > 0:
+        strike = round(spot / step) * step
     else:
         strike = 0.0
 
@@ -150,10 +149,6 @@ def render_archived_intraday(data, symbol, selected, config):
                 strike = round(spot / step) * step
         if iv <= 0 and not valid_ivs.empty:
             iv = float(valid_ivs.iloc[-1])
-
-    # Ensure strike is strictly consistent with spot price
-    if spot > 0 and (strike <= 0 or abs(strike - spot) > step * 1.5):
-        strike = round(spot / step) * step
 
     # 2. Top KPI Metric Cards for Live ATM Straddle & Greeks
     greeks = compute_straddle_greeks(spot, strike, dte, iv)
@@ -206,8 +201,7 @@ def render_archived_intraday(data, symbol, selected, config):
     else:
         raw_k = np.full(len(session_data), np.nan)
     fallback_k = np.where(s_prices > 0, np.round(s_prices / step) * step, strike)
-    valid_k = np.isfinite(raw_k) & (raw_k > 0) & (np.abs(raw_k - s_prices) <= step * 1.5)
-    s_strikes = np.where(valid_k, raw_k, fallback_k)
+    s_strikes = np.where(np.isfinite(raw_k) & (raw_k > 0), raw_k, fallback_k)
 
     try:
         exp_date = pd.Timestamp(selected.get('Expiry')).date()
@@ -315,21 +309,12 @@ def render_trade_tools(data, symbol, selected, rate, dividend, spread):
     from trade_review_ui import atm_pair, freshness, make_position, option_book, parity_forward, position_greeks, stress_position
     from history_policy import assumptions
     from dividend_yield import for_symbol
-    chosen_exp = selected.get('Expiry') if selected else None
-    candidate = (data / f"{symbol.lower()}_option_quotes_{chosen_exp}.json") if chosen_exp else None
-    if candidate and candidate.exists():
-        path = candidate
-    else:
-        now_date = datetime.now(IST).strftime('%Y-%m-%d')
-        active_paths = [p for p in sorted(data.glob(symbol.lower() + '_option_quotes_*.json'))
-                        if p.stem.replace(symbol.lower() + '_option_quotes_', '') >= now_date]
-        if not active_paths:
-            active_paths = sorted(data.glob(symbol.lower() + '_option_quotes_*.json'))
-        if not active_paths:
-            st.info('Live scenario stress testing requires local option book JSON archives.')
-            return
-        path = active_paths[0]
+    paths = sorted(data.glob(symbol.lower() + '_option_quotes_*.json'), reverse=True)
+    if not paths:
+        st.info('Live scenario stress testing requires local option book JSON archives.')
+        return
     try:
+        path = paths[0]
         payload = json.loads(path.read_text(encoding='utf-8'))
         settings = assumptions(data / 'monitor.sqlite', payload.get('config'))
         if not settings:
@@ -343,7 +328,7 @@ def render_trade_tools(data, symbol, selected, rate, dividend, spread):
         protected = st.toggle('Add protective wings', value=True, key='stress_wings')
         put = call = None
         if protected:
-            book = context['book']
+            book = context.get('book') if 'book' in context else context.get('chain', pd.DataFrame())
             puts = sorted(book.loc[(book.Kind == 'PE') & (book.Strike < context['strike'])]['Strike'].unique())
             calls = sorted(book.loc[(book.Kind == 'CE') & (book.Strike > context['strike'])]['Strike'].unique())
             if not puts or not calls:
@@ -353,7 +338,7 @@ def render_trade_tools(data, symbol, selected, rate, dividend, spread):
         position = make_position(context, put, call)
         days = st.number_input('Elapsed calendar days', min_value=0.0, max_value=365.0, value=1.0, step=0.25)
         costs = st.number_input('Additional costs per position (₹)', min_value=0.0, value=0.0, step=10.0)
-        scenarios, summary = stress_position(context, position, days, costs)
+        stress_res = stress_position(context, position, days, costs)
         st.markdown('**Position Legs**')
         table(position.drop(columns=['Bid IV', 'Ask IV'], errors='ignore'))
         st.markdown('**Position Greeks & Capital Summary**')

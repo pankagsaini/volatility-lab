@@ -6,12 +6,13 @@ import pandas as pd
 from forecast import fit_garch
 from vol_lib import validate_ohlc, rv_snapshot
 from market_data import IST
-from market_calendar import HOLIDAYS, last_trading_day_on_or_before
+from market_calendar import HOLIDAYS, SPECIAL_SESSIONS, last_trading_day_on_or_before
 
 VERSION = 'expiry-v4-session-annualized-nse2026'
 TERM_VERSION = 'term-v1-last-completed-close'
 CALENDAR_SOURCE = 'https://nsearchives.nseindia.com/content/circulars/FAOP71777.pdf'
 SPECIAL = pd.Timestamp('2026-11-08').date()
+HORIZON_CAP = 265
 
 _MODEL_BASE_CACHE: dict[tuple[str, int, float], tuple[float, np.ndarray | None, str]] = {}
 _VALIDATED_SLICE_CACHE: dict[tuple[int, str, str, float], tuple[pd.DataFrame, object]] = {}
@@ -125,7 +126,7 @@ def expiry_forecast(frame, expiry, as_of, iv=None):
     data, last = _prepare_one_year_slice(frame, cutoff)
 
     dates = sessions(last + timedelta(days=1), expiry)
-    if not dates or len(dates) > 245:
+    if not dates or len(dates) > HORIZON_CAP:
         raise ValueError('Unsupported expiry forecast horizon.')
     weights = []
     for date in dates:

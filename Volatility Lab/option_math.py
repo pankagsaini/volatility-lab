@@ -148,3 +148,28 @@ def reversal_values(chain, symbol=None):
         'Reversal put delta': 25.0 if complete else np.nan,
         'Reversal call delta': 25.0 if complete else np.nan,
     }
+
+
+def bsm_greeks_vec(spot, strike, years, vol=None, rate=0.0, dividend=0.0, kind='CE', iv=None, div_yield=None):
+    """Vectorized BSM Greeks supporting array  ('CE'/'PE') and safe clamping at T <= 0."""
+    sigma = np.maximum(np.asarray(iv if vol is None else vol, dtype=float), 1e-6)
+    q = float(div_yield if div_yield is not None else dividend)
+    r = float(rate)
+    S = np.maximum(np.asarray(spot, dtype=float), 1e-6)
+    K = np.maximum(np.asarray(strike, dtype=float), 1e-6)
+    T = np.maximum(np.asarray(years, dtype=float), 1e-9)
+    sqrt_T = np.sqrt(T)
+    d1 = (np.log(S / K) + (r - q + 0.5 * np.square(sigma)) * T) / (sigma * sqrt_T)
+    d2 = d1 - sigma * sqrt_T
+    df_r = np.exp(-r * T)
+    df_q = np.exp(-q * T)
+    pdf_d1 = _norm_pdf(d1)
+    is_call = np.isin(np.char.upper(np.asarray(kind, dtype=str)), ['CE', 'CALL', 'C'])
+    price = np.where(is_call, S * df_q * ndtr(d1) - K * df_r * ndtr(d2), K * df_r * ndtr(-d2) - S * df_q * ndtr(-d1))
+    delta = np.where(is_call, df_q * ndtr(d1), -df_q * ndtr(-d1))
+    gamma = (df_q * pdf_d1) / (S * sigma * sqrt_T)
+    vega = S * df_q * pdf_d1 * sqrt_T / 100.0
+    theta_c = (-(S * df_q * pdf_d1 * sigma) / (2.0 * sqrt_T) - r * K * df_r * ndtr(d2) + q * S * df_q * ndtr(d1)) / 365.0
+    theta_p = (-(S * df_q * pdf_d1 * sigma) / (2.0 * sqrt_T) + r * K * df_r * ndtr(-d2) - q * S * df_q * ndtr(-d1)) / 365.0
+    theta = np.where(is_call, theta_c, theta_p)
+    return {'price': price, 'delta': delta, 'gamma': gamma, 'vega': vega, 'theta': theta}

@@ -182,7 +182,7 @@ st.markdown(
             <div class="vl-app-qr-card">
               <div style="font-size:0.74rem; font-weight:700; color:#d4af37; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">📱 Open on Any Device</div>
               <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
-                <img src="{qr_url}" width="78" height="78" style="border-radius:6px; border:1px solid #334155; flex-shrink:0;" alt="QR" />
+                <img src="{qr_url}" width="78" height="78" style="border-radius:6px; border:1px solid #334155; flex-shrink:0;" alt="QR" onerror="this.style.display='none'" />
                 <div style="font-size:0.72rem; color:#cbd5e1; line-height:1.38;">
                   Scan with phone camera or <a href="{cloud_url}" target="_blank" style="color:#38bdf8; font-weight:600;">open Cloud App ↗</a><br/>
                   <span style="color:#94a3b8; font-size:0.68rem;">Tip: Tap <b>Add to Home Screen</b> in Safari/Chrome to install as an app.</span>

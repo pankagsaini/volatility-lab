@@ -74,20 +74,14 @@ def status(key, on_tick=None):
         if on_tick is not None:
             on_tick()
         ready = st.session_state.get('_background_ready_' + key)
-        from refresh_policy import refresh_due
-        from datetime import datetime
-        from market_data import IST
-        market_open = refresh_due(datetime.now(IST), None, 0)
         with st.container(height=48, border=False):
             message, action = st.columns([4, 1])
             if ready is not None:
                 message.caption('New snapshot available' if ready[0] else ready[1])
                 if action.button('Show updates', key='_apply_' + key, width='stretch'):
                     st.rerun()
-            elif market_open and pending(st.session_state, key):
+            elif pending(st.session_state, key):
                 message.caption('Updating quotes in background')
-            elif not market_open:
-                message.caption('Saved snapshot · Market closed')
             else:
                 message.caption('Saved snapshot · updates appear when ready')
     poll()

@@ -7,8 +7,6 @@ import numpy as np
 import pandas as pd
 from expiry_forecast import expiry_forecast, eligible_history
 
-VERSION = 'relative-value-v1'
-
 
 def _mid_rank_percentile(values, current):
     arr = np.asarray(values, dtype=float)
@@ -136,39 +134,28 @@ def observe(quote, history_frame=None):
     return record
 
 
-def comparable_stats(history_df, current, dte_tol=3.0, min_obs=20, metric='IV', min_days=20):
-    if isinstance(dte_tol, str):
-        metric = dte_tol
-        dte_tol = 3.0
-    if history_df.empty or metric not in history_df or 'DTE' not in history_df:
+def comparable_stats(history_df, current, dte_tol=3.0, min_obs=20):
+    if history_df.empty or 'IV' not in history_df or 'DTE' not in history_df:
         return {'status': 'Insufficient history', 'percentile': np.nan, 'z_score': np.nan, 'count': 0}
-    try:
-        cur_as_of = pd.Timestamp(current['As of'])
-        cur_dte = float(current['DTE'])
-        cur_iv = float(current[metric])
-    except (TypeError, ValueError, KeyError):
-        return {'status': 'Insufficient history', 'percentile': np.nan, 'z_score': np.nan, 'count': 0}
-
+    cur_as_of = pd.Timestamp(current['As of'])
+    cur_dte = float(current['DTE'])
+    cur_iv = float(current['IV'])
     df = history_df.copy()
     df['ts'] = pd.to_datetime(df['As of'], format='ISO8601', utc=True)
     df['numeric_dte'] = pd.to_numeric(df['DTE'], errors='coerce')
-    df['numeric_iv'] = pd.to_numeric(df[metric], errors='coerce')
+    df['numeric_iv'] = pd.to_numeric(df['IV'], errors='coerce')
     start = cur_as_of - pd.Timedelta(days=365)
     prior = df[(df['ts'] < cur_as_of) & (df['ts'] >= start) & (df['numeric_dte'].sub(cur_dte).abs() <= dte_tol)]
     vals = prior['numeric_iv'].dropna().to_numpy()
-    effective_min = min(min_obs, min_days)
-    if len(vals) < effective_min:
+    if len(vals) < min_obs:
         return {'status': 'Insufficient comparable prior observations', 'percentile': np.nan, 'z_score': np.nan, 'count': len(vals)}
     std = float(np.std(vals, ddof=1))
     z = float((cur_iv - np.mean(vals)) / std) if std > 1e-8 else 0.0
-    pct = _mid_rank_percentile(vals, cur_iv)
     return {
         'status': 'Ready',
-        'percentile': pct,
+        'percentile': _mid_rank_percentile(vals, cur_iv),
         'z_score': z,
         'count': int(len(vals)),
-        'Percentile': float(pct) if np.isfinite(pct) else None,
-        'Status': 'Ready',
     }
 
 

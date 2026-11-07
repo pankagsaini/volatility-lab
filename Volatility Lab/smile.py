@@ -11,7 +11,7 @@ VERSION = 'spot-delta-smile-v1'
 
 
 def has_usable_points(result):
-    if not result or not isinstance(result, dict):
+    if not isinstance(result, dict):
         return False
     for point in result.get('points', []):
         try:
@@ -61,12 +61,8 @@ def smile_points(chain, strikes, spot):
     metrics = {}
     for delta in (10, 25):
         p, c, atm = vals[f'{delta}P'], vals[f'{delta}C'], vals['ATM']
-        diff = p - c if p is not None and c is not None else None
-        fly = (p + c) / 2 - atm if all(v is not None for v in (p, c, atm)) else None
-        metrics[f'{delta} RR · put minus call'] = diff
-        metrics[f'RR{delta} · put minus call'] = diff
-        metrics[f'{delta} BF · wings minus ATM'] = fly
-        metrics[f'BF{delta} · wings minus ATM'] = fly
+        metrics[f'{delta} RR · put minus call'] = p - c if p is not None and c is not None else None
+        metrics[f'{delta} BF · wings minus ATM'] = (p + c) / 2 - atm if all(v is not None for v in (p, c, atm)) else None
     return {'version': VERSION, 'points': points, 'metrics': metrics}
 
 
@@ -74,12 +70,11 @@ def save_smile(path, symbol, expiry, config, as_of, result, capture_source=None)
     if capture_source != 'Google Drive':
         return
     path = Path(path)
-    config_str = json.dumps(config, sort_keys=True) if isinstance(config, (dict, list)) else str(config or '')
     with closing(sqlite3.connect(path, timeout=30)) as con, con:
         con.execute('PRAGMA journal_mode=WAL')
         con.execute('CREATE TABLE IF NOT EXISTS smile_observations (symbol TEXT, expiry TEXT, config TEXT, as_of TEXT, version TEXT, payload TEXT, PRIMARY KEY(symbol,expiry,config,as_of,version))')
         con.execute('INSERT OR REPLACE INTO smile_observations VALUES (?,?,?,?,?,?)',
-                    (symbol, str(expiry), config_str, str(as_of), VERSION, json.dumps(result, allow_nan=False)))
+                    (symbol, str(expiry), str(config), str(as_of), VERSION, json.dumps(result, allow_nan=False)))
 
 
 def load_smile(path, symbol, expiry, config, as_of):
@@ -89,20 +84,15 @@ def load_smile(path, symbol, expiry, config, as_of):
     with closing(sqlite3.connect(path, timeout=15)) as con:
         if not con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='smile_observations'").fetchone():
             return None
-        row = None
-        if isinstance(config, str) and config:
-            try:
-                row = con.execute(
-                    'SELECT payload FROM smile_observations WHERE symbol=? AND expiry=? AND config=? AND as_of=?',
-                    (symbol, str(expiry), config, str(as_of)),
-                ).fetchone()
-            except sqlite3.ProgrammingError:
-                row = None
+        row = con.execute(
+            'SELECT payload FROM smile_observations WHERE symbol=? AND expiry=? AND config=? AND as_of=? AND version=?',
+            (symbol, str(expiry), str(config), str(as_of), VERSION),
+        ).fetchone()
         if not row:
             # Fallback across config hash revisions for the exact same (symbol, expiry, as_of)
             row = con.execute(
-                'SELECT payload FROM smile_observations WHERE symbol=? AND expiry=? AND as_of=? ORDER BY rowid DESC LIMIT 1',
-                (symbol, str(expiry), str(as_of)),
+                'SELECT payload FROM smile_observations WHERE symbol=? AND expiry=? AND as_of=? AND version=? ORDER BY rowid DESC LIMIT 1',
+                (symbol, str(expiry), str(as_of), VERSION),
             ).fetchone()
     return json.loads(row[0]) if row else None
 
@@ -115,17 +105,17 @@ def load_latest_smile(path, symbol, expiry, config=None):
     with closing(sqlite3.connect(path, timeout=15)) as con:
         if not con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='smile_observations'").fetchone():
             return None
-        if isinstance(config, str) and config:
+        if config:
             rows = con.execute(
-                'SELECT as_of, payload FROM smile_observations WHERE symbol=? AND expiry=? AND config=? ORDER BY as_of DESC LIMIT 25',
-                (symbol, str(expiry), config),
+                'SELECT as_of, payload FROM smile_observations WHERE symbol=? AND expiry=? AND config=? AND version=? ORDER BY as_of DESC LIMIT 25',
+                (symbol, str(expiry), str(config), VERSION),
             ).fetchall()
         else:
             rows = []
         if not rows:
             rows = con.execute(
-                'SELECT as_of, payload FROM smile_observations WHERE symbol=? AND expiry=? ORDER BY as_of DESC LIMIT 25',
-                (symbol, str(expiry)),
+                'SELECT as_of, payload FROM smile_observations WHERE symbol=? AND expiry=? AND version=? ORDER BY as_of DESC LIMIT 25',
+                (symbol, str(expiry), VERSION),
             ).fetchall()
     for as_of_val, payload_str in rows:
         try:

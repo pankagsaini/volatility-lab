@@ -34,7 +34,7 @@ def term_structure(rows, symbol, deduplicate=False):
         valid_time = not pd.isna(stamp) and stamp.tzinfo is not None
         if valid_time:
             stamp = stamp.tz_convert(IST)
-        end = pd.Timestamp(datetime.combine(expiry, time(15, 40), tzinfo=IST))
+        end = pd.Timestamp(datetime.combine(expiry, time(15, 30), tzinfo=IST))
         dte = (end - stamp).total_seconds() / 86400 if valid_time else np.nan
         try:
             iv = float(row.get('IV'))

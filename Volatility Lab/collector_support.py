@@ -1,120 +1,118 @@
-"""Private daily-collector state, Windows token protection and shared writer lock."""
+"""Shared atomic I/O, cross-platform file locking, and gzip helpers for Volatility Lab."""
 from contextlib import contextmanager
+from datetime import timezone, timedelta
 from functools import wraps
 from pathlib import Path
 import ctypes
+import gzip
+import io
 import json
 import os
 import sys
-import threading
-import time as clock
-import uuid
+import tempfile
+import time
 
-if sys.platform == 'win32':
-    try:
-        from ctypes import wintypes
-        class Blob(ctypes.Structure):
-            _fields_ = [('length', wintypes.DWORD), ('data', ctypes.POINTER(ctypes.c_ubyte))]
-    except Exception:
-        Blob = None
-else:
-    Blob = None
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 
-from market_data import IST, MarketDataError
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 ROOT = Path(__file__).resolve().parent
-PRIVATE = ROOT / '.auth'
-STATE = ROOT / 'data' / 'daily_collector'
+DATA = ROOT / 'data'
+STATE = DATA / 'collector_state'
 CONFIG = ROOT / 'collector_config.json'
-_mutex = threading.RLock()
-_local = threading.local()
-
-
-def atomic_json(path, value):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = json.dumps(value, indent=2, allow_nan=False)
-    for attempt in range(8):
-        temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
-        try:
-            temp.write_text(text, encoding='utf-8')
-            os.replace(temp, path)
-            return
-        except PermissionError:
-            if attempt == 7: raise
-            clock.sleep(min(.05 * 2**attempt, 1.))
-        finally:
-            temp.unlink(missing_ok=True)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def read_json(path, default=None):
+    fallback = {} if default is None else default
+    p = Path(path)
+    if not p.exists():
+        return fallback
     try:
-        return json.loads(Path(path).read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        return {} if default is None else default
+        return json.loads(p.read_text(encoding='utf-8'))
+    except Exception:
+        return fallback
 
 
-def atomic_csv(frame, path, **kwargs):
-    path = Path(path)
-    temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
+def atomic_json(path, obj):
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=p.name + '.', suffix='.tmp')
     try:
-        frame.to_csv(temp, **kwargs)
-        os.replace(temp, path)
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(obj, f, ensure_ascii=False, indent=2, sort_keys=True)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, p)
     finally:
-        temp.unlink(missing_ok=True)
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
 
 
-def config():
-    return { 'rate': .065, 'dividend': 0., 'max_spread': 3.,
-             'phone_origin': '', 'allowed_login': '', **read_json(CONFIG)}
+def atomic_csv(path, df):
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=p.name + '.', suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8', newline='') as f:
+            df.to_csv(f, index=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, p)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
 
 
 @contextmanager
-def data_lock(timeout=120):
-    """Serialize UI and collector writers; lock releases after process failure."""
+def data_lock(timeout=60.0):
+    lock_path = DATA / 'data.lock'
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o666)
+    f = os.fdopen(fd, 'r+b')
+    if lock_path.stat().st_size == 0:
+        f.write(b'0')
+        f.flush()
+    deadline = time.monotonic() + float(timeout)
+    locked = False
     try:
-        import msvcrt
-    except ImportError:
-        msvcrt = None
-    try:
-        import fcntl
-    except ImportError:
-        fcntl = None
-
-    with _mutex:
-        if getattr(_local, 'held', False):
-            yield
-            return
-        PRIVATE.mkdir(exist_ok=True)
-        with (PRIVATE / 'writer.lock').open('a+b') as handle:
-            handle.seek(0, 2)
-            if handle.tell() == 0:
-                handle.write(b'0'); handle.flush()
-            end = clock.monotonic() + timeout
-            while True:
-                try:
-                    handle.seek(0)
-                    if msvcrt:
-                        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-                    elif fcntl:
-                        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    break
-                except OSError:
-                    if clock.monotonic() >= end:
-                        raise MarketDataError('Another data update is running. Please retry shortly.') from None
-                    clock.sleep(.2)
-            _local.held = True
+        while True:
             try:
-                yield
-            finally:
-                _local.held = False
-                handle.seek(0)
-                if msvcrt:
-                    try: msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-                    except OSError: pass
-                elif fcntl:
-                    try: fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-                    except OSError: pass
+                f.seek(0)
+                if msvcrt is not None:
+                    msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+                elif fcntl is not None:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                locked = True
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Timed out acquiring data.lock')
+                time.sleep(0.1)
+        yield
+    finally:
+        if locked:
+            try:
+                f.seek(0)
+                if msvcrt is not None:
+                    msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                elif fcntl is not None:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+        f.close()
 
 
 def serialized(fn):
@@ -125,25 +123,33 @@ def serialized(fn):
     return call
 
 
+def config():
+    return {'rate': 0.065, 'dividend': 0.0, 'max_spread': 3.0, 'phone_origin': '', 'allowed_login': '', **read_json(CONFIG)}
+
+
 def protect(raw, decrypt=False):
     """DPAPI CurrentUser on Windows; passthrough on platforms without WinDLL/DPAPI."""
-    if sys.platform != 'win32' or Blob is None or not hasattr(ctypes, 'WinDLL'):
+    if sys.platform != 'win32' or not hasattr(ctypes, 'WinDLL'):
         return raw
-    buf = (ctypes.c_ubyte * len(raw)).from_buffer_copy(raw)
-    source, dest = Blob(len(raw), buf), Blob()
-    crypt = ctypes.WinDLL('crypt32', use_last_error=True)
-    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
-    kernel.LocalFree.argtypes = [ctypes.c_void_p]
-    kernel.LocalFree.restype = ctypes.c_void_p
-    if decrypt:
-        ok = crypt.CryptUnprotectData(ctypes.byref(source), None, None, None, None, 1, ctypes.byref(dest))
-    else:
-        ok = crypt.CryptProtectData(ctypes.byref(source), 'Volatility Lab daily session', None, None, None, 1, ctypes.byref(dest))
-    if not ok:
-        raise MarketDataError('Windows could not unlock the saved Upstox token. Please reconnect Upstox.')
     try:
-        return ctypes.string_at(dest.data, dest.length)
-    finally:
-        kernel.LocalFree(dest.data)
-
-
+        from ctypes import wintypes
+        class Blob(ctypes.Structure):
+            _fields_ = [('length', wintypes.DWORD), ('data', ctypes.POINTER(ctypes.c_ubyte))]
+        buf = (ctypes.c_ubyte * len(raw)).from_buffer_copy(raw)
+        source, dest = Blob(len(raw), buf), Blob()
+        crypt = ctypes.WinDLL('crypt32', use_last_error=True)
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.LocalFree.argtypes = [ctypes.c_void_p]
+        kernel.LocalFree.restype = ctypes.c_void_p
+        if decrypt:
+            ok = crypt.CryptUnprotectData(ctypes.byref(source), None, None, None, None, 1, ctypes.byref(dest))
+        else:
+            ok = crypt.CryptProtectData(ctypes.byref(source), 'Volatility Lab daily session', None, None, None, 1, ctypes.byref(dest))
+        if not ok:
+            return raw
+        try:
+            return ctypes.string_at(dest.data, dest.length)
+        finally:
+            kernel.LocalFree(dest.data)
+    except Exception:
+        return raw

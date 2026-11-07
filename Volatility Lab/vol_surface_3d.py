@@ -51,18 +51,15 @@ def load_expiry_chains(symbol: str, data_dir: Path, today: Optional[date] = None
 
         # Calculate DTE from saved quote valuation timestamp when available
         val_str = content.get('valuation', '')
-        if today is not None:
-            val_date = today
-        elif val_str:
+        val_date = today
+        if val_str:
             try:
                 val_ts = pd.Timestamp(val_str)
                 if val_ts.tzinfo is not None:
                     val_ts = val_ts.tz_convert(IST)
                 val_date = val_ts.date()
             except Exception:
-                val_date = datetime.now(IST).date()
-        else:
-            val_date = datetime.now(IST).date()
+                val_date = today
         dte = max(0.2, float((exp_date - val_date).days))
 
         expiries_data.append({

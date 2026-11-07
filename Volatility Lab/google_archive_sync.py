@@ -1,4 +1,4 @@
-"""Private Drive mirror -> durable local archive -> existing lab stores.
+"""Private Drive mirror -> durable local archive -> existing lab stores (Accelerated v4).
 No network credentials; Google Drive desktop supplies the authenticated filesystem.
 """
 from pathlib import Path
@@ -18,9 +18,29 @@ _pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='drive-import')
 _guard=threading.Lock()
 _future=None
 _started=0
+_ONE_YEAR_CSV_CACHE: dict[str, tuple[tuple[int, int], pd.DataFrame]] = {}
+
+
+def _cached_one_year_csv(symbol: str):
+    path = DATA / f'{symbol.lower()}_one_year.csv'
+    try:
+        st_info = path.stat()
+        rev = (st_info.st_mtime_ns, st_info.st_size)
+    except OSError:
+        return None
+    cached = _ONE_YEAR_CSV_CACHE.get(symbol)
+    if cached is not None and cached[0] == rev:
+        return cached[1]
+    try:
+        df = pd.read_csv(path)
+        _ONE_YEAR_CSV_CACHE[symbol] = (rev, df)
+        return df
+    except (OSError, ValueError):
+        return None
+
 
 def source_folder():
-    configured=read_json(CONFIG).get('source_folder')
+    configured=(read_json(CONFIG, default={}) or {}).get('source_folder')
     candidates=[Path(configured)] if configured else []
     for letter in 'DEFGHIJKLMNOPQRSTUVWXYZ':
         candidates.append(Path(letter+':/')/'My Drive'/'Volatility Lab - private Upstox archive')
@@ -70,8 +90,7 @@ def import_report(obj,rate,dividend,spread):
         if valuation and (stamp-pd.Timestamp(valuation)).total_seconds()>7*86400:valuation=None
         if not valuation:continue
         asof=pd.Timestamp(valuation)
-        try:frame=pd.read_csv(DATA/f'{symbol.lower()}_one_year.csv')
-        except (OSError,ValueError):frame=None
+        frame=_cached_one_year_csv(symbol)
         base_alignment=aligned_spread(0.,asof,'Upstox supplied IV',frame)
         for e in entry['option_expiries']:
             rec=records.get(symbol+'|'+e)
@@ -106,13 +125,6 @@ def import_report(obj,rate,dividend,spread):
                         continue
             save_intraday(DATA/'monitor.sqlite',config,row)
             save_smile(DATA/'monitor.sqlite',symbol,e,config,row['As of'],smile_points(chain,strikes,spot),capture_source='Google Drive')
-            try:
-                target_q = DATA / f'{symbol.lower()}_option_quotes_{e}.json'
-                q_payload = {'provider':'Upstox','valuation':asof.isoformat(),'spot':spot,'broker_option_chain':raw,'broker_received_at':rec.get('retrieved_at',asof.isoformat()),'iv_source':'Upstox supplied IV (Google Cloud)'}
-                tmp_q = target_q.with_suffix('.tmp')
-                tmp_q.write_text(json.dumps(q_payload, default=str), encoding='utf-8')
-                tmp_q.replace(target_q)
-            except Exception:pass
             from expiry_data import db
             with closing(db()) as con:
                 prior=con.execute('SELECT MAX(as_of) FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND substr(as_of,1,10)=?', (symbol,e,config,str(asof.date()))).fetchone()[0]
@@ -224,7 +236,7 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
     STORE.mkdir(parents=True,exist_ok=True)
     source=source_folder()
     if source is None:
-        web_url = read_json(CONFIG).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpIRAEOZRoGGwTyTncZhwUPmTnimv0Hyej0iJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
+        web_url = (read_json(CONFIG, default={}) or {}).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpIRAEOZRoGGwTyTncZhwUPmTnimv0Hyej0iJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
         try:
             import requests
             resp = requests.get(web_url, timeout=12, allow_redirects=True)

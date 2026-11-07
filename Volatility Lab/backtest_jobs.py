@@ -28,10 +28,28 @@ def _run_ui_job(kind: str, settings: dict, task_obj):
     start = settings.get('start', '2024-10-01')
     end = settings.get('end', '2024-10-31')
     if kind == 'Futures':
-        task_obj.phase = 'Simulating dated futures carry'
-        from futures_backtest import simulate as simulate_futures
+        task_obj.phase = 'Loading dated futures candles'
+        from futures_backtest import load as load_futures_bars, simulate as simulate_futures, contract_lot_sizes
         from backtest_report import save_run
-        trades, skips, coverage = simulate_futures(settings)
+        symbol = settings.get('symbol', 'NIFTY')
+        start = settings.get('start')
+        end = settings.get('end')
+        bars = settings.get('bars') if isinstance(settings.get('bars'), pd.DataFrame) else load_futures_bars(symbol, start, end)
+        task_obj.phase = 'Simulating dated futures carry'
+        trades, skips, coverage = simulate_futures(
+            bars=bars,
+            pair=tuple(settings.get('pair', (0, 1))),
+            entry_carry=float(settings.get('entry_carry', 8.0)),
+            target_carry=float(settings.get('target_carry', 2.0)),
+            quantity=int(settings.get('quantity', 75 if symbol == 'NIFTY' else 30)),
+            near_side=int(settings.get('near_side', 1)),
+            slip_bps=float(settings.get('slip_bps', 5.0)),
+            max_hold_days=settings.get('max_hold_days'),
+            brokerage_per_order=float(settings.get('brokerage_per_order', 20.0)),
+            lots=settings.get('lots'),
+            contracts=settings.get('contracts') or contract_lot_sizes(symbol),
+            auto_roll_on_expiry=bool(settings.get('auto_roll_on_expiry', True)),
+        )
         save_run(settings, trades, skips, coverage)
         return (trades, skips, settings, coverage)
     task_obj.phase = 'Loading 1-minute option candles & signals'

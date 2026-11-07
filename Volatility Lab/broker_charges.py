@@ -21,7 +21,6 @@ class PageText(HTMLParser):
 
 
 def refresh():
-    """Verify the published standard rates still match the modeled schedule."""
     today = datetime.now().astimezone().date().isoformat()
     old = read_json(ROOT / 'current.json')
     if old.get('checked') == today:
@@ -63,7 +62,6 @@ def rates(day, kind=None, brokerage_per_order=20):
     if day_str < '2024-04-01':
         raise ValueError('Upstox fee history is modeled from 2024-04-01.')
 
-    # 1-argument call compatibility (v8 style: rates(day))
     if kind is None or (isinstance(kind, (int, float)) and brokerage_per_order == 20):
         d = date.fromisoformat(day_str)
         if d >= date(2026, 4, 1):
@@ -113,7 +111,6 @@ def rates(day, kind=None, brokerage_per_order=20):
         'gst': 0.18,
         'brokerage': brokerage,
         'brokerage_rate': brokerage_rate,
-        # v8 keys
         'stt_opt_sell': 0.0015 if day_str >= '2026-04-01' else (0.0010 if day_str >= '2024-10-01' else 0.000625),
         'stt_fut_sell': 0.0005 if day_str >= '2026-04-01' else (0.0002 if day_str >= '2024-10-01' else 0.000125),
         'exch_opt': exchange if kind_norm == 'Options' else 0.0003553,
@@ -122,9 +119,7 @@ def rates(day, kind=None, brokerage_per_order=20):
 
 
 def charge(day, kind, price, qty, side=None, brokerage_per_order=20):
-    # Flexible signature: handle (day, kind, price, qty, side) or (day, kind, side, price, qty)
     if isinstance(price, str) and price.lower() in ('buy', 'sell'):
-        # side passed in position 3
         actual_side = price.lower()
         actual_price = float(qty)
         actual_qty = float(side) if side is not None else 1.0

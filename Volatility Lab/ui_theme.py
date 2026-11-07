@@ -363,7 +363,7 @@ div[data-testid="stAlert"] {
     background: rgba(56, 189, 248, 0.15);
     color: #f8fafc !important;
 }
-details.vl-app-qr-dropdown {
+details.vl-app-qr-dropdown, details.vl-app-pop {
     position: relative;
     display: inline-block;
 }

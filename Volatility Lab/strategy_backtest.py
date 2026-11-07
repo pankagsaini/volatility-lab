@@ -1,9 +1,10 @@
+import numpy as np
 """Multi-leg options strategy backtest engine with SOM margin floor, quiet-minute carry-forward, and 6 Trade Scenario Presets."""
 from datetime import datetime, timedelta
 import json
 import math
 import pandas as pd
-from backtest_common import record_skip
+from backtest_common import record_skip, dated_lot_size
 from broker_charges import charge
 
 TEMPLATES = {
@@ -44,9 +45,10 @@ TEMPLATES = {
         {'Side': 'Buy', 'Type': 'PE', 'Offset': 350, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 350, 'ratio': 1},
     ],
     'Scenario 4 · Steep Put Skew Ratio Spread (RR25 ≥ +2.5 pp)': [
-        {'Side': 'Buy', 'Type': 'PE', 'Offset': 50, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 50, 'ratio': 1},
-        {'Side': 'Sell', 'Type': 'PE', 'Offset': 250, 'Ratio': 2, 'kind': 'PE', 'side': -1, 'offset': 250, 'ratio': 2},
-        {'Side': 'Buy', 'Type': 'PE', 'Offset': 550, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 550, 'ratio': 1},
+        {'Side': 'Sell', 'Type': 'PE', 'Offset': 150, 'Ratio': 2, 'kind': 'PE', 'side': -1, 'offset': 150, 'ratio': 2},
+        {'Side': 'Buy', 'Type': 'PE', 'Offset': 450, 'Ratio': 2, 'kind': 'PE', 'side': 1, 'offset': 450, 'ratio': 2},
+        {'Side': 'Sell', 'Type': 'CE', 'Offset': 250, 'Ratio': 1, 'kind': 'CE', 'side': -1, 'offset': 250, 'ratio': 1},
+        {'Side': 'Buy', 'Type': 'CE', 'Offset': 550, 'Ratio': 1, 'kind': 'CE', 'side': 1, 'offset': 550, 'ratio': 1},
     ],
     'Scenario 5 · Intraday Theta Decay Iron Butterfly (09:20–15:15)': [
         {'Side': 'Sell', 'Type': 'CE', 'Offset': 0, 'Ratio': 1, 'kind': 'CE', 'side': -1, 'offset': 0, 'ratio': 1},
@@ -55,8 +57,8 @@ TEMPLATES = {
         {'Side': 'Buy', 'Type': 'PE', 'Offset': 250, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 250, 'ratio': 1},
     ],
     'Scenario 6 · Synthetic Basis Skewed Condor (Call-Rich Parity)': [
-        {'Side': 'Sell', 'Type': 'CE', 'Offset': 150, 'Ratio': 1, 'kind': 'CE', 'side': -1, 'offset': 150, 'ratio': 1},
-        {'Side': 'Buy', 'Type': 'CE', 'Offset': 450, 'Ratio': 1, 'kind': 'CE', 'side': 1, 'offset': 450, 'ratio': 1},
+        {'Side': 'Sell', 'Type': 'CE', 'Offset': 150, 'Ratio': 2, 'kind': 'CE', 'side': -1, 'offset': 150, 'ratio': 2},
+        {'Side': 'Buy', 'Type': 'CE', 'Offset': 450, 'Ratio': 2, 'kind': 'CE', 'side': 1, 'offset': 450, 'ratio': 2},
         {'Side': 'Sell', 'Type': 'PE', 'Offset': 250, 'Ratio': 1, 'kind': 'PE', 'side': -1, 'offset': 250, 'ratio': 1},
         {'Side': 'Buy', 'Type': 'PE', 'Offset': 550, 'Ratio': 1, 'kind': 'PE', 'side': 1, 'offset': 550, 'ratio': 1},
     ],
@@ -133,7 +135,7 @@ SCENARIO_PRESETS = {
         'bias': 'Bearish',
         'stop': 2800.0,
         'target': 4200.0,
-        'filters': [('IV-RV Spread', 1.5, 15.0), ('25 Delta reversal', -5.0, 2.0)],
+        'filters': [('IV-RV Spread', 1.5, 15.0), ('25 Delta reversal', -6.0, 0.5)],
     },
 }
 
@@ -264,7 +266,7 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
     weekdays_allowed = set(s.get('weekdays', ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']))
 
     spot_bars = ticks.get(spot_key, {})
-    days = sorted({ts[:10] for ts in spot_bars if str(s['start']) <= ts[:10] <= str(s['end'])})
+    days = sorted({str(ts)[:10] for ts in spot_bars if str(s['start']) <= str(ts)[:10] <= str(s['end'])})
     trades, skips = [], []
 
     for idx_day, day in enumerate(days):
@@ -309,7 +311,10 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
         entry_stamp = f'{day} {entry_time}'
         lots_mult = max(1, int(s.get('lots', 1)))
         for spec in legs_spec:
-            target_k = spot_px + (spec['offset'] if spec['kind'] == 'CE' else -spec['offset'])
+            raw_off = float(spec.get('offset', 0.0))
+            if symbol == 'BANKNIFTY' and raw_off % 100 != 0:
+                raw_off = round(raw_off / 50.0) * 100.0
+            target_k = spot_px + (raw_off if spec['kind'] == 'CE' else -raw_off)
             contract = pick_contract(spec['kind'], target_k)
             if not contract:
                 skip_reason = 'Missing contract definitions'
@@ -321,7 +326,7 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
                 break
             raw_entry = float(eb[0])
             side = int(spec['side'])
-            qty = int(contract.get('lot_size', s.get('quantity', 1))) * int(spec.get('ratio', 1)) * lots_mult
+            qty = int(contract.get('lot_size') or s.get('quantity') or dated_lot_size(symbol, exp)) * int(spec.get('ratio', 1)) * lots_mult
             fill_entry = raw_entry * (1.0 + side * slip_bps / 10000.0)
             active_legs.append({
                 'contract': contract.get('trading_symbol', key),
@@ -338,7 +343,13 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
             record_skip(skips, day, skip_reason)
             continue
 
-        cap_req = estimate_exchange_margin(active_legs, spot_px, symbol=symbol)
+        user_margin = float(s.get('margin_per_lot') or 0.0)
+        if user_margin > 0:
+            cap_req = user_margin * lots_mult
+        elif s.get('estimate_margin', True):
+            cap_req = estimate_exchange_margin(active_legs, spot_px, symbol=symbol)
+        else:
+            cap_req = 0.0
         cap_alloc = float(s['capital_allocated']) if s.get('capital_allocated') else None
         if cap_alloc is not None and cap_alloc > 0 and cap_req > cap_alloc + 0.005:
             record_skip(skips, day, 'Insufficient allocated capital for exchange margin')
@@ -414,6 +425,8 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
             })
         charges_total = sum(cost_parts.values()) if use_upstox_fees else 2.0 * len(active_legs) * order_fee
         net_pnl = gross - slippage - charges_total
+        premium_val = abs(sum(-leg['side'] * leg['entry'] * leg['quantity'] for leg in active_legs))
+        total_cost_val = slippage + charges_total
         trades.append({
             'Date': day,
             'Expiry': exp,
@@ -422,12 +435,69 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
             'Exit reason': exit_reason,
             'Spot signal': spot_px,
             'Capital required': cap_req,
+            'Premium': premium_val,
             'Gross': gross,
             'Slippage': slippage,
             'Charges': charges_total,
+            'Cost': total_cost_val,
             'Net': net_pnl,
             'Net / capital %': (net_pnl / cap_req * 100.0) if cap_req > 0 else 0.0,
             'Legs': json.dumps(fills_out),
             **cost_parts,
         })
     return pd.DataFrame(trades), pd.DataFrame(skips)
+
+
+
+def summarize_performance(trades: pd.DataFrame, annualization: float = 245.0) -> dict:
+    """Compute guarded Sharpe, Sortino, Max Drawdown, Win Rate, and PnL Attribution."""
+    if trades is None or trades.empty or 'Net' not in trades.columns:
+        return {
+            'trades': 0, 'win_rate_pct': 0.0, 'avg_capital_inr': 0.0, 'total_premium_inr': 0.0,
+            'gross_pnl': 0.0, 'slippage': 0.0, 'charges': 0.0, 'net_pnl': 0.0,
+            'roi_pct': 0.0, 'max_drawdown_inr': 0.0, 'max_drawdown_pct': 0.0,
+            'sharpe': 0.0, 'sortino': 0.0,
+        }
+    net = pd.to_numeric(trades['Net'], errors='coerce').dropna().to_numpy(dtype=float)
+    n = len(net)
+    if n == 0:
+        return {
+            'trades': 0, 'win_rate_pct': 0.0, 'avg_capital_inr': 0.0, 'total_premium_inr': 0.0,
+            'gross_pnl': 0.0, 'slippage': 0.0, 'charges': 0.0, 'net_pnl': 0.0,
+            'roi_pct': 0.0, 'max_drawdown_inr': 0.0, 'max_drawdown_pct': 0.0,
+            'sharpe': 0.0, 'sortino': 0.0,
+        }
+    cum = np.cumsum(net)
+    peaks = np.maximum.accumulate(np.insert(cum, 0, 0.0))[1:]
+    dd_inr = peaks - cum
+    max_dd_inr = float(np.max(dd_inr)) if len(dd_inr) else 0.0
+    cap_series = pd.to_numeric(trades.get('Capital required', pd.Series([0.0])), errors='coerce').dropna()
+    avg_cap = float(cap_series.mean()) if len(cap_series) else 0.0
+    max_cap = float(cap_series.max()) if len(cap_series) else 0.0
+    denom = max_cap + max(0.0, float(np.max(peaks)))
+    max_dd_pct = float(max_dd_inr / denom * 100.0) if denom > 0 else 0.0
+
+    mean_pnl = float(np.mean(net))
+    std_pnl = float(np.std(net, ddof=1)) if n > 1 else 0.0
+    sharpe = float((mean_pnl / std_pnl) * math.sqrt(annualization)) if std_pnl > 1e-9 else 0.0
+
+    downside = np.minimum(0.0, net)
+    down_dev = float(math.sqrt(np.mean(np.square(downside))))
+    sortino = float((mean_pnl / down_dev) * math.sqrt(annualization)) if down_dev > 1e-9 else (sharpe if mean_pnl > 0 else 0.0)
+
+    net_sum = float(net.sum())
+    return {
+        'trades': int(n),
+        'win_rate_pct': float((net > 0).sum() / n * 100.0),
+        'avg_capital_inr': avg_cap,
+        'total_premium_inr': float(pd.to_numeric(trades.get('Premium', pd.Series([0.0])), errors='coerce').sum()),
+        'gross_pnl': float(pd.to_numeric(trades.get('Gross', pd.Series([0.0])), errors='coerce').sum()),
+        'slippage': float(pd.to_numeric(trades.get('Slippage', pd.Series([0.0])), errors='coerce').sum()),
+        'charges': float(pd.to_numeric(trades.get('Charges', pd.Series([0.0])), errors='coerce').sum()),
+        'net_pnl': net_sum,
+        'roi_pct': float(net_sum / avg_cap * 100.0) if avg_cap > 0 else 0.0,
+        'max_drawdown_inr': max_dd_inr,
+        'max_drawdown_pct': max_dd_pct,
+        'sharpe': sharpe,
+        'sortino': sortino,
+    }

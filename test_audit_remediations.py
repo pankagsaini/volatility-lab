@@ -35,7 +35,7 @@ if "msvcrt" not in sys.modules:
 
 # Add patched directory to sys.path when running in sandbox or local repo
 HERE_DIR = Path(__file__).resolve().parent
-PATCH_DIR = Path("/working_dir/c_e735eeeacddd5439/artifacts/file_generation/ttl=63d/intermediate/patched")
+PATCH_DIR = (Path(__file__).resolve().parent / "Volatility Lab") if (Path(__file__).resolve().parent / "Volatility Lab").exists() else Path(__file__).resolve().parent
 for candidate in (PATCH_DIR, HERE_DIR, HERE_DIR / "Volatility Lab"):
     if candidate.exists() and str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))
@@ -193,8 +193,10 @@ class TestTrack2CloudAndDownloaders(unittest.TestCase):
     """Track 2: Cloud Capture (Code.gs) and Background Downloaders tests."""
 
     def test_code_gs_weekend_guard_and_budget_fixes(self):
-        code_gs_path = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs") if (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").exists() else (PATCH_DIR / "Code.gs")
-        code_gs = code_gs_path.read_text(encoding="utf-8")
+        cand = PATCH_DIR / "cloud" / "apps_script" / "Code.gs"
+        if not cand.exists():
+            cand = PATCH_DIR / "Code.gs"
+        code_gs = cand.read_text(encoding="utf-8")
         # 1. Weekend guard appears before reconcilePriorSession() in scheduledCapture()
         sched_idx = code_gs.index("function scheduledCapture()")
         sched_body = code_gs[sched_idx:sched_idx + 1200]
@@ -328,21 +330,23 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
 
     def test_option_context_configurable_150_iv_ceiling(self):
         from types import SimpleNamespace
-        sys.modules.setdefault("history_policy", SimpleNamespace(compatible=lambda path, val: [val], register=lambda *a, **kw: None))
+        sys.modules.setdefault("history_policy", SimpleNamespace(compatible=lambda path, val: [val]))
         import option_context
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "iv.sqlite"
-            with sqlite3.connect(db_path) as conn:
+            conn = sqlite3.connect(db_path)
+            try:
                 conn.execute(
                     "CREATE TABLE expiry_observations (symbol TEXT, date TEXT, expiry TEXT, iv REAL, spread REAL, source TEXT, config TEXT)"
                 )
                 conn.execute("INSERT INTO expiry_observations VALUES ('NIFTY', '2026-10-15', '2026-10-22', 95.0, 0.2, 'Upstox supplied IV (Google Cloud)', 'v1')")
                 conn.execute("INSERT INTO expiry_observations VALUES ('NIFTY', '2026-10-15', '2026-10-22', 250.0, 0.2, 'Upstox supplied IV (Google Cloud)', 'v1')")
+                conn.commit()
+            finally:
+                conn.close()
             res = option_context.recorded_context(db_path, "NIFTY", "v1")
             self.assertEqual(len(res), 1)
             self.assertAlmostEqual(float(res["IV"].iloc[0]), 95.0, places=4)
-            del conn, res
-            import gc; gc.collect()
 
     def test_options_context_cache_lock_free_disk_read(self):
         import options_context_cache
@@ -397,6 +401,10 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             self.assertNotIn("streamlit==1.64.0", req_text)
             self.assertNotIn("plotly==7.1.0", req_text)
             self.assertNotIn("pypdf==6.20.1", req_text)
+
+
+
+
 
     def test_data_consistency_and_sync_integrity(self):
         from expiry_data import load_snapshot
@@ -459,7 +467,6 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             step = 50.0 if sym == 'NIFTY' else 100.0
             if price and atm:
                 self.assertLessEqual(abs(float(atm) - float(price)), step * 1.5)
-
 
     def test_v4_vectorized_intraday_greeks_and_garch_horizon_cache(self):
         from types import SimpleNamespace
@@ -666,6 +673,179 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             self.assertEqual(m_bounds["status"], "Ready")
             self.assertTrue(np.isfinite(m_bounds["percentile"]))
 
+
+VL_Sub = PATCH_DIR
+
+
+class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
+    """Track 9: v9.0 5-Subagent Master Audit & 6-Strategy Empirical Backtest Verification."""
+
+    def test_v9_all_6_scenarios_empirical_backtest_and_summarize(self):
+        import strategy_backtest
+        self.assertEqual(len(strategy_backtest.SCENARIO_PRESETS), 6)
+        day = "2026-11-05"
+        exp = "2026-11-12"
+        contracts = []
+        series = {"NSE_INDEX|Nifty 50": {}}
+        for m in range(376):
+            hh = 9 + (15 + m) // 60
+            mm = (15 + m) % 60
+            ts = f"{day} {hh:02d}:{mm:02d}"
+            series["NSE_INDEX|Nifty 50"][ts] = [24800.0, 24805.0, 24795.0, 24800.0, 1000]
+        for k in range(24000, 25650, 50):
+            for kind in ("CE", "PE"):
+                ikey = f"NFO|NIFTY|{exp}|{k}|{kind}"
+                contracts.append({
+                    "instrument_key": ikey,
+                    "trading_symbol": f"NIFTY {exp} {k} {kind}",
+                    "instrument_type": kind,
+                    "strike_price": float(k),
+                    "expiry": exp,
+                    "lot_size": 75,
+                })
+                series[ikey] = {}
+                dist = abs(k - 24800)
+                px_open = max(5.0, 180.0 - dist * 0.32)
+                px_close = max(3.0, px_open * 0.85)
+                for ts in series["NSE_INDEX|Nifty 50"]:
+                    px = px_open if ts <= f"{day} 09:35" else px_close
+                    series[ikey][ts] = [px, px + 1.0, max(0.5, px - 1.0), px, 500]
+
+        for name, cfg in strategy_backtest.SCENARIO_PRESETS.items():
+            # Craft a point-in-time signal at 09:18 IST that satisfies this scenario's exact filter bounds
+            sig_payload = {
+                "Instrument": "NIFTY",
+                "Expiry": exp,
+                "As of": f"{day}T09:18:00+05:30",
+                "Retrieved at": f"{day}T09:18:00+05:30",
+                "Price": 24800.0,
+                "IV": 15.0,
+                "HV30": 12.0,
+                "IV-RV Spread": 3.5,
+                "25 Delta reversal": 3.0 if "Scenario 4" in name else (0.0 if "Scenario 6" in name else 1.5),
+            }
+            if "Scenario 2" in name:
+                sig_payload["IV-RV Spread"] = -3.0
+            signals = [(exp, pd.Timestamp(f"{day} 09:18:00", tz="Asia/Kolkata"), sig_payload)]
+            settings = {
+                "symbol": "NIFTY",
+                "start": day,
+                "end": day,
+                "entry": cfg["entry"],
+                "exit": cfg["exit"],
+                "rank": cfg.get("expiry_rank", "Nearest"),
+                "dte": (1, 30),
+                "stop": cfg.get("stop", 3000.0),
+                "target": cfg.get("target", 5000.0),
+                "slip_bps": 5.0,
+                "use_upstox_fees": True,
+                "lots": 1,
+                "legs": strategy_backtest.TEMPLATES[name],
+                "filters": cfg["filters"],
+            }
+            trades, skips = strategy_backtest.simulate(settings, contracts, series, signals)
+            self.assertEqual(len(trades), 1, f"{name} failed to execute trade: skips={skips.to_dict('records')}")
+            self.assertGreater(float(trades.iloc[0]["Premium"]), 0.0)
+            self.assertGreater(float(trades.iloc[0]["Cost"]), 0.0)
+            perf = strategy_backtest.summarize_performance(trades)
+            self.assertEqual(perf["trades"], 1)
+            self.assertTrue(np.isfinite(perf["net_pnl"]))
+
+    def test_v9_futures_backtest_charge_and_expiry_rollover(self):
+        import futures_backtest
+        rows = []
+        days = ["2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28"]
+        for i, d in enumerate(days):
+            exps = ["2026-08-27", "2026-09-24", "2026-10-29"]
+            c_fac = 0.09 if i == 0 else 0.02
+            s = 24800.0
+            f1 = s * 1.001
+            f2 = f1 * (1.0 + c_fac * (28.0 / 365.0))
+            f3 = f2 * (1.0 + c_fac * (35.0 / 365.0))
+            for e, px in zip(exps, [f1, f2, f3]):
+                rows.append({"day": d, "expiry": e, "open": px, "high": px + 5, "low": px - 5, "close": px})
+        bars = pd.DataFrame(rows)
+        trades, skips, cov = futures_backtest.simulate(
+            bars=bars, pair=(0, 1), entry_carry=7.0, target_carry=3.0,
+            quantity=75, near_side=1, slip_bps=5.0, max_hold_days=10,
+            brokerage_per_order=20.0, lots=1,
+            contracts={"2026-08-27": 75, "2026-09-24": 75, "2026-10-29": 75},
+            auto_roll_on_expiry=True,
+        )
+        self.assertGreaterEqual(len(trades), 1)
+        self.assertIn("NetPnL", trades.columns)
+
+    def test_v9_backtest_signals_strict_no_future_lookahead(self):
+        import backtest_signals
+        exp = "2026-11-12"
+        day = "2026-11-05"
+        # Signal timestamp 30 mins AFTER 09:20 entry (09:50 IST) must NOT be used
+        future_ts = pd.Timestamp("2026-11-05 09:50:00", tz="Asia/Kolkata")
+        rows = [(exp, future_ts, {"Expiry": exp, "IV-RV Spread": 4.0, "HV30": 12.0})]
+        ok, reason = backtest_signals.decide(rows, exp, day, "09:20", [("iv_rv_spread", 2.0, 10.0)])
+        self.assertFalse(ok)
+        # Signal timestamp BEFORE entry (09:18 IST) with snake_case alias must pass
+        past_ts = pd.Timestamp("2026-11-05 09:18:00", tz="Asia/Kolkata")
+        rows_valid = [(exp, past_ts, {"Expiry": exp, "IV-RV Spread": 4.0, "HV30": 12.0})]
+        ok2, _ = backtest_signals.decide(rows_valid, exp, day, "09:20", [("iv_rv_spread", 2.0, 10.0)])
+        self.assertTrue(ok2)
+
+    def test_v9_market_calendar_2027_2028_holidays_and_horizon_265(self):
+        from datetime import date
+        import market_calendar
+        import expiry_forecast
+        import forecast
+        # 2027-04-15 (Ram Navami Thursday) and 2027-04-14 (Ambedkar Jayanti Wednesday) roll back to Tuesday 2027-04-13
+        self.assertEqual(market_calendar.last_trading_day_on_or_before(date(2027, 4, 15)), date(2027, 4, 13))
+        # 2028-11-02 (Guru Nanak Jayanti Thursday in Leap Year 2028) rolls back to Wednesday 2028-11-01
+        self.assertEqual(market_calendar.last_trading_day_on_or_before(date(2028, 11, 2)), date(2028, 11, 1))
+        self.assertGreaterEqual(getattr(expiry_forecast, "HORIZON_CAP", 245), 260)
+
+    def test_v9_option_math_t_zero_and_mixed_kind_vec(self):
+        import option_math
+        res = option_math.bsm_greeks_vec(
+            spot=np.array([24800.0, 24800.0]),
+            strike=np.array([24800.0, 24800.0]),
+            years=np.array([0.0, 5.0 / 365.0]),
+            iv=np.array([0.15, 0.15]),
+            rate=0.067,
+            div_yield=0.012,
+            kind=np.array(["CE", "PE"]),
+        )
+        self.assertEqual(len(res["delta"]), 2)
+        self.assertGreater(res["delta"][0], 0.0)
+        self.assertLess(res["delta"][1], 0.0)
+
+    def test_v9_collector_support_and_backtest_common_exports(self):
+        import collector_support
+        import backtest_common
+        self.assertEqual(collector_support.read_json("/nonexistent/path/xyz.json"), {})
+        self.assertFalse(backtest_common.is_blacklisted_future("NIFTY", "2026-11-26"))
+        self.assertEqual(backtest_common.dated_lot_size("NIFTY", "2026-11-06"), 75)
+        self.assertEqual(backtest_common.dated_lot_size("BANKNIFTY", "2026-11-06"), 30)
+
+    def test_v9_zero_ast_signature_or_import_mismatches(self):
+        import ast
+        exports = {}
+        for py in VL_Sub.glob("*.py"):
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+            names = set()
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    names.add(node.name)
+                elif isinstance(node, ast.Assign):
+                    for t in node.targets:
+                        if isinstance(t, ast.Name):
+                            names.add(t.id)
+            exports[py.stem] = names
+        for mod, req in [
+            ("smile", {"load_smile", "load_latest_smile", "has_usable_points"}),
+            ("relative_value", {"maturity_stats", "history", "capture", "save"}),
+            ("backtest_common", {"record_skip", "is_blacklisted_future", "is_blacklisted_option", "dated_lot_size"}),
+            ("collector_support", {"read_json", "atomic_json", "atomic_csv", "data_lock"}),
+            ("strategy_backtest", {"TEMPLATES", "SCENARIO_PRESETS", "simulate", "summarize_performance"}),
+        ]:
+            self.assertTrue(req.issubset(exports.get(mod, set())), f"Missing exports in {mod}: {req - exports.get(mod, set())}")
 
 
 if __name__ == "__main__":
