@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 APP_ENTRY = ROOT / "streamlit_app.py" if (ROOT / "streamlit_app.py").exists() else ROOT / "Volatility Lab" / "dashboard.py"
+DOMAIN_URL = "https://volatilitylab.in"
 CLOUD_URL = "https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/"
 
 
@@ -42,7 +43,8 @@ def main() -> None:
     print("=" * 74)
     print("  ❖ VOLATILITY LAB — UNIVERSAL ANY-DEVICE SERVER")
     print("=" * 74)
-    print(f"  • Always-On Cloud URL (Any Device 24/7): {CLOUD_URL}")
+    print(f"  • Official Domain & Web Portal:          {DOMAIN_URL}")
+    print(f"  • Always-On Streamlit Cloud (24/7):      {CLOUD_URL}")
     print(f"  • Local PC Browser URL:                  {local_url}")
     print(f"  • Wi-Fi / LAN URL (Phones & Tablets):    {lan_url}")
     print("=" * 74)

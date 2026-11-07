@@ -159,7 +159,8 @@ mkt_border = "rgba(16, 185, 129, 0.42)" if is_open else ("rgba(245, 158, 11, 0.4
 mkt_bg = "rgba(16, 185, 129, 0.12)" if is_open else ("rgba(245, 158, 11, 0.12)" if is_pre else "rgba(15, 23, 42, 0.85)")
 mkt_label = "● Market Live" if is_open else ("◐ Pre-Open" if is_pre else "○ Market Closed")
 
-cloud_url = "https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/"
+cloud_url = "https://volatilitylab.in"
+app_cloud_url = "https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/"
 repo_url = "https://github.com/pankagsaini/volatility-lab"
 edit_url = "https://github.com/pankagsaini/volatility-lab/edit/master/Volatility%20Lab/dashboard.py"
 try:
