@@ -49,23 +49,23 @@ def _file_rev(*paths: Path) -> tuple:
     return tuple(revs)
 
 
-@st.cache_data(show_spinner=False, max_entries=16)
+@st.cache_data(show_spinner=False, max_entries=2, ttl=300)
 def _cached_load_snapshot(config: str, allow_saved: bool, rev: tuple):
     return load_snapshot(config, allow_saved=allow_saved)
 
 
-@st.cache_data(show_spinner=False, max_entries=32)
+@st.cache_data(show_spinner=False, max_entries=4, ttl=300)
 def _cached_transition_context(db_path_str: str, symbol: str, config: str, rev: tuple):
     from option_context import transition_context
     return transition_context(Path(db_path_str), symbol, config)
 
 
-@st.cache_data(show_spinner=False, max_entries=64)
+@st.cache_data(show_spinner=False, max_entries=8, ttl=300)
 def _cached_expiry_history(symbol: str, expiry: str, config: str, rev: tuple):
     return history(symbol, expiry, config)
 
 
-@st.cache_data(show_spinner=False, max_entries=64)
+@st.cache_data(show_spinner=False, max_entries=8, ttl=300)
 def _cached_smile_bundle(db_path_str: str, symbol: str, expiry: str, config: str, as_of: str | None, capture_source: str | None, rev: tuple):
     db_path = Path(db_path_str)
     saved = load_smile(db_path, symbol, expiry, config, as_of)
@@ -83,13 +83,13 @@ def _cached_smile_bundle(db_path_str: str, symbol: str, expiry: str, config: str
     return saved, saved_as_of, exact_capture_unusable, exact_cloud_capture_missing
 
 
-@st.cache_data(show_spinner=False, max_entries=16)
+@st.cache_data(show_spinner=False, max_entries=4, ttl=300)
 def _cached_regime_summary(path_str: str, as_of: str | None, rev: tuple):
     from volatility_regime import regime_summary
     return regime_summary(pd.read_csv(path_str), as_of)
 
 
-@st.cache_data(show_spinner=False, max_entries=32)
+@st.cache_data(show_spinner=False, max_entries=2, ttl=300)
 def _cached_research_history(db_path_str: str, symbol: str, config: str, rev: tuple):
     from relative_value import history as research_history
     return research_history(Path(db_path_str), symbol, config, comparable=True)
@@ -264,7 +264,7 @@ def _load_full_price_history(symbol):
     merged=merged[merged.Date<=pd.Timestamp(history_cutoff())]
     return validate_ohlc(merged).reset_index()
 
-@st.cache_data(show_spinner=False,max_entries=4)
+@st.cache_data(show_spinner=False, max_entries=2, ttl=600)
 def _cached_full_price_history(symbol,revision):
     return _load_full_price_history(symbol)
 
@@ -284,7 +284,7 @@ def chart_hv(symbol,frame):
         return historical_vol(frame) if frame is not None else None
 
 
-@st.cache_data(show_spinner=False,max_entries=4)
+@st.cache_data(show_spinner=False, max_entries=2, ttl=600)
 def _cached_chart_prices(symbol,revision):
     full=_cached_full_price_history(symbol,revision)
     return one_year(full,revision[0]),historical_vol(full)
@@ -417,13 +417,13 @@ def history_figure(symbol,expiry,hv,iv,period,relative=False,spread_only=False):
 
     return fig
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=4, ttl=600)
 def analyze_models(raw):
     frame=one_year(pd.read_csv(io.BytesIO(raw)),history_cutoff())
     from model_view import model_tables
     return model_tables(frame)
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=4, ttl=600)
 def analyze_candidates(raw):
     frame=one_year(pd.read_csv(io.BytesIO(raw)),history_cutoff())
     from model_view import fit_candidates
@@ -478,13 +478,13 @@ def render_validation(symbol):
 
         else:st.info('No completed validation. Needs a training year plus subsequent history.')
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=12, ttl=300)
 def matched_expiry(raw,expiry,as_of,iv,version):
     df = pd.read_csv(io.BytesIO(raw)) if isinstance(raw, (bytes, bytearray)) else raw
     return expiry_forecast(df,expiry,as_of,iv)
 
 
-@st.cache_data(show_spinner=False,max_entries=96)
+@st.cache_data(show_spinner=False, max_entries=16, ttl=300)
 def _cached_term_forecast(raw,expiry,valuation_bucket,version):
     df = pd.read_csv(io.BytesIO(raw)) if isinstance(raw, (bytes, bytearray)) else raw
     return term_structure_forecast(df,expiry,valuation_bucket)

@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent / 'data/backtest_1minute'
 DATA_DIR = Path(__file__).resolve().parent / 'data'
 _CACHE_LOCK = threading.RLock()
 _FILE_CACHE = OrderedDict()
-_MAX_CACHE_FILES = 2048
+_MAX_CACHE_FILES = 128
 
 
 def _read_gzip_json(path):

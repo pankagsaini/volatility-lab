@@ -20,8 +20,8 @@ ROOT = Path(__file__).resolve().parent / "data"
 _FILE_CACHE: OrderedDict[str, Any] = OrderedDict()
 _CACHE_LOCK = RLock()
 _FILE_CACHE_LOCK = _CACHE_LOCK
-_MAX_CACHE_FILES = 2048
-_MAX_CACHE_ROWS = 75000
+_MAX_CACHE_FILES = 128
+_MAX_CACHE_ROWS = 15000
 _CACHED_ROWS = 0
 _FILE_CACHE_ROWS = 0
 

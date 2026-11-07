@@ -18,7 +18,7 @@ _MODEL_BASE_CACHE: dict[tuple[str, int, float], tuple[float, np.ndarray | None, 
 _VALIDATED_SLICE_CACHE: dict[tuple[int, str, str, float], tuple[pd.DataFrame, object]] = {}
 
 
-@lru_cache(maxsize=512)
+@lru_cache(maxsize=128)
 def _cached_sessions(start_iso: str, end_iso: str) -> tuple:
     start_d = pd.Timestamp(start_iso).date()
     end_d = pd.Timestamp(end_iso).date()
@@ -71,7 +71,7 @@ def _prepare_one_year_slice(frame: pd.DataFrame, cutoff_date) -> tuple[pd.DataFr
     data._ohlc_validated = True
 
     if cache_key is not None:
-        if len(_VALIDATED_SLICE_CACHE) >= 32:
+        if len(_VALIDATED_SLICE_CACHE) >= 8:
             _VALIDATED_SLICE_CACHE.clear()
         _VALIDATED_SLICE_CACHE[cache_key] = (data, last)
     return data, last
@@ -97,7 +97,7 @@ def _get_base_expiry_models(data: pd.DataFrame, last_str: str) -> tuple[float, n
     except (ValueError, RuntimeError, FloatingPointError, ImportError) as error:
         garch_status = str(error)
 
-    if len(_MODEL_BASE_CACHE) >= 32:
+    if len(_MODEL_BASE_CACHE) >= 8:
         _MODEL_BASE_CACHE.clear()
     _MODEL_BASE_CACHE[cache_key] = (ewma_rv_pct, garch_vars, garch_status)
     return ewma_rv_pct, garch_vars, garch_status

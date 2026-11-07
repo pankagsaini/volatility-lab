@@ -3,6 +3,7 @@
 from pathlib import Path
 import importlib
 import os
+import gc
 import gzip
 import json
 import time
@@ -219,6 +220,7 @@ def cloud_sync_status():
         previous = st.session_state.setdefault('_cloud_seen', sync_version)
         if sync_version != previous:
             st.session_state['_cloud_seen'] = sync_version
+            gc.collect()
             st.rerun()
 
 cloud_sync_status()

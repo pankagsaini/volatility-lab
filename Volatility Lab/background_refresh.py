@@ -5,7 +5,7 @@ import logging
 import time
 import streamlit as st
 
-_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix='lab-data')
+_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='lab-data')
 
 
 def is_stale(state, key, ttl=60.0):

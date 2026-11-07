@@ -254,7 +254,7 @@ def render_options():
                 st.caption('No saved runs yet.')
 
 
-@st.cache_data(max_entries=40, show_spinner=False)
+@st.cache_data(max_entries=20, ttl=600, show_spinner=False)
 def saved_run_summary(path, revision):
     from pathlib import Path
     file = Path(path)

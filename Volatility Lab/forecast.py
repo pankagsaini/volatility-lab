@@ -54,7 +54,7 @@ def _scipy_garch11_fallback(r: np.ndarray, max_h: int):
     }
 
 
-@lru_cache(maxsize=32)
+@lru_cache(maxsize=8)
 def _cached_garch_mle(returns_digest: str, returns_bytes: bytes, n_obs: int):
     """Fit GARCH(1,1) once per unique return series and project all 245 forward sessions."""
     r_arr = np.frombuffer(returns_bytes, dtype=np.float64)

@@ -35,7 +35,7 @@ def _sqlite_rev(db_path: Path):
     return tuple(revs)
 
 
-@st.cache_data(show_spinner=False, max_entries=16)
+@st.cache_data(show_spinner=False, max_entries=4, ttl=300)
 def _cached_intraday_snapshots(db_path_str: str, symbol: str, expiry: str, config: str, db_rev: tuple):
     from snapshot_history import load
     return load(Path(db_path_str), symbol, expiry, config)

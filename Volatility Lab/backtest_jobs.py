@@ -1,3 +1,4 @@
+import gc
 import pandas as pd
 """Single-worker background job dispatcher with fixed strategy_backtest.simulate argument ordering, separate locks, and full UI compatibility."""
 from concurrent.futures import ThreadPoolExecutor
@@ -73,6 +74,7 @@ def _run_ui_job(kind: str, settings: dict, task_obj):
         'unverified_dates': 0,
     }
     save_run(settings, trades, skips, coverage)
+    gc.collect()
     return (trades, skips, settings, coverage)
 
 
