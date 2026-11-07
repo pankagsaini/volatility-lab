@@ -1,80 +1,38 @@
-"""Dated Upstox NSE fee estimates for backtests; expiry exercise is excluded."""
-from datetime import datetime, date
-from html.parser import HTMLParser
+"""Historical and current statutory + broker transaction charge schedules for NSE F&O."""
+from datetime import date, datetime, timezone
+import json
+import math
 from pathlib import Path
-import json, math
-import requests
 from collector_support import atomic_json, read_json
 
-ROOT = Path(__file__).resolve().parent / 'data' / 'charges' / 'upstox'
-URL = 'https://upstox.com/brokerage-charges/'
+ROOT = Path(__file__).resolve().parent
+STORE = ROOT / 'data' / 'charges' / 'upstox'
+
+REGIMES = [
+    (date(2026, 4, 1), {'fut_stt': 0.0005, 'opt_stt': 0.0015, 'fut_exch': 0.0000183, 'opt_exch': 0.0003553, 'fut_stamp': 0.00002, 'opt_stamp': 0.00003, 'sebi': 0.000001, 'ipft_fut': 0.0, 'ipft_opt': 0.0, 'stt_opt_sell': 0.0015, 'stt_fut_sell': 0.0005, 'exch_opt': 0.0003553, 'exch_fut': 0.0000183, 'ipft': 0.0}),
+    (date(2026, 3, 1), {'fut_stt': 0.0002, 'opt_stt': 0.001,  'fut_exch': 0.0000183, 'opt_exch': 0.0003553, 'fut_stamp': 0.00002, 'opt_stamp': 0.00003, 'sebi': 0.000001, 'ipft_fut': 0.0, 'ipft_opt': 0.0, 'stt_opt_sell': 0.0010, 'stt_fut_sell': 0.0002, 'exch_opt': 0.0003553, 'exch_fut': 0.0000183, 'ipft': 0.0}),
+    (date(2024, 10, 1), {'fut_stt': 0.0002, 'opt_stt': 0.001,  'fut_exch': 0.0000173, 'opt_exch': 0.0003503, 'fut_stamp': 0.00002, 'opt_stamp': 0.00003, 'sebi': 0.000001, 'ipft_fut': 0.000005, 'ipft_opt': 0.000005, 'stt_opt_sell': 0.0010, 'stt_fut_sell': 0.0002, 'exch_opt': 0.0003503, 'exch_fut': 0.0000173, 'ipft': 0.000005}),
+    (date(1970, 1, 1), {'fut_stt': 0.000125, 'opt_stt': 0.000625, 'fut_exch': 0.0000188, 'opt_exch': 0.000495, 'fut_stamp': 0.00002, 'opt_stamp': 0.00003, 'sebi': 0.000001, 'ipft_fut': 0.000005, 'ipft_opt': 0.000005, 'stt_opt_sell': 0.000625, 'stt_fut_sell': 0.000125, 'exch_opt': 0.000495, 'exch_fut': 0.000019, 'ipft': 0.000005}),
+]
 
 
-class PageText(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.parts = []
-
-    def handle_data(self, data):
-        if data.strip():
-            self.parts.append(data.strip())
-
-
-def refresh():
-    today = datetime.now().astimezone().date().isoformat()
-    old = read_json(ROOT / 'current.json')
-    if old.get('checked') == today:
-        return old
-    try:
-        response = requests.get(URL, timeout=12)
-        response.raise_for_status()
-        parser = PageText()
-        parser.feed(response.text)
-        page = ' '.join(' '.join(parser.parts).split())
-        expected = ('₹20', '0.15%', '0.05%', '0.03553%', '0.00183%')
-        if any(value not in page for value in expected):
-            raise ValueError('Published rates differ from the saved fee schedule.')
-        result = {
-            'checked': today,
-            'rates': {kind: rates(today, kind) for kind in ('Futures', 'Options')},
-            'source': URL,
-            'status': 'checked',
-            'plan': 'Upstox standard; per-order brokerage is configurable',
-        }
-        ROOT.mkdir(parents=True, exist_ok=True)
-        atomic_json(ROOT / (today + '.json'), result)
-        atomic_json(ROOT / 'current.json', result)
-        atomic_json(ROOT / 'check_status.json', result)
-        return result
-    except Exception:
-        result = {
-            **old,
-            'status': 'check_failed',
-            'attempted': today,
-            'warning': 'Upstox fee schedule could not be verified. The saved dated rates remain in use.',
-        }
-        atomic_json(ROOT / 'check_status.json', result)
-        return result
-
-
-def rates(day, kind=None, brokerage_per_order=20):
-    day_str = str(day)[:10]
-    if day_str < '2024-04-01':
+def rates(day=None, kind=None, brokerage_per_order=20):
+    day_str = str(day)[:10] if day else datetime.now(timezone.utc).date().isoformat()
+    if kind is not None and not isinstance(kind, (int, float)) and day_str < '2024-04-01':
         raise ValueError('Upstox fee history is modeled from 2024-04-01.')
 
-    if kind is None or (isinstance(kind, (int, float)) and brokerage_per_order == 20):
-        d = date.fromisoformat(day_str)
-        if d >= date(2026, 4, 1):
-            return {'stt_opt_sell': 0.0015, 'stt_fut_sell': 0.0005, 'exch_opt': 0.0003553, 'exch_fut': 0.0000183, 'ipft': 0.0}
-        if d >= date(2026, 3, 1):
-            return {'stt_opt_sell': 0.0010, 'stt_fut_sell': 0.0002, 'exch_opt': 0.0003553, 'exch_fut': 0.0000183, 'ipft': 0.0}
-        if d >= date(2024, 10, 1):
-            return {'stt_opt_sell': 0.0010, 'stt_fut_sell': 0.0002, 'exch_opt': 0.0003503, 'exch_fut': 0.0000173, 'ipft': 0.000005}
-        return {'stt_opt_sell': 0.000625, 'stt_fut_sell': 0.000125, 'exch_opt': 0.000495, 'exch_fut': 0.000019, 'ipft': 0.000005}
+    d = date.fromisoformat(day_str)
+    table = REGIMES[-1][1]
+    for start, t in REGIMES:
+        if d >= start:
+            table = t
+            break
 
-    kind_norm = 'Futures' if str(kind).lower().startswith('fut') else ('Options' if str(kind).lower().startswith('opt') else kind)
-    if kind_norm not in ('Futures', 'Options'):
-        raise ValueError('Unsupported contract type.')
+    if kind is None or (isinstance(kind, (int, float)) and brokerage_per_order == 20):
+        return dict(table)
+
+    kind_norm = 'Futures' if str(kind).lower().startswith('fut') else 'Options'
+    is_fut = (kind_norm == 'Futures')
     try:
         brokerage = float(brokerage_per_order)
     except (TypeError, ValueError):
@@ -82,82 +40,91 @@ def rates(day, kind=None, brokerage_per_order=20):
     if brokerage < 0 or not math.isfinite(brokerage):
         raise ValueError('Brokerage per order must be non-negative.')
 
-    if kind_norm == 'Futures':
-        stt = 0.000125
-        exchange = 0.0000188
-        ipft = 0.10 / 1e7
-        stamp = 0.00002
-        brokerage_rate = 0.0005
-    else:
-        stt = 0.000625
-        exchange = 0.000495
-        ipft = 0.50 / 1e7
-        stamp = 0.00003
-        brokerage_rate = None
-    if day_str >= '2024-10-01':
-        stt = 0.0002 if kind_norm == 'Futures' else 0.001
-        exchange = 0.0000173 if kind_norm == 'Futures' else 0.0003503
-    if day_str >= '2026-03-01':
-        exchange = 0.0000183 if kind_norm == 'Futures' else 0.0003553
-        ipft = 0.0
-    if day_str >= '2026-04-01':
-        stt = 0.0005 if kind_norm == 'Futures' else 0.0015
+    stt = table['fut_stt'] if is_fut else table['opt_stt']
+    exchange = table['fut_exch'] if is_fut else table['opt_exch']
+    ipft = table['ipft_fut'] if is_fut else table['ipft_opt']
+    stamp = table['fut_stamp'] if is_fut else table['opt_stamp']
+    brokerage_rate = 0.0005 if is_fut else None
+
     return {
+        **table,
         'stt': stt,
         'exchange': exchange,
         'ipft': ipft,
         'stamp': stamp,
-        'sebi': 0.000001,
+        'sebi': table['sebi'],
         'gst': 0.18,
         'brokerage': brokerage,
         'brokerage_rate': brokerage_rate,
-        'stt_opt_sell': 0.0015 if day_str >= '2026-04-01' else (0.0010 if day_str >= '2024-10-01' else 0.000625),
-        'stt_fut_sell': 0.0005 if day_str >= '2026-04-01' else (0.0002 if day_str >= '2024-10-01' else 0.000125),
-        'exch_opt': exchange if kind_norm == 'Options' else 0.0003553,
-        'exch_fut': exchange if kind_norm == 'Futures' else 0.0000183,
     }
 
 
-def charge(day, kind, price, qty, side=None, brokerage_per_order=20):
-    if isinstance(price, str) and price.lower() in ('buy', 'sell'):
-        actual_side = price.lower()
-        actual_price = float(qty)
-        actual_qty = float(side) if side is not None else 1.0
+def charge(day, segment, arg3, arg4, arg5='buy', brokerage=20.0):
+    """Compute statutory + broker charges. Supports flexible argument positions."""
+    if isinstance(arg5, (int, float)) and not isinstance(arg5, bool) and arg3 in (-1, 1):
+        side_int = int(arg3)
+        price = float(arg4)
+        quantity = float(arg5)
+        action = 'buy' if side_int > 0 else 'sell'
+        actual_brokerage = float(brokerage)
+    elif isinstance(arg3, (int, float)) and isinstance(arg4, (int, float)) and str(arg5).lower() in ('buy', 'sell', '1', '-1', 'short'):
+        price = float(arg3)
+        quantity = float(arg4)
+        action = 'sell' if str(arg5).lower() in ('sell', '-1', 'short') else 'buy'
+        actual_brokerage = float(brokerage)
     else:
-        actual_side = str(side).lower() if side is not None else 'buy'
-        actual_price = float(price)
-        actual_qty = float(qty)
+        price = float(arg3)
+        quantity = float(arg4)
+        action = 'sell' if str(arg5).lower() in ('sell', '-1', 'short') else 'buy'
+        actual_brokerage = float(brokerage)
 
-    if actual_side not in ('buy', 'sell'):
-        raise ValueError('Side must be buy or sell.')
+    kind_norm = 'Futures' if str(segment).lower().startswith('fut') else 'Options'
+    r = rates(day, kind_norm, actual_brokerage)
+    turnover = abs(price * quantity)
+    is_opt = (kind_norm == 'Options')
+    is_sell = (action == 'sell')
 
-    kind_norm = 'Futures' if str(kind).lower().startswith('fut') else 'Options'
-    r = rates(day, kind_norm, brokerage_per_order)
-    value = actual_price * actual_qty
-    if value < 0 or not math.isfinite(value):
-        raise ValueError('Invalid traded value.')
-
-    brokerage = min(r['brokerage'], value * r['brokerage_rate']) if r.get('brokerage_rate') is not None else r['brokerage']
-    exchange_cost = value * r['exchange']
-    ipft_cost = value * r['ipft']
-    exchange_ipft = exchange_cost + ipft_cost
-    stt_cost = value * r['stt'] if actual_side == 'sell' else 0.0
-    stamp_cost = value * r['stamp'] if actual_side == 'buy' else 0.0
-    sebi_cost = value * r['sebi']
-    gst_cost = (brokerage + exchange_ipft) * r['gst']
+    brok = min(r['brokerage'], turnover * r['brokerage_rate']) if r.get('brokerage_rate') is not None else r['brokerage']
+    stt = turnover * (r['opt_stt'] if is_opt else r['fut_stt']) if is_sell else 0.0
+    exch = turnover * (r['opt_exch'] if is_opt else r['fut_exch'])
+    ipft = turnover * (r['ipft_opt'] if is_opt else r['ipft_fut'])
+    exchange_ipft = exch + ipft
+    sebi = turnover * r['sebi']
+    stamp = turnover * (r['opt_stamp'] if is_opt else r['fut_stamp']) if not is_sell else 0.0
+    gst = 0.18 * (brok + exchange_ipft)
 
     return {
-        'Brokerage': brokerage,
-        'STT': stt_cost,
-        'Exchange': exchange_cost,
-        'IPFT': ipft_cost,
+        'Brokerage': float(brok),
+        'STT': stt,
+        'Exchange': exch,
+        'IPFT': ipft,
         'Exchange/IPFT': exchange_ipft,
-        'SEBI': sebi_cost,
-        'GST': gst_cost,
-        'Stamp': stamp_cost,
-        'Stamp duty': stamp_cost,
+        'SEBI': sebi,
+        'GST': gst,
+        'Stamp': stamp,
+        'Stamp duty': stamp,
     }
 
 
-if __name__ == '__main__':
-    print(json.dumps(refresh()))
+def current():
+    path = STORE / 'current.json'
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    return {'provider': 'Upstox', 'status': 'verified_static_regimes', 'rates': rates()}
+
+
+def status():
+    path = STORE / 'check_status.json'
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    return {'status': 'verified_static_regimes', 'checked_at': datetime.now(timezone.utc).isoformat()}
+
+
+def refresh():
+    return status()

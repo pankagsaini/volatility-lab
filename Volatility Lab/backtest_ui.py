@@ -31,7 +31,7 @@ def _default_backtest_date_window(symbol: str = 'NIFTY') -> tuple[date, date, st
             with sqlite3.connect(q_path, timeout=5) as con:
                 has_jobs = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jobs'").fetchone()
                 if has_jobs:
-                    rows = con.execute('SELECT meta FROM jobs WHERE state="done" AND kind="minute" LIMIT 500').fetchall()
+                    rows = con.execute("SELECT meta FROM jobs WHERE state='done' AND kind='minute' AND json_extract(meta, '$.symbol')=? ORDER BY rowid DESC LIMIT 500", (symbol,)).fetchall()
                     starts, ends = [], []
                     for (m_txt,) in rows:
                         m = json.loads(m_txt)
@@ -185,6 +185,7 @@ def render_options():
         lots=int(lots),
         capital_allocated=capital_allocated,
         margin_per_lot=margin_per_lot,
+        estimate_margin=estimate_margin,
         fees=fees,
         trigger=trigger,
         mode=mode,

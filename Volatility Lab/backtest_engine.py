@@ -158,7 +158,7 @@ def load(symbol, start, end):
     conflicts = set()
     if q_path.exists():
         try:
-            with sqlite3.connect(q_path, timeout=30) as con:
+            with closing(sqlite3.connect(q_path, timeout=30)) as con:
                 has_jobs = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jobs'").fetchone()
                 jobs = con.execute('SELECT kind,meta,file FROM jobs WHERE state="done" AND kind IN ("contracts","minute")').fetchall() if has_jobs else []
             for kind, metastr, file in jobs:

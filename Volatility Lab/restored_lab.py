@@ -338,7 +338,7 @@ def render_trade_tools(data, symbol, selected, rate, dividend, spread):
         position = make_position(context, put, call)
         days = st.number_input('Elapsed calendar days', min_value=0.0, max_value=365.0, value=1.0, step=0.25)
         costs = st.number_input('Additional costs per position (₹)', min_value=0.0, value=0.0, step=10.0)
-        stress_res = stress_position(context, position, days, costs)
+        scenarios, summary = stress_position(context, position, days, costs)
         st.markdown('**Position Legs**')
         table(position.drop(columns=['Bid IV', 'Ask IV'], errors='ignore'))
         st.markdown('**Position Greeks & Capital Summary**')

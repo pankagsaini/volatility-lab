@@ -1,8 +1,8 @@
-import numpy as np
 """Multi-leg options strategy backtest engine with SOM margin floor, quiet-minute carry-forward, and 6 Trade Scenario Presets."""
 from datetime import datetime, timedelta
 import json
 import math
+import numpy as np
 import pandas as pd
 from backtest_common import record_skip, dated_lot_size
 from broker_charges import charge
@@ -176,6 +176,40 @@ def template(name):
 def scenario_preset(name):
     """Return scenario metadata + default filter/timing configuration when `name` is one of the 6 trade scenarios."""
     return dict(SCENARIO_PRESETS[name]) if name in SCENARIO_PRESETS else None
+
+
+
+def _positive_int(value, label: str = "Value") -> int:
+    try:
+        ivalue = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be a positive integer") from exc
+    if ivalue <= 0 or (isinstance(value, float) and not value.is_integer()):
+        raise ValueError(f"{label} must be a positive integer")
+    return ivalue
+
+
+def sizing(s: dict) -> tuple[str, int]:
+    mode = s.get("sizing_mode", "broker_lot_size" if "lots" in s else "fixed_units")
+    if mode not in ("fixed_units", "broker_lot_size"):
+        raise ValueError(f"Invalid sizing_mode: {mode!r}")
+    if mode == "broker_lot_size":
+        return mode, _positive_int(s.get("lots", 1), "Lots")
+    return mode, _positive_int(s.get("quantity", 1), "Quantity")
+
+
+def broker_lot_size(contract: dict) -> int:
+    return _positive_int(contract.get("lot_size"), "Broker lot size")
+
+
+def capital_settings(s: dict) -> float | None:
+    cap = s.get("capital_allocated")
+    if cap is None or cap == "" or cap == 0:
+        return None
+    val = float(cap)
+    if not math.isfinite(val) or val <= 0:
+        raise ValueError("capital_allocated must be a positive finite number")
+    return val
 
 
 def validate(settings: dict) -> bool:

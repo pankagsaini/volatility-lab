@@ -470,3 +470,5 @@ def render_vol_surface_3d(symbol: str, selected_row: Dict[str, Any], result: Dic
         st.metric("Term Structure Slope", f"{diag['term_slope']:+.2f}%", help="Back ATM IV minus Front ATM IV")
     with m_col4:
         st.metric("Front Skew (96%-104%)", f"{diag['front_skew']:+.2f}%", help="Front expiry OTM Put IV minus OTM Call IV")
+
+build_surface = build_surface_figure

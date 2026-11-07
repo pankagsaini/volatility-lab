@@ -1,8 +1,8 @@
 """As-known-at-entry signal loader and point-in-time filter evaluator (strict AvailableAt <= DecisionTime)."""
+from contextlib import closing
 import json
 import math
 import sqlite3
-from contextlib import closing
 from pathlib import Path
 import pandas as pd
 
@@ -78,7 +78,6 @@ def decide(rows, expiry, day, entry, filters):
         r for exp, t, r in rows
         if exp == exp_str and t <= at and str(t.date()) == day_str and 0 <= (at - t).total_seconds() <= 9600
     ]
-    # Strict point-in-time guard: no future timestamps allowed
     if not candidates:
         return False, 'Missing signal known before entry'
     r = candidates[-1]

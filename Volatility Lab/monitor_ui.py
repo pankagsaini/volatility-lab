@@ -648,7 +648,7 @@ def render_term_structure(symbol,result):
     listed_text={day.isoformat() for day in listed}
     rows=[row for row in result.get('rows',[]) if row.get('Instrument')==symbol
             and str(row.get('Expiry','')) in listed_text]
-    curve=term_structure(rows,symbol)
+    curve=term_structure(rows,symbol,deduplicate=True)
     if curve.empty:
         st.info('No quote rows are saved for the currently listed expiries. Refresh quotes to update them.');return
 

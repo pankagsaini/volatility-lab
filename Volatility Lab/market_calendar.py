@@ -1,13 +1,26 @@
-"""Centralized NSE trading calendar with 2024-2028 (including Leap Year 2028) holiday & special session support."""
-from datetime import date, timedelta
+"""Centralized NSE trading calendar with 2023-2028 (including Leap Year 2028) holiday & special session support."""
+from datetime import date, datetime, timedelta
+
+MIN_SUPPORTED_YEAR = 2023
+MAX_SUPPORTED_YEAR = 2028
+
+
+class CalendarHorizonError(ValueError):
+    """Raised when a date query falls outside the verified NSE holiday calendar horizon."""
+    pass
+
 
 HOLIDAYS = {
+    # 2023 NSE Holidays
+    date(2023, 1, 26), date(2023, 3, 7), date(2023, 3, 30), date(2023, 4, 4),
+    date(2023, 4, 7), date(2023, 4, 14), date(2023, 5, 1), date(2023, 6, 29),
+    date(2023, 8, 15), date(2023, 9, 19), date(2023, 10, 2), date(2023, 10, 24),
+    date(2023, 11, 14), date(2023, 11, 27), date(2023, 12, 25),
     # 2024 NSE Holidays
     date(2024, 1, 22), date(2024, 1, 26), date(2024, 3, 8), date(2024, 3, 25),
     date(2024, 3, 29), date(2024, 4, 11), date(2024, 4, 17), date(2024, 5, 1),
     date(2024, 5, 20), date(2024, 6, 17), date(2024, 7, 17), date(2024, 8, 15),
-    date(2024, 10, 2), date(2024, 11, 1), date(2024, 11, 15), date(2024, 11, 20),
-    date(2024, 12, 25),
+    date(2024, 10, 2), date(2024, 11, 1), date(2024, 11, 15), date(2024, 12, 25),
     # 2025 NSE Holidays
     date(2025, 2, 26), date(2025, 3, 14), date(2025, 3, 31), date(2025, 4, 10),
     date(2025, 4, 14), date(2025, 4, 18), date(2025, 5, 1), date(2025, 8, 15),
@@ -40,14 +53,27 @@ SPECIAL_SESSIONS = {
 }
 
 
-def is_trading_day(d: date, include_special: bool = False) -> bool:
-    if include_special and d in SPECIAL_SESSIONS:
+def _coerce_date(value) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value)[:10])
+
+
+def is_trading_day(d, include_special: bool = False) -> bool:
+    cur = _coerce_date(d)
+    if cur.year < MIN_SUPPORTED_YEAR or cur.year > MAX_SUPPORTED_YEAR:
+        raise CalendarHorizonError(f"Date {cur} falls outside verified NSE holiday calendar horizon ({MIN_SUPPORTED_YEAR}-{MAX_SUPPORTED_YEAR}).")
+    if include_special and cur in SPECIAL_SESSIONS:
         return True
-    return d.weekday() < 5 and d not in HOLIDAYS
+    return cur.weekday() < 5 and cur not in HOLIDAYS
 
 
-def last_trading_day_on_or_before(d: date, include_special: bool = False) -> date:
-    cur = d
+def last_trading_day_on_or_before(d, include_special: bool = False) -> date:
+    cur = _coerce_date(d)
+    if cur.year < MIN_SUPPORTED_YEAR or cur.year > MAX_SUPPORTED_YEAR:
+        raise CalendarHorizonError(f"Date {cur} falls outside verified NSE holiday calendar horizon ({MIN_SUPPORTED_YEAR}-{MAX_SUPPORTED_YEAR}).")
     while not is_trading_day(cur, include_special=include_special):
         cur -= timedelta(days=1)
     return cur

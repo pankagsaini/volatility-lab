@@ -4,7 +4,7 @@ No network credentials; Google Drive desktop supplies the authenticated filesyst
 from pathlib import Path
 from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
-import gzip,hashlib,json,os,sqlite3,threading,time
+import gzip,hashlib,json,os,sqlite3,threading,time,zlib,zlib
 import pandas as pd
 import numpy as np
 from collector_support import atomic_json,read_json,data_lock,STATE
@@ -243,14 +243,18 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
             if resp.status_code == 200:
                 obj = resp.json()
                 if obj.get('schema') == 1 and obj.get('records'):
+                    retrieved_at = str(obj.get('retrieved_at') or '')
+                    prev_status = read_json(STORE/'status.json', default={}) or {}
+                    if prev_status.get('mode') == 'web_cloud' and prev_status.get('updated') == retrieved_at and retrieved_at:
+                        return 0
                     with data_lock(timeout=120):
                         import_report(obj, rate, dividend, spread)
-                    atomic_json(STORE/'status.json',{'status':'ready','mode':'web_cloud','updated':str(obj.get('retrieved_at') or pd.Timestamp.now(tz='UTC').isoformat()),'total_files':1,'source':web_url})
+                    atomic_json(STORE/'status.json',{'status':'ready','mode':'web_cloud','updated':retrieved_at or pd.Timestamp.now(tz='UTC').isoformat(),'total_files':int(prev_status.get('total_files', 0)) + 1,'source':web_url})
                     return 1
         except Exception as exc:
             pass
         atomic_json(STORE/'status.json',{'status':'waiting','message':'Sign in to Google Drive desktop to connect the private archive.'});return 0
-    manifest=read_json(STORE/'manifest.json');count=0;errors=[]
+    manifest=read_json(STORE/'manifest.json', default={}) or {};count=0;errors=[]
     import re
     pattern=re.compile(r'^\d{4}\-\d{2}\-\d{2}_(snapshot|test|eod)_\d{6}_(complete|partial)\.json\.gz$')
     for path in sorted(source.glob('*.json.gz'), reverse=True):
@@ -270,7 +274,7 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
             manifest[path.name]={'sha256':digest,'size':len(raw),'mtime':info.st_mtime_ns,'saved_at':pd.Timestamp.now(tz='UTC').isoformat()}
             atomic_json(STORE/'manifest.json',manifest);count+=1
             atomic_json(STORE/'status.json',{'status':'syncing','total_files':len(manifest),'updated':pd.Timestamp.now(tz='UTC').isoformat()})
-        except (EOFError, gzip.BadGzipFile):
+        except (EOFError, gzip.BadGzipFile, zlib.error, json.JSONDecodeError):
             # Transient Google Drive stream still flushing; retry on next cycle without error penalty
             continue
         except Exception as exc:errors.append({'file':path.name,'error':type(exc).__name__})
@@ -289,7 +293,7 @@ def sync_once(rate,dividend,spread,verify_receipt=False):
         fcntl = None
 
     STORE.mkdir(parents=True,exist_ok=True)
-    with (STORE/'sync.lock').open('a+b') as lock:
+    with os.fdopen(os.open(str(STORE/'sync.lock'), os.O_CREAT | os.O_RDWR, 0o666), 'r+b') as lock:
         lock.seek(0);lock.write(b'0');lock.flush();lock.seek(0)
         try:
             if msvcrt:

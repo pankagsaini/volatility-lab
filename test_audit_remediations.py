@@ -848,5 +848,86 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
             self.assertTrue(req.issubset(exports.get(mod, set())), f"Missing exports in {mod}: {req - exports.get(mod, set())}")
 
 
+    def test_v10_startup_recovery_and_full_export_parity(self):
+        """Verify all v10.0 startup crash fixes: collector_support, trade_review, broker_charges, backtest_common, strategy_backtest, and requirements.txt."""
+        import tempfile
+        import collector_support
+        import trade_review
+        import broker_charges
+        import backtest_common
+        import market_calendar
+        import strategy_backtest
+        import backtest_jobs
+
+        # 1. collector_support full export & dual-order atomic_csv verification
+        for sym in ("ROOT", "DATA", "PRIVATE", "STATE", "IST", "atomic_json", "read_json", "atomic_csv", "data_lock", "serialized", "protect", "unprotect", "decompress_gzip", "validate_schema", "parse_ist_timestamp"):
+            self.assertTrue(hasattr(collector_support, sym), f"collector_support missing {sym}")
+        self.assertEqual(collector_support.STATE.name, "state")
+        with collector_support.serialized("unit_test_lock", timeout=5):
+            pass
+        raw_token = b"test_secret_token_bytes"
+        enc = collector_support.protect(raw_token)
+        dec = collector_support.unprotect(enc)
+        self.assertEqual(dec, raw_token)
+        with tempfile.TemporaryDirectory() as td:
+            df_test = pd.DataFrame({"Date": ["2026-11-06"], "Close": [24200.0]})
+            csv1 = Path(td) / "order1.csv"
+            csv2 = Path(td) / "order2.csv"
+            collector_support.atomic_csv(df_test, csv1, index=False)
+            collector_support.atomic_csv(csv2, df_test)
+            self.assertTrue(csv1.exists() and csv2.exists())
+
+        # 2. trade_review parity_forward, string/dict freshness, and tuple/dict stress_position
+        payload = {
+            "provider": "Upstox",
+            "spot": 24200.0,
+            "tte_days": 7.0,
+            "lot_size": 75,
+            "contracts": [
+                {"expiry": "2026-11-12", "strike": 24000.0, "kind": "PE", "bid": 80.0, "ask": 82.0, "iv": 15.0, "delta": -0.25, "gamma": 0.001, "theta": -10.0, "vega": 12.0},
+                {"expiry": "2026-11-12", "strike": 24200.0, "kind": "CE", "bid": 150.0, "ask": 152.0, "iv": 14.0, "delta": 0.50, "gamma": 0.002, "theta": -15.0, "vega": 18.0},
+                {"expiry": "2026-11-12", "strike": 24200.0, "kind": "PE", "bid": 145.0, "ask": 147.0, "iv": 14.2, "delta": -0.50, "gamma": 0.002, "theta": -15.0, "vega": 18.0},
+                {"expiry": "2026-11-12", "strike": 24400.0, "kind": "CE", "bid": 75.0, "ask": 77.0, "iv": 14.5, "delta": 0.25, "gamma": 0.001, "theta": -10.0, "vega": 12.0},
+            ],
+        }
+        ctx = trade_review.option_book(payload, "2026-11-12")
+        self.assertIn("book", ctx)
+        self.assertIn("chain", ctx)
+        self.assertIn("stamp", ctx)
+        self.assertIn("strike", ctx)
+        self.assertIn("Kind", ctx["book"].columns)
+        self.assertIn("Type", ctx["chain"].columns)
+        pf = trade_review.parity_forward(ctx)
+        self.assertIn("forward", pf)
+        fr = trade_review.freshness(ctx)
+        self.assertIsInstance(fr, str)
+        self.assertTrue("Book captured " + str(ctx["stamp"]) + " · " + fr)
+        self.assertIn("fresh", fr._meta)
+        pos = trade_review.make_position(ctx, 24000.0, 24400.0)
+        res = trade_review.stress_position(ctx, pos, 1.0, 50.0)
+        self.assertIn("grid", res)
+        scenarios, summary = res
+        self.assertIsInstance(scenarios, pd.DataFrame)
+        self.assertIn("Spot move %", scenarios.columns)
+        self.assertIsInstance(summary, dict)
+
+        # 3. broker_charges 5-arg & 6-arg compatibility + refresh() + Stamp duty key
+        c1 = broker_charges.charge("2026-11-06", "Options", 150.0, 75, "sell", 20.0)
+        c2 = broker_charges.charge("2026-11-06", "futures", -1, 24200.0, 75, 20.0)
+        self.assertIn("Stamp duty", c1)
+        self.assertGreater(c1["STT"], 0.0)
+        self.assertGreater(c2["STT"], 0.0)
+        self.assertIsInstance(broker_charges.refresh(), dict)
+
+        # 4. backtest_common load_blacklist & market_calendar CalendarHorizonError
+        self.assertIsInstance(backtest_common.load_blacklist(), dict)
+        self.assertTrue(issubclass(market_calendar.CalendarHorizonError, ValueError))
+
+        # 5. strategy_backtest legacy helpers & backtest_jobs pandas import
+        self.assertEqual(strategy_backtest.sizing({"sizing_mode": "broker_lot_size", "lots": 2}), ("broker_lot_size", 2))
+        self.assertEqual(strategy_backtest.broker_lot_size({"lot_size": 75}), 75)
+        self.assertTrue(hasattr(backtest_jobs, "pd"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -1,3 +1,4 @@
+import pandas as pd
 """Single-worker background job dispatcher with fixed strategy_backtest.simulate argument ordering, separate locks, and full UI compatibility."""
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
@@ -155,3 +156,31 @@ def collect(state, key=None):
         return None
     state.pop(slot, None)
     return fut.result()
+
+
+def _futures(task):
+    s = task.get('settings', task)
+    from futures_backtest import load as load_futures_bars, simulate as simulate_futures, contract_lot_sizes
+    symbol = s.get('symbol', 'NIFTY')
+    bars = task.get('bars') if isinstance(task.get('bars'), pd.DataFrame) else load_futures_bars(symbol, s.get('start'), s.get('end'))
+    trades, skips, coverage = simulate_futures(
+        bars=bars,
+        pair=tuple(s.get('pair', (0, 1))),
+        entry_carry=float(s.get('entry_carry', 8.0)),
+        target_carry=float(s.get('target_carry', 2.0)),
+        quantity=int(s.get('quantity', 75 if symbol == 'NIFTY' else 30)),
+        near_side=int(s.get('near_side', 1)),
+        slip_bps=float(s.get('slip_bps', 5.0)),
+        max_hold_days=s.get('max_hold_days'),
+        brokerage_per_order=float(s.get('brokerage_per_order', 20.0)),
+        lots=s.get('lots'),
+        contracts=task.get('contracts') or contract_lot_sizes(symbol),
+        auto_roll_on_expiry=bool(s.get('auto_roll_on_expiry', True)),
+    )
+    return {'kind': 'futures', 'settings': s, 'trades': trades, 'skips': skips, 'coverage': coverage}
+
+
+def _run(task):
+    if str(task.get('kind', '')).lower() == 'futures':
+        return _futures(task)
+    return _options(task)

@@ -1,3 +1,4 @@
+VERSION = 'rv-v2-point-in-time'
 """SQLite WAL store and strictly prior DTE-matched & maturity-bucketed relative value diagnostics."""
 from contextlib import closing
 from pathlib import Path
@@ -226,3 +227,14 @@ def maturity_stats(history_df, current, bounds=(0, 7, 15, 35, 65, 120, 366), min
         'Expiry cycles': exp_cycles,
         'Status': 'Ready',
     }
+
+
+def compute_relative_value_spread(iv, forecast_rv):
+    try:
+        iv_f = float(iv)
+        rv_f = float(forecast_rv)
+        if np.isfinite(iv_f) and np.isfinite(rv_f) and iv_f > 0 and rv_f > 0:
+            return iv_f - rv_f
+    except (TypeError, ValueError):
+        pass
+    return np.nan

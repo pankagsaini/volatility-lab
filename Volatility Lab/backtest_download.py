@@ -2,7 +2,7 @@
 from pathlib import Path
 from datetime import date,timedelta,datetime
 from urllib.parse import quote
-import gzip,json,sqlite3,hashlib,time,shutil
+import gzip,json,os,sqlite3,hashlib,time,shutil
 try:
     import msvcrt
 except ImportError:
@@ -131,8 +131,9 @@ def run():
    enqueue(c,'/v2/expired-instruments/expiries',{'instrument_key':key},'expiries',{'symbol':symbol,'underlying':key})
    enqueue(c,'/v2/option/contract',{'instrument_key':key},'contracts',{'symbol':symbol,'expired':False})
    candle_jobs(c,key,max(start,date(2022,1,1)),end,False,'1minute',{'symbol':symbol})
+ consecutive_errors = 0
  while True:
-  if shutil.disk_usage(ROOT).free<10*1024**3:status(c,'paused_low_disk');return
+  if shutil.disk_usage(ROOT).free<10*1024**3:status(c,'paused_low_disk');pool.shutdown(wait=False);return
   jobs=next_jobs(c,2)
   if not jobs:
    failed=c.execute('SELECT COUNT(*) FROM jobs WHERE state="failed"').fetchone()[0]
@@ -142,7 +143,7 @@ def run():
    ident,path,params,kind,metastr,attempts=job;meta=json.loads(metastr)
    status(c,'running',current={'kind':kind,'symbol':meta['symbol'],'start':meta.get('start'),'end':meta.get('end')})
    try:
-    data=future.result()
+    data=future.result(timeout=90)
     # Preserve original response, including zero/illiquid candles. No spread filter.
     dest=ROOT/(ident+'.json.gz');temp=dest.with_suffix('.tmp')
     blob=gzip.compress(json.dumps({'schema':1,'provider':'Upstox','retrieved_at':datetime.now().astimezone().isoformat(),'path':path,'params':json.loads(params),'meta':meta,'data':data}).encode())
@@ -168,23 +169,32 @@ def run():
        if first<=last:candle_jobs(c,meta['key'],first,last,meta['expired'],'1minute',meta)
      n=len(data.get('candles',[])) if isinstance(data,dict) else len(data)
      c.execute('UPDATE jobs SET state="done",rows=?,file=?,error=NULL WHERE id=?',(n,dest.name,ident))
+     consecutive_errors = 0
+     consecutive_errors = 0
    except Exception as exc:
     # Do not persist broker responses/tokens in error messages.
     is_fatal_auth = '401' in str(exc) or '403' in str(exc)
     next_state = 'failed' if (attempts>=2 or is_fatal_auth) else 'pending'
     with c:c.execute('UPDATE jobs SET state=?,attempts=attempts+1,error=? WHERE id=?',(next_state,type(exc).__name__,ident))
     status(c,'retrying',error_type=type(exc).__name__)
-    if is_fatal_auth:
-     status(c,'paused_auth_error',error_type=type(exc).__name__);pool.shutdown();return
+    consecutive_errors += 1
+    if is_fatal_auth or consecutive_errors >= 10:
+     status(c,'paused_auth_error' if is_fatal_auth else 'paused_network_error',error_type=type(exc).__name__);pool.shutdown(wait=False);return
     time.sleep(2)
 
 if __name__=='__main__':
- with (ROOT/'download.lock').open('a+b') as lock:
+ ROOT.mkdir(parents=True, exist_ok=True)
+ with os.fdopen(os.open(str(ROOT/'download.lock'), os.O_CREAT | os.O_RDWR, 0o666), 'r+b') as lock:
   lock.seek(0);lock.write(b'0');lock.flush();lock.seek(0)
-  try:msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
+  try:
+   if msvcrt is not None: msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
   except OSError:raise SystemExit(0)
   try:run()
   except BaseException as exc:
    with db() as c:status(c,'stopped' if isinstance(exc,(KeyboardInterrupt,SystemExit)) else 'paused_error',error_type=type(exc).__name__)
    if isinstance(exc,(KeyboardInterrupt,SystemExit)):raise
-  finally:lock.seek(0);msvcrt.locking(lock.fileno(),msvcrt.LK_UNLCK,1)
+  finally:
+   lock.seek(0)
+   if msvcrt is not None:
+    try: msvcrt.locking(lock.fileno(),msvcrt.LK_UNLCK,1)
+    except OSError: pass
