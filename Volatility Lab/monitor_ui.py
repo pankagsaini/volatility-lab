@@ -902,7 +902,7 @@ def render_relative_value(symbol,selected,config):
         show_table(pd.DataFrame(measures)[['Measure','Prior days','Expiry cycles','Status']])
         st.caption('Volatility: annualized % · spreads: pp · historical DTE matched ±3 days')
         st.caption(f'Saved observations: {len(saved)} · latest snapshot: {current["As of"]}')
-        st.download_button('Download research history CSV',saved.to_csv(index=False).encode(),file_name=f'{symbol}_research_history.csv',mime='text/csv')
+        st.download_button('Download research history CSV',saved.tail(1000).to_csv(index=False).encode(),file_name=f'{symbol}_research_history.csv',mime='text/csv')
 
 def render_monitor(rate=.065,dividend=0.,spread=3.):
 

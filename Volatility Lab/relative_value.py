@@ -45,17 +45,31 @@ def save(path, record):
         )
 
 
-def load_history(path, symbol=None):
+def load_history(path, symbol=None, max_rows=2500):
+    from datetime import date as _date
     path = Path(path)
     if not path.exists():
         return pd.DataFrame()
     with closing(connection(path)) as con:
         if symbol:
-            rows = con.execute('SELECT expiry, config, as_of, payload FROM intraday_observations WHERE symbol=? ORDER BY as_of', (symbol,)).fetchall()
+            rows = con.execute(
+                'SELECT expiry, config, MAX(as_of) AS as_of, payload '
+                'FROM intraday_observations WHERE symbol=? '
+                'GROUP BY expiry, substr(as_of, 1, 10) '
+                'ORDER BY as_of DESC LIMIT ?',
+                (symbol, int(max_rows)),
+            ).fetchall()
         else:
-            rows = con.execute('SELECT expiry, config, as_of, payload FROM intraday_observations ORDER BY as_of').fetchall()
+            rows = con.execute(
+                'SELECT expiry, config, MAX(as_of) AS as_of, payload '
+                'FROM intraday_observations '
+                'GROUP BY symbol, expiry, substr(as_of, 1, 10) '
+                'ORDER BY as_of DESC LIMIT ?',
+                (int(max_rows),),
+            ).fetchall()
     if not rows:
         return pd.DataFrame()
+    rows.reverse()
     records = []
     for exp, cfg, as_of, payload_str in rows:
         try:
@@ -65,7 +79,9 @@ def load_history(path, symbol=None):
             item.setdefault('As of', as_of)
             if 'DTE' not in item or item.get('DTE') is None:
                 try:
-                    item['DTE'] = (pd.Timestamp(item['Expiry']).date() - pd.Timestamp(item['As of']).date()).days
+                    d_exp = _date.fromisoformat(str(item['Expiry'])[:10])
+                    d_asof = _date.fromisoformat(str(item['As of'])[:10])
+                    item['DTE'] = (d_exp - d_asof).days
                 except Exception:
                     pass
             records.append(item)
