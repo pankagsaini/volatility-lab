@@ -23,7 +23,7 @@ def _cached_sessions(start_iso: str, end_iso: str) -> tuple:
     end_d = pd.Timestamp(end_iso).date()
     if start_d > end_d:
         return ()
-    supported_years = {d.year for d in HOLIDAYS} | {2025, 2026, 2027}
+    supported_years = {d.year for d in HOLIDAYS} | {2023, 2024, 2025, 2026, 2027, 2028}
     if start_d.year not in supported_years or end_d.year not in supported_years:
         raise ValueError(f'Verified trading calendar currently covers {sorted(supported_years)} only.')
     return tuple(

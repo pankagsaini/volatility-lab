@@ -535,5 +535,138 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         self.assertIn("@media (max-width: 768px)", ui_theme.CLASSIC_MODERN_CSS)
 
 
+    def test_v7_end_to_end_backtest_with_monitor_sqlite_cloud_fallback_and_header_actions(self):
+        import backtest_engine as be
+        import backtest_signals as bs
+        import strategy_backtest as sb
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_data = Path(tmp) / "data"
+            tmp_data.mkdir(parents=True, exist_ok=True)
+            mon_db = tmp_data / "monitor.sqlite"
+            con = sqlite3.connect(mon_db)
+            try:
+                con.execute(
+                    "CREATE TABLE intraday_observations (symbol TEXT, expiry TEXT, config TEXT, as_of TEXT, payload TEXT)"
+                )
+                for minute, spot_px, iv_val in [("09:15:00", 24450.0, 14.5), ("09:19:00", 24455.0, 14.4), ("09:20:00", 24460.0, 14.2), ("15:15:00", 24452.0, 13.6)]:
+                    payload = {
+                        "Instrument": "NIFTY",
+                        "Expiry": "2026-11-12",
+                        "Price": spot_px,
+                        "IV": iv_val,
+                        "Call IV": iv_val,
+                        "Put IV": iv_val,
+                        "IV-RV Spread": 2.6,
+                        "HV30": 11.6,
+                        "25 Delta reversal": 2.8,
+                        "As of": f"2026-11-06T{minute}+05:30",
+                        "Retrieved at": f"2026-11-06T{minute}+05:30",
+                    }
+                    con.execute(
+                        "INSERT INTO intraday_observations VALUES (?, ?, ?, ?, ?)",
+                        ("NIFTY", "2026-11-12", "cfg1", payload["As of"], json.dumps(payload)),
+                    )
+                con.commit()
+            finally:
+                con.close()
+            orig_data_dir, orig_root, orig_sig_path = be.DATA_DIR, be.ROOT, bs.PATH
+            try:
+                be.DATA_DIR = tmp_data
+                be.ROOT = tmp_data / "backtest_1minute"
+                bs.PATH = mon_db
+                contracts, series, conflicts = be.load("NIFTY", "2026-11-06", "2026-11-06")
+                self.assertTrue(len(contracts) > 0)
+                self.assertIn("NSE_INDEX|Nifty 50", series)
+                signals = bs.load_signals("NIFTY")
+                self.assertTrue(len(signals) >= 4)
+                scen = "Scenario 1 · VRP Harvest Iron Condor (Calm HV)"
+                info = sb.scenario_preset(scen)
+                settings = {
+                    "name": scen,
+                    "template": scen,
+                    "symbol": "NIFTY",
+                    "start": "2026-11-06",
+                    "end": "2026-11-06",
+                    "entry": info["entry"],
+                    "exit": info["exit"],
+                    "lots": 1,
+                    "dte": info["dte"],
+                    "legs": sb.template(scen),
+                    "filters": info["filters"],
+                }
+                trades, skips = sb.simulate(settings, contracts, series, signals)
+                self.assertEqual(len(trades), 1, f"Expected 1 executed trade, got skips={skips.to_dict('records')}")
+                self.assertIn("Net", trades.columns)
+            finally:
+                be.DATA_DIR, be.ROOT, bs.PATH = orig_data_dir, orig_root, orig_sig_path
+
+
+    def test_v8_year_long_offline_end_to_end_audit(self):
+        import smile
+        import relative_value as rv
+        import market_calendar as mc
+        import expiry_forecast as ef
+        from datetime import date
+
+        # 1. Verify 2027 and 2028 calendar horizon works without CalendarHorizonError
+        d_2027 = mc.last_trading_day_on_or_before(date(2027, 11, 15))
+        self.assertLessEqual(d_2027, date(2027, 11, 15))
+        s_2027 = ef.sessions("2027-01-01", "2027-12-31")
+        self.assertGreater(len(s_2027), 235)
+        s_2028 = ef.sessions("2028-01-01", "2028-03-31")
+        self.assertGreater(len(s_2028), 55)
+
+        # 2. Verify smile.load_smile (with config fallback) and smile.load_latest_smile
+        with tempfile.TemporaryDirectory() as tmp:
+            db_p = Path(tmp) / "monitor.sqlite"
+            payload = {
+                "version": smile.VERSION,
+                "points": [{"Point": "ATM", "IV": 14.25, "Source": "Upstox", "Method": "Exact", "Strikes": "24500"}],
+                "metrics": {"25 RR · put minus call": 2.4, "25 BF · wings minus ATM": 0.65},
+            }
+            smile.save_smile(db_p, "NIFTY", "2027-01-28", "cfg_old", "2027-01-15T15:30:00+05:30", payload, capture_source="Google Drive")
+            # Exact config load
+            s_exact = smile.load_smile(db_p, "NIFTY", "2027-01-28", "cfg_old", "2027-01-15T15:30:00+05:30")
+            self.assertIsNotNone(s_exact)
+            # Fallback config load (when rate/dividend config hash updates over the next year)
+            s_fallback = smile.load_smile(db_p, "NIFTY", "2027-01-28", "cfg_new", "2027-01-15T15:30:00+05:30")
+            self.assertIsNotNone(s_fallback)
+            # Latest smile load
+            s_latest = smile.load_latest_smile(db_p, "NIFTY", "2027-01-28", "cfg_new")
+            self.assertIsNotNone(s_latest)
+            self.assertEqual(s_latest.get("as_of"), "2027-01-15T15:30:00+05:30")
+
+            # 3. Verify relative_value.capture, relative_value.history, and dual-mode maturity_stats
+            snap = {
+                "config": "cfg_new",
+                "rows": [
+                    {
+                        "Instrument": "NIFTY",
+                        "Expiry": f"2027-01-{10 + i:02d}",
+                        "As of": f"2027-01-05T15:40:00+05:30",
+                        "DTE": 5,
+                        "IV": 13.0 + 0.2 * i,
+                        "IV-RV Spread": 1.5 + 0.1 * i,
+                        "25 Delta reversal": 2.0 + 0.05 * i,
+                        "Source": "Upstox supplied IV (Google Cloud)",
+                    }
+                    for i in range(15)
+                ],
+            }
+            count = rv.capture(db_p, snap)
+            self.assertEqual(count, 15)
+            hist_df = rv.history(db_p, "NIFTY", "cfg_new", comparable=True)
+            self.assertEqual(len(hist_df), 15)
+            # UI 3-arg call: maturity_stats(saved, current, metric)
+            m_ui = rv.maturity_stats(hist_df, snap["rows"][-1], "IV-RV Spread")
+            self.assertEqual(m_ui["Status"], "Ready")
+            self.assertIsNotNone(m_ui["Percentile"])
+            # Unit test 3-arg call: maturity_stats(saved, current, bounds=...)
+            m_bounds = rv.maturity_stats(hist_df, snap["rows"][-1], bounds=(0, 7, 15, 35, 65, 120, 366))
+            self.assertEqual(m_bounds["status"], "Ready")
+            self.assertTrue(np.isfinite(m_bounds["percentile"]))
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -1,4 +1,4 @@
-"""Standalone local options dashboard; no trading actions (Accelerated v4)."""
+"""Standalone local options dashboard; no trading actions (Accelerated v7)."""
 
 from pathlib import Path
 import importlib
@@ -6,6 +6,7 @@ import os
 import gzip
 import json
 import time
+import urllib.parse
 from datetime import datetime, timezone
 import streamlit as st
 from market_data import MarketDataError, IST
@@ -148,7 +149,7 @@ else:current_label=workspace_labels['Options']
 
 if current_label not in markets:current_label=markets[0]
 
-# Classic & Modern Institutional Masthead Header with aligned live market status
+# Undistorted Institutional Masthead Header with compact top-right Icon Toolbar (📱 App, 🔗 Share, ★ Star, ✎ Edit) + Market Status
 now = datetime.now(IST)
 is_open = (now.weekday() < 5) and (555 <= now.hour * 60 + now.minute <= 930)
 is_pre = (now.weekday() < 5) and (540 <= now.hour * 60 + now.minute < 555)
@@ -156,6 +157,16 @@ mkt_color = "#34d399" if is_open else ("#fbbf24" if is_pre else "#94a3b8")
 mkt_border = "rgba(16, 185, 129, 0.42)" if is_open else ("rgba(245, 158, 11, 0.42)" if is_pre else "rgba(148, 163, 184, 0.28)")
 mkt_bg = "rgba(16, 185, 129, 0.12)" if is_open else ("rgba(245, 158, 11, 0.12)" if is_pre else "rgba(15, 23, 42, 0.85)")
 mkt_label = "● Market Live" if is_open else ("◐ Pre-Open" if is_pre else "○ Market Closed")
+
+cloud_url = "https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/"
+repo_url = "https://github.com/pankagsaini/volatility-lab"
+edit_url = "https://github.com/pankagsaini/volatility-lab/edit/master/Volatility%20Lab/dashboard.py"
+try:
+    lan_ip = ui_theme.get_lan_ip()
+except Exception:
+    lan_ip = "127.0.0.1"
+lan_url = f"http://{lan_ip}:8501"
+qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=6&data={urllib.parse.quote(cloud_url)}"
 
 st.markdown(
     f"""
@@ -165,7 +176,28 @@ st.markdown(
         <span class="vl-brand-sub">NSE Index Volatility &amp; Relative Value</span>
       </div>
       <div class="vl-pill-row">
-        <span style="display:inline-block; padding:5px 14px; border-radius:999px; font-family:var(--vl-font-mono, monospace); font-size:0.74rem; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; border:1px solid {mkt_border}; background:{mkt_bg}; color:{mkt_color};">
+        <div class="vl-Quick-actions">
+          <details class="vl-app-qr-dropdown">
+            <summary class="vl-icon-action" title="Open on any phone, tablet, or app">📱 App</summary>
+            <div class="vl-app-qr-card">
+              <div style="font-size:0.74rem; font-weight:700; color:#d4af37; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">📱 Open on Any Device</div>
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                <img src="{qr_url}" width="78" height="78" style="border-radius:6px; border:1px solid #334155; flex-shrink:0;" alt="QR" />
+                <div style="font-size:0.72rem; color:#cbd5e1; line-height:1.38;">
+                  Scan with phone camera or <a href="{cloud_url}" target="_blank" style="color:#38bdf8; font-weight:600;">open Cloud App ↗</a><br/>
+                  <span style="color:#94a3b8; font-size:0.68rem;">Tip: Tap <b>Add to Home Screen</b> in Safari/Chrome to install as an app.</span>
+                </div>
+              </div>
+              <div style="font-family:var(--vl-font-mono, monospace); font-size:0.68rem; color:#94a3b8; background:#090d16; border:1px solid #1e293b; border-radius:6px; padding:5px 8px;">
+                Wi-Fi LAN: <span style="color:#38bdf8;">{lan_url}</span>
+              </div>
+            </div>
+          </details>
+          <a class="vl-icon-action" href="{cloud_url}" target="_blank" title="Share live Streamlit app link">🔗 Share</a>
+          <a class="vl-icon-action" href="{repo_url}" target="_blank" title="Star repository on GitHub">★ Star</a>
+          <a class="vl-icon-action" href="{edit_url}" target="_blank" title="Edit on GitHub">✎ Edit</a>
+        </div>
+        <span style="display:inline-block; padding:5px 13px; border-radius:999px; font-family:var(--vl-font-mono, monospace); font-size:0.73rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border:1px solid {mkt_border}; background:{mkt_bg}; color:{mkt_color}; white-space:nowrap;">
           {mkt_label} · {now:%H:%M IST}
         </span>
       </div>
@@ -174,14 +206,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-ws_col, dev_col = st.columns([5, 1.35], vertical_alignment="center")
-with ws_col:
-    chosen_label = st.segmented_control('Workspace', markets, default=current_label, label_visibility='collapsed', key='market_workspace_label') or current_label
-with dev_col:
-    try:
-        ui_theme.render_any_device_access_popover()
-    except Exception:
-        pass
+chosen_label = st.segmented_control('Workspace', markets, default=current_label, label_visibility='collapsed', key='market_workspace_label') or current_label
 workspace = label_to_mode.get(chosen_label, 'Options')
 st.session_state.market_workspace = workspace
 

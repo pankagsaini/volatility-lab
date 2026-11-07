@@ -2,7 +2,11 @@
 from pathlib import Path
 from datetime import date,timedelta,datetime
 from urllib.parse import quote
-import gzip,json,sqlite3,hashlib,time,shutil,msvcrt
+import gzip,json,sqlite3,hashlib,time,shutil
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 from concurrent.futures import ThreadPoolExecutor
 import threading
 from upstox_archive import Collector,INDICES

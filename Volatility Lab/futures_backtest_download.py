@@ -5,7 +5,10 @@ from urllib.parse import quote
 import gzip
 import hashlib
 import json
-import msvcrt
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 from collector_support import atomic_json
 
 ROOT = Path(__file__).resolve().parent / 'data' / 'futures_backtest'
