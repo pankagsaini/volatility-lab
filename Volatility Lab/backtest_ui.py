@@ -45,6 +45,17 @@ def _default_backtest_date_window(symbol: str = 'NIFTY') -> tuple[date, date, st
         except Exception:
             pass
 
+    csv_path = DATA_DIR / f'{str(symbol).lower()}_one_year.csv'
+    csv_min = csv_max = None
+    if csv_path.exists():
+        try:
+            df_c = pd.read_csv(csv_path)
+            if not df_c.empty and 'Date' in df_c.columns:
+                csv_min = date.fromisoformat(str(df_c['Date'].min())[:10])
+                csv_max = date.fromisoformat(str(df_c['Date'].max())[:10])
+        except Exception:
+            pass
+
     mon_db = DATA_DIR / 'monitor.sqlite'
     if mon_db.exists():
         try:
@@ -58,9 +69,16 @@ def _default_backtest_date_window(symbol: str = 'NIFTY') -> tuple[date, date, st
                     if row and row[0] and row[1] and int(row[2] or 0) > 0:
                         d_min = date.fromisoformat(str(row[0])[:10])
                         d_max = date.fromisoformat(str(row[1])[:10])
-                        return d_min, d_max, f"Cloud intraday archive ({row[0]} to {row[1]} · {row[2]} captures)"
+                        if csv_max and csv_max > d_max:
+                            d_max = csv_max
+                        if (d_max - d_min).days < 14 and csv_min:
+                            d_min = max(csv_min, d_max - timedelta(days=30))
+                        return d_min, d_max, f"Cloud + Historical archive ({d_min} to {d_max} · {row[2]} intraday captures)"
         except Exception:
             pass
+
+    if csv_min and csv_max:
+        return max(csv_min, csv_max - timedelta(days=30)), csv_max, f"Historical archive ({csv_min} to {csv_max})"
 
     return date(2024, 10, 1), date(2024, 10, 31), "Default range"
 
@@ -208,7 +226,17 @@ def render_options():
             if any(low > high for _, low, high in filters):
                 raise ValueError('Filter minimum must not exceed maximum.')
             st.session_state.pop('_backtest_error', None)
-            jobs.submit(st.session_state, 'Options', settings)
+            # Execute fast Cloud / <=90-day runs synchronously so results render immediately on click
+            q_exists = (ROOT / 'queue.sqlite').exists()
+            day_span = (end - start).days
+            if not q_exists or day_span <= 60:
+                from types import SimpleNamespace
+                with st.spinner(f"Running {name} on {symbol} ({start} to {end})..."):
+                    dummy_task = SimpleNamespace(kind='Options', phase='Running', settings=settings, future=None)
+                    res = jobs._run_ui_job('Options', settings, dummy_task)
+                    st.session_state['builder_result'] = res
+            else:
+                jobs.submit(st.session_state, 'Options', settings)
         except (ValueError, KeyError, TypeError, OSError) as exc:
             st.error('Cannot run: ' + str(exc))
 
@@ -223,9 +251,8 @@ def render_options():
     if 'builder_result' in st.session_state:
         report(*st.session_state.builder_result)
 
-    saved = st.expander('Saved runs', key='backtest_saved_runs', on_change='rerun')
-    if saved.open:
-        with saved:
+    with st.expander('Saved runs', expanded=False):
+        if True:
             files = sorted(STORE.glob('*.json'), reverse=True) if STORE.exists() else []
             if files:
                 summaries = []
@@ -287,10 +314,9 @@ def render_inventory():
         st.caption('Expiry coverage does not guarantee candle coverage. Overlapping rows are retained; empty responses are not treated as market closures.')
         st.download_button(
             'Download contract coverage',
-            lambda: pd.DataFrame(inventory['contracts']).to_csv(index=False).encode(),
-            'historical_contract_coverage.csv',
-            'text/csv',
-            on_click='ignore',
+            pd.DataFrame(inventory.get('contracts', [])[:2000]).to_csv(index=False).encode(),
+            file_name='historical_contract_coverage.csv',
+            mime='text/csv',
         )
 
 

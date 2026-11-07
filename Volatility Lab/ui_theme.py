@@ -574,9 +574,32 @@ def install_classic_modern_theme() -> None:
         @wraps(orig_plotly_chart)
         def _wrapped_plotly_chart(figure_or_data, *args, **kwargs):
             style_plotly_figure(figure_or_data)
-            return orig_plotly_chart(figure_or_data, *args, **kwargs)
+            try:
+                return orig_plotly_chart(figure_or_data, *args, **kwargs)
+            except TypeError:
+                if kwargs.get("width") == "stretch":
+                    kwargs.pop("width", None)
+                    kwargs["use_container_width"] = True
+                return orig_plotly_chart(figure_or_data, *args, **kwargs)
 
         st.plotly_chart = _wrapped_plotly_chart
+
+        for _wname in ("dataframe", "data_editor"):
+            if hasattr(st, _wname):
+                _orig_fn = getattr(st, _wname)
+                def _make_compat_wrapper(fn):
+                    @wraps(fn)
+                    def _compat(*args, **kwargs):
+                        try:
+                            return fn(*args, **kwargs)
+                        except TypeError:
+                            if kwargs.get("width") == "stretch":
+                                kwargs.pop("width", None)
+                                kwargs["use_container_width"] = True
+                            return fn(*args, **kwargs)
+                    return _compat
+                setattr(st, _wname, _make_compat_wrapper(_orig_fn))
+
         st._vl_classic_modern_wrapped = True
 
 
