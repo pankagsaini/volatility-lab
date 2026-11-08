@@ -1,12 +1,19 @@
-# Backups & Temporary Fixes
+# Backups, Scratch & Temporary Fixes
 .audit_backups/
+scratch/
 apply_volatility_lab_fixes.py
+*.bak
+*.orig
 
 # Byte-compiled / optimized / cache files
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+
+# Windows Batch & Untracked Shell Scripts
+*.cmd
+*.ps1
 
 # Embedded Python Runtime & MinGit Binary Tools
 Volatility Lab/.runtime/
@@ -20,7 +27,6 @@ Volatility Lab/.streamlit/secrets.toml
 *.lock
 *.tmp
 .clasprc.json
-# .clasp.json (tracked so project ID is preserved)
 
 # System Diagnostic Logs
 Volatility Lab/logs/
@@ -39,12 +45,11 @@ Volatility Lab/data/underlying_history/
 Volatility Lab/data/dividend_sources/*.pdf
 Volatility Lab/data/*.sqlite*
 Volatility Lab/data/**/*.sqlite*
-# Node / Frontend Dependencies
+
+# Node / Frontend Dependencies (Legacy)
 node_modules/
 **/node_modules/
 .npm/
-Volatility Lab/frontend/node_modules/
-Volatility Lab/web/plotly.min.js
 
 # Data subdirectories to ignore
 archive_to_verify_before_delete/

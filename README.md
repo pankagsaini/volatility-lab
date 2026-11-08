@@ -1,114 +1,182 @@
-# Volatility Lab
+# Volatility Lab — Institutional NSE Volatility & Backtest Workbench
 
-Institutional-grade quantitative volatility research, market monitoring, and strategy backtesting workstation focused on Indian equity index derivatives (**NIFTY 50** and **NIFTY BANK**).
+[![Status](https://img.shields.io/badge/Status-Production%20Live-10B981?style=flat-square)](https://volatilitylab.in)
+[![Domain](https://img.shields.io/badge/Domain-volatilitylab.in-38BDF8?style=flat-square)](https://volatilitylab.in)
+[![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.15-D4AF37?style=flat-square)](https://github.com/pankagsaini/volatility-lab)
+[![Audit](https://img.shields.io/badge/Tests-31%2F31%20Passed-10B981?style=flat-square)](test_audit_remediations.py)
+[![Trading Rules](https://img.shields.io/badge/Backtest%20Rules-9%2F9%20Passed-10B981?style=flat-square)](Volatility%20Lab/test_backtest_rules.py)
+
+**Volatility Lab** is an institutional-grade quantitative volatility research, market monitoring, and strategy backtesting workstation focused on Indian equity index derivatives (**NIFTY 50** and **NIFTY BANK**).
+
+The repository hosts both the full **Streamlit Cloud Analytical Engine** and the **Custom Domain GitHub Pages Web Portal** for [https://volatilitylab.in](https://volatilitylab.in).
 
 ---
 
-## Architecture Overview
+## 🏛 Architecture Overview
 
 ```
                                       ┌────────────────────────────────┐
                                       │   Google Apps Script Trigger   │
                                       │   (Runs M-F 09:15-15:30 IST)   │
-                                      └──────────────┬─────────────────┘
-                                                     │ Captures Option Chains
-                                                     ▼
-┌─────────────────────────┐           ┌────────────────────────────────┐
-│      Upstox API v2      │◄──────────┤   Google Drive Private Cloud   │
-│   (Live Market Feeds)   │           │   (Live & Historical Store)    │
-└────────────┬────────────┘           └────────────────────────────────┘
-             │                                       │
-             ▼                                       ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                       Streamlit Cloud Dashboard                      │
-│     • Volatility Radar & Surface 3D  • Term Structure & Skew         │
-│     • Real-time Greeks & ATM IV       • Multi-leg Backtesting Engine │
-└──────────────────────────────────────────────────────────────────────────┘
+                                      └───────────────┬────────────────┘
+                                                      │ Fetches live Upstox V2 quotes
+                                                      ▼
+                                      ┌────────────────────────────────┐
+                                      │    Google Drive Storage Hub    │
+                                      │  (JSON, GZIP, and CSV Archives)│
+                                      └───────────────┬────────────────┘
+                                                      │ Synchronizes at startup
+                                                      ▼
+┌─────────────────────────────────┐   ┌────────────────────────────────┐   ┌─────────────────────────────────┐
+│     volatilitylab.in Portal     │   │     Streamlit Cloud Engine     │   │      Local Development          │
+│   (docs/index.html + CNAME)     │   │       (streamlit_app.py)       │   │     (LAUNCH_ANY_DEVICE.py)      │
+│  - 0-delay browser execution    │   │  - Memory-bounded runtime (v11)│   │  - Auto-discovers LAN IP        │
+│  - Options Quant Desk           │   │  - Full mathematical modules   │   │  - Multi-device local testing   │
+│  - SVI What-If Sliders          │   │  - Plotly interactive charts   │   │  - Offline fallback datasets    │
+└─────────────────────────────────┘   └────────────────────────────────┘   └─────────────────────────────────┘
 ```
-
-- **Cloud Capture (Zero Laptop Dependency)**: Autonomous Google Apps Script runs daily on Google Cloud infrastructure during market hours, capturing snapshot options data and archiving directly to Google Drive.
-- **Web Dashboard**: Hosted on Streamlit Cloud or locally via the FastAPI web app, pulling real-time options telemetry and displaying analytics with Bloomberg-grade precision.
 
 ---
 
-## Repository Structure
+## 📁 Repository Directory Structure
 
 ```
-├── .streamlit/             # Streamlit Cloud configuration & secrets templates
-├── .python-version        # Supported Python runtime (3.11)
-├── scripts/                # Local validation and smoke-test tooling
+.
+├── .streamlit/
+│   └── config.toml               # Institutional Obsidian theme (#090d16) and low-memory config
+├── docs/                         # GitHub Pages static production build
+│   ├── index.html                # High-performance Quant Desk web portal (volatilitylab.in)
+│   └── CNAME                     # Custom domain pointer (volatilitylab.in)
 ├── Volatility Lab/
-│   ├── cloud/              # Apps Script automation routines & sync infrastructure
-│   ├── data/               # Reference catalogues, active contracts & calibration data
-│   │   ├── charges/        # Upstox fee schedules
-│   │   ├── upstox/         # Master instrument catalogues & expiries
-│   │   └── monitor.sqlite  # Active smile curve & intraday observations
-│   ├── frontend/           # Modern TypeScript / React frontend source
-│   ├── web/                # Built web assets
-│   ├── dashboard.py        # Streamlit application main entry point
-│   ├── monitor_ui.py       # Live Volatility Radar, Trade Review & Monitor UI
-│   ├── backtest_*.py       # Institutional multi-leg backtesting engines
-│   └── test_*.py           # Comprehensive unit & regression test suite
-├── app.py                  # Streamlit Cloud loader
-├── streamlit_app.py        # Cloud entrypoint
-├── run_local.py            # Cross-platform local launcher
-├── requirements.txt        # Python dependency manifest
-├── scripts/validate_setup.py  # Setup validation utility
-├── Open Dashboard.cmd      # Windows convenience launcher
-├── Open Volatility Lab Web.cmd # Windows convenience launcher
-└── Turn Off Dashboard.cmd # Windows stop helper
+│   ├── .streamlit/config.toml    # Subdirectory Streamlit configuration mirror
+│   ├── cloud/
+│   │   └── apps_script/Code.gs   # Autonomous Upstox live options chain collector
+│   ├── data/                     # Offline 1-year CSV baselines and database fallback
+│   │   ├── banknifty_one_year.csv
+│   │   ├── nifty_one_year.csv
+│   │   ├── monitor.sqlite
+│   │   ├── dividend_yields.json
+│   │   └── risk_free_rate.json
+│   ├── backtest_common.py        # Contract lot sizes, dated schedules & blacklists
+│   ├── backtest_engine.py        # Synchronous backtester with cloud SQLite fallback
+│   ├── backtest_jobs.py          # Background task scheduler and queue state machine
+│   ├── backtest_signals.py       # Signal evaluation with strict anti-lookahead guards
+│   ├── backtest_ui.py            # Streamlit Backtest Workbench UI (6 scenario presets)
+│   ├── broker_charges.py         # Statutory NSE/SEBI fees (STT, stamp duty, GST, brokerage)
+│   ├── collector_support.py      # Thread-safe atomic JSON/CSV writers and DPAPI tools
+│   ├── dashboard.py              # Main multi-workspace Streamlit dashboard
+│   ├── expiry_forecast.py        # Term structure & forward volatility forecasting
+│   ├── forecast.py               # GARCH(1,1) with resilient pure-Python Nelder-Mead fallback
+│   ├── futures_backtest.py       # Dated futures carry engine with expiry roll logic
+│   ├── google_archive_sync.py    # Multi-threaded Google Drive historical sync
+│   ├── market_calendar.py        # NSE trading calendar & holidays (2024–2028)
+│   ├── monitor_ui.py             # Options Desk UI (Radar, Regime, Term, Smile, Intraday)
+│   ├── option_math.py            # Vectorized BSM Greeks & machine-precision Brent solver
+│   ├── pricing_inputs.py         # Synthetic future calculation & dividend-adjusted spot
+│   ├── relative_value.py         # Cross-strike implied volatility spread tracking
+│   ├── smile.py                  # SVI fair volatility surface modeling
+│   ├── strategy_backtest.py      # 6 core option strategies (Straddle, Strangle, Condor, etc.)
+│   ├── term_structure.py         # Listed expiry term structure & calendar arbitrage checks
+│   ├── trade_review.py           # Multi-leg payoff matrix, breakevens & Greeks breakdown
+│   ├── ui_theme.py               # Obsidian slate & sovereign gold institutional design system
+│   ├── vol_lib.py                # OHLC validation, Parkinson, Garman-Klass & Yang-Zhang RV
+│   ├── vol_surface_3d.py         # 3D interactive volatility surface generator
+│   └── test_backtest_rules.py    # 9 automated trading rules backtest suite
+├── CNAME                         # Root custom domain pointer
+├── LAUNCH_ANY_DEVICE.py          # Dual LAN / WAN cross-device local runner
+├── MAIN_AUDIT.md                 # Master Audit & Technical Architecture Reference
+├── README.md                     # This file
+├── requirements.txt              # Production dependency specifications
+├── streamlit_app.py              # Memory-bounded Streamlit entrypoint
+└── test_audit_remediations.py    # Comprehensive 31-test audit verification suite
 ```
 
 ---
 
-## Fresh Clone Setup
+## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.11+
-- A virtual environment is recommended
+- Python 3.11, 3.12, or 3.15
+- Git
 
-### Install and validate
+### Installation
 ```bash
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-python -m pip install -r requirements.txt
-python scripts/validate_setup.py
+# Clone the repository
+git clone https://github.com/pankagsaini/volatility-lab.git
+cd volatility-lab
+
+# Install production dependencies
+pip install -r requirements.txt
 ```
 
-### Run locally
+### Launching the Dashboard
+
+#### 1. Standard Streamlit Run
 ```bash
-python run_local.py --dashboard
+streamlit run streamlit_app.py
 ```
 
-This starts the main Streamlit workstation.
-
+#### 2. Any-Device LAN Runner
+To access the dashboard from your phone, tablet, or another machine on the same Wi-Fi:
 ```bash
-python run_local.py --web
+python LAUNCH_ANY_DEVICE.py
 ```
-
-This starts the FastAPI web workstation and serves the built frontend assets.
-
-```bash
-python run_local.py --both
-```
-
-This runs both entry points together.
-
-### Legacy Windows launchers
-The files `Open Dashboard.cmd`, `Open Volatility Lab Web.cmd`, and `Turn Off Dashboard.cmd` are convenience wrappers for a Windows desktop setup. They are useful for local Windows use, but the cross-platform launcher in `run_local.py` is the recommended path for fresh-clone setup and CI validation.
+This automatically binds to `0.0.0.0:8501`, identifies your local LAN IP address, and outputs a convenient link.
 
 ---
 
-## Running Tests
+## 🧪 Automated Test Verification
 
-Execute the validation and smoke checks:
+The codebase maintains strict 100% test passing guarantees:
+
 ```bash
-python scripts/validate_setup.py
-python scripts/smoke_test.py
+# 1. Run the Comprehensive 31-Test Audit Suite
+python test_audit_remediations.py
+
+# 2. Run the 9 Trading Backtest Rules Suite
+python "Volatility Lab/test_backtest_rules.py"
+
+# 3. Verify Streamlit AppTest Runtime Initialization
+python -c "from streamlit.testing.v1 import AppTest; at = AppTest.from_file('streamlit_app.py', default_timeout=30); at.run(); assert len(at.exception) == 0; print('AppTest: 0 Exceptions')"
 ```
 
-Execute the full regression test suite:
-```bash
-python -m unittest discover -s "Volatility Lab" -p "test_*.py"
-```
-*(The project includes a large regression suite; use the smoke checks for a rapid fresh-clone validation.)*
+---
+
+## 🌐 Custom Domain & Website
+
+The repository powers **[https://volatilitylab.in](https://volatilitylab.in)** via GitHub Pages configured to deploy from `/docs`.
+
+- **Domain Configuration**: Managed via `CNAME` and `docs/CNAME`.
+- **DNS Records (GoDaddy)**:
+  - `A` Record `@` ➔ `185.199.108.153`
+  - `A` Record `@` ➔ `185.199.109.153`
+  - `A` Record `@` ➔ `185.199.110.153`
+  - `A` Record `@` ➔ `185.199.111.153`
+  - `CNAME` Record `www` ➔ `pankagsaini.github.io`
+- For step-by-step domain configuration details, refer to [README_DEPLOY_GODADDY.md](README_DEPLOY_GODADDY.md).
+
+---
+
+## 📊 Core Quantitative Models
+
+1. **Black-Scholes-Merton Engine** ([`option_math.py`](Volatility%20Lab/option_math.py)):
+   - Dividend-adjusted BSM analytical pricing with vectorized Greeks ($\Delta$, $\Gamma$, $\mathcal{V}$, $\Theta$).
+   - High-precision root finder using Brent-Dekker algorithm with pure-Python fallback.
+
+2. **GARCH(1,1) Volatility Forecasting** ([`forecast.py`](Volatility%20Lab/forecast.py)):
+   - Maximum Likelihood Estimation (MLE) of conditional variance with Nelder-Mead simplex optimizer.
+   - Variance persistence modeling across multi-day horizons.
+
+3. **SVI Volatility Surface** ([`smile.py`](Volatility%20Lab/smile.py)):
+   - Quasi-explicit Stochastic Volatility Inspired (SVI) parameterization.
+   - Out-of-the-money butterfly and 25-delta risk reversal estimation.
+
+4. **Empirical Strategy Backtester** ([`strategy_backtest.py`](Volatility%20Lab/strategy_backtest.py)):
+   - Minute-level order simulation accounting for slippage, bid-ask spreads, and realistic fill constraints.
+   - Complete Upstox and statutory transaction cost calculation (STT, Exchange turnover fee, SEBI turnover, Stamp duty, and 18% GST).
+
+---
+
+## 📜 License & Disclaimer
+
+This project is developed for quantitative research and educational backtesting on Indian equity derivatives. Trading options and futures involves substantial risk of loss. Historical performance and model forecasts do not guarantee future market results.
