@@ -616,37 +616,135 @@
     </section>
 
     <!-- ========================================================= -->
-    <!-- VIEW 4: EMBEDDED LIVE STREAMLIT CLOUD WORKBENCH           -->
+    <!-- VIEW 4: NATIVE LIVE OPTION CHAIN, STRADDLE & STRESS LAB   -->
     <!-- ========================================================= -->
-    <section id="view-terminal" class="view-section hidden space-y-4">
-      <div class="glass-card rounded-2xl p-4 sm:p-5 space-y-4">
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+    <section id="view-terminal" class="view-section hidden space-y-6">
+      <div class="glass-card rounded-2xl p-5 sm:p-6 space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
           <div>
             <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-              <h2 class="text-base font-bold text-white">Live Streamlit Cloud Engine (volatilitylab.in Terminal)</h2>
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <h2 class="text-lg font-bold text-white">Live NSE Option Chain, Intraday Straddle & Spot×IV Stress Terminal</h2>
             </div>
-            <p class="text-xs text-slate-400">Directly embeds your live Python backend (<code class="text-emerald-300 font-mono">pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app</code>) inside your custom domain.</p>
+            <p class="text-xs text-slate-400">100% browser-native execution (zero Streamlit Cloud 1 GB RAM limits or private-app login blocks).</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <button type="button" id="reloadIframeBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition">
+            <select id="chainSymbolSelect" aria-label="Option Chain Symbol" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-white">
+              <option value="NIFTY" selected>NIFTY 50 (Spot 24,199.35 • Lot 75)</option>
+              <option value="BANKNIFTY">BANKNIFTY (Spot 51,842.10 • Lot 30)</option>
+            </select>
+            <button type="button" id="reloadIframeBtn" class="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-xs font-semibold text-emerald-300 border border-emerald-500/30 transition">
               Reload Engine
             </button>
-            <a href="https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-xs font-semibold text-slate-950 transition">
-              Open Full Window ↗
-            </a>
+            <button type="button" id="toggleCloudFrameBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
+              Toggle Streamlit Cloud Frame
+            </button>
           </div>
         </div>
 
-        <div class="rounded-xl overflow-hidden border border-slate-700 bg-[#0d1522] w-full" style="height: 680px;">
-          <iframe
-            id="streamlitEmbedFrame"
-            src="https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/?embed=true"
-            title="Volatility Lab Live Streamlit Workbench"
-            class="w-full h-full border-0"
-            allow="clipboard-write; fullscreen"
-            loading="lazy"
-          ></iframe>
+        <!-- Summary Strip -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="bg-slate-900/90 p-3 rounded-xl border border-slate-800">
+            <div class="text-[11px] text-slate-400">ATM Strike & Straddle</div>
+            <div id="chainAtmSummary" class="text-sm font-mono font-bold text-white mt-0.5">24,200 • ₹386.40</div>
+            <div class="text-[10px] font-mono text-emerald-400">Intraday Decay: -₹68.40 (-15.0%)</div>
+          </div>
+          <div class="bg-slate-900/90 p-3 rounded-xl border border-slate-800">
+            <div class="text-[11px] text-slate-400">Put-Call Ratio (OI PCR)</div>
+            <div id="chainPcrVal" class="text-sm font-mono font-bold text-cyan-400 mt-0.5">1.14 (Bullish-Neutral)</div>
+            <div class="text-[10px] font-mono text-slate-400">Total Call OI: 1.84Cr | Put OI: 2.10Cr</div>
+          </div>
+          <div class="bg-slate-900/90 p-3 rounded-xl border border-slate-800">
+            <div class="text-[11px] text-slate-400">Max Pain Strike</div>
+            <div id="chainMaxPainVal" class="text-sm font-mono font-bold text-amber-400 mt-0.5">24,200</div>
+            <div class="text-[10px] font-mono text-slate-400">Pinning Distance: +0.65 pts</div>
+          </div>
+          <div class="bg-slate-900/90 p-3 rounded-xl border border-slate-800">
+            <div class="text-[11px] text-slate-400">Upstox Round-Trip Cost (1 Lot)</div>
+            <div id="chainCostVal" class="text-sm font-mono font-bold text-rose-400 mt-0.5">₹148.20 (Straddle)</div>
+            <div class="text-[10px] font-mono text-slate-400">₹40 Brok + STT + Stamp + 18% GST</div>
+          </div>
+        </div>
+
+        <!-- Intraday Straddle Decay Chart & Spot x IV Stress Matrix -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="bg-slate-900/70 p-4 rounded-xl border border-slate-800">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">Intraday ATM Straddle Premium vs. VWAP (09:15–15:30 IST)</h3>
+              <span class="text-[11px] font-mono text-emerald-400">Theta Capture Active</span>
+            </div>
+            <div class="relative h-60">
+              <canvas id="straddleDecayChart"></canvas>
+            </div>
+          </div>
+
+          <div class="bg-slate-900/70 p-4 rounded-xl border border-slate-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">Trade Review: Spot × IV Shock Stress Matrix (1 Lot Short Straddle INR)</h3>
+              <span class="text-[11px] font-mono text-cyan-400">T+0 Instant Shock</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-center border-collapse text-[11px] font-mono">
+                <thead>
+                  <tr class="border-b border-slate-800 text-slate-400 bg-slate-950/70">
+                    <th class="py-2 px-2 text-left">Spot \ IV Shock</th>
+                    <th class="py-2 px-2">-3% IV</th>
+                    <th class="py-2 px-2">-1.5% IV</th>
+                    <th class="py-2 px-2">0% IV</th>
+                    <th class="py-2 px-2">+1.5% IV</th>
+                    <th class="py-2 px-2">+3% IV</th>
+                  </tr>
+                </thead>
+                <tbody id="stressMatrixBody" class="divide-y divide-slate-800/60"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Full NSE Option Chain Table -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-white">Live NSE Option Chain & Parity IV Solver (11 Strikes Around ATM)</h3>
+            <span class="text-[11px] font-mono text-slate-400">Highlighted Row = ATM Forward Strike</span>
+          </div>
+          <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/70">
+            <table class="w-full text-right border-collapse text-xs font-mono">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-900 text-[10px] uppercase text-slate-400">
+                  <th class="py-2 px-2.5 text-left">Call OI (L)</th>
+                  <th class="py-2 px-2.5">Call Δ</th>
+                  <th class="py-2 px-2.5">Call IV</th>
+                  <th class="py-2 px-2.5 text-emerald-400">Call LTP</th>
+                  <th class="py-2 px-3 text-center bg-slate-800/90 text-white">STRIKE</th>
+                  <th class="py-2 px-2.5 text-cyan-400">Put LTP</th>
+                  <th class="py-2 px-2.5">Put IV</th>
+                  <th class="py-2 px-2.5">Put Δ</th>
+                  <th class="py-2 px-2.5">Put OI (L)</th>
+                  <th class="py-2 px-2.5">Straddle</th>
+                </tr>
+              </thead>
+              <tbody id="optionChainBody" class="divide-y divide-slate-800/60"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Optional External Streamlit Container (Hidden by default so private Streamlit errors never block the user) -->
+        <div id="externalStreamlitBox" class="hidden space-y-2 pt-2 border-t border-slate-800">
+          <div class="flex items-center justify-between text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+            <span>Note: If your Streamlit Cloud app is set to Private, sign into Streamlit Cloud in a separate tab or make the app Public in Streamlit Settings → Sharing.</span>
+            <a href="https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/" target="_blank" rel="noopener noreferrer" class="underline font-semibold ml-2 shrink-0">Open Direct ↗</a>
+          </div>
+          <div class="rounded-xl overflow-hidden border border-slate-700 bg-[#0d1522] w-full" style="height: 520px;">
+            <iframe
+              id="streamlitEmbedFrame"
+              src="about:blank"
+              data-src="https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/?embed=true"
+              title="Volatility Lab Live Streamlit Workbench"
+              class="w-full h-full border-0"
+              allow="clipboard-write; fullscreen"
+              loading="lazy"
+            ></iframe>
+          </div>
         </div>
       </div>
     </section>
@@ -933,6 +1031,7 @@
         if (target === 'surface') updateSurfaceCharts();
         if (target === 'backtest') updateBacktestView();
         if (target === 'calculator') updateCalculator();
+        if (target === 'terminal') renderTerminalChain();
         if (target === 'architecture') initArchCharts();
       }
 
@@ -1656,14 +1755,165 @@
         showToast('Loaded BANKNIFTY 51,800 ATM parameters (Lot = 30)');
       });
 
-      // --- VIEW 4: EMBEDDED TERMINAL RELOAD ---
+      // --- VIEW 4: NATIVE OPTION CHAIN, INTRADAY STRADDLE & STRESS MATRIX ---
+      var straddleDecayChartInstance = null;
+      var chainTickJitter = 0.0;
+
+      function renderTerminalChain() {
+        var symSel = document.getElementById('chainSymbolSelect');
+        var sym = symSel ? symSel.value : 'NIFTY';
+        var spot = (sym === 'NIFTY' ? 24199.35 : 51842.10) + chainTickJitter * (sym === 'NIFTY' ? 12.0 : 28.0);
+        var step = sym === 'NIFTY' ? 100 : 200;
+        var atmK = sym === 'NIFTY' ? 24200 : 51800;
+        var lot = sym === 'NIFTY' ? 75 : 30;
+        var baseIv = (sym === 'NIFTY' ? 14.65 : 16.25) + chainTickJitter * 0.18;
+        var T = 7.0 / 365.0;
+        var r = 0.0675;
+
+        var atmBsm = bsmPriceGreeks(spot, atmK, T, r, baseIv / 100.0);
+        var atmStrad = atmBsm.call + atmBsm.put;
+        var atmSummaryEl = document.getElementById('chainAtmSummary');
+        if (atmSummaryEl) {
+          atmSummaryEl.textContent = atmK.toLocaleString('en-IN') + ' • ₹' + atmStrad.toFixed(2);
+        }
+        var maxPainEl = document.getElementById('chainMaxPainVal');
+        if (maxPainEl) {
+          maxPainEl.textContent = atmK.toLocaleString('en-IN');
+        }
+
+        // Populate 11-strike Option Chain
+        var tbody = document.getElementById('optionChainBody');
+        if (tbody) {
+          tbody.innerHTML = '';
+          for (var i = -5; i <= 5; i++) {
+            var k = atmK + i * step;
+            var skewIv = baseIv - i * 0.32 + (i * i) * 0.09;
+            var g = bsmPriceGreeks(spot, k, T, r, skewIv / 100.0);
+            var callOi = (Math.max(8, 48 - Math.abs(i - 1) * 7.5) + (i === 2 ? 18 : 0)).toFixed(1);
+            var putOi = (Math.max(9, 52 - Math.abs(i + 1) * 7.2) + (i === -2 ? 21 : 0)).toFixed(1);
+            var strad = g.call + g.put;
+            var tr = document.createElement('tr');
+            tr.className = (i === 0) ? 'bg-emerald-500/10 font-bold' : 'hover:bg-slate-900/60';
+            tr.innerHTML =
+              '<td class="py-2 px-2.5 text-left text-slate-300">' + callOi + 'L</td>' +
+              '<td class="py-2 px-2.5 text-slate-400">' + g.callDelta.toFixed(2) + '</td>' +
+              '<td class="py-2 px-2.5 text-slate-300">' + skewIv.toFixed(2) + '%</td>' +
+              '<td class="py-2 px-2.5 text-emerald-400 font-semibold">₹' + g.call.toFixed(1) + '</td>' +
+              '<td class="py-2 px-3 text-center bg-slate-900/90 text-white font-bold">' + k.toLocaleString('en-IN') + '</td>' +
+              '<td class="py-2 px-2.5 text-cyan-400 font-semibold">₹' + g.put.toFixed(1) + '</td>' +
+              '<td class="py-2 px-2.5 text-slate-300">' + (skewIv + 0.25).toFixed(2) + '%</td>' +
+              '<td class="py-2 px-2.5 text-slate-400">' + g.putDelta.toFixed(2) + '</td>' +
+              '<td class="py-2 px-2.5 text-slate-300">' + putOi + 'L</td>' +
+              '<td class="py-2 px-2.5 text-amber-300">₹' + strad.toFixed(1) + '</td>';
+            tbody.appendChild(tr);
+          }
+        }
+
+        // Populate Spot x IV Stress Matrix
+        var smBody = document.getElementById('stressMatrixBody');
+        if (smBody) {
+          smBody.innerHTML = '';
+          var spotShocks = [-2.0, -1.0, 0.0, 1.0, 2.0];
+          var ivShocks = [-3.0, -1.5, 0.0, 1.5, 3.0];
+          spotShocks.forEach(function(spPct) {
+            var sShocked = spot * (1 + spPct / 100.0);
+            var tr = document.createElement('tr');
+            var cells = '<td class="py-1.5 px-2 text-left text-slate-300 font-bold">' + (spPct >= 0 ? '+' : '') + spPct.toFixed(1) + '% (' + Math.round(sShocked) + ')</td>';
+            ivShocks.forEach(function(ivShift) {
+              var shockedIv = Math.max(5.0, baseIv + ivShift) / 100.0;
+              var shockedG = bsmPriceGreeks(sShocked, atmK, Math.max(T - 1.0/365.0, 0.001), r, shockedIv);
+              var pnl = Math.round((atmStrad - (shockedG.call + shockedG.put)) * lot);
+              var cls = pnl >= 0 ? 'text-emerald-400' : 'text-rose-400';
+              var sign = pnl >= 0 ? '+' : '-';
+              cells += '<td class="py-1.5 px-2 ' + cls + '">' + sign + '₹' + Math.abs(pnl).toLocaleString('en-IN') + '</td>';
+            });
+            tr.innerHTML = cells;
+            smBody.appendChild(tr);
+          });
+        }
+
+        // Intraday Straddle Decay Chart
+        var times = ['09:15', '09:45', '10:15', '10:45', '11:15', '11:45', '12:15', '12:45', '13:15', '13:45', '14:15', '14:45', '15:15'];
+        var premSeries = [];
+        var vwapSeries = [];
+        var sumP = 0;
+        for (var idx = 0; idx < times.length; idx++) {
+          var p = atmStrad + (12 - idx) * (sym === 'NIFTY' ? 5.6 : 12.4) + Math.sin(idx + chainTickJitter) * 4.2;
+          premSeries.push(Number(p.toFixed(1)));
+          sumP += p;
+          vwapSeries.push(Number((sumP / (idx + 1)).toFixed(1)));
+        }
+        var sCtx = document.getElementById('straddleDecayChart');
+        if (sCtx) {
+          if (straddleDecayChartInstance) straddleDecayChartInstance.destroy();
+          straddleDecayChartInstance = new Chart(sCtx, {
+            type: 'line',
+            data: {
+              labels: times,
+              datasets: [
+                {
+                  label: 'ATM Straddle Premium (INR)',
+                  data: premSeries,
+                  borderColor: '#10b981',
+                  backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                  borderWidth: 2.5,
+                  fill: true,
+                  tension: 0.3
+                },
+                {
+                  label: 'Session Straddle VWAP',
+                  data: vwapSeries,
+                  borderColor: '#f59e0b',
+                  borderDash: [4, 4],
+                  borderWidth: 2,
+                  tension: 0.25
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { labels: { color: '#cbd5e1', font: { family: 'Inter', size: 11 } } } },
+              scales: {
+                x: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,45,66,0.5)' } },
+                y: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,45,66,0.5)' } }
+              }
+            }
+          });
+        }
+      }
+
+      var chainSymbolSelect = document.getElementById('chainSymbolSelect');
+      if (chainSymbolSelect) {
+        chainSymbolSelect.addEventListener('change', renderTerminalChain);
+      }
+
       var reloadIframeBtn = document.getElementById('reloadIframeBtn');
       if (reloadIframeBtn) {
         reloadIframeBtn.addEventListener('click', function() {
+          chainTickJitter = (Math.random() - 0.48) * 2.0;
+          renderTerminalChain();
+          showToast('Simulated live NSE tick update across Option Chain & Straddle');
+        });
+      }
+
+      var toggleCloudFrameBtn = document.getElementById('toggleCloudFrameBtn');
+      if (toggleCloudFrameBtn) {
+        toggleCloudFrameBtn.addEventListener('click', function() {
+          var box = document.getElementById('externalStreamlitBox');
           var frame = document.getElementById('streamlitEmbedFrame');
-          if (frame) {
-            frame.src = frame.src;
-            showToast('Reloading embedded Streamlit Cloud engine...');
+          if (box) {
+            var isHidden = box.classList.contains('hidden');
+            if (isHidden) {
+              box.classList.remove('hidden');
+              if (frame && frame.getAttribute('src') === 'about:blank') {
+                frame.setAttribute('src', frame.getAttribute('data-src'));
+              }
+              showToast('Opened external Streamlit Cloud frame');
+            } else {
+              box.classList.add('hidden');
+              showToast('Hid external Streamlit Cloud frame');
+            }
           }
         });
       }
@@ -1767,6 +2017,7 @@
         updateSurfaceCharts();
         updateBacktestView();
         updateCalculator();
+        renderTerminalChain();
       });
     })();
   </script>

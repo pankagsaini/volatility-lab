@@ -4,7 +4,73 @@ import hashlib
 import warnings
 import numpy as np
 import pandas as pd
-from scipy.optimize import minimize
+try:
+    from scipy.optimize import minimize
+except (ImportError, Exception):
+    def minimize(func, x0, method=None, bounds=None, **kwargs):  # type: ignore[no-redef]
+        """Pure-Python Nelder-Mead simplex optimizer with bound constraints (fallback when SciPy C-libs are unavailable)."""
+        x0_arr = np.asarray(x0, dtype=float)
+        n = len(x0_arr)
+
+        def wrapped(x_vec):
+            if bounds is not None:
+                for val, (lb, ub) in zip(x_vec, bounds):
+                    if (lb is not None and val < lb) or (ub is not None and val > ub):
+                        return 1e12
+            return float(func(x_vec))
+
+        sim = np.zeros((n + 1, n), dtype=float)
+        sim[0] = x0_arr
+        for i in range(n):
+            y = np.array(x0_arr, copy=True)
+            step = 0.05 * (bounds[i][1] - bounds[i][0]) if (bounds and bounds[i][1] is not None and bounds[i][0] is not None) else 0.05
+            y[i] += min(max(step, 1e-4), 0.1)
+            sim[i + 1] = y
+
+        fsim = np.array([wrapped(sim[i]) for i in range(n + 1)], dtype=float)
+        alpha, gamma, rho, sigma = 1.0, 2.0, 0.5, 0.5
+
+        for _ in range(400):
+            idx = np.argsort(fsim)
+            sim, fsim = sim[idx], fsim[idx]
+            if np.max(np.abs(sim[1:] - sim[0])) < 1e-5 and (fsim[-1] - fsim[0]) < 1e-5:
+                break
+            xbar = np.mean(sim[:-1], axis=0)
+            xr = xbar + alpha * (xbar - sim[-1])
+            fxr = wrapped(xr)
+            if fsim[0] <= fxr < fsim[-2]:
+                sim[-1], fsim[-1] = xr, fxr
+            elif fxr < fsim[0]:
+                xe = xbar + gamma * (xr - xbar)
+                fxe = wrapped(xe)
+                if fxe < fxr:
+                    sim[-1], fsim[-1] = xe, fxe
+                else:
+                    sim[-1], fsim[-1] = xr, fxr
+            else:
+                if fxr < fsim[-1]:
+                    xc = xbar + rho * (xr - xbar)
+                    fxc = wrapped(xc)
+                    if fxc <= fxr:
+                        sim[-1], fsim[-1] = xc, fxc
+                    else:
+                        sim[1:] = sim[0] + sigma * (sim[1:] - sim[0])
+                        fsim[1:] = [wrapped(p) for p in sim[1:]]
+                else:
+                    xcc = xbar - rho * (xbar - sim[-1])
+                    fxcc = wrapped(xcc)
+                    if fxcc < fsim[-1]:
+                        sim[-1], fsim[-1] = xcc, fxcc
+                    else:
+                        sim[1:] = sim[0] + sigma * (sim[1:] - sim[0])
+                        fsim[1:] = [wrapped(p) for p in sim[1:]]
+
+        idx = np.argsort(fsim)
+        class _MinResult:
+            def __init__(self, x_best, f_best):
+                self.x = x_best
+                self.fun = f_best
+        return _MinResult(sim[idx[0]], fsim[idx[0]])
 from vol_lib import validate_ohlc, rolling_rv_suite
 
 
