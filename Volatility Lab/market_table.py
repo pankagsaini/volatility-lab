@@ -8,7 +8,7 @@ import pandas as pd
 from forecast import fit_garch
 from market_data import IST, MarketDataError, history_cutoff
 from vol_lib import validate_ohlc
-from market_calendar import HOLIDAYS,last_trading_day_on_or_before
+from market_calendar import HOLIDAYS,SPECIAL_SESSIONS,last_trading_day_on_or_before
 
 INDICES={'NIFTY':'NIFTY 50','BANKNIFTY':'NIFTY BANK'}
 COLUMNS=['Price','% change','Call IV','Put IV','IV','25 Delta reversal','IV-RV Spread']
@@ -71,7 +71,13 @@ def quote_time(quote):
 def valuation_time(spotq,now):
     """Live during session; explicitly dated last-session snapshot outside hours."""
     stamp=quote_time(spotq)
-    if now.date() in HOLIDAYS or now.weekday()>4:
+    mins = now.hour * 60 + now.minute
+    if now.date() in SPECIAL_SESSIONS:
+        info = SPECIAL_SESSIONS[now.date()]
+        if info.get('snap_start_min', 1080) <= mins <= info.get('snap_end_min', 1170):
+            if not fresh(spotq, now): raise MarketDataError('Stale spot quote during market hours.')
+            return now, False
+    if (now.date() in HOLIDAYS or now.weekday() > 4) and now.date() not in SPECIAL_SESSIONS:
         from upstox_adapter import provider_timestamp
         trade=provider_timestamp(spotq.get('last_trade_time'))
         if not trade:raise MarketDataError('No dated last-session trade on market holiday.')

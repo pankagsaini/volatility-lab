@@ -8,7 +8,7 @@ import gzip,hashlib,json,os,sqlite3,threading,time,zlib,zlib
 import pandas as pd
 import numpy as np
 from collector_support import atomic_json,read_json,data_lock,STATE
-from market_calendar import HOLIDAYS
+from market_calendar import HOLIDAYS, SPECIAL_SESSIONS
 ROOT=Path(__file__).resolve().parent
 DATA=ROOT/'data'
 STORE=DATA/'google_archive'
@@ -85,7 +85,12 @@ def import_report(obj,rate,dividend,spread):
         q=quotes.get(INDICES[symbol],{})
         valuation=provider_timestamp(q.get('timestamp')) or provider_timestamp(q.get('last_trade_time'))
         trade=provider_timestamp(q.get('last_trade_time'))
-        if stamp.date() in HOLIDAYS or stamp.weekday()>4 or not 555<=stamp.hour*60+stamp.minute<=940:
+        mins = stamp.hour * 60 + stamp.minute
+        if stamp.date() in SPECIAL_SESSIONS:
+            in_session = 1080 <= mins <= 1170
+        else:
+            in_session = stamp.date() not in HOLIDAYS and stamp.weekday() <= 4 and 555 <= mins <= 940
+        if not in_session:
             valuation=trade
         if valuation and (stamp-pd.Timestamp(valuation)).total_seconds()>7*86400:valuation=None
         if not valuation:continue
@@ -154,7 +159,7 @@ def import_futures(obj,quotes,stamp):
     from upstox_archive import connect as research
     from upstox_data import INDICES
     root=DATA/'futures'
-    quote_now=stamp.replace(hour=18,minute=0) if stamp.date() in HOLIDAYS else stamp
+    quote_now=stamp.replace(hour=18,minute=0) if (stamp.date() in HOLIDAYS and stamp.date() not in SPECIAL_SESSIONS) else stamp
     cat=obj.get('catalogue',{}).get('indices',{})
     for symbol,entry in cat.items():
         if symbol not in INDICES:continue

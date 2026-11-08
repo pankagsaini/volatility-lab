@@ -605,13 +605,41 @@ def install_classic_modern_theme() -> None:
 
 def market_session_badge_html(now: datetime | None = None) -> str:
     """Return a Classic & Modern dark-slate pill badge for current NSE market status."""
+    from market_calendar import SPECIAL_SESSIONS
     current = now or datetime.now(IST)
     if current.tzinfo is None:
         current = current.replace(tzinfo=IST)
     else:
         current = current.astimezone(IST)
     minute = current.hour * 60 + current.minute
-    if current.weekday() < 5 and 555 <= minute <= 930:
+    cur_date = current.date()
+
+    if cur_date in SPECIAL_SESSIONS:
+        if 1080 <= minute < 1095:
+            label = "◐ NSE · MUHURAT PRE-OPEN"
+            style = (
+                "background:rgba(245,158,11,0.18); color:#fbbf24; "
+                "border:1px solid rgba(245,158,11,0.55); box-shadow:0 0 10px rgba(245,158,11,0.25);"
+            )
+        elif 1095 <= minute <= 1155:
+            label = "● NSE LIVE · MUHURAT SPECIAL SESSION"
+            style = (
+                "background:rgba(245,158,11,0.22); color:#fef08a; "
+                "border:1px solid #eab308; box-shadow:0 0 16px rgba(234,179,8,0.45); font-weight:700;"
+            )
+        elif 1155 < minute <= 1170:
+            label = "◐ NSE · MUHURAT CLOSING"
+            style = (
+                "background:rgba(245,158,11,0.14); color:#fbbf24; "
+                "border:1px solid rgba(245,158,11,0.45);"
+            )
+        else:
+            label = "○ NSE CLOSED · SPECIAL SESSION ARCHIVE"
+            style = (
+                "background:rgba(148,163,184,0.10); color:#cbd5e1; "
+                "border:1px solid rgba(148,163,184,0.28);"
+            )
+    elif current.weekday() < 5 and 555 <= minute <= 930:
         label = "● NSE LIVE · REGULAR SESSION"
         style = (
             "background:rgba(16,185,129,0.14); color:#34d399; "

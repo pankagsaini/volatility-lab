@@ -28,6 +28,22 @@ const VL = {
   indices: CONFIG.indices
 };
 
+// Recognized NSE special trading sessions (e.g. Diwali Muhurat Trading).
+// snap: 18:00 - 19:30 IST (minutes 1080 to 1170)
+// eod: 19:30 - 22:00 IST (minutes 1170 to 1320)
+const SPECIAL_SESSIONS = {
+  '2024-11-01': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2024' },
+  '2025-10-21': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2025' },
+  '2026-11-08': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2026' },
+  '2027-10-29': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2027' },
+  '2028-10-17': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2028' }
+};
+
+function isSpecialTradingSession_(dateStr) {
+  return Boolean(SPECIAL_SESSIONS[dateStr]);
+}
+
+
 /**
  * Access Google Apps Script private properties store.
  */
@@ -544,9 +560,11 @@ function scheduledCapture() {
     return;
   }
 
-  // Skip weekends (Saturday=6, Sunday=7) before any reconciliation or capture
+  // Skip weekends (Saturday=6, Sunday=7) unless today is a recognized special trading session (e.g. Diwali Muhurat)
   if (weekday > 5) {
-    return;
+    if (!isSpecialTradingSession_(today)) {
+      return;
+    }
   }
 
   // Pre-market reconciliation window: 07:00 - 09:00 IST (minutes 420 to 540)
@@ -555,21 +573,37 @@ function scheduledCapture() {
     return;
   }
 
-  // Intraday snapshots: 09:00 - 16:00 IST (540 to 960)
-  // EOD candle retries: 18:00 - 22:00 IST (1080 to 1320)
-  const mode = (mins >= 540 && mins < 960) ? 'snapshot' : (mins >= 1080 && mins < 1320) ? 'eod' : null;
+  const special = SPECIAL_SESSIONS[today];
+  let mode = null;
+
+  if (special) {
+    // Special session schedule (e.g. Diwali Muhurat: snapshots 18:00-19:30, EOD 19:30-22:00 IST)
+    if (mins >= special.snap_start && mins < special.snap_end) {
+      mode = 'snapshot';
+    } else if (mins >= special.eod_start && mins < special.eod_end) {
+      mode = 'eod';
+    }
+  } else {
+    // Regular session schedule:
+    // Intraday snapshots: 09:00 - 16:00 IST (540 to 960)
+    // EOD candle retries: 18:00 - 22:00 IST (1080 to 1320)
+    mode = (mins >= 540 && mins < 960) ? 'snapshot' : (mins >= 1080 && mins < 1320) ? 'eod' : null;
+  }
+
   if (!mode) {
     return;
   }
 
-  // Check holiday calendar
-  let closed;
-  try {
-    closed = marketClosed_(now);
-  } catch (err) {
-    const message = 'Market calendar unavailable; capture paused.';
-    properties.setProperty('COLLECTOR_STATUS', message + ' ' + today);
-    throw err;
+  // Check holiday calendar (bypassed if today is an active special session)
+  let closed = false;
+  if (!special) {
+    try {
+      closed = marketClosed_(now);
+    } catch (err) {
+      const message = 'Market calendar unavailable; capture paused.';
+      properties.setProperty('COLLECTOR_STATUS', message + ' ' + today);
+      throw err;
+    }
   }
 
   if (closed) {
@@ -593,7 +627,9 @@ function scheduledCapture() {
       interval = 1;
       properties.setProperty('INTERVAL_MINUTES', '1');
     }
-    const slot = today + '|' + Math.floor((mins - 540) / interval);
+    const snapBase = special ? special.snap_start : 540;
+
+    const slot = today + '|' + Math.floor((mins - snapBase) / interval);
 
     // Snapshot slot deduplication
     if (mode === 'snapshot' && properties.getProperty('LAST_SNAPSHOT_SLOT') === slot) {
@@ -754,6 +790,9 @@ function reconcilePriorSession() {
 function marketClosed_(now) {
   const properties = props_();
   const today = day_(now);
+  if (isSpecialTradingSession_(today)) {
+    return false;
+  }
   const year = today.slice(0, 4);
 
   let calendar = JSON.parse(properties.getProperty('MARKET_CALENDAR') || 'null');

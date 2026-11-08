@@ -11,7 +11,7 @@ from contextlib import contextmanager
 
 from collector_support import atomic_json, read_json, STATE
 from market_data import IST, MarketDataError, history_cutoff
-from market_calendar import HOLIDAYS,last_trading_day_on_or_before
+from market_calendar import HOLIDAYS,SPECIAL_SESSIONS,last_trading_day_on_or_before
 
 ROOT=Path(__file__).resolve().parent
 STATUS=STATE/'status.json'
@@ -65,8 +65,14 @@ def run(now=None):
 
 def _run(now=None):
     now=now or datetime.now(IST)
-    if now.weekday()>4 or now.date() in HOLIDAYS:return 0
-    stage='eod' if now.time().replace(tzinfo=None)>=time(16,30) else 'closing_quotes' if now.time().replace(tzinfo=None)>=time(15,20) else 'history_catchup'
+    mins=now.hour*60+now.minute
+    if now.date() in SPECIAL_SESSIONS:
+        info=SPECIAL_SESSIONS[now.date()]
+        if not (info.get('snap_start_min',1080)<=mins<=info.get('eod_end_min',1320)):return 0
+        stage='eod' if mins>=1170 else 'closing_quotes' if mins>=1155 else 'history_catchup'
+    elif now.weekday()>4 or now.date() in HOLIDAYS:return 0
+    else:
+        stage='eod' if now.time().replace(tzinfo=None)>=time(16,30) else 'closing_quotes' if now.time().replace(tzinfo=None)>=time(15,20) else 'history_catchup' 
     key=str(now.date())+'_'+stage
     previous=read_json(STATUS)
     completed=previous.get('completed',{})

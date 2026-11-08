@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from market_data import IST, history_cutoff, MarketDataError
 from market_table import Monitor
-from market_calendar import HOLIDAYS,last_trading_day_on_or_before
+from market_calendar import HOLIDAYS,SPECIAL_SESSIONS,last_trading_day_on_or_before
 from collector_support import serialized,atomic_csv
 
 
@@ -33,7 +33,14 @@ def quote_value(quote, now, max_bps=20):
     result['As of']=stamp.isoformat() if stamp is not None else None
     age=(pd.Timestamp(now)-stamp).total_seconds() if stamp is not None else np.inf
     local=pd.Timestamp(now).tz_convert(IST)
-    if local.weekday()<5 and local.date() not in HOLIDAYS and 9*60+15<=local.hour*60+local.minute<=15*60+40:
+    mins = local.hour * 60 + local.minute
+    is_live = False
+    if local.date() in SPECIAL_SESSIONS:
+        info = SPECIAL_SESSIONS[local.date()]
+        is_live = info.get('snap_start_min', 1080) <= mins <= info.get('snap_end_min', 1170)
+    elif local.weekday() < 5 and local.date() not in HOLIDAYS and 9*60+15 <= mins <= 15*60+40:
+        is_live = True
+    if is_live:
         if not -5<=age<=90:return {**result,'Status':'Stale quote'}
         try:
             bid=quote['depth']['buy'][0];ask=quote['depth']['sell'][0]
