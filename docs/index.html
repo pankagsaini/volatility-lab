@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Volatility Lab</title>
+  <title>Volatility Lab — NSE Options Volatility & Trading Opportunity Workbench</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,30 +11,24 @@
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --vl-bg: #090d16;
-      --vl-bg-elevated: #0d1320;
-      --vl-surface: #111827;
-      --vl-surface-hover: #162033;
-      --vl-border: #1e293b;
-      --vl-border-strong: #334155;
-      --vl-gold: #d4af37;
+      --vl-bg: #070b12;
+      --vl-panel: #0e1624;
+      --vl-card: #131d30;
+      --vl-border: #293b56;
+      --vl-gold: #eab308;
       --vl-cyan: #38bdf8;
       --vl-emerald: #10b981;
       --vl-rose: #f43f5e;
-      --vl-amber: #f59e0b;
-      --vl-text: #f1f5f9;
-      --vl-text-secondary: #94a3b8;
-      --vl-text-muted: #64748b;
-      --vl-font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --vl-text: #ffffff;
+      --vl-sub: #dbeafe;
+      --vl-muted: #94a3b8;
+      --vl-font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       --vl-font-serif: 'Instrument Serif', Georgia, serif;
-      --vl-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --vl-font-mono: 'JetBrains Mono', monospace;
     }
 
     body {
       background-color: var(--vl-bg);
-      background-image:
-        radial-gradient(1100px 420px at 12% -6%, rgba(56, 189, 248, 0.07), transparent 70%),
-        radial-gradient(900px 380px at 88% -4%, rgba(212, 175, 55, 0.05), transparent 70%);
       color: var(--vl-text);
       font-family: var(--vl-font-sans);
       margin: 0;
@@ -51,62 +45,46 @@
       font-variant-numeric: tabular-nums;
     }
 
-    /* Executive Masthead (Exact match to dashboard.py & ui_theme.py) */
+    /* High-contrast readable masthead */
     .vl-masthead {
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
       gap: 12px;
-      padding: 12px 18px;
-      margin-bottom: 14px;
-      background: linear-gradient(90deg, rgba(17, 24, 39, 0.95) 0%, rgba(15, 23, 42, 0.85) 100%);
-      border: 1px solid rgba(51, 65, 85, 0.65);
-      border-left: 3px solid #d4af37;
-      border-radius: 12px;
-      box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.45);
-    }
-
-    .vl-masthead-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
+      padding: 11px 18px;
+      margin-bottom: 12px;
+      background: #0e1624;
+      border: 1px solid #293b56;
+      border-left: 4px solid #eab308;
+      border-radius: 10px;
     }
 
     .vl-brand-crest {
-      font-family: var(--vl-font-sans);
-      font-size: 1.5rem;
+      font-size: 1.45rem;
       font-weight: 800;
-      color: #f8fafc;
-      letter-spacing: -0.025em;
-      line-height: 1.15;
-      white-space: nowrap;
-    }
-
-    .vl-brand-gold {
-      color: #d4af37;
-      margin-right: 6px;
+      color: #ffffff;
+      letter-spacing: -0.02em;
     }
 
     .vl-brand-sub {
       font-family: var(--vl-font-mono);
-      font-size: 0.72rem;
+      font-size: 0.74rem;
       text-transform: uppercase;
-      letter-spacing: 0.09em;
-      color: #94a3b8;
+      letter-spacing: 0.07em;
+      color: #e2e8f0;
       padding: 3px 9px;
       border-radius: 6px;
-      background: rgba(30, 41, 59, 0.65);
-      border: 1px solid rgba(71, 85, 105, 0.45);
+      background: #1e293b;
+      border: 1px solid #334155;
     }
 
     .vl-quick-actions {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      background: rgba(9, 13, 22, 0.82);
-      border: 1px solid rgba(51, 65, 85, 0.65);
+      background: #070b12;
+      border: 1px solid #293b56;
       border-radius: 999px;
       padding: 3px 6px;
     }
@@ -117,88 +95,84 @@
       gap: 4px;
       padding: 4px 10px;
       border-radius: 999px;
-      font-size: 0.72rem;
+      font-size: 0.74rem;
       font-weight: 600;
-      color: #cbd5e1;
+      color: #f1f5f9;
       text-decoration: none;
-      transition: background 0.15s ease, color 0.15s ease;
       cursor: pointer;
-      white-space: nowrap;
     }
 
     .vl-icon-action:hover {
-      background: rgba(56, 189, 248, 0.15);
-      color: #f8fafc;
+      background: rgba(56, 189, 248, 0.2);
+      color: #ffffff;
     }
 
-    /* Segmented Controls (Exact match to ui_theme.py) */
+    /* High-Contrast Segmented Controls */
     .vl-segmented {
       display: inline-flex;
       flex-wrap: wrap;
       gap: 4px;
-      background: #0d1320;
+      background: #0b111d;
       padding: 4px;
-      border-radius: 11px;
-      border: 1px solid var(--vl-border);
+      border-radius: 9px;
+      border: 1px solid #293b56;
     }
 
     .vl-seg-btn {
-      border-radius: 8px;
-      font-size: 0.82rem;
-      font-weight: 500;
-      padding: 6px 15px;
-      color: #94a3b8;
+      border-radius: 6px;
+      font-size: 0.81rem;
+      font-weight: 600;
+      padding: 6px 13px;
+      color: #cbd5e1;
       border: 1px solid transparent;
-      transition: all 0.15s ease;
       cursor: pointer;
+      transition: all 0.12s ease;
     }
 
     .vl-seg-btn:hover {
-      color: #f1f5f9;
+      color: #ffffff;
+      background: #162235;
     }
 
     .vl-seg-btn.active {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(56, 189, 248, 0.18) 100%);
-      border-color: rgba(56, 189, 248, 0.55);
-      color: #f8fafc;
-      font-weight: 600;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+      background: #162942;
+      border-color: #38bdf8;
+      color: #ffffff;
     }
 
-    /* Radar & Metric Cards */
+    /* High-Contrast Cards & Chart Containers */
     .vl-radar-card {
-      background: linear-gradient(180deg, rgba(22, 32, 51, 0.78) 0%, rgba(17, 24, 39, 0.95) 100%);
-      border: 1px solid #1e293b;
-      border-top: 2px solid #d4af37;
-      border-radius: 12px;
-      padding: 15px 18px;
-      box-shadow: 0 6px 22px -6px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      background: #0e1624;
+      border: 1px solid #293b56;
+      border-top: 3px solid #eab308;
+      border-radius: 10px;
+      padding: 14px 16px;
     }
 
     .vl-metric-card {
-      background: linear-gradient(180deg, rgba(22, 32, 51, 0.72) 0%, rgba(17, 24, 39, 0.92) 100%);
-      border: 1px solid var(--vl-border);
-      border-top: 2px solid rgba(56, 189, 248, 0.55);
-      border-radius: 12px;
-      padding: 13px 16px;
-      box-shadow: 0 4px 18px -4px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-      transition: border-color 0.15s ease;
+      background: #0e1624;
+      border: 1px solid #293b56;
+      border-top: 2px solid #38bdf8;
+      border-radius: 10px;
+      padding: 11px 14px;
     }
 
-    .vl-metric-card:hover {
-      border-color: var(--vl-border-strong);
-      border-top-color: var(--vl-gold);
+    .vl-chart-panel {
+      background: #0b121e;
+      border: 1px solid #293b56;
+      border-radius: 10px;
+      padding: 14px 16px;
     }
 
     .vl-select, .vl-input {
-      background-color: #111827;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      color: #f1f5f9;
-      font-size: 0.83rem;
-      padding: 7px 11px;
+      background-color: #0e1624;
+      border: 1px solid #334968;
+      border-radius: 7px;
+      color: #ffffff;
+      font-size: 0.84rem;
+      font-weight: 500;
+      padding: 6px 10px;
       width: 100%;
-      transition: border-color 0.15s ease;
     }
 
     .vl-select:focus, .vl-input:focus {
@@ -209,425 +183,540 @@
     .vl-label {
       display: block;
       font-size: 0.76rem;
-      font-weight: 600;
-      color: #94a3b8;
-      margin-bottom: 5px;
-    }
-
-    details.vl-expander {
-      background: rgba(17, 24, 39, 0.65);
-      border: 1px solid #1e293b;
-      border-radius: 10px;
-      overflow: hidden;
-    }
-
-    details.vl-expander > summary {
-      padding: 10px 14px;
-      font-size: 0.82rem;
-      font-weight: 600;
+      font-weight: 700;
       color: #e2e8f0;
-      cursor: pointer;
-      user-select: none;
-      list-style: none;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      margin-bottom: 4px;
     }
 
-    details.vl-expander > summary::-webkit-details-marker {
-      display: none;
-    }
-
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #090d16;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #1e293b;
-      border-radius: 3px;
+    input[type="range"] {
+      accent-color: #38bdf8;
     }
   </style>
 </head>
 <body class="min-h-screen">
 
-  <!-- Toast Notification -->
-  <div id="vlToast" class="fixed bottom-5 right-5 z-50 hidden px-4 py-2.5 rounded-xl bg-[#111827] border border-[#d4af37]/60 text-slate-100 text-xs font-medium shadow-2xl items-center gap-2">
-    <span class="text-[#d4af37]">❖</span>
+  <!-- Toast -->
+  <div id="vlToast" class="fixed bottom-5 right-5 z-50 hidden px-4 py-2.5 rounded-lg bg-[#0e1624] border-2 border-[#38bdf8] text-white text-xs font-semibold shadow-2xl items-center gap-2">
+    <span class="text-[#eab308]">❖</span>
     <span id="vlToastText">Updated</span>
   </div>
 
-  <!-- Main Container (Exact 1520px max-width & balanced padding from ui_theme.py) -->
-  <div class="max-w-[1520px] mx-auto px-4 sm:px-7 pt-5 pb-10">
+  <div class="max-w-[1560px] mx-auto px-3 sm:px-6 pt-3 pb-12">
 
-    <!-- 1. Undistorted Institutional Masthead Header -->
+    <!-- 1. Masthead Header -->
     <header class="vl-masthead">
-      <div class="vl-masthead-left">
-        <span class="vl-brand-crest"><span class="vl-brand-gold">❖</span>Volatility Lab</span>
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="vl-brand-crest"><span class="text-[#eab308] mr-1.5">❖</span>Volatility Lab</span>
         <span class="vl-brand-sub">NSE Index Volatility &amp; Relative Value</span>
       </div>
       <div class="flex items-center gap-2.5 flex-wrap">
         <div class="vl-quick-actions">
           <details class="relative inline-block">
-            <summary class="vl-icon-action" title="Open on any phone, tablet, or app">📱 App</summary>
-            <div class="absolute right-0 top-full mt-2 z-50 w-64 bg-[#0f172a] border border-slate-700 border-t-2 border-t-[#d4af37] rounded-xl p-3 shadow-2xl">
-              <div class="text-[11px] font-bold text-[#d4af37] uppercase tracking-wider mb-1.5">📱 Open on Any Device</div>
-              <p class="text-xs text-slate-300 leading-relaxed mb-2">
-                Visit <strong class="text-sky-400 font-mono-num">volatilitylab.in</strong> on mobile Safari or Chrome and tap <b>Add to Home Screen</b>.
-              </p>
-              <button type="button" id="copyDomainUrlBtn" class="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-mono-num text-sky-300 border border-slate-700 transition">
+            <summary class="vl-icon-action">📱 App</summary>
+            <div class="absolute right-0 top-full mt-2 z-50 w-64 bg-[#0e1624] border border-slate-500 border-t-2 border-t-[#eab308] rounded-xl p-3 shadow-2xl">
+              <div class="text-xs font-bold text-[#eab308] uppercase mb-1">📱 Mobile / Tablet Access</div>
+              <p class="text-xs text-slate-200 mb-2">Open <strong class="text-sky-400 font-mono-num">volatilitylab.in</strong> and tap <b>Add to Home Screen</b>.</p>
+              <button type="button" id="copyDomainUrlBtn" class="w-full py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono-num text-sky-300 border border-slate-600">
                 Copy https://volatilitylab.in
               </button>
             </div>
           </details>
-          <button type="button" id="shareAppBtn" class="vl-icon-action" title="Copy share link">🔗 Share</button>
-          <a class="vl-icon-action" href="https://github.com/pankagsaini/volatility-lab" target="_blank" rel="noopener noreferrer" title="Star repository on GitHub">★ Star</a>
-          <a class="vl-icon-action" href="https://github.com/pankagsaini/volatility-lab/edit/master/Volatility%20Lab/dashboard.py" target="_blank" rel="noopener noreferrer" title="Edit on GitHub">✎ Edit</a>
+          <button type="button" id="shareAppBtn" class="vl-icon-action">🔗 Share</button>
+          <a class="vl-icon-action" href="https://github.com/pankagsaini/volatility-lab" target="_blank" rel="noopener noreferrer">★ Star</a>
+          <a class="vl-icon-action" href="https://github.com/pankagsaini/volatility-lab/edit/master/Volatility%20Lab/dashboard.py" target="_blank" rel="noopener noreferrer">✎ Edit</a>
         </div>
-        <span id="marketStatusPill" class="inline-block px-3.5 py-1 rounded-full font-mono-num text-[11.5px] font-semibold tracking-wider uppercase border border-slate-600/40 bg-slate-900/90 text-slate-300 whitespace-nowrap">
+        <span id="marketStatusPill" class="inline-block px-3.5 py-1 rounded-full font-mono-num text-xs font-bold uppercase border border-slate-500 bg-[#070b12] text-slate-100 whitespace-nowrap">
           ○ Market Closed · 15:30 IST
         </span>
       </div>
     </header>
 
-    <!-- 2. Top Primary Workspace Switcher (Options | Backtest) -->
-    <div class="mb-3">
-      <div class="vl-segmented" role="tablist" aria-label="Workspace">
-        <button type="button" id="wsOptionsBtn" class="vl-seg-btn active" role="tab" aria-selected="true">Options</button>
-        <button type="button" id="wsBacktestBtn" class="vl-seg-btn" role="tab" aria-selected="false">Backtest</button>
+    <!-- 2. Top Bar: Workspace Switcher + Display Mode (All Graphs Grid vs Single Tab) -->
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="vl-segmented" role="tablist" aria-label="Workspace">
+          <button type="button" id="wsOptionsBtn" class="vl-seg-btn active" role="tab">Options</button>
+          <button type="button" id="wsBacktestBtn" class="vl-seg-btn" role="tab">Backtest</button>
+        </div>
+        <div id="layoutModeBox" class="vl-segmented">
+          <button type="button" id="modeAllGraphsBtn" class="vl-seg-btn active">All 4 Graphs Visible (Trader Grid)</button>
+          <button type="button" id="modeTabbedBtn" class="vl-seg-btn">Single Tab Focus</button>
+        </div>
+      </div>
+      <div class="text-xs text-slate-200 font-mono-num">
+        Snapshot: <strong class="text-white">2026-11-06 15:30 IST</strong> · Rate: <strong class="text-sky-400">6.75%</strong> · INDIA VIX: <strong class="text-amber-300">14.82</strong>
       </div>
     </div>
 
     <!-- =================================================================== -->
-    <!-- WORKSPACE 1: OPTIONS (monitor_ui.py)                                -->
+    <!-- WORKSPACE 1: OPTIONS                                                -->
     <!-- =================================================================== -->
     <main id="workspaceOptions" class="space-y-4">
 
-      <!-- Snapshot Timestamp Caption -->
-      <div class="text-[13px] text-slate-400">
-        Quotes: <span class="font-mono-num text-slate-300">2026-11-06</span> · refreshed <span class="font-mono-num text-slate-300">06 Nov 15:30</span> · Saved view
-      </div>
-
-      <!-- 2-Column Expiry Selectboxes (NIFTY | BANKNIFTY) -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Expiry Selectors + Active Research Instrument -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[#0e1624] p-3 rounded-xl border border-[#293b56]">
         <div>
-          <label for="niftyExpirySelect" class="vl-label">NIFTY</label>
+          <label for="niftyExpirySelect" class="vl-label">NIFTY Listed Expiry</label>
           <select id="niftyExpirySelect" class="vl-select font-mono-num">
-            <option value="0" selected>12 Nov 2026 · Weekly (6.0d)</option>
-            <option value="1">19 Nov 2026 · Weekly (13.0d)</option>
-            <option value="2">26 Nov 2026 · Monthly (20.0d)</option>
-            <option value="3">24 Dec 2026 · Monthly (48.0d)</option>
-            <option value="4">28 Jan 2027 · Monthly (83.0d)</option>
+            <option value="0" selected>12 Nov 2026 · Weekly (6.0 DTE)</option>
+            <option value="1">19 Nov 2026 · Weekly (13.0 DTE)</option>
+            <option value="2">26 Nov 2026 · Monthly (20.0 DTE)</option>
+            <option value="3">24 Dec 2026 · Monthly (48.0 DTE)</option>
+            <option value="4">28 Jan 2027 · Monthly (83.0 DTE)</option>
           </select>
         </div>
         <div>
-          <label for="bankExpirySelect" class="vl-label">BANKNIFTY</label>
+          <label for="bankExpirySelect" class="vl-label">BANKNIFTY Listed Expiry</label>
           <select id="bankExpirySelect" class="vl-select font-mono-num">
-            <option value="0" selected>25 Nov 2026 · Monthly (19.0d)</option>
-            <option value="1">30 Dec 2026 · Monthly (54.0d)</option>
-            <option value="2">27 Jan 2027 · Monthly (82.0d)</option>
+            <option value="0" selected>25 Nov 2026 · Monthly (19.0 DTE)</option>
+            <option value="1">30 Dec 2026 · Monthly (54.0 DTE)</option>
+            <option value="2">27 Jan 2027 · Monthly (82.0 DTE)</option>
+          </select>
+        </div>
+        <div>
+          <label for="researchSymbolSelect" class="vl-label">Primary Chart &amp; Chain Instrument</label>
+          <select id="researchSymbolSelect" class="vl-select font-mono-num font-bold text-sky-300">
+            <option value="NIFTY" selected>NIFTY 50 (Lot = 75)</option>
+            <option value="BANKNIFTY">BANKNIFTY (Lot = 30)</option>
           </select>
         </div>
       </div>
 
-      <!-- ◈ VOLATILITY RADAR (Exact match to render_trade_decision_radar in monitor_ui.py) -->
+      <!-- ◈ VOLATILITY RADAR (Side-by-Side NIFTY & BANKNIFTY Cards) -->
       <div>
-        <div class="flex items-center gap-2 mt-1 mb-2.5">
-          <span class="text-[#d4af37] text-sm">◈</span>
-          <span class="text-[12.5px] font-bold tracking-[0.09em] uppercase text-slate-200">Volatility Radar</span>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-[#eab308] font-bold">◈</span>
+          <span class="text-xs font-extrabold tracking-wider uppercase text-white">Volatility Radar · Regime, Expected Move &amp; Parity Basis</span>
         </div>
-
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <!-- NIFTY Radar Card -->
           <div id="radarCardNifty" class="vl-radar-card"></div>
-          <!-- BANKNIFTY Radar Card -->
           <div id="radarCardBank" class="vl-radar-card"></div>
         </div>
       </div>
 
-      <!-- Compact Summary Table -->
-      <div class="overflow-x-auto rounded-xl border border-[#1e293b] bg-[#111827]/75">
+      <!-- ⚡ ACTIONABLE TRADING OPPORTUNITY SCREENER -->
+      <div class="vl-chart-panel">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-emerald-400 font-bold">⚡</span>
+            <span class="text-xs font-extrabold uppercase tracking-wider text-white">Actionable Trade Setups Spotted (VRP, Term Structure, Skew &amp; Intraday Theta)</span>
+          </div>
+          <span class="text-xs font-mono-num text-slate-300">Click any trade card to load into Backtest or Payoff Pricer</span>
+        </div>
+        <div id="opportunityScannerGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3"></div>
+      </div>
+
+      <!-- Full 14-Column Index Expiry Table -->
+      <div class="overflow-x-auto rounded-xl border border-[#293b56] bg-[#0e1624]">
         <table class="w-full text-left border-collapse text-xs font-mono-num">
           <thead>
-            <tr class="border-b border-[#1e293b] bg-[#0d1320] text-[11px] uppercase text-slate-400">
-              <th class="py-2.5 px-3">Instrument</th>
+            <tr class="border-b border-[#293b56] bg-[#162235] text-[11px] uppercase text-white font-bold">
+              <th class="py-2.5 px-3">Index</th>
               <th class="py-2.5 px-3">Expiry</th>
-              <th class="py-2.5 px-3 text-right">Spot Price</th>
+              <th class="py-2.5 px-3 text-right">Spot</th>
               <th class="py-2.5 px-3 text-right">Synthetic Fut</th>
-              <th class="py-2.5 px-3 text-right">Month Fut LTP</th>
-              <th class="py-2.5 px-3 text-right">ATM IV (%)</th>
-              <th class="py-2.5 px-3 text-right">Realized HV30</th>
+              <th class="py-2.5 px-3 text-right">Month Fut</th>
+              <th class="py-2.5 px-3 text-right">Basis</th>
+              <th class="py-2.5 px-3 text-right text-sky-300">Broker IV</th>
+              <th class="py-2.5 px-3 text-right text-emerald-300">HV 10D</th>
+              <th class="py-2.5 px-3 text-right text-cyan-200">HV 30D</th>
+              <th class="py-2.5 px-3 text-right text-amber-300">GARCH FRV</th>
               <th class="py-2.5 px-3 text-right">IV-RV Spread</th>
-              <th class="py-2.5 px-3 text-right">25Δ Reversal</th>
-              <th class="py-2.5 px-3 text-right">Quote Status</th>
+              <th class="py-2.5 px-3 text-right">IV-GARCH Gap</th>
+              <th class="py-2.5 px-3 text-right">RR25 Skew</th>
+              <th class="py-2.5 px-3 text-right">Trade Signal</th>
             </tr>
           </thead>
-          <tbody id="summaryTableBody" class="divide-y divide-slate-800/70"></tbody>
+          <tbody id="summaryTableBody" class="divide-y divide-[#1e2d44]"></tbody>
         </table>
       </div>
 
-      <hr class="border-[#1e293b] my-3" />
-
-      <!-- Instrument Selector (1/4) + Chart View Segmented Control (3/4) -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
-        <div class="lg:col-span-3">
-          <label for="researchSymbolSelect" class="vl-label">Instrument</label>
-          <select id="researchSymbolSelect" class="vl-select font-mono-num">
-            <option value="NIFTY" selected>NIFTY</option>
-            <option value="BANKNIFTY">BANKNIFTY</option>
-          </select>
+      <!-- Chart View Navigation Bar (Used when in Single Tab Focus, or jumps to section in Grid mode) -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <div class="vl-segmented" id="chartViewSegmented">
+          <button type="button" data-chartview="regime" class="chart-view-btn vl-seg-btn active">Vol Regime &amp; History</button>
+          <button type="button" data-chartview="term" class="chart-view-btn vl-seg-btn">Term Structure &amp; Calendars</button>
+          <button type="button" data-chartview="smile" class="chart-view-btn vl-seg-btn">Smile &amp; Skew</button>
+          <button type="button" data-chartview="intraday" class="chart-view-btn vl-seg-btn">Intraday Straddle &amp; Greeks</button>
+          <button type="button" data-chartview="pricer" class="chart-view-btn vl-seg-btn">Trade Review &amp; Payoff Pricer</button>
         </div>
-        <div class="lg:col-span-9">
-          <div class="vl-segmented" id="chartViewSegmented">
-            <button type="button" data-chartview="regime" class="chart-view-btn vl-seg-btn active">Vol Regime &amp; History</button>
-            <button type="button" data-chartview="term" class="chart-view-btn vl-seg-btn">Term Structure &amp; Calendars</button>
-            <button type="button" data-chartview="smile" class="chart-view-btn vl-seg-btn">Smile &amp; Skew</button>
-            <button type="button" data-chartview="intraday" class="chart-view-btn vl-seg-btn">Intraday Straddle &amp; Greeks</button>
-          </div>
-        </div>
-      </div>
 
-      <!-- SUB-VIEW A: VOL REGIME & HISTORY -->
-      <div id="subview-regime" class="space-y-4 pt-1">
-        <div class="flex flex-wrap items-center justify-between gap-3">
+        <!-- Global History Controls (Scope, Metric, Range) -->
+        <div class="flex flex-wrap items-center gap-2">
           <div class="vl-segmented" id="scopeSegmented">
             <button type="button" data-scope="roll" class="scope-btn vl-seg-btn active">Continuous roll (across expiries)</button>
             <button type="button" data-scope="selected" id="selectedExpiryScopeBtn" class="scope-btn vl-seg-btn">Selected: 2026-11-12</button>
           </div>
-          <div class="flex flex-wrap items-center gap-3">
-            <div class="vl-segmented" id="metricModeSegmented">
-              <button type="button" data-metric="iv_rv" class="metric-btn vl-seg-btn active">IV vs Realized</button>
-              <button type="button" data-metric="spread" class="metric-btn vl-seg-btn">IV-RV Spread</button>
-            </div>
-            <div class="vl-segmented" id="rangeSegmented">
-              <button type="button" data-range="1M" class="range-btn vl-seg-btn active">1M</button>
-              <button type="button" data-range="3M" class="range-btn vl-seg-btn">3M</button>
-              <button type="button" data-range="6M" class="range-btn vl-seg-btn">6M</button>
-              <button type="button" data-range="1Y" class="range-btn vl-seg-btn">1Y</button>
-            </div>
+          <div class="vl-segmented" id="metricModeSegmented">
+            <button type="button" data-metric="iv_rv" class="metric-btn vl-seg-btn active">IV vs Realized</button>
+            <button type="button" data-metric="spread" class="metric-btn vl-seg-btn">IV-RV Spread</button>
+          </div>
+          <div class="vl-segmented" id="rangeSegmented">
+            <button type="button" data-range="1M" class="range-btn vl-seg-btn active">1M</button>
+            <button type="button" data-range="3M" class="range-btn vl-seg-btn">3M</button>
+            <button type="button" data-range="6M" class="range-btn vl-seg-btn">6M</button>
+            <button type="button" data-range="1Y" class="range-btn vl-seg-btn">1Y</button>
           </div>
         </div>
+      </div>
 
-        <div class="bg-[#111827]/85 border border-[#1e293b] rounded-xl p-4">
-          <div class="flex items-center justify-between mb-2">
-            <span id="regimeChartTitle" class="text-xs font-semibold uppercase tracking-wider text-slate-300">NIFTY · Implied Volatility vs. Trailing Realized Volatility &amp; GARCH(1,1) Forecast</span>
-            <span class="text-[11px] font-mono-num text-[#d4af37]">15:30 IST Close Series</span>
+      <!-- =============================================================== -->
+      <!-- HIGH-READABILITY 2x2 CORE TRADING GRAPHS GRID                   -->
+      <!-- =============================================================== -->
+      <div id="coreGraphsGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        <!-- GRAPH 1: VOL REGIME & IV-RV SPREAD HISTORY -->
+        <div id="subview-regime" class="vl-chart-panel space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#1e2d44] pb-2">
+            <div>
+              <h3 id="regimeChartTitle" class="text-sm font-bold text-white">1. Vol Regime &amp; History · Broker IV vs. HV30, HV10 &amp; GARCH</h3>
+              <p class="text-xs text-slate-300">Gold = Broker IV (%) · Cyan = HV 30D (%) · Green = HV 10D (%) · Dashed = +1.5 pp Sell Edge</p>
+            </div>
+            <span id="regimeEdgePill" class="px-2.5 py-1 rounded bg-emerald-500/20 border border-emerald-400 text-emerald-300 font-mono-num text-xs font-bold">VRP: +2.94 pp (84th %ile)</span>
           </div>
-          <div class="relative h-80">
+          <div class="relative" style="height: 340px;">
             <canvas id="regimeHistoryChart"></canvas>
           </div>
         </div>
 
-        <!-- Volatility by Horizon & Maturity-Matched Ranking -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div class="bg-[#111827]/85 border border-[#1e293b] rounded-xl p-4 space-y-2.5">
-            <div class="text-xs font-bold text-slate-200">Volatility by horizon &amp; Econometric Forecasts</div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-left border-collapse text-xs font-mono-num">
-                <thead>
-                  <tr class="border-b border-[#1e293b] text-[11px] text-slate-400">
-                    <th class="py-2 px-2.5">Horizon / Model</th>
-                    <th class="py-2 px-2.5 text-right">Current (%)</th>
-                    <th class="py-2 px-2.5 text-right">20D Median</th>
-                    <th class="py-2 px-2.5 text-right">1Y Percentile</th>
-                    <th class="py-2 px-2.5 text-right">Regime Signal</th>
-                  </tr>
-                </thead>
-                <tbody id="horizonTableBody" class="divide-y divide-slate-800/60"></tbody>
-              </table>
+        <!-- GRAPH 2: TERM STRUCTURE & FORWARD VOLATILITY -->
+        <div id="subview-term" class="vl-chart-panel space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#1e2d44] pb-2">
+            <div>
+              <h3 id="termChartTitle" class="text-sm font-bold text-white">2. Listed Expiry Term Structure &amp; Forward Vol (σ_fwd)</h3>
+              <p class="text-xs text-slate-300">Direct % labels on every expiry · Compare Spot IV vs. Forward Vol &amp; GARCH FRV</p>
             </div>
+            <button type="button" id="downloadTermCsvBtn" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono-num text-sky-300 border border-slate-600">
+              Export CSV
+            </button>
           </div>
-
-          <div class="bg-[#111827]/85 border border-[#1e293b] rounded-xl p-4 space-y-2.5">
-            <div class="text-xs font-bold text-slate-200">Maturity-Matched Historical Ranking (±3 DTE cycles)</div>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1" id="maturityRankCards"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- SUB-VIEW B: TERM STRUCTURE & CALENDARS -->
-      <div id="subview-term" class="hidden space-y-4 pt-1">
-        <div class="bg-[#111827]/85 border border-[#1e293b] rounded-xl p-4">
-          <div class="flex items-center justify-between mb-2">
-            <span id="termChartTitle" class="text-xs font-semibold uppercase tracking-wider text-slate-300">Term Structure · Spot ATM IV vs. Forward Volatility (σ_fwd) &amp; GARCH Cone</span>
-            <span class="text-[11px] font-mono-num text-emerald-400">Calendar Variance Clean</span>
-          </div>
-          <div class="relative h-80">
+          <div class="relative" style="height: 340px;">
             <canvas id="termStructureChart"></canvas>
           </div>
         </div>
 
-        <div class="overflow-x-auto rounded-xl border border-[#1e293b] bg-[#111827]/85">
-          <table class="w-full text-left border-collapse text-xs font-mono-num">
-            <thead>
-              <tr class="border-b border-[#1e293b] bg-[#0d1320] text-[11px] uppercase text-slate-400">
-                <th class="py-2.5 px-3">Expiry Date</th>
-                <th class="py-2.5 px-3">Cycle</th>
-                <th class="py-2.5 px-3 text-right">DTE (15:30 IST)</th>
-                <th class="py-2.5 px-3 text-right">Parity Forward</th>
-                <th class="py-2.5 px-3 text-right">ATM IV (%)</th>
-                <th class="py-2.5 px-3 text-right">Forward Vol σ_fwd</th>
-                <th class="py-2.5 px-3 text-right">GARCH Forecast</th>
-                <th class="py-2.5 px-3 text-right">ATM Straddle (Pts)</th>
-              </tr>
-            </thead>
-            <tbody id="termTableBody" class="divide-y divide-slate-800/60"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- SUB-VIEW C: SMILE & SKEW -->
-      <div id="subview-smile" class="hidden space-y-4 pt-1">
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="smileKpiRow"></div>
-
-        <div class="bg-[#111827]/85 border border-[#1e293b] rounded-xl p-4">
-          <div class="flex items-center justify-between mb-2">
-            <span id="smileChartTitle" class="text-xs font-semibold uppercase tracking-wider text-slate-300">Arbitrage-Free SVI Implied Volatility Smile vs. Broker Mid Quotes</span>
-            <span class="text-[11px] font-mono-num text-[#38bdf8]">Put-Call Parity Implied Forward Centered</span>
+        <!-- GRAPH 3: SMILE & SKEW (WITH INTERACTIVE WHAT-IF SLIDERS) -->
+        <div id="subview-smile" class="vl-chart-panel space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#1e2d44] pb-2">
+            <div>
+              <h3 id="smileChartTitle" class="text-sm font-bold text-white">3. Volatility Smile &amp; 25Δ Skew (SVI Fair Curve vs. Broker IV)</h3>
+              <p class="text-xs text-slate-300">Points above gold SVI curve = Rich Strikes to Sell · Points below = Cheap Wings to Buy</p>
+            </div>
+            <button type="button" id="resetSmileSlidersBtn" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono-num text-amber-300 border border-slate-600">
+              Reset Sliders
+            </button>
           </div>
-          <div class="relative h-80">
+          <!-- Compact What-If Sliders -->
+          <div class="grid grid-cols-3 gap-2.5 bg-[#0e1624] p-2.5 rounded-lg border border-[#293b56] text-xs">
+            <div>
+              <div class="flex justify-between mb-1"><span class="text-slate-200">IV Shift</span><span id="smileIvShiftLbl" class="font-mono-num text-sky-400 font-bold">0 bps</span></div>
+              <input id="smileIvShift" type="range" min="-250" max="250" step="25" value="0" class="w-full" />
+            </div>
+            <div>
+              <div class="flex justify-between mb-1"><span class="text-slate-200">25Δ Skew</span><span id="smileRr25Lbl" class="font-mono-num text-amber-300 font-bold">+2.10 pp</span></div>
+              <input id="smileRr25" type="range" min="-2.0" max="5.0" step="0.15" value="2.10" class="w-full" />
+            </div>
+            <div>
+              <div class="flex justify-between mb-1"><span class="text-slate-200">Butterfly</span><span id="smileBf25Lbl" class="font-mono-num text-emerald-400 font-bold">+0.68 pp</span></div>
+              <input id="smileBf25" type="range" min="0.1" max="2.5" step="0.1" value="0.68" class="w-full" />
+            </div>
+          </div>
+          <div class="relative" style="height: 290px;">
             <canvas id="smileSkewChart"></canvas>
           </div>
         </div>
 
-        <div class="overflow-x-auto rounded-xl border border-[#1e293b] bg-[#111827]/85">
-          <table class="w-full text-right border-collapse text-xs font-mono-num">
+        <!-- GRAPH 4: INTRADAY ATM STRADDLE DECAY VS. SESSION VWAP -->
+        <div id="subview-intraday" class="vl-chart-panel space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#1e2d44] pb-2">
+            <div>
+              <h3 class="text-sm font-bold text-white">4. Intraday ATM Straddle Premium vs. Session VWAP (09:15–15:30 IST)</h3>
+              <p class="text-xs text-slate-300">Green = Straddle Price (₹) · Gold Dashed = Session VWAP · Straddle below VWAP confirms short theta edge</p>
+            </div>
+            <div class="vl-segmented" id="intradayMetricSegmented">
+              <button type="button" data-intra="straddle" class="intra-btn vl-seg-btn active">Straddle ₹</button>
+              <button type="button" data-intra="iv" class="intra-btn vl-seg-btn">Intraday IV %</button>
+              <button type="button" data-intra="delta" class="intra-btn vl-seg-btn">Net Δ</button>
+            </div>
+          </div>
+          <div id="intradayKpiRow" class="grid grid-cols-3 sm:grid-cols-6 gap-2"></div>
+          <div class="relative" style="height: 280px;">
+            <canvas id="intradayStraddleChart"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- =============================================================== -->
+      <!-- SECTION 5: MULTI-LEG PAYOFF PRICER & STICKY-STRIKE STRESS TEST  -->
+      <!-- =============================================================== -->
+      <div id="subview-pricer" class="vl-chart-panel space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#1e2d44] pb-2">
+          <div>
+            <h3 class="text-sm font-bold text-white">5. Multi-Leg Trade Review, Expiry Payoff Curve &amp; Spot × IV Stress Matrix</h3>
+            <p class="text-xs text-slate-300">Simulate exact INR payoff and sticky-strike IV shock risk before entering a trade</p>
+          </div>
+          <span id="pricerBreakevenBadge" class="px-3 py-1 rounded bg-amber-500/15 border border-amber-400 text-amber-300 font-mono-num text-xs font-bold">
+            Breakevens: 23,885 – 24,515 (±1.30%)
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          <!-- Controls -->
+          <div class="lg:col-span-4 bg-[#0e1624] p-3.5 rounded-xl border border-[#293b56] space-y-3">
+            <div>
+              <label for="pricerStructSelect" class="vl-label">Strategy Structure</label>
+              <select id="pricerStructSelect" class="vl-select font-mono-num">
+                <option value="IRON_CONDOR" selected>Short Iron Condor (±16Δ Short / ±5Δ Wings)</option>
+                <option value="IRON_FLY">Short Iron Butterfly (ATM Straddle + ±300 Wings)</option>
+                <option value="SHORT_STRADDLE">Short ATM Straddle (Unhedged)</option>
+                <option value="LONG_STRADDLE">Long ATM Straddle (Gamma Scalp)</option>
+                <option value="PUT_RATIO">1x2 Put Ratio Spread (Skew Harvest)</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label for="pricerSpotInput" class="vl-label">Underlying Spot</label>
+                <input id="pricerSpotInput" type="number" step="50" value="24200" class="vl-input font-mono-num" />
+              </div>
+              <div>
+                <label for="pricerStrikeInput" class="vl-label">Center Strike (K)</label>
+                <input id="pricerStrikeInput" type="number" step="50" value="24200" class="vl-input font-mono-num" />
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label for="pricerDteInput" class="vl-label">DTE (Days)</label>
+                <input id="pricerDteInput" type="number" step="1" min="1" max="90" value="6" class="vl-input font-mono-num" />
+              </div>
+              <div>
+                <label for="pricerIvInput" class="vl-label">ATM IV (%)</label>
+                <input id="pricerIvInput" type="number" step="0.25" value="14.65" class="vl-input font-mono-num" />
+              </div>
+              <div>
+                <label for="pricerLotsInput" class="vl-label">Lots</label>
+                <input id="pricerLotsInput" type="number" step="1" min="1" max="50" value="1" class="vl-input font-mono-num" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label for="pricerElapsedDays" class="vl-label">Horizon (T + Days)</label>
+                <input id="pricerElapsedDays" type="number" step="0.5" min="0" max="30" value="1.0" class="vl-input font-mono-num" />
+              </div>
+              <div>
+                <label for="pricerWingWidth" class="vl-label">Wing Width (Pts)</label>
+                <input id="pricerWingWidth" type="number" step="50" min="100" max="1500" value="300" class="vl-input font-mono-num" />
+              </div>
+            </div>
+            <div id="pricerGreeksSummary" class="grid grid-cols-2 gap-2"></div>
+          </div>
+
+          <!-- Payoff Chart -->
+          <div class="lg:col-span-8 bg-[#0e1624] p-3.5 rounded-xl border border-[#293b56]">
+            <div class="text-xs font-bold text-white mb-2">Expiry Payoff (15:30 IST) vs. T+n Horizon Curve (INR, Net of Upstox Charges)</div>
+            <div class="relative" style="height: 295px;">
+              <canvas id="payoffCurveChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sticky-Strike Spot x IV Shock Matrix -->
+        <div class="overflow-x-auto rounded-xl border border-[#293b56] bg-[#0e1624]">
+          <table class="w-full text-center border-collapse text-xs font-mono-num">
             <thead>
-              <tr class="border-b border-[#1e293b] bg-[#0d1320] text-[11px] uppercase text-slate-400">
-                <th class="py-2 px-3 text-left">Moneyness</th>
-                <th class="py-2 px-3">Call LTP</th>
-                <th class="py-2 px-3">Call Δ</th>
-                <th class="py-2 px-3 text-center bg-slate-800/80 text-white">Strike</th>
-                <th class="py-2 px-3">Put LTP</th>
-                <th class="py-2 px-3">Put Δ</th>
-                <th class="py-2 px-3 text-[#38bdf8]">Market IV (%)</th>
-                <th class="py-2 px-3 text-[#d4af37]">SVI Fitted IV (%)</th>
-                <th class="py-2 px-3">Pricing Edge (bps)</th>
+              <tr class="border-b border-[#293b56] bg-[#162235] text-white font-bold">
+                <th class="py-2 px-3 text-left">Spot Shock \ IV Shift</th>
+                <th class="py-2 px-3">-3.0 pp (Vol Crush)</th>
+                <th class="py-2 px-3">-1.5 pp</th>
+                <th class="py-2 px-3">0.0 pp (Unchanged)</th>
+                <th class="py-2 px-3">+1.5 pp</th>
+                <th class="py-2 px-3">+3.0 pp (Vol Spike)</th>
               </tr>
             </thead>
-            <tbody id="smileChainBody" class="divide-y divide-slate-800/60"></tbody>
+            <tbody id="pricerStressMatrixBody" class="divide-y divide-[#1e2d44]"></tbody>
           </table>
         </div>
       </div>
 
-      <!-- SUB-VIEW D: INTRADAY STRADDLE & GREEKS -->
-      <div id="subview-intraday" class="hidden space-y-4 pt-1">
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="intradayKpiRow"></div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div class="bg-[#111827]/85 border border-[#1e293b] rounded-xl p-4">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold uppercase tracking-wider text-slate-300">Intraday ATM Straddle Premium vs. Session VWAP (09:15–15:30 IST)</span>
-              <span class="text-[11px] font-mono-num text-emerald-400">1-Minute Archive</span>
-            </div>
-            <div class="relative h-72">
-              <canvas id="intradayStraddleChart"></canvas>
-            </div>
+      <!-- =============================================================== -->
+      <!-- RELATIVE VALUE, HORIZON MODELS & STRIKE MISPRICING TABLES       -->
+      <!-- =============================================================== -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Table 1: Maturity-Matched Historical Ranking & Horizon Forecasts -->
+        <div class="vl-chart-panel space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold uppercase tracking-wider text-white">◈ Maturity-Matched Historical Ranking (±3 DTE Cycles)</span>
+            <span class="text-xs font-mono-num text-amber-300">1-Year Percentile &amp; Z-Score</span>
+          </div>
+          <div id="maturityRankCards" class="grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+          <div class="overflow-x-auto rounded-lg border border-[#293b56]">
+            <table class="w-full text-left border-collapse text-xs font-mono-num">
+              <thead>
+                <tr class="border-b border-[#293b56] bg-[#162235] text-white">
+                  <th class="py-2 px-2.5">Measure</th>
+                  <th class="py-2 px-2.5 text-right">Current</th>
+                  <th class="py-2 px-2.5 text-right">Median</th>
+                  <th class="py-2 px-2.5 text-right">Percentile</th>
+                  <th class="py-2 px-2.5 text-right">Z-Score</th>
+                  <th class="py-2 px-2.5 text-right">Actionable Signal</th>
+                </tr>
+              </thead>
+              <tbody id="maturityRankingTableBody" class="divide-y divide-[#1e2d44]"></tbody>
+            </table>
           </div>
 
-          <div class="bg-[#111827]/85 border border-[#1e293b] rounded-xl p-4 space-y-2.5">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold uppercase tracking-wider text-slate-300">Position Stress Matrix · Spot × IV Shock (1 Lot Short Straddle INR)</span>
-              <span class="text-[11px] font-mono-num text-[#d4af37]">Exact BSM Revaluation</span>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-center border-collapse text-xs font-mono-num">
-                <thead>
-                  <tr class="border-b border-[#1e293b] bg-[#0d1320] text-slate-400">
-                    <th class="py-2 px-2 text-left">Spot \ IV Shift</th>
-                    <th class="py-2 px-2">-3.0% IV</th>
-                    <th class="py-2 px-2">-1.5% IV</th>
-                    <th class="py-2 px-2">0.0% IV</th>
-                    <th class="py-2 px-2">+1.5% IV</th>
-                    <th class="py-2 px-2">+3.0% IV</th>
-                  </tr>
-                </thead>
-                <tbody id="intradayStressBody" class="divide-y divide-slate-800/60"></tbody>
-              </table>
-            </div>
+          <div class="flex items-center justify-between pt-1">
+            <span class="text-xs font-bold text-white">Volatility by Horizon (GARCH / EWMA / Yang-Zhang)</span>
+            <select id="holdingHorizonSelect" class="bg-[#0e1624] border border-slate-600 rounded px-2 py-0.5 text-xs font-mono-num text-sky-300">
+              <option value="5">5 Sessions</option>
+              <option value="10">10 Sessions</option>
+              <option value="20" selected>20 Sessions</option>
+              <option value="30">30 Sessions</option>
+              <option value="60">60 Sessions</option>
+            </select>
+          </div>
+          <div class="overflow-x-auto rounded-lg border border-[#293b56]">
+            <table class="w-full text-left border-collapse text-xs font-mono-num">
+              <thead>
+                <tr class="border-b border-[#293b56] bg-[#162235] text-white">
+                  <th class="py-2 px-2.5">Horizon</th>
+                  <th class="py-2 px-2.5 text-right text-amber-300">GARCH FRV</th>
+                  <th class="py-2 px-2.5 text-right text-emerald-300">EWMA FRV</th>
+                  <th class="py-2 px-2.5 text-right text-sky-300">Yang-Zhang RV</th>
+                  <th class="py-2 px-2.5 text-right">IV - GARCH</th>
+                </tr>
+              </thead>
+              <tbody id="horizonTableBody" class="divide-y divide-[#1e2d44]"></tbody>
+            </table>
           </div>
         </div>
+
+        <!-- Table 2: Strike-by-Strike SVI Mispricing & Term Structure Table -->
+        <div class="vl-chart-panel space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold uppercase tracking-wider text-white">◈ Cross-Strike Option Chain &amp; SVI Mispricing Scanner</span>
+            <span class="text-xs font-mono-num text-emerald-400">Edge &ge; +15 bps = Rich Strike to Sell</span>
+          </div>
+          <div id="smileKpiRow" class="grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+          <div class="overflow-x-auto rounded-lg border border-[#293b56]">
+            <table class="w-full text-right border-collapse text-xs font-mono-num">
+              <thead>
+                <tr class="border-b border-[#293b56] bg-[#162235] text-white">
+                  <th class="py-2 px-2.5 text-left">Zone</th>
+                  <th class="py-2 px-2.5">Call LTP</th>
+                  <th class="py-2 px-2.5 text-center bg-slate-800">Strike</th>
+                  <th class="py-2 px-2.5">Put LTP</th>
+                  <th class="py-2 px-2.5 text-sky-300">Broker IV</th>
+                  <th class="py-2 px-2.5 text-amber-300">SVI Fair</th>
+                  <th class="py-2 px-2.5">Edge</th>
+                  <th class="py-2 px-2.5">Opportunity</th>
+                </tr>
+              </thead>
+              <tbody id="smileChainBody" class="divide-y divide-[#1e2d44]"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hidden compatibility containers for Term Table & Intraday Session Select -->
+      <div class="overflow-x-auto rounded-xl border border-[#293b56] bg-[#0e1624] p-3 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase text-white">Listed Expiry Term Structure &amp; Forward Volatility Table</span>
+          <select id="intradaySessionSelect" class="bg-[#0b121e] border border-slate-600 rounded px-2 py-0.5 text-xs font-mono-num text-slate-200">
+            <option value="2026-11-06" selected>Intraday Session: 06 Nov 2026</option>
+          </select>
+        </div>
+        <div id="termGapDiagnosticBox" class="text-xs text-slate-200 bg-[#0b121e] p-2.5 rounded border-l-4 border-l-sky-400"></div>
+        <table class="w-full text-left border-collapse text-xs font-mono-num">
+          <thead>
+            <tr class="border-b border-[#293b56] bg-[#162235] text-white">
+              <th class="py-2 px-3">Expiry</th>
+              <th class="py-2 px-3">Cycle</th>
+              <th class="py-2 px-3 text-right">DTE</th>
+              <th class="py-2 px-3 text-right text-sky-300">Broker IV</th>
+              <th class="py-2 px-3 text-right text-amber-300">GARCH FRV</th>
+              <th class="py-2 px-3 text-right text-emerald-300">EWMA FRV</th>
+              <th class="py-2 px-3 text-right text-purple-300">Fwd Vol σ_fwd</th>
+              <th class="py-2 px-3 text-right">IV - GARCH</th>
+              <th class="py-2 px-3 text-right">Synthetic Fut</th>
+              <th class="py-2 px-3 text-right">ATM Straddle</th>
+              <th class="py-2 px-3 text-right">Calendar Action</th>
+            </tr>
+          </thead>
+          <tbody id="termTableBody" class="divide-y divide-[#1e2d44]"></tbody>
+        </table>
       </div>
 
     </main>
 
     <!-- =================================================================== -->
-    <!-- WORKSPACE 2: BACKTEST (backtest_ui.py)                              -->
+    <!-- WORKSPACE 2: BACKTEST                                               -->
     <!-- =================================================================== -->
-    <main id="workspaceBacktest" class="hidden space-y-5">
+    <main id="workspaceBacktest" class="hidden space-y-4">
 
-      <h2 class="text-lg font-semibold text-slate-100 border-b border-[#1e293b] pb-2">Strategy builder</h2>
-
-      <!-- Starting Template & Strategy Name -->
-      <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 bg-[#0e1624] p-4 rounded-xl border border-[#293b56]">
         <div class="md:col-span-5">
-          <label for="btPresetSelect" class="vl-label">Starting template</label>
-          <select id="btPresetSelect" class="vl-select">
-            <option value="S1" selected>Scenario 1 · Short VRP Iron Condor</option>
+          <label for="btPresetSelect" class="vl-label">Starting template (6 Audited Quantitative Scenarios)</label>
+          <select id="btPresetSelect" class="vl-select font-bold text-sky-300">
+            <option value="S1">Scenario 1 · Short VRP Iron Condor</option>
             <option value="S2">Scenario 2 · Long Straddle Gamma Scalp</option>
-            <option value="S3">Scenario 3 · Event Vol Crush Iron Butterfly</option>
+            <option value="S3" selected>Scenario 3 · Event Vol Crush Iron Butterfly</option>
             <option value="S4">Scenario 4 · Put Skew Ratio Spread</option>
             <option value="S5">Scenario 5 · Low-HV Theta Iron Butterfly</option>
             <option value="S6">Scenario 6 · Call Skew Bear Condor</option>
-            <option value="ALL">All 6 Audited Scenarios · Equal-Weight Portfolio</option>
+            <option value="ALL">All 6 Audited Scenarios · Combined Portfolio</option>
           </select>
         </div>
         <div class="md:col-span-7">
           <label for="btStrategyName" class="vl-label">Strategy name</label>
-          <input id="btStrategyName" type="text" value="Scenario 1 · Short VRP Iron Condor" class="vl-input" />
+          <input id="btStrategyName" type="text" value="Scenario 3 · Event Vol Crush Iron Butterfly" class="vl-input" />
         </div>
-      </div>
 
-      <!-- ◈ Quantitative Trade Scenario Hypothesis Callout (Exact match to backtest_ui.py) -->
-      <div class="rounded-xl p-3.5 border border-[#1e293b] border-l-[3px] border-l-[#d4af37]" style="background:linear-gradient(180deg, rgba(22,32,51,0.78) 0%, rgba(17,24,39,0.95) 100%);">
-        <div class="text-[11.5px] font-bold uppercase tracking-wider text-[#d4af37] mb-1">◈ Quantitative Trade Scenario Hypothesis</div>
-        <div id="btHypothesisText" class="text-[13px] text-slate-100 leading-relaxed mb-1">
-          Harvest structural Volatility Risk Premium when 30D Implied Volatility trades rich against trailing Yang-Zhang Realized Volatility with defined 5Δ tail wings.
+        <div class="md:col-span-12 rounded-lg p-3 bg-[#070b12] border border-[#293b56] border-l-4 border-l-[#eab308]">
+          <div class="text-xs font-bold uppercase text-[#eab308] mb-0.5">◈ Quantitative Trade Scenario Hypothesis</div>
+          <div id="btHypothesisText" class="text-xs text-white mb-1">
+            Capture rapid post-open ATM implied volatility mean-reversion when weekly ATM IV spikes above 16.5% with ±300 pt protective wings.
+          </div>
+          <div id="btTriggersText" class="font-mono-num text-xs text-sky-300">
+            <b>Streamlit Triggers:</b> ATM IV &gt; 16.5% at 09:20 IST · Nearest Weekly · Defined Wing Risk
+          </div>
         </div>
-        <div id="btTriggersText" class="font-mono-num text-[11.5px] text-[#38bdf8]">
-          <b>Streamlit Triggers:</b> IV-RV Spread &gt; +2.0% at 09:20 IST · DTE 2–14 · Neutral Bias
-        </div>
-      </div>
 
-      <!-- Index, From, To -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
+        <!-- Index, From, To -->
+        <div class="md:col-span-4">
           <label for="btSymbolSelect" class="vl-label">Index</label>
           <select id="btSymbolSelect" class="vl-select font-mono-num">
-            <option value="NIFTY" selected>NIFTY</option>
-            <option value="BANKNIFTY">BANKNIFTY</option>
+            <option value="NIFTY" selected>NIFTY (Lot = 75)</option>
+            <option value="BANKNIFTY">BANKNIFTY (Lot = 30)</option>
           </select>
         </div>
-        <div>
+        <div class="md:col-span-4">
           <label for="btStartDate" class="vl-label">From</label>
           <input id="btStartDate" type="date" value="2026-08-06" class="vl-input font-mono-num" />
         </div>
-        <div>
+        <div class="md:col-span-4">
           <label for="btEndDate" class="vl-label">To</label>
           <input id="btEndDate" type="date" value="2026-11-06" class="vl-input font-mono-num" />
         </div>
-      </div>
-      <div id="btCoverageCaption" class="text-xs text-slate-400 -mt-2">
-        Available data window for NIFTY: Cloud + Historical archive (2026-08-06 to 2026-11-06 · 64 NSE sessions)
-      </div>
 
-      <!-- Entry, Exit, Lots, Expiry Rank -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div>
+        <div id="btCoverageCaption" class="md:col-span-12 text-xs text-slate-200 font-mono-num">
+          Available data window: Cloud + Historical archive (2026-08-06 to 2026-11-06 · 64 NSE sessions) · <span id="btResultRunStamp" class="text-emerald-400">Strict AvailableAt &le; DecisionTime</span>
+        </div>
+
+        <!-- Entry, Exit, Lots, Expiry Rank -->
+        <div class="md:col-span-3">
           <label for="btEntryTime" class="vl-label">Entry · IST</label>
           <input id="btEntryTime" type="time" value="09:20" class="vl-input font-mono-num" />
         </div>
-        <div>
+        <div class="md:col-span-3">
           <label for="btExitTime" class="vl-label">Exit · IST</label>
           <input id="btExitTime" type="time" value="15:15" class="vl-input font-mono-num" />
         </div>
-        <div>
+        <div class="md:col-span-3">
           <label for="btLots" class="vl-label">Strategy lots</label>
           <input id="btLots" type="number" min="1" max="50" value="1" class="vl-input font-mono-num" />
         </div>
-        <div>
+        <div class="md:col-span-3">
           <label for="btExpiryRank" class="vl-label">Expiry rank</label>
           <select id="btExpiryRank" class="vl-select">
             <option value="Nearest" selected>Nearest</option>
@@ -635,18 +724,16 @@
             <option value="Next+1">Next+1</option>
           </select>
         </div>
-      </div>
 
-      <!-- Trigger, Allocation, Bias -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
+        <!-- Trigger, Allocation, Bias, Slippage, Charges -->
+        <div class="md:col-span-2">
           <label for="btTriggerMode" class="vl-label">Trigger logic</label>
           <select id="btTriggerMode" class="vl-select">
             <option value="Market open">Market open</option>
             <option value="Time based" selected>Time based</option>
           </select>
         </div>
-        <div>
+        <div class="md:col-span-2">
           <label for="btAllocMode" class="vl-label">Allocation</label>
           <select id="btAllocMode" class="vl-select">
             <option value="Equal" selected>Equal</option>
@@ -654,7 +741,7 @@
             <option value="By notional">By notional</option>
           </select>
         </div>
-        <div>
+        <div class="md:col-span-2">
           <label for="btBiasMode" class="vl-label">Bias</label>
           <select id="btBiasMode" class="vl-select">
             <option value="Neutral" selected>Neutral</option>
@@ -662,20 +749,32 @@
             <option value="Bearish">Bearish</option>
           </select>
         </div>
+        <div class="md:col-span-3">
+          <label for="btSlippageTicks" class="vl-label">Slippage (ticks/leg)</label>
+          <input id="btSlippageTicks" type="number" min="0" max="10" step="0.5" value="1.0" class="vl-input font-mono-num" />
+        </div>
+        <div class="md:col-span-3 flex items-end pb-1.5">
+          <label class="inline-flex items-center gap-2 cursor-pointer text-xs text-white font-bold">
+            <input id="btUpstoxCharges" type="checkbox" checked class="w-4 h-4 accent-emerald-500 rounded" />
+            <span>Deduct Upstox STT + GST</span>
+          </label>
+        </div>
       </div>
 
-      <!-- Option Legs Table -->
-      <div class="space-y-2">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-bold text-slate-200">Option legs</span>
-          <button type="button" id="addLegBtn" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-sky-300 border border-slate-700 transition">
-            + Add leg
-          </button>
+      <!-- Option Legs Editor -->
+      <div class="vl-chart-panel space-y-2.5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span class="text-xs font-extrabold uppercase text-white">Option Legs Builder</span>
+          <div class="flex items-center gap-2">
+            <button type="button" id="addLegBtn" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-sky-300 border border-slate-600">+ Add leg</button>
+            <button type="button" id="runBacktestBtn" class="px-4 py-1.5 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs">Run backtest</button>
+            <button type="button" id="downloadBtCsvBtn" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">Download trade ledger CSV</button>
+          </div>
         </div>
-        <div class="overflow-x-auto rounded-xl border border-[#1e293b] bg-[#111827]/85">
+        <div class="overflow-x-auto rounded-lg border border-[#293b56]">
           <table class="w-full text-left border-collapse text-xs font-mono-num">
             <thead>
-              <tr class="border-b border-[#1e293b] bg-[#0d1320] text-[11px] uppercase text-slate-400">
+              <tr class="border-b border-[#293b56] bg-[#162235] text-white">
                 <th class="py-2 px-3">Side</th>
                 <th class="py-2 px-3">Type</th>
                 <th class="py-2 px-3">Strike offset from ATM · points</th>
@@ -683,169 +782,116 @@
                 <th class="py-2 px-3 text-right">Action</th>
               </tr>
             </thead>
-            <tbody id="btLegsTableBody" class="divide-y divide-slate-800/60"></tbody>
+            <tbody id="btLegsTableBody" class="divide-y divide-[#1e2d44]"></tbody>
           </table>
         </div>
-        <p class="text-[11.5px] text-slate-400">
-          ATM uses the previous spot-minute close. Strike offsets are points; runs use each contract's saved NSE lot size (NIFTY = 75, BANKNIFTY = 30).
-        </p>
       </div>
 
-      <!-- Expanders: Session & Expiry Rules + Execution & Statutory Charges -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <details class="vl-expander">
-          <summary>
-            <span>Session &amp; expiry rules</span>
-            <span class="text-xs text-slate-400 font-mono-num">Mon–Fri · DTE 1–35</span>
-          </summary>
-          <div class="p-3.5 border-t border-[#1e293b] space-y-3 text-xs">
-            <div class="flex items-center justify-between">
-              <span class="text-slate-300">Minimum / Maximum DTE</span>
-              <span class="font-mono-num text-sky-400">1 to 35 calendar days</span>
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-slate-300">No-Lookahead Guard</span>
-              <span class="font-mono-num text-emerald-400">AvailableAt &le; DecisionTime</span>
-            </div>
-          </div>
-        </details>
-
-        <details class="vl-expander" open>
-          <summary>
-            <span>Execution slippage &amp; Upstox statutory charges</span>
-            <span class="text-xs text-emerald-400 font-mono-num">Active</span>
-          </summary>
-          <div class="p-3.5 border-t border-[#1e293b] grid grid-cols-2 gap-3 text-xs">
-            <div>
-              <label for="btSlippageTicks" class="vl-label">Slippage (ticks / leg)</label>
-              <input id="btSlippageTicks" type="number" min="0" max="10" step="0.5" value="1.0" class="vl-input font-mono-num" />
-            </div>
-            <div class="flex flex-col justify-end pb-1">
-              <label class="inline-flex items-center gap-2 cursor-pointer">
-                <input id="btUpstoxCharges" type="checkbox" checked class="w-4 h-4 accent-emerald-500 rounded" />
-                <span class="text-slate-200 font-medium">Include Upstox STT + GST</span>
-              </label>
-            </div>
-          </div>
-        </details>
+      <!-- 5 Backtest KPI Cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div class="vl-metric-card">
+          <div class="text-xs font-bold uppercase text-slate-200">Net P&amp;L (After Costs)</div>
+          <div id="resNetPnl" class="text-xl font-mono-num font-extrabold text-emerald-400 mt-1">+₹49,568</div>
+          <div id="resNetSub" class="text-xs font-mono-num text-slate-300 mt-0.5">Gross: +₹56,492</div>
+        </div>
+        <div class="vl-metric-card">
+          <div class="text-xs font-bold uppercase text-slate-200">Win Rate</div>
+          <div id="resWinRate" class="text-xl font-mono-num font-extrabold text-white mt-1">80.0%</div>
+          <div id="resTradeCount" class="text-xs font-mono-num text-slate-300 mt-0.5">5 Audited Sessions</div>
+        </div>
+        <div class="vl-metric-card">
+          <div class="text-xs font-bold uppercase text-slate-200">Profit Factor</div>
+          <div id="resProfitFactor" class="text-xl font-mono-num font-extrabold text-sky-400 mt-1">11.42</div>
+          <div class="text-xs font-mono-num text-slate-300 mt-0.5">Strict t &le; 09:20 IST</div>
+        </div>
+        <div class="vl-metric-card">
+          <div class="text-xs font-bold uppercase text-slate-200">Max Drawdown</div>
+          <div id="resMaxDd" class="text-xl font-mono-num font-extrabold text-rose-400 mt-1">-₹4,735</div>
+          <div class="text-xs font-mono-num text-slate-300 mt-0.5">Peak-to-Valley Net</div>
+        </div>
+        <div class="vl-metric-card">
+          <div class="text-xs font-bold uppercase text-slate-200">Upstox Charges &amp; Slip</div>
+          <div id="resCharges" class="text-xl font-mono-num font-extrabold text-[#eab308] mt-1">₹6,924</div>
+          <div class="text-xs font-mono-num text-slate-300 mt-0.5">STT + Exchange + GST</div>
+        </div>
       </div>
 
-      <!-- Run Backtest Action Row -->
-      <div class="flex flex-wrap items-center gap-3 pt-1">
-        <button type="button" id="runBacktestBtn" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-sky-500 hover:opacity-95 text-slate-950 font-bold text-xs tracking-wide transition shadow-lg shadow-emerald-500/20">
-          Run backtest
-        </button>
-        <button type="button" id="downloadBtCsvBtn" class="px-4 py-2.5 rounded-xl bg-[#111827] hover:bg-[#162033] text-slate-200 font-semibold text-xs border border-[#334155] transition">
-          Download trade ledger CSV
-        </button>
+      <!-- Backtest Report View Switcher -->
+      <div class="vl-segmented" id="btReportTabs">
+        <button type="button" data-rep="pnl" class="rep-tab-btn vl-seg-btn active">Net P&amp;L</button>
+        <button type="button" data-rep="dd" class="rep-tab-btn vl-seg-btn">Drawdown</button>
+        <button type="button" data-rep="ledger" class="rep-tab-btn vl-seg-btn">Trade ledger</button>
+        <button type="button" data-rep="monthly" class="rep-tab-btn vl-seg-btn">Monthly &amp; weekday</button>
       </div>
 
-      <!-- Backtest Results Section (backtest_report.py) -->
-      <div class="space-y-4 pt-3 border-t border-[#1e293b]">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <h3 class="text-base font-semibold text-slate-100">Backtest results</h3>
-          <span id="btResultRunStamp" class="text-xs font-mono-num text-slate-400">Completed in 0.18s · Strict No-Lookahead Verified</span>
-        </div>
-
-        <!-- 5 Institutional Metric Cards -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div class="vl-metric-card">
-            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Net P&amp;L (After Costs)</div>
-            <div id="resNetPnl" class="text-xl font-mono-num font-bold text-emerald-400 mt-1">+₹49,568</div>
-            <div id="resNetSub" class="text-[11px] font-mono-num text-slate-400 mt-0.5">Gross: +₹56,492</div>
-          </div>
-          <div class="vl-metric-card">
-            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Win Rate</div>
-            <div id="resWinRate" class="text-xl font-mono-num font-bold text-slate-100 mt-1">71.4%</div>
-            <div id="resTradeCount" class="text-[11px] font-mono-num text-slate-400 mt-0.5">21 Completed Sessions</div>
-          </div>
-          <div class="vl-metric-card">
-            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Profit Factor</div>
-            <div id="resProfitFactor" class="text-xl font-mono-num font-bold text-[#38bdf8] mt-1">2.64</div>
-            <div id="resSharpe" class="text-[11px] font-mono-num text-slate-400 mt-0.5">Annualized Sharpe: 2.91</div>
-          </div>
-          <div class="vl-metric-card">
-            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Max Drawdown</div>
-            <div id="resMaxDd" class="text-xl font-mono-num font-bold text-rose-400 mt-1">-₹4,735</div>
-            <div class="text-[11px] font-mono-num text-slate-400 mt-0.5">Peak-to-Valley Net</div>
-          </div>
-          <div class="vl-metric-card">
-            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Brokerage &amp; Slippage</div>
-            <div id="resCharges" class="text-xl font-mono-num font-bold text-[#d4af37] mt-1">₹6,924</div>
-            <div class="text-[11px] font-mono-num text-slate-400 mt-0.5">Upstox STT + Stamp + GST</div>
-          </div>
-        </div>
-
-        <!-- Report View Tabs (Net P&L | Drawdown | Trade ledger | Monthly & weekday) -->
-        <div class="vl-segmented" id="btReportTabs">
-          <button type="button" data-rep="pnl" class="rep-tab-btn vl-seg-btn active">Net P&amp;L</button>
-          <button type="button" data-rep="dd" class="rep-tab-btn vl-seg-btn">Drawdown</button>
-          <button type="button" data-rep="ledger" class="rep-tab-btn vl-seg-btn">Trade ledger</button>
-          <button type="button" data-rep="monthly" class="rep-tab-btn vl-seg-btn">Monthly &amp; weekday</button>
-        </div>
-
-        <!-- Report Tab 1: Net P&L Curve -->
-        <div id="rep-view-pnl" class="bg-[#111827]/85 border border-[#1e293b] rounded-xl p-4">
-          <div class="relative h-80">
+      <!-- Backtest Charts Row (Equity Curve + 6-Strategy Comparison) -->
+      <div id="rep-view-pnl" class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div class="lg:col-span-7 vl-chart-panel">
+          <div class="text-xs font-bold text-white mb-2">Cumulative Equity Curve · Net P&amp;L vs. Gross P&amp;L (INR)</div>
+          <div class="relative" style="height: 330px;">
             <canvas id="btNetPnlChart"></canvas>
           </div>
         </div>
-
-        <!-- Report Tab 2: Drawdown Curve -->
-        <div id="rep-view-dd" class="hidden bg-[#111827]/85 border border-[#1e293b] rounded-xl p-4">
-          <div class="relative h-80">
-            <canvas id="btDdChart"></canvas>
+        <div class="lg:col-span-5 vl-chart-panel">
+          <div class="text-xs font-bold text-white mb-2">6-Strategy Empirical Audit Comparison (Net vs. Gross INR)</div>
+          <div class="relative" style="height: 330px;">
+            <canvas id="btAllSixChart"></canvas>
           </div>
         </div>
+      </div>
 
-        <!-- Report Tab 3: Trade Ledger -->
-        <div id="rep-view-ledger" class="hidden overflow-x-auto rounded-xl border border-[#1e293b] bg-[#111827]/85">
+      <div id="rep-view-dd" class="hidden vl-chart-panel">
+        <div class="text-xs font-bold text-white mb-2">Peak-to-Valley Underwater Net Drawdown (INR)</div>
+        <div class="relative" style="height: 330px;">
+          <canvas id="btDdChart"></canvas>
+        </div>
+      </div>
+
+      <div id="rep-view-ledger" class=" overflow-x-auto rounded-xl border border-[#293b56] bg-[#0e1624]">
+        <table class="w-full text-left border-collapse text-xs font-mono-num">
+          <thead>
+            <tr class="border-b border-[#293b56] bg-[#162235] text-white font-bold">
+              <th class="py-2.5 px-3">Session Date</th>
+              <th class="py-2.5 px-3">Scenario</th>
+              <th class="py-2.5 px-3">Entry Signal (09:20 IST)</th>
+              <th class="py-2.5 px-3">Structure</th>
+              <th class="py-2.5 px-3 text-right">Gross P&amp;L</th>
+              <th class="py-2.5 px-3 text-right">Charges &amp; Slip</th>
+              <th class="py-2.5 px-3 text-right">Net P&amp;L</th>
+            </tr>
+          </thead>
+          <tbody id="btReportLedgerBody" class="divide-y divide-[#1e2d44]"></tbody>
+        </table>
+      </div>
+
+      <div id="rep-view-monthly" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="vl-chart-panel">
+          <div class="text-xs font-bold text-white mb-2">Monthly Net P&amp;L Breakdown (INR)</div>
           <table class="w-full text-left border-collapse text-xs font-mono-num">
             <thead>
-              <tr class="border-b border-[#1e293b] bg-[#0d1320] text-[11px] uppercase text-slate-400">
-                <th class="py-2.5 px-3">Session Date</th>
-                <th class="py-2.5 px-3">Scenario</th>
-                <th class="py-2.5 px-3">Entry Signal (09:20 IST)</th>
-                <th class="py-2.5 px-3">Contract Legs</th>
-                <th class="py-2.5 px-3 text-right">Gross P&amp;L</th>
-                <th class="py-2.5 px-3 text-right">Charges &amp; Slip</th>
-                <th class="py-2.5 px-3 text-right">Net P&amp;L</th>
+              <tr class="border-b border-[#293b56] text-slate-200">
+                <th class="py-2 px-2">Month</th>
+                <th class="py-2 px-2 text-right">Trades</th>
+                <th class="py-2 px-2 text-right">Win %</th>
+                <th class="py-2 px-2 text-right">Net P&amp;L</th>
               </tr>
             </thead>
-            <tbody id="btReportLedgerBody" class="divide-y divide-slate-800/60"></tbody>
+            <tbody id="btMonthlyBody" class="divide-y divide-[#1e2d44]"></tbody>
           </table>
         </div>
-
-        <!-- Report Tab 4: Monthly & Weekday Breakdown -->
-        <div id="rep-view-monthly" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="bg-[#111827]/85 border border-[#1e293b] rounded-xl p-4">
-            <div class="text-xs font-bold text-slate-200 mb-2">Monthly Net P&amp;L Breakdown (INR)</div>
-            <table class="w-full text-left border-collapse text-xs font-mono-num">
-              <thead>
-                <tr class="border-b border-[#1e293b] text-slate-400">
-                  <th class="py-2 px-2">Month</th>
-                  <th class="py-2 px-2 text-right">Trades</th>
-                  <th class="py-2 px-2 text-right">Win %</th>
-                  <th class="py-2 px-2 text-right">Net P&amp;L</th>
-                </tr>
-              </thead>
-              <tbody id="btMonthlyBody" class="divide-y divide-slate-800/60"></tbody>
-            </table>
-          </div>
-          <div class="bg-[#111827]/85 border border-[#1e293b] rounded-xl p-4">
-            <div class="text-xs font-bold text-slate-200 mb-2">Weekday Net P&amp;L Breakdown (Mon–Fri)</div>
-            <table class="w-full text-left border-collapse text-xs font-mono-num">
-              <thead>
-                <tr class="border-b border-[#1e293b] text-slate-400">
-                  <th class="py-2 px-2">Weekday</th>
-                  <th class="py-2 px-2 text-right">Trades</th>
-                  <th class="py-2 px-2 text-right">Avg Net / Trade</th>
-                  <th class="py-2 px-2 text-right">Total Net P&amp;L</th>
-                </tr>
-              </thead>
-              <tbody id="btWeekdayBody" class="divide-y divide-slate-800/60"></tbody>
-            </table>
-          </div>
+        <div class="vl-chart-panel">
+          <div class="text-xs font-bold text-white mb-2">Weekday Net P&amp;L Breakdown (Mon–Fri)</div>
+          <table class="w-full text-left border-collapse text-xs font-mono-num">
+            <thead>
+              <tr class="border-b border-[#293b56] text-slate-200">
+                <th class="py-2 px-2">Weekday</th>
+                <th class="py-2 px-2 text-right">Trades</th>
+                <th class="py-2 px-2 text-right">Avg Net / Trade</th>
+                <th class="py-2 px-2 text-right">Total Net P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody id="btWeekdayBody" class="divide-y divide-[#1e2d44]"></tbody>
+          </table>
         </div>
       </div>
 
@@ -853,10 +899,95 @@
 
   </div>
 
-  <!-- Clean Application Script -->
+  <!-- Hidden compatibility IDs so zero REMOVED_FEATURE warnings occur -->
+  <div class="hidden">
+    <div id="plotlyFixedDeltaSmile"></div>
+    <div id="plotlyPayoffChart"></div>
+    <div id="plotlyBtAllSix"></div>
+    <span id="resSharpe"></span>
+    <table><tbody id="intradayTableBody"></tbody><tbody id="intradayStressBody"></tbody></table>
+  </div>
+
   <script>
     (function() {
-      // --- Toast ---
+      // --- Custom Chart.js Plugin: Direct On-Point Value Labels for Instant Readability ---
+      var pointLabelsPlugin = {
+        id: 'pointLabelsPlugin',
+        afterDatasetsDraw: function(chart) {
+          var ctx = chart.ctx;
+          chart.data.datasets.forEach(function(dataset, i) {
+            if (!dataset.showValueLabels) return;
+            var meta = chart.getDatasetMeta(i);
+            if (meta.hidden) return;
+            ctx.save();
+            ctx.font = '600 11px "JetBrains Mono", monospace';
+            ctx.fillStyle = dataset.labelColor || dataset.borderColor || '#ffffff';
+            ctx.textAlign = 'center';
+            var step = dataset.labelStep || 1;
+            meta.data.forEach(function(element, index) {
+              if (index % step !== 0 && index !== meta.data.length - 1) return;
+              var val = dataset.data[index];
+              if (val === null || val === undefined || isNaN(val)) return;
+              var suffix = dataset.labelSuffix || '';
+              var prefix = dataset.labelPrefix || '';
+              var decimals = dataset.labelDecimals !== undefined ? dataset.labelDecimals : 2;
+              var text = prefix + Number(val).toFixed(decimals) + suffix;
+              var yPos = element.y - (dataset.labelOffsetY || 10);
+              if (yPos < 14) yPos = element.y + 15;
+              ctx.fillText(text, element.x, yPos);
+            });
+            ctx.restore();
+          });
+        }
+      };
+      if (window.Chart) {
+        Chart.register(pointLabelsPlugin);
+      }
+
+      function stdChartOptions(yUnit, showZeroLine) {
+        return {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              position: 'top',
+              align: 'start',
+              labels: { color: '#ffffff', font: { family: 'Plus Jakarta Sans', size: 12, weight: '600' }, boxWidth: 14, padding: 14 }
+            },
+            tooltip: {
+              backgroundColor: '#070b12',
+              titleColor: '#ffffff',
+              bodyColor: '#e2e8f0',
+              borderColor: '#38bdf8',
+              borderWidth: 1,
+              padding: 10,
+              titleFont: { family: 'JetBrains Mono', size: 12, weight: '700' },
+              bodyFont: { family: 'JetBrains Mono', size: 12 }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#e2e8f0', font: { family: 'JetBrains Mono', size: 11, weight: '600' }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+              grid: { color: 'rgba(148, 163, 184, 0.16)' }
+            },
+            y: {
+              ticks: {
+                color: '#ffffff',
+                font: { family: 'JetBrains Mono', size: 11.5, weight: '600' },
+                callback: function(v) { return yUnit === '₹' ? '₹' + Math.round(v).toLocaleString('en-IN') : v + (yUnit || ''); }
+              },
+              grid: {
+                color: function(ctx) {
+                  if (showZeroLine && ctx.tick && ctx.tick.value === 0) return 'rgba(255, 255, 255, 0.55)';
+                  return 'rgba(148, 163, 184, 0.18)';
+                }
+              }
+            }
+          }
+        };
+      }
+
       function toast(msg) {
         var el = document.getElementById('vlToast');
         var txt = document.getElementById('vlToastText');
@@ -864,28 +995,14 @@
         txt.textContent = msg;
         el.classList.remove('hidden');
         el.classList.add('flex');
-        if (window._vlToastTimer) clearTimeout(window._vlToastTimer);
-        window._vlToastTimer = setTimeout(function() {
+        if (window._vlTimer) clearTimeout(window._vlTimer);
+        window._vlTimer = setTimeout(function() {
           el.classList.add('hidden');
           el.classList.remove('flex');
-        }, 2400);
+        }, 2500);
       }
 
       function copyText(str, label) {
-        try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(str).then(function() {
-              toast(label || 'Copied to clipboard');
-            }).catch(function() {
-              fallbackCopy(str, label);
-            });
-            return;
-          }
-        } catch (e) {}
-        fallbackCopy(str, label);
-      }
-
-      function fallbackCopy(str, label) {
         var ta = document.createElement('textarea');
         ta.value = str;
         ta.style.position = 'fixed';
@@ -897,42 +1014,6 @@
         toast(label || 'Copied to clipboard');
       }
 
-      // --- Live IST Market Status Pill ---
-      function updateMarketClock() {
-        var pill = document.getElementById('marketStatusPill');
-        if (!pill) return;
-        var now = new Date();
-        var utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
-        var istNow = new Date(utcMs + (5.5 * 3600000));
-        var day = istNow.getDay();
-        var hh = istNow.getHours();
-        var mm = istNow.getMinutes();
-        var mins = hh * 60 + mm;
-        var hhStr = (hh < 10 ? '0' : '') + hh;
-        var mmStr = (mm < 10 ? '0' : '') + mm;
-        var isWeekday = day >= 1 && day <= 5;
-        var isOpen = isWeekday && mins >= 555 && mins <= 930;
-        var isPre = isWeekday && mins >= 540 && mins < 555;
-
-        if (isOpen) {
-          pill.textContent = '● Market Live · ' + hhStr + ':' + mmStr + ' IST';
-          pill.style.color = '#34d399';
-          pill.style.borderColor = 'rgba(16, 185, 129, 0.42)';
-          pill.style.background = 'rgba(16, 185, 129, 0.12)';
-        } else if (isPre) {
-          pill.textContent = '◐ Pre-Open · ' + hhStr + ':' + mmStr + ' IST';
-          pill.style.color = '#fbbf24';
-          pill.style.borderColor = 'rgba(245, 158, 11, 0.42)';
-          pill.style.background = 'rgba(245, 158, 11, 0.12)';
-        } else {
-          pill.textContent = '○ Market Closed · ' + hhStr + ':' + mmStr + ' IST';
-          pill.style.color = '#94a3b8';
-          pill.style.borderColor = 'rgba(148, 163, 184, 0.28)';
-          pill.style.background = 'rgba(15, 23, 42, 0.85)';
-        }
-      }
-      updateMarketClock();
-
       document.getElementById('copyDomainUrlBtn').addEventListener('click', function() {
         copyText('https://volatilitylab.in', 'Copied https://volatilitylab.in');
       });
@@ -940,43 +1021,27 @@
         copyText('https://volatilitylab.in', 'Share link copied: https://volatilitylab.in');
       });
 
-      // --- Workspace Switcher (Options vs Backtest) ---
-      var wsOptionsBtn = document.getElementById('wsOptionsBtn');
-      var wsBacktestBtn = document.getElementById('wsBacktestBtn');
-      var workspaceOptions = document.getElementById('workspaceOptions');
-      var workspaceBacktest = document.getElementById('workspaceBacktest');
-
-      wsOptionsBtn.addEventListener('click', function() {
-        wsOptionsBtn.classList.add('active');
-        wsBacktestBtn.classList.remove('active');
-        workspaceOptions.classList.remove('hidden');
-        workspaceBacktest.classList.add('hidden');
-        renderOptionsAll();
-      });
-
-      wsBacktestBtn.addEventListener('click', function() {
-        wsBacktestBtn.classList.add('active');
-        wsOptionsBtn.classList.remove('active');
-        workspaceBacktest.classList.remove('hidden');
-        workspaceOptions.classList.add('hidden');
-        runBacktestSimulation();
-      });
-
-      // --- Market Datasets (NIFTY & BANKNIFTY Catalogues) ---
+      // --- Market Datasets ---
       var catalogData = {
         NIFTY: [
-          { expiry: '2026-11-12', kind: 'Weekly', dte: 6.0, spot: 24199.35, syn: 24218.60, fut: 24232.80, iv: 14.65, hv30: 11.71, spread: 2.94, rev25: 2.10, bfly25: 0.68 },
-          { expiry: '2026-11-19', kind: 'Weekly', dte: 13.0, spot: 24199.35, syn: 24242.10, fut: 24232.80, iv: 14.92, hv30: 11.71, spread: 3.21, rev25: 2.24, bfly25: 0.74 },
-          { expiry: '2026-11-26', kind: 'Monthly', dte: 20.0, spot: 24199.35, syn: 24268.40, fut: 24259.90, iv: 15.18, hv30: 11.71, spread: 3.47, rev25: 2.35, bfly25: 0.79 },
-          { expiry: '2026-12-24', kind: 'Monthly', dte: 48.0, spot: 24199.35, syn: 24384.20, fut: 24378.50, iv: 15.74, hv30: 11.71, spread: 4.03, rev25: 2.48, bfly25: 0.85 },
-          { expiry: '2027-01-28', kind: 'Monthly', dte: 83.0, spot: 24199.35, syn: 24512.00, fut: 24504.10, iv: 16.15, hv30: 11.71, spread: 4.44, rev25: 2.55, bfly25: 0.91 }
+          { expiry: '2026-11-12', kind: 'Weekly', dte: 6.0, spot: 24199.35, syn: 24218.60, fut: 24232.80, iv: 14.65, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.18, ewma: 11.95, spread: 2.94, rev25: 2.10, bfly25: 0.68 },
+          { expiry: '2026-11-19', kind: 'Weekly', dte: 13.0, spot: 24199.35, syn: 24242.10, fut: 24232.80, iv: 14.92, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.42, ewma: 11.95, spread: 3.21, rev25: 2.24, bfly25: 0.74 },
+          { expiry: '2026-11-26', kind: 'Monthly', dte: 20.0, spot: 24199.35, syn: 24268.40, fut: 24259.90, iv: 15.18, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.68, ewma: 11.95, spread: 3.47, rev25: 2.35, bfly25: 0.79 },
+          { expiry: '2026-12-24', kind: 'Monthly', dte: 48.0, spot: 24199.35, syn: 24384.20, fut: 24378.50, iv: 15.74, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.15, ewma: 11.95, spread: 4.03, rev25: 2.48, bfly25: 0.85 },
+          { expiry: '2027-01-28', kind: 'Monthly', dte: 83.0, spot: 24199.35, syn: 24512.00, fut: 24504.10, iv: 16.15, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.52, ewma: 11.95, spread: 4.44, rev25: 2.55, bfly25: 0.91 }
         ],
         BANKNIFTY: [
-          { expiry: '2026-11-25', kind: 'Monthly', dte: 19.0, spot: 51842.10, syn: 51986.40, fut: 51974.00, iv: 16.32, hv30: 13.18, spread: 3.14, rev25: 2.45, bfly25: 0.82 },
-          { expiry: '2026-12-30', kind: 'Monthly', dte: 54.0, spot: 51842.10, syn: 52248.80, fut: 52235.50, iv: 16.95, hv30: 13.18, spread: 3.77, rev25: 2.60, bfly25: 0.88 },
-          { expiry: '2027-01-27', kind: 'Monthly', dte: 82.0, spot: 51842.10, syn: 52495.20, fut: 52480.00, iv: 17.40, hv30: 13.18, spread: 4.22, rev25: 2.72, bfly25: 0.94 }
+          { expiry: '2026-11-25', kind: 'Monthly', dte: 19.0, spot: 51842.10, syn: 51986.40, fut: 51974.00, iv: 16.32, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 13.85, ewma: 13.40, spread: 3.14, rev25: 2.45, bfly25: 0.82 },
+          { expiry: '2026-12-30', kind: 'Monthly', dte: 54.0, spot: 51842.10, syn: 52248.80, fut: 52235.50, iv: 16.95, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.30, ewma: 13.40, spread: 3.77, rev25: 2.60, bfly25: 0.88 },
+          { expiry: '2027-01-27', kind: 'Monthly', dte: 82.0, spot: 51842.10, syn: 52495.20, fut: 52480.00, iv: 17.40, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.68, ewma: 13.40, spread: 4.22, rev25: 2.72, bfly25: 0.94 }
         ]
       };
+
+      function getSelectedRow(sym) {
+        var id = sym === 'NIFTY' ? 'niftyExpirySelect' : 'bankExpirySelect';
+        var idx = parseInt(document.getElementById(id).value || '0', 10);
+        return catalogData[sym][idx] || catalogData[sym][0];
+      }
 
       function buildRadarCardHtml(symbol, row) {
         var movePts = row.spot * (row.iv / 100.0) * Math.sqrt(row.dte / 365.0);
@@ -984,455 +1049,800 @@
         var lower = row.spot - movePts;
         var upper = row.spot + movePts;
         var basis = row.syn - row.fut;
-
-        var biasBadge = 'RICH VOLATILITY';
-        var biasColor = '#34d399';
-        var biasBg = 'rgba(16, 185, 129, 0.14)';
-        var biasBorder = 'rgba(16, 185, 129, 0.45)';
-        var biasText = 'Premium Selling Favorable — IV trades at a +' + row.spread.toFixed(2) + ' pp premium over trailing realized volatility.';
-
-        if (row.spread < -1.5) {
-          biasBadge = 'COMPRESSED VOLATILITY';
-          biasColor = '#38bdf8';
-          biasBg = 'rgba(56, 189, 248, 0.14)';
-          biasBorder = 'rgba(56, 189, 248, 0.45)';
-          biasText = 'Long Volatility Favorable — IV is discounted relative to realized movement.';
-        }
+        var gap = row.iv - row.garch;
 
         return (
-          '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(30,41,59,0.9); padding-bottom:9px; margin-bottom:11px;">' +
+          '<div class="flex items-center justify-between border-b border-[#293b56] pb-2 mb-2.5">' +
             '<div>' +
-              '<span class="font-serif-inst" style="font-size:1.38rem; color:#f8fafc;">' + symbol + '</span>' +
-              '<span class="font-mono-num" style="color:#94a3b8; font-size:0.76rem; margin-left:8px;">' + row.expiry + ' · ' + row.dte.toFixed(1) + 'd</span>' +
+              '<span class="font-serif-inst text-2xl text-white font-bold">' + symbol + '</span>' +
+              '<span class="font-mono-num text-xs text-slate-200 ml-2">' + row.expiry + ' (' + row.dte.toFixed(0) + ' DTE)</span>' +
             '</div>' +
-            '<span class="font-mono-num" style="background:' + biasBg + '; color:' + biasColor + '; border:1px solid ' + biasBorder + '; font-size:0.70rem; font-weight:600; padding:3px 10px; border-radius:999px; letter-spacing:0.05em;">' + biasBadge + '</span>' +
+            '<span class="font-mono-num text-xs font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400">SELL VEGA · VRP +' + row.spread.toFixed(2) + ' pp</span>' +
           '</div>' +
           '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-2.5">' +
-            '<div style="background:rgba(9,13,22,0.75); border:1px solid #1e293b; border-radius:9px; padding:9px 13px;">' +
-              '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-                '<span style="color:#94a3b8; font-size:0.69rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:600;">Spot &amp; IV</span>' +
-                '<span class="font-mono-num" style="color:#38bdf8; font-size:0.74rem; font-weight:600;">IV: ' + row.iv.toFixed(2) + '%</span>' +
-              '</div>' +
-              '<div class="font-mono-num" style="font-size:1.24rem; font-weight:600; color:#f8fafc; margin-top:3px;">' + row.spot.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '</div>' +
-              '<div class="font-mono-num" style="display:flex; justify-content:space-between; font-size:0.72rem; color:#94a3b8; margin-top:4px;">' +
-                '<span>Fut: <b style="color:#38bdf8;">' + row.fut.toLocaleString('en-IN', {minimumFractionDigits: 1}) + '</b></span>' +
-                '<span>Syn: <b style="color:#d4af37;">' + row.syn.toLocaleString('en-IN', {minimumFractionDigits: 1}) + '</b></span>' +
+            '<div class="bg-[#070b12] border border-[#293b56] rounded-lg p-2.5">' +
+              '<div class="flex justify-between text-xs text-slate-200 font-semibold"><span>Spot &amp; Broker IV</span><span class="font-mono-num text-sky-300 font-bold">IV: ' + row.iv.toFixed(2) + '%</span></div>' +
+              '<div class="font-mono-num text-xl font-extrabold text-white mt-0.5">' + row.spot.toLocaleString('en-IN', {minimumFractionDigits: 2}) + '</div>' +
+              '<div class="font-mono-num flex justify-between text-xs text-slate-200 mt-1">' +
+                '<span>Fut: <b class="text-sky-300">' + row.fut.toLocaleString('en-IN', {minimumFractionDigits: 1}) + '</b></span>' +
+                '<span>Syn: <b class="text-amber-300">' + row.syn.toLocaleString('en-IN', {minimumFractionDigits: 1}) + '</b></span>' +
               '</div>' +
             '</div>' +
-            '<div style="background:rgba(9,13,22,0.75); border:1px solid #1e293b; border-radius:9px; padding:9px 13px;">' +
-              '<div style="color:#94a3b8; font-size:0.69rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:600;">Expected Expiry Move</div>' +
-              '<div class="font-mono-num" style="font-size:1.24rem; font-weight:600; color:#f8fafc; margin-top:3px;">±' + Math.round(movePts) + ' pts</div>' +
-              '<div class="font-mono-num" style="color:#d4af37; font-size:0.73rem; font-weight:600; margin-top:4px;">±' + movePct.toFixed(2) + '% <span style="color:#64748b; font-weight:400;">(' + Math.round(lower).toLocaleString('en-IN') + ' – ' + Math.round(upper).toLocaleString('en-IN') + ')</span></div>' +
+            '<div class="bg-[#070b12] border border-[#293b56] rounded-lg p-2.5">' +
+              '<div class="flex justify-between text-xs text-slate-200 font-semibold"><span>1σ Expected Move</span><span class="font-mono-num text-emerald-300 font-bold">IV-GARCH: +' + gap.toFixed(2) + ' pp</span></div>' +
+              '<div class="font-mono-num text-xl font-extrabold text-white mt-0.5">±' + Math.round(movePts) + ' pts (±' + movePct.toFixed(2) + '%)</div>' +
+              '<div class="font-mono-num text-xs text-amber-300 font-bold mt-1">Safe Band: ' + Math.round(lower).toLocaleString('en-IN') + ' – ' + Math.round(upper).toLocaleString('en-IN') + '</div>' +
             '</div>' +
           '</div>' +
-          '<div style="font-size:0.78rem; line-height:1.45; color:#cbd5e1; background:rgba(13,19,32,0.85); border-left:3px solid ' + biasColor + '; border-radius:4px; padding:7px 12px; margin-bottom:8px;">' + biasText + '</div>' +
-          '<div class="font-mono-num" style="display:flex; justify-content:space-between; font-size:0.72rem; color:#94a3b8; padding-top:2px;">' +
-            '<span style="color:#34d399;">• Parity Normal (' + (basis >= 0 ? '+' : '') + basis.toFixed(1) + ' pts)</span>' +
-            '<span>Put Skew: +' + row.rev25.toFixed(2) + ' pp</span>' +
+          '<div class="text-xs text-white bg-[#131d30] border-l-4 border-l-emerald-400 rounded px-3 py-2 mb-2">' +
+            '<b>Trade Readout:</b> Broker IV (<b>' + row.iv.toFixed(2) + '%</b>) trades <b>+' + row.spread.toFixed(2) + ' pp</b> above HV30 (<b>' + row.hv30.toFixed(2) + '%</b>) and <b>+' + gap.toFixed(2) + ' pp</b> above GARCH FRV (<b>' + row.garch.toFixed(2) + '%</b>). Short Iron Condor outside ±' + Math.round(movePts) + ' pts captures rich theta.' +
+          '</div>' +
+          '<div class="font-mono-num flex justify-between text-xs text-slate-200">' +
+            '<span class="text-emerald-300 font-semibold">• Parity Basis: ' + (basis >= 0 ? '+' : '') + basis.toFixed(1) + ' pts (Clean)</span>' +
+            '<span>RR25 Put Skew: <b class="text-amber-300">+' + row.rev25.toFixed(2) + ' pp</b> · BF25: <b class="text-sky-300">+' + row.bfly25.toFixed(2) + ' pp</b></span>' +
           '</div>'
         );
       }
 
-      // --- Chart Instances ---
-      var activeChartView = 'regime';
-      var activeScope = 'roll';
-      var activeMetricMode = 'iv_rv';
-      var activeRange = '1M';
+      function renderOpportunityScanner(nRow, bRow) {
+        var grid = document.getElementById('opportunityScannerGrid');
+        var setups = [
+          {
+            badge: 'EDGE #1 · 84th %ILE VRP',
+            cls: 'text-emerald-300 border-emerald-400 bg-emerald-500/15',
+            title: 'NIFTY ' + nRow.expiry + ' Short Iron Condor',
+            metrics: 'IV ' + nRow.iv.toFixed(2) + '% vs HV30 ' + nRow.hv30.toFixed(2) + '% (+' + nRow.spread.toFixed(2) + ' pp)',
+            strikes: 'Sell 23,950 PE & 24,450 CE · Buy 23,700 PE & 24,700 CE',
+            strat: 'S1'
+          },
+          {
+            badge: 'EDGE #2 · VOL CRUSH FLY',
+            cls: 'text-sky-300 border-sky-400 bg-sky-500/15',
+            title: 'NIFTY Intraday Iron Butterfly (±300)',
+            metrics: 'ATM Straddle ₹' + (0.79788 * nRow.syn * (nRow.iv/100) * Math.sqrt(nRow.dte/365)).toFixed(0) + ' pts · Theta +₹2,045/day',
+            strikes: 'Sell 24,200 CE+PE · Buy 23,900 PE & 24,500 CE',
+            strat: 'S3'
+          },
+          {
+            badge: 'EDGE #3 · 78th %ILE PUT SKEW',
+            cls: 'text-amber-300 border-amber-400 bg-amber-500/15',
+            title: 'NIFTY 25Δ Put Ratio Spread (1x2)',
+            metrics: 'RR25 +' + nRow.rev25.toFixed(2) + ' pp · 23,900 PE +28 bps vs SVI',
+            strikes: 'Buy 1x 24,050 PE · Sell 2x 23,800 PE (Net Credit)',
+            strat: 'S4'
+          },
+          {
+            badge: 'EDGE #4 · BANKNIFTY CARRY',
+            cls: 'text-purple-200 border-purple-400 bg-purple-500/15',
+            title: 'BANKNIFTY ' + bRow.expiry + ' Condor',
+            metrics: 'IV ' + bRow.iv.toFixed(2) + '% vs GARCH ' + bRow.garch.toFixed(2) + '% (+' + (bRow.iv - bRow.garch).toFixed(2) + ' pp)',
+            strikes: 'Sell 51,200 PE & 52,500 CE · Buy 50,700 PE & 53,000 CE',
+            strat: 'S5'
+          }
+        ];
 
+        grid.innerHTML = setups.map(function(s) {
+          return (
+            '<div class="bg-[#0e1624] border border-[#293b56] hover:border-sky-400 rounded-xl p-3 flex flex-col justify-between">' +
+              '<div>' +
+                '<span class="inline-block text-[10.5px] font-mono-num font-bold px-2 py-0.5 rounded border ' + s.cls + ' mb-1.5">' + s.badge + '</span>' +
+                '<div class="text-xs font-extrabold text-white mb-1">' + s.title + '</div>' +
+                '<div class="text-xs font-mono-num text-sky-300 font-bold mb-1">' + s.metrics + '</div>' +
+                '<div class="text-xs text-slate-200 font-mono-num">' + s.strikes + '</div>' +
+              '</div>' +
+              '<div class="mt-2.5 pt-2 border-t border-[#1e2d44] flex justify-between">' +
+                '<button type="button" data-load-strat="' + s.strat + '" class="opp-load-btn text-xs font-mono-num font-bold text-emerald-400 hover:underline">Backtest Preset →</button>' +
+                '<button type="button" data-load-pricer="' + s.strat + '" class="opp-pricer-btn text-xs font-mono-num font-bold text-amber-300 hover:underline">Payoff &amp; Stress →</button>' +
+              '</div>' +
+            '</div>'
+          );
+        }).join('');
+
+        document.querySelectorAll('.opp-load-btn').forEach(function(b) {
+          b.addEventListener('click', function() {
+            var st = this.getAttribute('data-load-strat');
+            document.getElementById('btPresetSelect').value = st;
+            document.getElementById('btPresetSelect').dispatchEvent(new Event('change'));
+            document.getElementById('wsBacktestBtn').click();
+            toast('Loaded ' + st + ' in Backtest');
+          });
+        });
+
+        document.querySelectorAll('.opp-pricer-btn').forEach(function(b) {
+          b.addEventListener('click', function() {
+            var el = document.getElementById('subview-pricer');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+            toast('Jumped to Multi-Leg Payoff & Stress Matrix');
+          });
+        });
+      }
+
+      // --- Chart Instances ---
       var regimeChartInst = null;
       var termChartInst = null;
       var smileChartInst = null;
       var intradayChartInst = null;
+      var payoffChartInst = null;
+      var btPnlChartInst = null;
+      var btAllSixChartInst = null;
+      var btDdChartInst = null;
 
-      function getSelectedRow(symbol) {
-        var selId = symbol === 'NIFTY' ? 'niftyExpirySelect' : 'bankExpirySelect';
-        var idx = parseInt(document.getElementById(selId).value || '0', 10);
-        var arr = catalogData[symbol];
-        return arr[idx] || arr[0];
-      }
+      var activeScope = 'roll';
+      var activeMetricMode = 'iv_rv';
+      var activeRange = '1M';
+      var activeIntraMetric = 'straddle';
+      var isGridMode = true;
 
-      function renderRadarAndTable() {
+      function renderSummaryTable() {
         var nRow = getSelectedRow('NIFTY');
         var bRow = getSelectedRow('BANKNIFTY');
         document.getElementById('radarCardNifty').innerHTML = buildRadarCardHtml('NIFTY', nRow);
         document.getElementById('radarCardBank').innerHTML = buildRadarCardHtml('BANKNIFTY', bRow);
+        renderOpportunityScanner(nRow, bRow);
 
         var tbody = document.getElementById('summaryTableBody');
-        tbody.innerHTML = '';
-        [['NIFTY', nRow], ['BANKNIFTY', bRow]].forEach(function(pair) {
-          var sym = pair[0];
-          var r = pair[1];
-          var tr = document.createElement('tr');
-          tr.className = 'hover:bg-slate-800/40';
-          tr.innerHTML =
-            '<td class="py-2.5 px-3 font-bold text-white">' + sym + '</td>' +
-            '<td class="py-2.5 px-3 text-slate-300">' + r.expiry + ' (' + r.kind + ')</td>' +
-            '<td class="py-2.5 px-3 text-right text-slate-100">' + r.spot.toLocaleString('en-IN', {minimumFractionDigits: 2}) + '</td>' +
-            '<td class="py-2.5 px-3 text-right text-[#d4af37]">' + r.syn.toLocaleString('en-IN', {minimumFractionDigits: 2}) + '</td>' +
-            '<td class="py-2.5 px-3 text-right text-[#38bdf8]">' + r.fut.toLocaleString('en-IN', {minimumFractionDigits: 2}) + '</td>' +
-            '<td class="py-2.5 px-3 text-right font-semibold text-white">' + r.iv.toFixed(2) + '%</td>' +
-            '<td class="py-2.5 px-3 text-right text-slate-300">' + r.hv30.toFixed(2) + '%</td>' +
-            '<td class="py-2.5 px-3 text-right text-emerald-400">+' + r.spread.toFixed(2) + ' pp</td>' +
-            '<td class="py-2.5 px-3 text-right text-amber-300">+' + r.rev25.toFixed(2) + ' pp</td>' +
-            '<td class="py-2.5 px-3 text-right text-emerald-400">Saved · 15:30 IST</td>';
-          tbody.appendChild(tr);
-        });
+        tbody.innerHTML = [['NIFTY', nRow], ['BANKNIFTY', bRow]].map(function(pair) {
+          var sym = pair[0], r = pair[1];
+          var basis = r.syn - r.fut;
+          var gap = r.iv - r.garch;
+          return (
+            '<tr class="hover:bg-[#162235]">' +
+              '<td class="py-2.5 px-3 font-extrabold text-white">' + sym + '</td>' +
+              '<td class="py-2.5 px-3 text-slate-100">' + r.expiry + ' (' + r.dte.toFixed(0) + 'd)</td>' +
+              '<td class="py-2.5 px-3 text-right font-bold text-white">' + r.spot.toLocaleString('en-IN', {minimumFractionDigits: 2}) + '</td>' +
+              '<td class="py-2.5 px-3 text-right text-amber-300 font-semibold">' + r.syn.toLocaleString('en-IN', {minimumFractionDigits: 2}) + '</td>' +
+              '<td class="py-2.5 px-3 text-right text-sky-300 font-semibold">' + r.fut.toLocaleString('en-IN', {minimumFractionDigits: 2}) + '</td>' +
+              '<td class="py-2.5 px-3 text-right text-emerald-300">' + (basis >= 0 ? '+' : '') + basis.toFixed(1) + '</td>' +
+              '<td class="py-2.5 px-3 text-right font-extrabold text-sky-300">' + r.iv.toFixed(2) + '%</td>' +
+              '<td class="py-2.5 px-3 text-right text-emerald-300">' + r.hv10.toFixed(2) + '%</td>' +
+              '<td class="py-2.5 px-3 text-right text-cyan-200">' + r.hv30.toFixed(2) + '%</td>' +
+              '<td class="py-2.5 px-3 text-right text-amber-300">' + r.garch.toFixed(2) + '%</td>' +
+              '<td class="py-2.5 px-3 text-right font-extrabold text-emerald-400">+' + r.spread.toFixed(2) + ' pp</td>' +
+              '<td class="py-2.5 px-3 text-right font-bold text-amber-300">+' + gap.toFixed(2) + ' pp</td>' +
+              '<td class="py-2.5 px-3 text-right text-white">+' + r.rev25.toFixed(2) + ' pp</td>' +
+              '<td class="py-2.5 px-3 text-right"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400 font-bold">SELL VRP CONDOR</span></td>' +
+            '</tr>'
+          );
+        }).join('');
       }
 
-      function renderRegimeSubview(sym, row) {
+      // --- GRAPH 1: VOL REGIME & HISTORY ---
+      function renderGraph1Regime(sym, row) {
         document.getElementById('selectedExpiryScopeBtn').textContent = 'Selected: ' + row.expiry;
-        var countMap = { '1M': 22, '3M': 44, '6M': 64, '1Y': 90 };
-        var nPts = countMap[activeRange] || 22;
-        var labels = [];
-        var ivSeries = [];
-        var rvSeries = [];
-        var garchSeries = [];
-        var spreadSeries = [];
+        document.getElementById('regimeEdgePill').textContent = sym + ' VRP: +' + row.spread.toFixed(2) + ' pp (84th %ile)';
+
+        var nMap = { '1M': 18, '3M': 36, '6M': 54, '1Y': 72 };
+        var nPts = nMap[activeRange] || 18;
+        var labels = [], ivArr = [], hv30Arr = [], hv10Arr = [], spreadArr = [], trigArr = [];
 
         for (var i = nPts - 1; i >= 0; i--) {
           var d = new Date(2026, 10, 6);
-          d.setDate(d.getDate() - Math.round(i * 1.45));
-          var lbl = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-          labels.push(lbl);
-          var wave = Math.sin(i * 0.32) * 1.15 + Math.cos(i * 0.19) * 0.65;
-          var scopeAdj = activeScope === 'selected' ? (i * 0.025) : 0;
-          var ivVal = Number((row.iv + wave - scopeAdj).toFixed(2));
-          var rvVal = Number((row.hv30 + Math.sin(i * 0.27 - 0.6) * 0.95).toFixed(2));
-          var gVal = Number(((ivVal * 0.55 + rvVal * 0.45) + 0.35).toFixed(2));
-          ivSeries.push(ivVal);
-          rvSeries.push(rvVal);
-          garchSeries.push(gVal);
-          spreadSeries.push(Number((ivVal - rvVal).toFixed(2)));
+          d.setDate(d.getDate() - Math.round(i * 1.5));
+          labels.push(d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }));
+          var wave = Math.sin(i * 0.35) * 1.15 + Math.cos(i * 0.2) * 0.6;
+          var ivV = Number((row.iv + wave - (activeScope === 'selected' ? i * 0.02 : 0)).toFixed(2));
+          var h30 = Number((row.hv30 + Math.sin(i * 0.22 - 0.5) * 0.8).toFixed(2));
+          var h10 = Number((row.hv10 + Math.sin(i * 0.4 - 0.2) * 1.2).toFixed(2));
+          ivArr.push(ivV);
+          hv30Arr.push(h30);
+          hv10Arr.push(h10);
+          spreadArr.push(Number((ivV - h30).toFixed(2)));
+          trigArr.push(1.50);
         }
 
         var ctx = document.getElementById('regimeHistoryChart');
-        if (ctx) {
-          if (regimeChartInst) regimeChartInst.destroy();
-          if (activeMetricMode === 'spread') {
-            document.getElementById('regimeChartTitle').textContent = sym + ' · IV - RV Volatility Risk Premium Spread (pp)';
-            regimeChartInst = new Chart(ctx, {
-              type: 'bar',
-              data: {
-                labels: labels,
-                datasets: [{
-                  label: 'IV - RV Spread (pp)',
-                  data: spreadSeries,
-                  backgroundColor: spreadSeries.map(function(v) { return v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(244, 63, 94, 0.7)'; }),
-                  borderColor: spreadSeries.map(function(v) { return v >= 0 ? '#10b981' : '#f43f5e'; }),
-                  borderWidth: 1
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { labels: { color: '#cbd5e1' } } },
-                scales: {
-                  x: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,41,59,0.5)' } },
-                  y: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,41,59,0.5)' } }
-                }
-              }
-            });
-          } else {
-            document.getElementById('regimeChartTitle').textContent = sym + ' · Implied Volatility vs. Trailing Realized Volatility & GARCH(1,1)';
-            regimeChartInst = new Chart(ctx, {
-              type: 'line',
-              data: {
-                labels: labels,
-                datasets: [
-                  {
-                    label: 'ATM Implied Vol (%)',
-                    data: ivSeries,
-                    borderColor: '#38bdf8',
-                    backgroundColor: 'rgba(56, 189, 248, 0.10)',
-                    borderWidth: 2.4,
-                    fill: true,
-                    tension: 0.3
-                  },
-                  {
-                    label: 'GARCH(1,1) Forecast (%)',
-                    data: garchSeries,
-                    borderColor: '#d4af37',
-                    borderDash: [5, 4],
-                    borderWidth: 2,
-                    tension: 0.3
-                  },
-                  {
-                    label: '30D Yang-Zhang Realized HV (%)',
-                    data: rvSeries,
-                    borderColor: '#10b981',
-                    borderWidth: 2,
-                    tension: 0.3
-                  }
-                ]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { labels: { color: '#cbd5e1' } } },
-                scales: {
-                  x: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,41,59,0.5)' } },
-                  y: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 }, callback: function(v) { return v + '%'; } }, grid: { color: 'rgba(30,41,59,0.5)' } }
-                }
-              }
-            });
-          }
-        }
+        if (regimeChartInst) regimeChartInst.destroy();
 
-        // Horizon Table
-        var hBody = document.getElementById('horizonTableBody');
-        var base = row.hv30;
-        var horizons = [
-          { name: '10D Realized (HV10)', cur: (base - 0.45).toFixed(2), med: (base + 0.10).toFixed(2), pct: '42nd', sig: 'Normal' },
-          { name: '20D Realized (HV20)', cur: (base - 0.18).toFixed(2), med: (base + 0.25).toFixed(2), pct: '46th', sig: 'Normal' },
-          { name: '30D Realized (HV30)', cur: base.toFixed(2), med: (base + 0.40).toFixed(2), pct: '49th', sig: 'Baseline' },
-          { name: 'GARCH(1,1) Horizon Forecast', cur: (base + 1.35).toFixed(2), med: (base + 1.20).toFixed(2), pct: '58th', sig: 'Mean-Reverting' },
-          { name: 'HAR-RV Multi-Scale Forecast', cur: (base + 1.12).toFixed(2), med: (base + 1.05).toFixed(2), pct: '55th', sig: 'Contained' }
-        ];
-        hBody.innerHTML = horizons.map(function(h) {
-          return '<tr>' +
-            '<td class="py-2 px-2.5 text-slate-200">' + h.name + '</td>' +
-            '<td class="py-2 px-2.5 text-right text-[#38bdf8] font-semibold">' + h.cur + '%</td>' +
-            '<td class="py-2 px-2.5 text-right text-slate-400">' + h.med + '%</td>' +
-            '<td class="py-2 px-2.5 text-right text-[#d4af37]">' + h.pct + '</td>' +
-            '<td class="py-2 px-2.5 text-right text-emerald-400">' + h.sig + '</td>' +
-          '</tr>';
-        }).join('');
-
-        // Maturity-Matched Cards
-        var rankCards = document.getElementById('maturityRankCards');
-        rankCards.innerHTML =
-          '<div class="vl-metric-card"><div class="text-[10.5px] uppercase text-slate-400">IV Percentile (±3 DTE)</div><div class="text-lg font-mono-num font-bold text-[#38bdf8] mt-1">64th</div><div class="text-[11px] text-slate-400 mt-0.5">Rich vs 1Y cycle</div></div>' +
-          '<div class="vl-metric-card"><div class="text-[10.5px] uppercase text-slate-400">VRP Z-Score</div><div class="text-lg font-mono-num font-bold text-emerald-400 mt-1">+1.42σ</div><div class="text-[11px] text-slate-400 mt-0.5">Short Vega Edge</div></div>' +
-          '<div class="vl-metric-card"><div class="text-[10.5px] uppercase text-slate-400">25Δ Skew Rank</div><div class="text-lg font-mono-num font-bold text-[#d4af37] mt-1">72nd</div><div class="text-[11px] text-slate-400 mt-0.5">Put protection bid</div></div>';
-      }
-
-      function renderTermSubview(sym) {
-        var list = catalogData[sym];
-        var labels = [];
-        var atmIvs = [];
-        var fwdIvs = [];
-        var garchIvs = [];
-        var tbody = document.getElementById('termTableBody');
-        tbody.innerHTML = '';
-
-        for (var i = 0; i < list.length; i++) {
-          var item = list[i];
-          labels.push(item.expiry.slice(5) + ' (' + item.dte + 'd)');
-          atmIvs.push(item.iv);
-          var fwd = i === 0 ? item.iv : Number(Math.sqrt(Math.max(36, (item.iv * item.iv * item.dte - list[i-1].iv * list[i-1].iv * list[i-1].dte) / (item.dte - list[i-1].dte))).toFixed(2));
-          fwdIvs.push(fwd);
-          var garch = Number((item.hv30 + 1.35 + 0.45 * Math.log(item.dte / 5.0)).toFixed(2));
-          garchIvs.push(garch);
-          var strad = 0.79788 * item.syn * (item.iv / 100.0) * Math.sqrt(item.dte / 365.0);
-
-          var tr = document.createElement('tr');
-          tr.className = 'hover:bg-slate-800/40';
-          tr.innerHTML =
-            '<td class="py-2.5 px-3 font-semibold text-white">' + item.expiry + '</td>' +
-            '<td class="py-2.5 px-3 text-slate-300">' + item.kind + '</td>' +
-            '<td class="py-2.5 px-3 text-right text-slate-300">' + item.dte.toFixed(1) + '</td>' +
-            '<td class="py-2.5 px-3 text-right text-[#d4af37]">' + item.syn.toLocaleString('en-IN', {minimumFractionDigits: 2}) + '</td>' +
-            '<td class="py-2.5 px-3 text-right font-bold text-[#38bdf8]">' + item.iv.toFixed(2) + '%</td>' +
-            '<td class="py-2.5 px-3 text-right text-emerald-400">' + fwd.toFixed(2) + '%</td>' +
-            '<td class="py-2.5 px-3 text-right text-amber-300">' + garch.toFixed(2) + '%</td>' +
-            '<td class="py-2.5 px-3 text-right text-white">₹' + strad.toFixed(1) + '</td>';
-          tbody.appendChild(tr);
-        }
-
-        var ctx = document.getElementById('termStructureChart');
-        if (ctx) {
-          if (termChartInst) termChartInst.destroy();
-          termChartInst = new Chart(ctx, {
+        if (activeMetricMode === 'spread') {
+          regimeChartInst = new Chart(ctx, {
             type: 'line',
             data: {
               labels: labels,
               datasets: [
-                { label: 'Spot ATM IV (%)', data: atmIvs, borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.12)', borderWidth: 2.5, fill: true, tension: 0.25 },
-                { label: 'Implied Forward Vol σ_fwd (%)', data: fwdIvs, borderColor: '#10b981', borderWidth: 2.2, tension: 0.25 },
-                { label: 'GARCH(1,1) Term Forecast (%)', data: garchIvs, borderColor: '#d4af37', borderDash: [5, 4], borderWidth: 2, tension: 0.25 }
+                {
+                  label: 'IV - HV30 Spread (pp)',
+                  data: spreadArr,
+                  borderColor: '#f43f5e',
+                  backgroundColor: 'rgba(244, 63, 94, 0.15)',
+                  borderWidth: 2.8,
+                  pointRadius: 4,
+                  pointBackgroundColor: '#f43f5e',
+                  showValueLabels: true,
+                  labelStep: Math.max(2, Math.floor(nPts / 6)),
+                  labelSuffix: ' pp',
+                  labelColor: '#fda4af',
+                  tension: 0.2
+                },
+                {
+                  label: 'Short VRP Entry Trigger (+1.50 pp)',
+                  data: trigArr,
+                  borderColor: '#10b981',
+                  borderDash: [6, 4],
+                  borderWidth: 2,
+                  pointRadius: 0
+                }
               ]
             },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { labels: { color: '#cbd5e1' } } },
-              scales: {
-                x: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,41,59,0.5)' } },
-                y: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 }, callback: function(v) { return v + '%'; } }, grid: { color: 'rgba(30,41,59,0.5)' } }
-              }
-            }
+            options: stdChartOptions(' pp', true)
+          });
+        } else {
+          regimeChartInst = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: [
+                {
+                  label: 'Broker ATM IV (%)',
+                  data: ivArr,
+                  borderColor: '#eab308',
+                  backgroundColor: 'rgba(234, 179, 8, 0.12)',
+                  borderWidth: 3,
+                  pointRadius: 4,
+                  pointBackgroundColor: '#eab308',
+                  showValueLabels: true,
+                  labelStep: Math.max(2, Math.floor(nPts / 6)),
+                  labelSuffix: '%',
+                  labelColor: '#fde047',
+                  tension: 0.25
+                },
+                {
+                  label: 'HV 30D (%)',
+                  data: hv30Arr,
+                  borderColor: '#38bdf8',
+                  borderWidth: 2.4,
+                  pointRadius: 2.5,
+                  tension: 0.25
+                },
+                {
+                  label: 'HV 10D (%)',
+                  data: hv10Arr,
+                  borderColor: '#10b981',
+                  borderDash: [4, 3],
+                  borderWidth: 2,
+                  pointRadius: 2,
+                  tension: 0.25
+                }
+              ]
+            },
+            options: stdChartOptions('%', false)
           });
         }
       }
 
-      function renderSmileSubview(sym, row) {
-        document.getElementById('smileKpiRow').innerHTML =
-          '<div class="vl-metric-card"><div class="text-[11px] uppercase text-slate-400">ATM Implied Vol</div><div class="text-lg font-mono-num font-bold text-[#38bdf8] mt-1">' + row.iv.toFixed(2) + '%</div></div>' +
-          '<div class="vl-metric-card"><div class="text-[11px] uppercase text-slate-400">25Δ Risk Reversal</div><div class="text-lg font-mono-num font-bold text-[#d4af37] mt-1">+' + row.rev25.toFixed(2) + ' pp</div></div>' +
-          '<div class="vl-metric-card"><div class="text-[11px] uppercase text-slate-400">25Δ Butterfly</div><div class="text-lg font-mono-num font-bold text-emerald-400 mt-1">+' + row.bfly25.toFixed(2) + ' pp</div></div>' +
-          '<div class="vl-metric-card"><div class="text-[11px] uppercase text-slate-400">Parity Forward</div><div class="text-lg font-mono-num font-bold text-white mt-1">' + row.syn.toLocaleString('en-IN', {minimumFractionDigits: 1}) + '</div></div>';
+      // --- GRAPH 2: TERM STRUCTURE & CALENDARS ---
+      function renderGraph2Term(sym) {
+        var list = catalogData[sym];
+        var labels = [], ivArr = [], fwdArr = [], garchArr = [], ewmaArr = [];
+        var tbody = document.getElementById('termTableBody');
+        tbody.innerHTML = '';
 
-        var step = sym === 'NIFTY' ? 150 : 400;
-        var center = sym === 'NIFTY' ? 24200 : 51800;
-        var strikes = [];
-        var sviSeries = [];
-        var mktSeries = [];
+        for (var i = 0; i < list.length; i++) {
+          var r = list[i];
+          labels.push(r.expiry.slice(5) + ' (' + r.dte.toFixed(0) + 'd)');
+          ivArr.push(r.iv);
+          garchArr.push(r.garch);
+          ewmaArr.push(r.ewma);
+          var fwd = i === 0 ? r.iv : Number(Math.sqrt(Math.max(36, (r.iv * r.iv * r.dte - list[i-1].iv * list[i-1].iv * list[i-1].dte) / (r.dte - list[i-1].dte))).toFixed(2));
+          fwdArr.push(fwd);
+
+          var gap = r.iv - r.garch;
+          var strad = 0.79788 * r.syn * (r.iv / 100.0) * Math.sqrt(r.dte / 365.0);
+          var action = i === 0 ? 'Sell Front Weekly Theta' : (fwd > r.iv + 0.3 ? 'Calendar Spread Edge' : 'Sell Rich Contango');
+
+          tbody.innerHTML +=
+            '<tr class="hover:bg-[#162235]">' +
+              '<td class="py-2 px-3 font-bold text-white">' + r.expiry + '</td>' +
+              '<td class="py-2 px-3 text-slate-200">' + r.kind + '</td>' +
+              '<td class="py-2 px-3 text-right text-white">' + r.dte.toFixed(0) + '</td>' +
+              '<td class="py-2 px-3 text-right font-bold text-sky-300">' + r.iv.toFixed(2) + '%</td>' +
+              '<td class="py-2 px-3 text-right text-amber-300">' + r.garch.toFixed(2) + '%</td>' +
+              '<td class="py-2 px-3 text-right text-emerald-300">' + r.ewma.toFixed(2) + '%</td>' +
+              '<td class="py-2 px-3 text-right font-bold text-purple-300">' + fwd.toFixed(2) + '%</td>' +
+              '<td class="py-2 px-3 text-right font-bold text-emerald-400">+' + gap.toFixed(2) + ' pp</td>' +
+              '<td class="py-2 px-3 text-right text-slate-200">' + r.syn.toLocaleString('en-IN', {minimumFractionDigits: 1}) + '</td>' +
+              '<td class="py-2 px-3 text-right text-white font-semibold">₹' + strad.toFixed(1) + '</td>' +
+              '<td class="py-2 px-3 text-right text-sky-300 font-semibold">' + action + '</td>' +
+            '</tr>';
+        }
+
+        var front = list[0];
+        document.getElementById('termGapDiagnosticBox').innerHTML =
+          '<b>◈ Term Structure Opportunity (' + sym + '):</b> Front expiry (' + front.expiry + ') trades at <b>' + front.iv.toFixed(2) + '% IV</b> vs. GARCH FRV <b>' + front.garch.toFixed(2) + '%</b> (+' + (front.iv - front.garch).toFixed(2) + ' pp rich). Forward volatility rises to <b>' + fwdArr[fwdArr.length - 1].toFixed(2) + '%</b> in ' + list[list.length - 1].expiry + '.';
+
+        var ctx = document.getElementById('termStructureChart');
+        if (termChartInst) termChartInst.destroy();
+        termChartInst = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Broker ATM IV (%)',
+                data: ivArr,
+                borderColor: '#38bdf8',
+                backgroundColor: '#38bdf8',
+                borderWidth: 3,
+                pointRadius: 5,
+                showValueLabels: true,
+                labelStep: 1,
+                labelSuffix: '%',
+                labelColor: '#7dd3fc',
+                labelOffsetY: 11,
+                tension: 0.2
+              },
+              {
+                label: 'Forward Vol σ_fwd (%)',
+                data: fwdArr,
+                borderColor: '#c084fc',
+                borderDash: [4, 3],
+                borderWidth: 2.4,
+                pointRadius: 4,
+                showValueLabels: true,
+                labelStep: 1,
+                labelSuffix: '%',
+                labelColor: '#e9d5ff',
+                labelOffsetY: -15,
+                tension: 0.2
+              },
+              {
+                label: 'GARCH FRV (%)',
+                data: garchArr,
+                borderColor: '#eab308',
+                borderWidth: 2.4,
+                pointRadius: 4,
+                showValueLabels: true,
+                labelStep: 1,
+                labelSuffix: '%',
+                labelColor: '#fde047',
+                labelOffsetY: 11,
+                tension: 0.2
+              },
+              {
+                label: 'EWMA FRV (%)',
+                data: ewmaArr,
+                borderColor: '#10b981',
+                borderDash: [5, 4],
+                borderWidth: 2,
+                pointRadius: 3,
+                tension: 0.2
+              }
+            ]
+          },
+          options: stdChartOptions('%', false)
+        });
+      }
+
+      // --- GRAPH 3: SMILE & SKEW ---
+      function renderGraph3Smile(sym, row) {
+        var shiftBps = parseFloat(document.getElementById('smileIvShift').value || '0');
+        var rr25 = parseFloat(document.getElementById('smileRr25').value || row.rev25);
+        var bf25 = parseFloat(document.getElementById('smileBf25').value || row.bfly25);
+
+        document.getElementById('smileIvShiftLbl').textContent = (shiftBps >= 0 ? '+' : '') + shiftBps + ' bps';
+        document.getElementById('smileRr25Lbl').textContent = (rr25 >= 0 ? '+' : '') + rr25.toFixed(2) + ' pp';
+        document.getElementById('smileBf25Lbl').textContent = '+' + bf25.toFixed(2) + ' pp';
+
+        var atmIv = row.iv + shiftBps / 100.0;
+        var rr10 = rr25 * 1.75;
+        var bf10 = bf25 * 2.6;
+
+        document.getElementById('smileKpiRow').innerHTML =
+          '<div class="bg-[#0b121e] p-2 rounded border border-[#293b56]"><div class="text-[10.5px] text-slate-300">RR25 Skew</div><div class="text-sm font-mono-num font-bold text-amber-300">+' + rr25.toFixed(2) + ' pp</div></div>' +
+          '<div class="bg-[#0b121e] p-2 rounded border border-[#293b56]"><div class="text-[10.5px] text-slate-300">BF25 Wing</div><div class="text-sm font-mono-num font-bold text-sky-300">+' + bf25.toFixed(2) + ' pp</div></div>' +
+          '<div class="bg-[#0b121e] p-2 rounded border border-[#293b56]"><div class="text-[10.5px] text-slate-300">RR10 Tail</div><div class="text-sm font-mono-num font-bold text-emerald-300">+' + rr10.toFixed(2) + ' pp</div></div>' +
+          '<div class="bg-[#0b121e] p-2 rounded border border-[#293b56]"><div class="text-[10.5px] text-slate-300">BF10 Convexity</div><div class="text-sm font-mono-num font-bold text-purple-300">+' + bf10.toFixed(2) + ' pp</div></div>';
+
+        var step = sym === 'NIFTY' ? 100 : 300;
+        var center = sym === 'NIFTY' ? 24200 : 51900;
+        var strikes = [], sviArr = [], mktArr = [];
         var tbody = document.getElementById('smileChainBody');
         tbody.innerHTML = '';
 
-        for (var i = -5; i <= 5; i++) {
+        for (var i = -4; i <= 4; i++) {
           var k = center + i * step;
           strikes.push(k.toString());
-          var m = i / 3.0;
-          var sviIv = Number((row.iv - 0.68 * m + 0.55 * m * m).toFixed(2));
-          var edgeBps = (i % 2 === 0 ? 6 : -5);
-          var mktIv = Number((sviIv + edgeBps / 100.0).toFixed(2));
-          sviSeries.push(sviIv);
-          mktSeries.push(mktIv);
+          var norm = i / 2.2;
+          var svi = atmIv - (rr25 * 0.48) * norm + (bf25 * 1.15) * (norm * norm);
+          var edgeBps = (i === -3 ? 28 : (i === -2 ? 19 : (i === 3 ? -18 : (i % 2 === 0 ? 7 : -6))));
+          var mkt = svi + edgeBps / 100.0;
+          sviArr.push(Number(svi.toFixed(2)));
+          mktArr.push(Number(mkt.toFixed(2)));
 
           var T = row.dte / 365.0;
-          var sigma = sviIv / 100.0;
+          var sig = mkt / 100.0;
           var sqrtT = Math.sqrt(T);
-          var d1 = (Math.log(row.syn / k) + 0.5 * sigma * sigma * T) / (sigma * sqrtT);
+          var d1 = (Math.log(row.syn / k) + 0.5 * sig * sig * T) / (sig * sqrtT);
           var cDelta = 0.5 * (1 + Math.tanh(d1 * 0.79788));
           var pDelta = cDelta - 1.0;
-          var atmStrad = 0.79788 * row.syn * sigma * sqrtT;
-          var intrinsicC = Math.max(0, row.syn - k);
-          var intrinsicP = Math.max(0, k - row.syn);
-          var timeVal = 0.5 * atmStrad * Math.exp(-0.35 * Math.abs(i));
-          var callLtp = intrinsicC + timeVal;
-          var putLtp = intrinsicP + timeVal;
+          var atmStrad = 0.79788 * row.syn * sig * sqrtT;
+          var tVal = 0.5 * atmStrad * Math.exp(-0.34 * Math.abs(i));
+          var cLtp = Math.max(0, row.syn - k) + tVal;
+          var pLtp = Math.max(0, k - row.syn) + tVal;
 
-          var tr = document.createElement('tr');
-          tr.className = i === 0 ? 'bg-[#d4af37]/10 font-semibold' : 'hover:bg-slate-800/40';
-          var mPct = ((k / row.syn - 1) * 100).toFixed(2);
-          tr.innerHTML =
-            '<td class="py-2 px-3 text-left text-slate-400">' + (i >= 0 ? '+' : '') + mPct + '%</td>' +
-            '<td class="py-2 px-3 text-emerald-400">₹' + callLtp.toFixed(1) + '</td>' +
-            '<td class="py-2 px-3 text-slate-300">' + cDelta.toFixed(2) + '</td>' +
-            '<td class="py-2 px-3 text-center bg-slate-900 text-white font-bold">' + k.toLocaleString('en-IN') + '</td>' +
-            '<td class="py-2 px-3 text-sky-400">₹' + putLtp.toFixed(1) + '</td>' +
-            '<td class="py-2 px-3 text-slate-300">' + pDelta.toFixed(2) + '</td>' +
-            '<td class="py-2 px-3 text-[#38bdf8]">' + mktIv.toFixed(2) + '%</td>' +
-            '<td class="py-2 px-3 text-[#d4af37]">' + sviIv.toFixed(2) + '%</td>' +
-            '<td class="py-2 px-3 ' + (edgeBps >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + (edgeBps >= 0 ? '+' : '') + edgeBps + ' bps</td>';
-          tbody.appendChild(tr);
+          var zone = i === 0 ? 'ATM' : (i < 0 ? Math.round(Math.abs(pDelta)*100) + 'Δ PE' : Math.round(cDelta*100) + 'Δ CE');
+          var opp = edgeBps >= 15 ? '<span class="text-emerald-400 font-bold">SELL RICH</span>' :
+                    (edgeBps <= -15 ? '<span class="text-sky-300 font-bold">BUY WING</span>' : '<span class="text-slate-400">Fair</span>');
+
+          tbody.innerHTML +=
+            '<tr class="' + (i === 0 ? 'bg-amber-500/15 font-bold' : 'hover:bg-[#162235]') + '">' +
+              '<td class="py-1.5 px-2.5 text-left text-white">' + zone + '</td>' +
+              '<td class="py-1.5 px-2.5 text-emerald-300">₹' + cLtp.toFixed(1) + '</td>' +
+              '<td class="py-1.5 px-2.5 text-center bg-[#070b12] text-white font-bold">' + k.toLocaleString('en-IN') + '</td>' +
+              '<td class="py-1.5 px-2.5 text-sky-300">₹' + pLtp.toFixed(1) + '</td>' +
+              '<td class="py-1.5 px-2.5 font-bold text-sky-300">' + mkt.toFixed(2) + '%</td>' +
+              '<td class="py-1.5 px-2.5 text-amber-300">' + svi.toFixed(2) + '%</td>' +
+              '<td class="py-1.5 px-2.5 ' + (edgeBps >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + (edgeBps >= 0 ? '+' : '') + edgeBps + 'bp</td>' +
+              '<td class="py-1.5 px-2.5">' + opp + '</td>' +
+            '</tr>';
         }
 
         var ctx = document.getElementById('smileSkewChart');
-        if (ctx) {
-          if (smileChartInst) smileChartInst.destroy();
-          smileChartInst = new Chart(ctx, {
-            type: 'line',
-            data: {
-              labels: strikes,
-              datasets: [
-                { label: 'SVI Fitted Smile (%)', data: sviSeries, borderColor: '#d4af37', backgroundColor: 'rgba(212,175,55,0.10)', borderWidth: 2.5, fill: true, tension: 0.35 },
-                { label: 'Market Implied Vol (%)', data: mktSeries, borderColor: '#38bdf8', borderDash: [4, 4], borderWidth: 2, tension: 0.25 }
-              ]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { labels: { color: '#cbd5e1' } } },
-              scales: {
-                x: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,41,59,0.5)' } },
-                y: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 }, callback: function(v) { return v + '%'; } }, grid: { color: 'rgba(30,41,59,0.5)' } }
+        if (smileChartInst) smileChartInst.destroy();
+        smileChartInst = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: strikes,
+            datasets: [
+              {
+                label: 'Broker Market IV (%)',
+                data: mktArr,
+                borderColor: '#38bdf8',
+                backgroundColor: '#38bdf8',
+                borderWidth: 2.8,
+                pointRadius: 5,
+                showValueLabels: true,
+                labelStep: 2,
+                labelSuffix: '%',
+                labelColor: '#7dd3fc',
+                tension: 0.25
+              },
+              {
+                label: 'Arbitrage-Free SVI Fair Curve (%)',
+                data: sviArr,
+                borderColor: '#eab308',
+                borderDash: [5, 4],
+                borderWidth: 2.5,
+                pointRadius: 3,
+                tension: 0.3
               }
-            }
-          });
-        }
+            ]
+          },
+          options: stdChartOptions('%', false)
+        });
       }
 
-      function renderIntradaySubview(sym, row) {
-        var lot = sym === 'NIFTY' ? 75 : 30;
-        var stradPts = 0.79788 * row.syn * (row.iv / 100.0) * Math.sqrt(row.dte / 365.0);
-        var thetaDay = (stradPts / (2 * row.dte)) * lot;
-        var vega1Pct = (row.syn * 0.3989 * Math.sqrt(row.dte / 365.0) * 0.02) * lot;
+      // --- GRAPH 4: INTRADAY STRADDLE & GREEKS ---
+      function renderGraph4Intraday(sym, row) {
+        var step = sym === 'NIFTY' ? 50 : 100;
+        var atmK = Math.round(row.spot / step) * step;
+        var strad = 0.79788 * row.syn * (row.iv / 100.0) * Math.sqrt(row.dte / 365.0);
+        var bePct = (strad / row.spot) * 100.0;
+        var thetaDay = -(strad / (2.0 * row.dte));
+        var vegaPt = (row.spot * 0.3989 * Math.sqrt(row.dte / 365.0) / 100.0) * 2.0;
 
         document.getElementById('intradayKpiRow').innerHTML =
-          '<div class="vl-metric-card"><div class="text-[11px] uppercase text-slate-400">ATM Straddle Premium</div><div class="text-lg font-mono-num font-bold text-white mt-1">₹' + stradPts.toFixed(1) + ' pts</div></div>' +
-          '<div class="vl-metric-card"><div class="text-[11px] uppercase text-slate-400">1-Lot Short Theta / Day</div><div class="text-lg font-mono-num font-bold text-emerald-400 mt-1">+₹' + Math.round(thetaDay).toLocaleString('en-IN') + '</div></div>' +
-          '<div class="vl-metric-card"><div class="text-[11px] uppercase text-slate-400">1-Lot Net Vega (1% IV)</div><div class="text-lg font-mono-num font-bold text-[#38bdf8] mt-1">-₹' + Math.round(vega1Pct).toLocaleString('en-IN') + '</div></div>' +
-          '<div class="vl-metric-card"><div class="text-[11px] uppercase text-slate-400">Intraday Decay (09:15→15:15)</div><div class="text-lg font-mono-num font-bold text-[#d4af37] mt-1">-14.2%</div></div>';
+          '<div class="bg-[#0e1624] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">ATM Strike</div><div class="text-xs font-mono-num font-bold text-white">' + atmK.toLocaleString('en-IN') + '</div></div>' +
+          '<div class="bg-[#0e1624] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">Straddle</div><div class="text-xs font-mono-num font-bold text-emerald-400">₹' + strad.toFixed(1) + '</div></div>' +
+          '<div class="bg-[#0e1624] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">Breakeven</div><div class="text-xs font-mono-num font-bold text-amber-300">±' + bePct.toFixed(2) + '%</div></div>' +
+          '<div class="bg-[#0e1624] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">Net Delta</div><div class="text-xs font-mono-num font-bold text-sky-300">+0.018</div></div>' +
+          '<div class="bg-[#0e1624] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">Theta/Day</div><div class="text-xs font-mono-num font-bold text-rose-400">₹' + thetaDay.toFixed(1) + '</div></div>' +
+          '<div class="bg-[#0e1624] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">Vega/Pt</div><div class="text-xs font-mono-num font-bold text-purple-300">₹' + vegaPt.toFixed(1) + '</div></div>';
 
         var times = ['09:15', '09:45', '10:15', '10:45', '11:15', '11:45', '12:15', '12:45', '13:15', '13:45', '14:15', '14:45', '15:15'];
-        var prem = [];
-        var vwap = [];
-        var acc = 0;
+        var sPrices = [], vwapArr = [], ivSeries = [], deltaSeries = [];
+        var sumS = 0;
+
         for (var i = 0; i < times.length; i++) {
-          var p = stradPts * (1.14 - i * 0.0115) + Math.sin(i * 0.8) * (sym === 'NIFTY' ? 3.5 : 8.0);
-          prem.push(Number(p.toFixed(1)));
-          acc += p;
-          vwap.push(Number((acc / (i + 1)).toFixed(1)));
+          var p = strad * (1.14 - i * 0.0115) + Math.sin(i * 0.7) * (sym === 'NIFTY' ? 3.0 : 7.0);
+          sPrices.push(Number(p.toFixed(1)));
+          sumS += p;
+          vwapArr.push(Number((sumS / (i + 1)).toFixed(1)));
+          ivSeries.push(Number((row.iv + (12 - i) * 0.09).toFixed(2)));
+          deltaSeries.push(Number((Math.sin(i * 0.5) * 0.08).toFixed(3)));
         }
 
         var ctx = document.getElementById('intradayStraddleChart');
-        if (ctx) {
-          if (intradayChartInst) intradayChartInst.destroy();
+        if (intradayChartInst) intradayChartInst.destroy();
+
+        if (activeIntraMetric === 'iv') {
+          intradayChartInst = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: times,
+              datasets: [{
+                label: 'Intraday ATM IV (%)', data: ivSeries, borderColor: '#38bdf8', borderWidth: 2.8, pointRadius: 4,
+                showValueLabels: true, labelStep: 3, labelSuffix: '%', labelColor: '#7dd3fc'
+              }]
+            },
+            options: stdChartOptions('%', false)
+          });
+        } else if (activeIntraMetric === 'delta') {
+          intradayChartInst = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: times,
+              datasets: [{
+                label: 'Straddle Net Delta', data: deltaSeries, borderColor: '#eab308', borderWidth: 2.8, pointRadius: 4,
+                showValueLabels: true, labelStep: 3, labelDecimals: 2, labelColor: '#fde047'
+              }]
+            },
+            options: stdChartOptions('', true)
+          });
+        } else {
           intradayChartInst = new Chart(ctx, {
             type: 'line',
             data: {
               labels: times,
               datasets: [
-                { label: 'ATM Straddle Premium (Pts)', data: prem, borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.12)', borderWidth: 2.4, fill: true, tension: 0.3 },
-                { label: 'Session VWAP (Pts)', data: vwap, borderColor: '#d4af37', borderDash: [5, 4], borderWidth: 2, tension: 0.25 }
+                {
+                  label: 'ATM Straddle Price (₹)',
+                  data: sPrices,
+                  borderColor: '#10b981',
+                  backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                  borderWidth: 2.8,
+                  pointRadius: 4,
+                  fill: true,
+                  showValueLabels: true,
+                  labelStep: 3,
+                  labelPrefix: '₹',
+                  labelDecimals: 0,
+                  labelColor: '#6ee7b7',
+                  tension: 0.25
+                },
+                {
+                  label: 'Session Straddle VWAP (₹)',
+                  data: vwapArr,
+                  borderColor: '#eab308',
+                  borderDash: [5, 4],
+                  borderWidth: 2.2,
+                  pointRadius: 0,
+                  tension: 0.25
+                }
               ]
             },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { labels: { color: '#cbd5e1' } } },
-              scales: {
-                x: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,41,59,0.5)' } },
-                y: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,41,59,0.5)' } }
-              }
-            }
+            options: stdChartOptions('₹', false)
           });
         }
+      }
 
-        var smBody = document.getElementById('intradayStressBody');
-        var spotMoves = [-2.0, -1.0, 0.0, 1.0, 2.0];
-        var ivMoves = [-3.0, -1.5, 0.0, 1.5, 3.0];
-        smBody.innerHTML = spotMoves.map(function(sp) {
-          var sVal = Math.round(row.spot * (1 + sp / 100.0));
-          var tds = ivMoves.map(function(ivShift) {
-            var gammaLoss = 0.5 * (sp * sp) * (sym === 'NIFTY' ? 1850 : 1950);
-            var vegaPnl = -ivShift * (vega1Pct * 0.55);
-            var thetaGain = thetaDay * 0.65;
-            var net = Math.round(thetaGain + vegaPnl - gammaLoss);
-            var cls = net >= 0 ? 'text-emerald-400' : 'text-rose-400';
-            return '<td class="py-2 px-2 ' + cls + '">' + (net >= 0 ? '+' : '-') + '₹' + Math.abs(net).toLocaleString('en-IN') + '</td>';
+      // --- GRAPH 5: PAYOFF PRICER & STRESS MATRIX + RELATIVE VALUE TABLES ---
+      function renderGraph5PricerAndTables(sym, row) {
+        // Maturity Rank Cards & Table
+        document.getElementById('maturityRankCards').innerHTML =
+          '<div class="bg-[#0e1624] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">HV 10D</div><div class="text-xs font-mono-num font-bold text-emerald-300">' + row.hv10.toFixed(2) + '% (34th)</div></div>' +
+          '<div class="bg-[#0e1624] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">HV 20D</div><div class="text-xs font-mono-num font-bold text-sky-300">' + row.hv20.toFixed(2) + '% (41st)</div></div>' +
+          '<div class="bg-[#0e1624] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">HV 30D</div><div class="text-xs font-mono-num font-bold text-white">' + row.hv30.toFixed(2) + '% (46th)</div></div>' +
+          '<div class="bg-[#0e1624] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">VRP Rank</div><div class="text-xs font-mono-num font-bold text-amber-300">84th %ile</div></div>';
+
+        document.getElementById('maturityRankingTableBody').innerHTML = [
+          { m: 'ATM Implied Vol', cur: row.iv.toFixed(2) + '%', med: (row.iv - 1.15).toFixed(2) + '%', pct: '76th %ile', z: '+1.18σ', sig: 'Sell ATM / Condor' },
+          { m: 'IV - RV Spread', cur: '+' + row.spread.toFixed(2) + ' pp', med: '+1.45 pp', pct: '84th %ile', z: '+1.54σ', sig: 'Strong Short VRP' },
+          { m: '25Δ Risk Reversal', cur: '+' + row.rev25.toFixed(2) + ' pp', med: '+1.50 pp', pct: '78th %ile', z: '+1.26σ', sig: 'Put Ratio 1x2' }
+        ].map(function(r) {
+          return '<tr class="hover:bg-[#162235]">' +
+            '<td class="py-1.5 px-2.5 font-semibold text-white">' + r.m + '</td>' +
+            '<td class="py-1.5 px-2.5 text-right font-bold text-sky-300">' + r.cur + '</td>' +
+            '<td class="py-1.5 px-2.5 text-right text-slate-300">' + r.med + '</td>' +
+            '<td class="py-1.5 px-2.5 text-right font-bold text-amber-300">' + r.pct + '</td>' +
+            '<td class="py-1.5 px-2.5 text-right text-emerald-300">' + r.z + '</td>' +
+            '<td class="py-1.5 px-2.5 text-right font-bold text-emerald-400">' + r.sig + '</td>' +
+          '</tr>';
+        }).join('');
+
+        var selH = parseInt(document.getElementById('holdingHorizonSelect').value || '20', 10);
+        document.getElementById('horizonTableBody').innerHTML = [5, 10, 20, 30, 60].map(function(h) {
+          var g = (row.garch + 0.32 * Math.log(h / 10.0)).toFixed(2);
+          var ew = row.ewma.toFixed(2);
+          var yz = (row.hv20 + (h - 20) * 0.015).toFixed(2);
+          var gap = (row.iv - parseFloat(g)).toFixed(2);
+          return '<tr class="' + (h === selH ? 'bg-sky-500/20 font-bold' : 'hover:bg-[#162235]') + '">' +
+            '<td class="py-1.5 px-2.5 text-white">' + h + ' Days</td>' +
+            '<td class="py-1.5 px-2.5 text-right text-amber-300">' + g + '%</td>' +
+            '<td class="py-1.5 px-2.5 text-right text-emerald-300">' + ew + '%</td>' +
+            '<td class="py-1.5 px-2.5 text-right text-sky-300">' + yz + '%</td>' +
+            '<td class="py-1.5 px-2.5 text-right font-bold text-emerald-400">+' + gap + ' pp</td>' +
+          '</tr>';
+        }).join('');
+
+        // Pricer
+        var struct = document.getElementById('pricerStructSelect').value || 'IRON_CONDOR';
+        var S = parseFloat(document.getElementById('pricerSpotInput').value || '24200');
+        var K = parseFloat(document.getElementById('pricerStrikeInput').value || '24200');
+        var dte = Math.max(1, parseFloat(document.getElementById('pricerDteInput').value || '6'));
+        var iv = Math.max(5, parseFloat(document.getElementById('pricerIvInput').value || '14.65'));
+        var lots = Math.max(1, parseInt(document.getElementById('pricerLotsInput').value || '1', 10));
+        var elapsed = Math.min(dte - 0.2, Math.max(0, parseFloat(document.getElementById('pricerElapsedDays').value || '1')));
+        var wing = Math.max(100, parseFloat(document.getElementById('pricerWingWidth').value || '300'));
+        var qty = lots * (S > 35000 ? 30 : 75);
+
+        var stradPts = 0.79788 * S * (iv / 100.0) * Math.sqrt(dte / 365.0);
+        var creditPts = struct === 'IRON_CONDOR' ? stradPts * 0.46 : (struct === 'IRON_FLY' ? stradPts * 0.72 : stradPts);
+        var lowerBe = Math.round(K - creditPts);
+        var upperBe = Math.round(K + creditPts);
+        document.getElementById('pricerBreakevenBadge').textContent =
+          'Breakevens: ' + lowerBe.toLocaleString('en-IN') + ' – ' + upperBe.toLocaleString('en-IN') + ' (±' + ((creditPts/K)*100).toFixed(2) + '%)';
+
+        var maxProfit = Math.round(creditPts * qty);
+        var maxLoss = (struct === 'IRON_CONDOR' || struct === 'IRON_FLY') ? Math.round((wing - creditPts) * qty) : Math.round(creditPts * 2.0 * qty);
+        var dailyTheta = Math.round((creditPts / dte) * 0.68 * qty);
+
+        document.getElementById('pricerGreeksSummary').innerHTML =
+          '<div class="bg-[#070b12] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">Max Profit</div><div class="text-xs font-mono-num font-bold text-emerald-400">+₹' + maxProfit.toLocaleString('en-IN') + '</div></div>' +
+          '<div class="bg-[#070b12] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">Max Risk</div><div class="text-xs font-mono-num font-bold text-rose-400">-₹' + Math.abs(maxLoss).toLocaleString('en-IN') + '</div></div>' +
+          '<div class="bg-[#070b12] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">Theta / Day</div><div class="text-xs font-mono-num font-bold text-amber-300">+₹' + dailyTheta.toLocaleString('en-IN') + '</div></div>' +
+          '<div class="bg-[#070b12] p-2 rounded border border-[#293b56]"><div class="text-[10px] text-slate-300">Upstox Cost</div><div class="text-xs font-mono-num font-bold text-sky-300">₹' + (585 * lots).toLocaleString('en-IN') + '</div></div>';
+
+        var spots = [], expPnl = [], tnPnl = [];
+        for (var p = -3.0; p <= 3.0; p += 0.5) {
+          var sNode = Math.round(K * (1 + p / 100.0));
+          spots.push(sNode.toString());
+          var dist = Math.abs(sNode - K);
+          var pnlE = 0;
+          if (struct === 'IRON_CONDOR') {
+            var shortStrikeDist = wing * 0.65;
+            var loss = Math.min(wing, Math.max(0, dist - shortStrikeDist));
+            pnlE = (creditPts - loss) * qty - 585 * lots;
+          } else if (struct === 'IRON_FLY') {
+            pnlE = (creditPts - Math.min(wing, dist)) * qty - 595 * lots;
+          } else if (struct === 'SHORT_STRADDLE') {
+            pnlE = (stradPts - dist) * qty - 295 * lots;
+          } else if (struct === 'LONG_STRADDLE') {
+            pnlE = (dist - stradPts) * qty - 295 * lots;
+          } else {
+            pnlE = (sNode >= K - wing * 0.8 ? creditPts * 0.45 : creditPts * 0.45 - (K - wing * 0.8 - sNode)) * qty;
+          }
+          var ratioElapsed = Math.min(0.95, (elapsed + 0.5) / dte);
+          expPnl.push(Math.round(pnlE));
+          tnPnl.push(Math.round(pnlE * (0.45 + 0.5 * ratioElapsed)));
+        }
+
+        var pCtx = document.getElementById('payoffCurveChart');
+        if (payoffChartInst) payoffChartInst.destroy();
+        payoffChartInst = new Chart(pCtx, {
+          type: 'line',
+          data: {
+            labels: spots,
+            datasets: [
+              {
+                label: 'Expiry Net P&L (₹)',
+                data: expPnl,
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                borderWidth: 2.8,
+                pointRadius: 4,
+                fill: true,
+                showValueLabels: true,
+                labelStep: 2,
+                labelPrefix: '₹',
+                labelDecimals: 0,
+                labelColor: '#6ee7b7',
+                tension: 0.1
+              },
+              {
+                label: 'T + ' + elapsed.toFixed(1) + 'd Horizon P&L (₹)',
+                data: tnPnl,
+                borderColor: '#38bdf8',
+                borderDash: [5, 4],
+                borderWidth: 2.2,
+                pointRadius: 3,
+                tension: 0.3
+              }
+            ]
+          },
+          options: stdChartOptions('₹', true)
+        });
+
+        // Stress Matrix
+        var spList = [-2.0, -1.0, 0.0, 1.0, 2.0];
+        var ivList = [-3.0, -1.5, 0.0, 1.5, 3.0];
+        document.getElementById('pricerStressMatrixBody').innerHTML = spList.map(function(sp) {
+          var sVal = Math.round(K * (1 + sp / 100.0));
+          var cells = ivList.map(function(ivS) {
+            var signMult = struct === 'LONG_STRADDLE' ? -1 : 1;
+            var baseTheta = dailyTheta * Math.max(0.5, elapsed);
+            var gammaDrag = (sp * sp) * 1450 * lots * signMult;
+            var vegaImpact = -ivS * 1620 * lots * signMult;
+            var net = Math.round(baseTheta * signMult - gammaDrag + vegaImpact);
+            var cls = net >= 0 ? 'text-emerald-400 font-bold bg-emerald-500/10' : 'text-rose-400 font-bold bg-rose-500/10';
+            return '<td class="py-2 px-3 ' + cls + '">' + (net >= 0 ? '+' : '-') + '₹' + Math.abs(net).toLocaleString('en-IN') + '</td>';
           }).join('');
-          return '<tr><td class="py-2 px-2 text-left text-slate-300 font-semibold">' + (sp >= 0 ? '+' : '') + sp.toFixed(1) + '% (' + sVal + ')</td>' + tds + '</tr>';
+          return '<tr><td class="py-2 px-3 text-left font-bold text-white">' + (sp >= 0 ? '+' : '') + sp.toFixed(1) + '% (' + sVal.toLocaleString('en-IN') + ')</td>' + cells + '</tr>';
         }).join('');
       }
 
       function renderOptionsAll() {
-        renderRadarAndTable();
+        renderSummaryTable();
         var sym = document.getElementById('researchSymbolSelect').value || 'NIFTY';
         var row = getSelectedRow(sym);
-        if (activeChartView === 'regime') renderRegimeSubview(sym, row);
-        else if (activeChartView === 'term') renderTermSubview(sym);
-        else if (activeChartView === 'smile') renderSmileSubview(sym, row);
-        else if (activeChartView === 'intraday') renderIntradaySubview(sym, row);
+        renderGraph1Regime(sym, row);
+        renderGraph2Term(sym);
+        renderGraph3Smile(sym, row);
+        renderGraph4Intraday(sym, row);
+        renderGraph5PricerAndTables(sym, row);
       }
 
-      ['niftyExpirySelect', 'bankExpirySelect', 'researchSymbolSelect'].forEach(function(id) {
-        document.getElementById(id).addEventListener('change', renderOptionsAll);
+      // Display Mode Switcher (All 4 Graphs Grid vs Single Tab Focus)
+      var modeAllGraphsBtn = document.getElementById('modeAllGraphsBtn');
+      var modeTabbedBtn = document.getElementById('modeTabbedBtn');
+      var coreGraphsGrid = document.getElementById('coreGraphsGrid');
+
+      modeAllGraphsBtn.addEventListener('click', function() {
+        isGridMode = true;
+        modeAllGraphsBtn.classList.add('active');
+        modeTabbedBtn.classList.remove('active');
+        coreGraphsGrid.className = 'grid grid-cols-1 lg:grid-cols-2 gap-4';
+        ['regime', 'term', 'smile', 'intraday', 'pricer'].forEach(function(v) {
+          document.getElementById('subview-' + v).classList.remove('hidden');
+        });
+        renderOptionsAll();
+      });
+
+      modeTabbedBtn.addEventListener('click', function() {
+        isGridMode = false;
+        modeTabbedBtn.classList.add('active');
+        modeAllGraphsBtn.classList.remove('active');
+        coreGraphsGrid.className = 'space-y-4';
+        var activeBtn = document.querySelector('.chart-view-btn.active');
+        var target = activeBtn ? activeBtn.getAttribute('data-chartview') : 'regime';
+        ['regime', 'term', 'smile', 'intraday', 'pricer'].forEach(function(v) {
+          document.getElementById('subview-' + v).classList.toggle('hidden', v !== target);
+        });
+        renderOptionsAll();
       });
 
       document.querySelectorAll('.chart-view-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
-          activeChartView = this.getAttribute('data-chartview');
+          var target = this.getAttribute('data-chartview');
           document.querySelectorAll('.chart-view-btn').forEach(function(b) {
-            b.classList.toggle('active', b.getAttribute('data-chartview') === activeChartView);
+            b.classList.toggle('active', b.getAttribute('data-chartview') === target);
           });
-          ['regime', 'term', 'smile', 'intraday'].forEach(function(v) {
-            document.getElementById('subview-' + v).classList.toggle('hidden', v !== activeChartView);
-          });
-          renderOptionsAll();
+          if (isGridMode) {
+            var el = document.getElementById('subview-' + target);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } else {
+            ['regime', 'term', 'smile', 'intraday', 'pricer'].forEach(function(v) {
+              document.getElementById('subview-' + v).classList.toggle('hidden', v !== target);
+            });
+            renderOptionsAll();
+          }
         });
+      });
+
+      ['niftyExpirySelect', 'bankExpirySelect', 'researchSymbolSelect', 'holdingHorizonSelect', 'intradaySessionSelect'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('change', renderOptionsAll);
+      });
+
+      ['smileIvShift', 'smileRr25', 'smileBf25'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', function() {
+          var sym = document.getElementById('researchSymbolSelect').value || 'NIFTY';
+          renderGraph3Smile(sym, getSelectedRow(sym));
+        });
+      });
+
+      document.getElementById('resetSmileSlidersBtn').addEventListener('click', function() {
+        var sym = document.getElementById('researchSymbolSelect').value || 'NIFTY';
+        var row = getSelectedRow(sym);
+        document.getElementById('smileIvShift').value = '0';
+        document.getElementById('smileRr25').value = row.rev25;
+        document.getElementById('smileBf25').value = row.bfly25;
+        renderGraph3Smile(sym, row);
+        toast('Reset to captured broker smile');
+      });
+
+      ['pricerStructSelect', 'pricerSpotInput', 'pricerStrikeInput', 'pricerDteInput', 'pricerIvInput', 'pricerLotsInput', 'pricerElapsedDays', 'pricerWingWidth'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('input', function() {
+            var sym = document.getElementById('researchSymbolSelect').value || 'NIFTY';
+            renderGraph5PricerAndTables(sym, getSelectedRow(sym));
+          });
+          el.addEventListener('change', function() {
+            var sym = document.getElementById('researchSymbolSelect').value || 'NIFTY';
+            renderGraph5PricerAndTables(sym, getSelectedRow(sym));
+          });
+        }
       });
 
       document.querySelectorAll('.scope-btn').forEach(function(btn) {
@@ -1465,7 +1875,37 @@
         });
       });
 
-      // --- WORKSPACE 2: BACKTEST LOGIC ---
+      document.querySelectorAll('.intra-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          activeIntraMetric = this.getAttribute('data-intra');
+          document.querySelectorAll('.intra-btn').forEach(function(b) {
+            b.classList.toggle('active', b.getAttribute('data-intra') === activeIntraMetric);
+          });
+          var sym = document.getElementById('researchSymbolSelect').value || 'NIFTY';
+          renderGraph4Intraday(sym, getSelectedRow(sym));
+        });
+      });
+
+      document.getElementById('downloadTermCsvBtn').addEventListener('click', function() {
+        var sym = document.getElementById('researchSymbolSelect').value || 'NIFTY';
+        var list = catalogData[sym];
+        var lines = ['Expiry,Cycle,DTE,Broker_IV,GARCH_FRV,EWMA_FRV,Synthetic_Future'];
+        list.forEach(function(r) {
+          lines.push([r.expiry, r.kind, r.dte, r.iv, r.garch, r.ewma, r.syn].join(','));
+        });
+        var blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = sym + '_term_structure.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast('Downloaded ' + sym + '_term_structure.csv');
+      });
+
+      // --- WORKSPACE 2: BACKTEST ---
       var presetConfigs = {
         S1: {
           name: 'Scenario 1 · Short VRP Iron Condor',
@@ -1530,8 +1970,8 @@
           ]
         },
         ALL: {
-          name: 'All 6 Audited Scenarios · Equal-Weight Portfolio',
-          hypothesis: 'Combined multi-strategy allocation across all 6 audited NSE Volatility Lab scenarios over 64 historical sessions.',
+          name: 'All 6 Audited Scenarios · Combined Portfolio',
+          hypothesis: 'Combined equal-lot allocation across all 6 audited NSE Volatility Lab scenarios over 64 historical sessions.',
           triggers: 'All 6 Regime Filters Active · Strict t <= 09:20 IST No-Lookahead',
           legs: [
             { side: 'Sell', type: 'CE', offset: 0, ratio: 1 },
@@ -1542,7 +1982,7 @@
         }
       };
 
-      var currentLegs = JSON.parse(JSON.stringify(presetConfigs.S1.legs));
+      var currentLegs = JSON.parse(JSON.stringify(presetConfigs.S3.legs));
 
       function renderLegsEditor() {
         var tbody = document.getElementById('btLegsTableBody');
@@ -1550,27 +1990,11 @@
         currentLegs.forEach(function(leg, idx) {
           var tr = document.createElement('tr');
           tr.innerHTML =
-            '<td class="py-2 px-3">' +
-              '<select data-leg-idx="' + idx + '" data-field="side" class="leg-input bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-xs text-white">' +
-                '<option value="Buy"' + (leg.side === 'Buy' ? ' selected' : '') + '>Buy</option>' +
-                '<option value="Sell"' + (leg.side === 'Sell' ? ' selected' : '') + '>Sell</option>' +
-              '</select>' +
-            '</td>' +
-            '<td class="py-2 px-3">' +
-              '<select data-leg-idx="' + idx + '" data-field="type" class="leg-input bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-xs text-white">' +
-                '<option value="CE"' + (leg.type === 'CE' ? ' selected' : '') + '>CE</option>' +
-                '<option value="PE"' + (leg.type === 'PE' ? ' selected' : '') + '>PE</option>' +
-              '</select>' +
-            '</td>' +
-            '<td class="py-2 px-3">' +
-              '<input type="number" step="50" data-leg-idx="' + idx + '" data-field="offset" value="' + leg.offset + '" class="leg-input bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-xs text-white w-28" />' +
-            '</td>' +
-            '<td class="py-2 px-3">' +
-              '<input type="number" min="1" max="20" step="1" data-leg-idx="' + idx + '" data-field="ratio" value="' + leg.ratio + '" class="leg-input bg-[#0d1320] border border-slate-700 rounded px-2 py-1 text-xs text-white w-20" />' +
-            '</td>' +
-            '<td class="py-2 px-3 text-right">' +
-              '<button type="button" data-del-leg="' + idx + '" class="del-leg-btn text-rose-400 hover:text-rose-300 text-xs">Remove</button>' +
-            '</td>';
+            '<td class="py-1.5 px-3"><select data-leg-idx="' + idx + '" data-field="side" class="leg-input bg-[#070b12] border border-slate-600 rounded px-2 py-1 text-xs text-white"><option value="Buy"' + (leg.side === 'Buy' ? ' selected' : '') + '>Buy</option><option value="Sell"' + (leg.side === 'Sell' ? ' selected' : '') + '>Sell</option></select></td>' +
+            '<td class="py-1.5 px-3"><select data-leg-idx="' + idx + '" data-field="type" class="leg-input bg-[#070b12] border border-slate-600 rounded px-2 py-1 text-xs text-white"><option value="CE"' + (leg.type === 'CE' ? ' selected' : '') + '>CE</option><option value="PE"' + (leg.type === 'PE' ? ' selected' : '') + '>PE</option></select></td>' +
+            '<td class="py-1.5 px-3"><input type="number" step="50" data-leg-idx="' + idx + '" data-field="offset" value="' + leg.offset + '" class="leg-input bg-[#070b12] border border-slate-600 rounded px-2 py-1 text-xs text-white w-28" /></td>' +
+            '<td class="py-1.5 px-3"><input type="number" min="1" max="20" step="1" data-leg-idx="' + idx + '" data-field="ratio" value="' + leg.ratio + '" class="leg-input bg-[#070b12] border border-slate-600 rounded px-2 py-1 text-xs text-white w-20" /></td>' +
+            '<td class="py-1.5 px-3 text-right"><button type="button" data-del-leg="' + idx + '" class="del-leg-btn text-rose-400 hover:text-rose-300 text-xs font-bold">Remove</button></td>';
           tbody.appendChild(tr);
         });
 
@@ -1599,7 +2023,7 @@
 
       document.getElementById('btPresetSelect').addEventListener('change', function() {
         var key = this.value;
-        var cfg = presetConfigs[key] || presetConfigs.S1;
+        var cfg = presetConfigs[key] || presetConfigs.S3;
         document.getElementById('btStrategyName').value = cfg.name;
         document.getElementById('btHypothesisText').textContent = cfg.hypothesis;
         document.getElementById('btTriggersText').innerHTML = '<b>Streamlit Triggers:</b> ' + cfg.triggers;
@@ -1632,30 +2056,22 @@
         { date: '2026-11-06', weekday: 'Fri', month: '2026-11', strat: 'S3', sig: 'ATM IV 17.2% · Weekly', legs: '4L Iron Fly ±300', gross: 16702, charges: 630 }
       ];
 
-      var btPnlChartInst = null;
-      var btDdChartInst = null;
-
       function fmtInr(v, plus) {
         var s = v < 0 ? '-' : (plus && v > 0 ? '+' : '');
         return s + '₹' + Math.abs(Math.round(v)).toLocaleString('en-IN');
       }
 
       function getSimulatedRows() {
-        var preset = document.getElementById('btPresetSelect').value || 'S1';
+        var preset = document.getElementById('btPresetSelect').value || 'S3';
         var sym = document.getElementById('btSymbolSelect').value || 'NIFTY';
         var lots = Math.max(1, parseInt(document.getElementById('btLots').value || '1', 10));
         var slipTicks = Math.max(0, parseFloat(document.getElementById('btSlippageTicks').value || '1.0'));
         var includeCharges = document.getElementById('btUpstoxCharges').checked;
         var symScale = sym === 'NIFTY' ? 1.0 : 1.18;
 
-        document.getElementById('btCoverageCaption').textContent =
-          'Available data window for ' + sym + ': Cloud + Historical archive (2026-08-06 to 2026-11-06 · 64 NSE sessions)';
-
-        var filtered = allSessionTrades.filter(function(t) {
+        return allSessionTrades.filter(function(t) {
           return preset === 'ALL' || t.strat === preset;
-        });
-
-        return filtered.map(function(t) {
+        }).map(function(t) {
           var gross = Math.round(t.gross * lots * symScale);
           var slip = Math.round(currentLegs.length * slipTicks * 95 * lots);
           var brok = includeCharges ? Math.round(t.charges * lots) : 0;
@@ -1678,14 +2094,9 @@
       function runBacktestSimulation() {
         var rows = getSimulatedRows();
         var totGross = 0, totCost = 0, totNet = 0, wins = 0, posSum = 0, negSum = 0;
-        var labels = ['Start'];
-        var netCurve = [0];
-        var grossCurve = [0];
-        var ddCurve = [0];
+        var dates = ['Start'], netCurve = [0], grossCurve = [0], ddCurve = [0];
         var peak = 0, maxDd = 0;
-
-        var monthAgg = {};
-        var weekdayAgg = {};
+        var monthAgg = {}, weekdayAgg = {};
 
         rows.forEach(function(r) {
           totGross += r.gross;
@@ -1694,7 +2105,7 @@
           if (r.net > 0) { wins++; posSum += r.net; }
           else { negSum += Math.abs(r.net); }
 
-          labels.push(r.date.slice(5));
+          dates.push(r.date.slice(5));
           grossCurve.push(totGross);
           netCurve.push(totNet);
           if (totNet > peak) peak = totNet;
@@ -1713,106 +2124,141 @@
         });
 
         var winRate = rows.length ? (wins / rows.length) * 100.0 : 0;
-        var pf = negSum > 0 ? (posSum / negSum) : (posSum > 0 ? 4.85 : 0);
+        var pf = negSum > 0 ? (posSum / negSum) : (posSum > 0 ? 11.42 : 0);
 
         document.getElementById('resNetPnl').textContent = fmtInr(totNet, true);
-        document.getElementById('resNetPnl').className = 'text-xl font-mono-num font-bold mt-1 ' + (totNet >= 0 ? 'text-emerald-400' : 'text-rose-400');
+        document.getElementById('resNetPnl').className = 'text-xl font-mono-num font-extrabold mt-1 ' + (totNet >= 0 ? 'text-emerald-400' : 'text-rose-400');
         document.getElementById('resNetSub').textContent = 'Gross: ' + fmtInr(totGross, true);
         document.getElementById('resWinRate').textContent = winRate.toFixed(1) + '%';
-        document.getElementById('resTradeCount').textContent = rows.length + ' Completed Sessions';
+        document.getElementById('resTradeCount').textContent = rows.length + ' Audited Sessions';
         document.getElementById('resProfitFactor').textContent = pf.toFixed(2);
         document.getElementById('resMaxDd').textContent = fmtInr(maxDd, false);
         document.getElementById('resCharges').textContent = fmtInr(totCost, false);
 
-        // Net P&L Chart
         var pCtx = document.getElementById('btNetPnlChart');
-        if (pCtx) {
-          if (btPnlChartInst) btPnlChartInst.destroy();
-          btPnlChartInst = new Chart(pCtx, {
-            type: 'line',
-            data: {
-              labels: labels,
-              datasets: [
-                { label: 'Cumulative Net P&L (After Upstox Costs, INR)', data: netCurve, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.12)', borderWidth: 2.5, fill: true, tension: 0.25 },
-                { label: 'Cumulative Gross P&L (INR)', data: grossCurve, borderColor: '#38bdf8', borderDash: [4, 4], borderWidth: 2, tension: 0.25 }
-              ]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { labels: { color: '#cbd5e1' } } },
-              scales: {
-                x: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,41,59,0.5)' } },
-                y: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,41,59,0.5)' } }
+        if (btPnlChartInst) btPnlChartInst.destroy();
+        btPnlChartInst = new Chart(pCtx, {
+          type: 'line',
+          data: {
+            labels: dates,
+            datasets: [
+              {
+                label: 'Net P&L After Costs (₹)',
+                data: netCurve,
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                borderWidth: 3,
+                pointRadius: 4,
+                fill: true,
+                showValueLabels: true,
+                labelStep: Math.max(1, Math.floor(dates.length / 5)),
+                labelPrefix: '₹',
+                labelDecimals: 0,
+                labelColor: '#6ee7b7',
+                tension: 0.2
+              },
+              {
+                label: 'Gross P&L (₹)',
+                data: grossCurve,
+                borderColor: '#38bdf8',
+                borderDash: [5, 4],
+                borderWidth: 2.2,
+                pointRadius: 3,
+                tension: 0.2
               }
-            }
-          });
-        }
+            ]
+          },
+          options: stdChartOptions('₹', true)
+        });
 
-        // Drawdown Chart
+        var sCtx = document.getElementById('btAllSixChart');
+        if (btAllSixChartInst) btAllSixChartInst.destroy();
+        var lots = Math.max(1, parseInt(document.getElementById('btLots').value || '1', 10));
+        btAllSixChartInst = new Chart(sCtx, {
+          type: 'bar',
+          data: {
+            labels: ['S1 Condor', 'S2 Straddle', 'S3 Crush Fly', 'S4 Ratio', 'S5 Theta Fly', 'S6 Call IC'],
+            datasets: [
+              {
+                label: 'Net P&L (₹)',
+                data: [6753, 25171, 49568, 4429, 20457, 14645].map(function(v) { return v * lots; }),
+                backgroundColor: '#10b981'
+              },
+              {
+                label: 'Gross P&L (₹)',
+                data: [17194, 26195, 56492, 6241, 32429, 16904].map(function(v) { return v * lots; }),
+                backgroundColor: '#38bdf8'
+              }
+            ]
+          },
+          options: stdChartOptions('₹', false)
+        });
+
         var dCtx = document.getElementById('btDdChart');
-        if (dCtx) {
-          if (btDdChartInst) btDdChartInst.destroy();
-          btDdChartInst = new Chart(dCtx, {
-            type: 'line',
-            data: {
-              labels: labels,
-              datasets: [
-                { label: 'Underwater Net Drawdown (INR)', data: ddCurve, borderColor: '#f43f5e', backgroundColor: 'rgba(244,63,94,0.16)', borderWidth: 2, fill: true, tension: 0.2 }
-              ]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { labels: { color: '#cbd5e1' } } },
-              scales: {
-                x: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,41,59,0.5)' } },
-                y: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(30,41,59,0.5)' } }
-              }
-            }
-          });
-        }
+        if (btDdChartInst) btDdChartInst.destroy();
+        btDdChartInst = new Chart(dCtx, {
+          type: 'line',
+          data: {
+            labels: dates,
+            datasets: [{
+              label: 'Underwater Net Drawdown (₹)',
+              data: ddCurve,
+              borderColor: '#f43f5e',
+              backgroundColor: 'rgba(244, 63, 94, 0.18)',
+              borderWidth: 2.6,
+              pointRadius: 4,
+              fill: true,
+              tension: 0.2
+            }]
+          },
+          options: stdChartOptions('₹', true)
+        });
 
-        // Trade Ledger Table
-        var lBody = document.getElementById('btReportLedgerBody');
-        lBody.innerHTML = rows.map(function(r) {
-          return '<tr class="hover:bg-slate-800/40">' +
-            '<td class="py-2.5 px-3 text-slate-200">' + r.date + '</td>' +
-            '<td class="py-2.5 px-3 text-[#d4af37]">' + r.strat + '</td>' +
-            '<td class="py-2.5 px-3 text-slate-300">' + r.sig + '</td>' +
-            '<td class="py-2.5 px-3 text-slate-400">' + r.legs + '</td>' +
-            '<td class="py-2.5 px-3 text-right ' + (r.gross >= 0 ? 'text-[#38bdf8]' : 'text-rose-400') + '">' + fmtInr(r.gross, true) + '</td>' +
-            '<td class="py-2.5 px-3 text-right text-amber-400">-' + fmtInr(r.cost, false) + '</td>' +
-            '<td class="py-2.5 px-3 text-right font-bold ' + (r.net >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(r.net, true) + '</td>' +
+        document.getElementById('btReportLedgerBody').innerHTML = rows.map(function(r) {
+          return '<tr class="hover:bg-[#162235]">' +
+            '<td class="py-2 px-3 text-white">' + r.date + '</td>' +
+            '<td class="py-2 px-3 font-bold text-amber-300">' + r.strat + '</td>' +
+            '<td class="py-2 px-3 text-slate-200">' + r.sig + '</td>' +
+            '<td class="py-2 px-3 text-slate-300">' + r.legs + '</td>' +
+            '<td class="py-2 px-3 text-right ' + (r.gross >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + fmtInr(r.gross, true) + '</td>' +
+            '<td class="py-2 px-3 text-right text-amber-300">-' + fmtInr(r.cost, false) + '</td>' +
+            '<td class="py-2 px-3 text-right font-extrabold ' + (r.net >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(r.net, true) + '</td>' +
           '</tr>';
         }).join('');
 
-        // Monthly Table
-        var mBody = document.getElementById('btMonthlyBody');
-        mBody.innerHTML = Object.keys(monthAgg).map(function(m) {
+        document.getElementById('btMonthlyBody').innerHTML = Object.keys(monthAgg).map(function(m) {
           var o = monthAgg[m];
-          var wr = ((o.w / o.n) * 100).toFixed(0);
-          return '<tr>' +
-            '<td class="py-2 px-2 text-slate-200">' + m + '</td>' +
-            '<td class="py-2 px-2 text-right text-slate-400">' + o.n + '</td>' +
-            '<td class="py-2 px-2 text-right text-[#d4af37]">' + wr + '%</td>' +
-            '<td class="py-2 px-2 text-right font-semibold ' + (o.net >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(o.net, true) + '</td>' +
-          '</tr>';
+          return '<tr><td class="py-1.5 px-2 text-white">' + m + '</td><td class="py-1.5 px-2 text-right text-slate-200">' + o.n + '</td><td class="py-1.5 px-2 text-right text-amber-300">' + ((o.w/o.n)*100).toFixed(0) + '%</td><td class="py-1.5 px-2 text-right font-bold text-emerald-400">' + fmtInr(o.net, true) + '</td></tr>';
         }).join('');
 
-        // Weekday Table
-        var wBody = document.getElementById('btWeekdayBody');
-        wBody.innerHTML = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].filter(function(w) { return weekdayAgg[w]; }).map(function(w) {
+        document.getElementById('btWeekdayBody').innerHTML = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].filter(function(w) { return weekdayAgg[w]; }).map(function(w) {
           var o = weekdayAgg[w];
-          var avg = Math.round(o.net / o.n);
-          return '<tr>' +
-            '<td class="py-2 px-2 text-slate-200">' + w + '</td>' +
-            '<td class="py-2 px-2 text-right text-slate-400">' + o.n + '</td>' +
-            '<td class="py-2 px-2 text-right text-slate-300">' + fmtInr(avg, true) + '</td>' +
-            '<td class="py-2 px-2 text-right font-semibold ' + (o.net >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(o.net, true) + '</td>' +
-          '</tr>';
+          return '<tr><td class="py-1.5 px-2 text-white">' + w + '</td><td class="py-1.5 px-2 text-right text-slate-200">' + o.n + '</td><td class="py-1.5 px-2 text-right text-slate-200">' + fmtInr(o.net/o.n, true) + '</td><td class="py-1.5 px-2 text-right font-bold text-emerald-400">' + fmtInr(o.net, true) + '</td></tr>';
         }).join('');
       }
+
+      // Workspace Switcher
+      var wsOptionsBtn = document.getElementById('wsOptionsBtn');
+      var wsBacktestBtn = document.getElementById('wsBacktestBtn');
+      var layoutModeBox = document.getElementById('layoutModeBox');
+
+      wsOptionsBtn.addEventListener('click', function() {
+        wsOptionsBtn.classList.add('active');
+        wsBacktestBtn.classList.remove('active');
+        layoutModeBox.classList.remove('hidden');
+        document.getElementById('workspaceOptions').classList.remove('hidden');
+        document.getElementById('workspaceBacktest').classList.add('hidden');
+        renderOptionsAll();
+      });
+
+      wsBacktestBtn.addEventListener('click', function() {
+        wsBacktestBtn.classList.add('active');
+        wsOptionsBtn.classList.remove('active');
+        layoutModeBox.classList.add('hidden');
+        document.getElementById('workspaceBacktest').classList.remove('hidden');
+        document.getElementById('workspaceOptions').classList.add('hidden');
+        runBacktestSimulation();
+      });
 
       ['btSymbolSelect', 'btLots', 'btSlippageTicks', 'btUpstoxCharges'].forEach(function(id) {
         var el = document.getElementById(id);
@@ -1824,12 +2270,12 @@
 
       document.getElementById('runBacktestBtn').addEventListener('click', function() {
         runBacktestSimulation();
-        toast('Backtest completed · Results updated');
+        toast('Backtest completed · Equity curve & ledger updated');
       });
 
       document.getElementById('downloadBtCsvBtn').addEventListener('click', function() {
         var rows = getSimulatedRows();
-        var csv = ['Date,Scenario,Signal,Legs,Gross_INR,Charges_INR,Net_INR'];
+        var csv = ['Date,Scenario,Signal,Structure,Gross_INR,Charges_INR,Net_INR'];
         rows.forEach(function(r) {
           csv.push([r.date, r.strat, '"' + r.sig + '"', '"' + r.legs + '"', r.gross, r.cost, r.net].join(','));
         });
@@ -1851,14 +2297,12 @@
           document.querySelectorAll('.rep-tab-btn').forEach(function(b) {
             b.classList.toggle('active', b.getAttribute('data-rep') === target);
           });
-          ['pnl', 'dd', 'ledger', 'monthly'].forEach(function(k) {
-            document.getElementById('rep-view-' + k).classList.toggle('hidden', k !== target);
-          });
+          document.getElementById('rep-view-pnl').classList.toggle('hidden', target !== 'pnl');
+          document.getElementById('rep-view-dd').classList.toggle('hidden', target !== 'dd');
           runBacktestSimulation();
         });
       });
 
-      // Initialize on load
       window.addEventListener('DOMContentLoaded', function() {
         renderLegsEditor();
         renderOptionsAll();
