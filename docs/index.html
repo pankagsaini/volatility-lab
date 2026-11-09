@@ -732,8 +732,8 @@
         }
       };
 
-      function getPlotlyBaseLayout(yTitle, yPrefix, ySuffix, showZero) {
-        return {
+      function getPlotlyBaseLayout(yTitle, yPrefix, ySuffix, showZero, xType) {
+        var base = {
           paper_bgcolor: 'rgba(0,0,0,0)',
           plot_bgcolor: 'rgba(13, 19, 32, 0.55)',
           font: {
@@ -788,6 +788,10 @@
             ticksuffix: ySuffix || ''
           }
         };
+        if (xType) {
+          base.xaxis.type = xType;
+        }
+        return base;
       }
 
       function toast(msg) {
@@ -898,7 +902,7 @@
         for (var i = 0; i < slice.length; i++) {
           var item = slice[i];
           var d = item.d || item.date || '';
-          dates.push(d ? d.slice(5) : (item.l || ''));
+          dates.push(d || item.l || '');
           var isLast = (i === slice.length - 1);
           var curIv = isLast ? r.iv : item.iv;
           var curH10 = isLast ? r.hv10 : (item.h10 !== undefined ? item.h10 : item.hv10);
@@ -918,6 +922,14 @@
         }
 
         var container = document.getElementById('regimeMainCanvas');
+        var tickStops = [
+          { dtickrange: [null, 86400000], value: '%d %b %Y' },
+          { dtickrange: [86400000, 604800000], value: '%d %b' },
+          { dtickrange: [604800000, 'M1'], value: '%d %b' },
+          { dtickrange: ['M1', 'M12'], value: '%b %Y' },
+          { dtickrange: ['M12', null], value: '%Y' }
+        ];
+
         if (activeMetric === 'spread') {
           document.getElementById('regimeGraphHeading').textContent = activeSymbol + ' · Volatility Risk Premium Spreads: (IV - HV30) & (IV - HV10) pp';
           var spreadTraces = [
@@ -932,7 +944,7 @@
               fillcolor: 'rgba(16, 185, 129, 0.12)',
               marker: { size: slice.length > 60 ? 2 : 4, color: '#10b981' },
               connectgaps: false,
-              hovertemplate: '%{x}<br>IV - HV30: <b>%{y:+.2f} pp</b><extra></extra>'
+              hovertemplate: '%{x|%d %b %Y}<br>IV - HV30: <b>%{y:+.2f} pp</b><extra></extra>'
             },
             {
               x: dates,
@@ -943,7 +955,7 @@
               line: { color: '#38bdf8', width: 1.8 },
               marker: { size: slice.length > 60 ? 2 : 3, color: '#38bdf8' },
               connectgaps: false,
-              hovertemplate: '%{x}<br>IV - HV10: <b>%{y:+.2f} pp</b><extra></extra>'
+              hovertemplate: '%{x|%d %b %Y}<br>IV - HV10: <b>%{y:+.2f} pp</b><extra></extra>'
             },
             {
               x: dates,
@@ -956,7 +968,9 @@
             }
           ];
 
-          var sLayout = getPlotlyBaseLayout('Spread (pp)', '', ' pp', true);
+          var sLayout = getPlotlyBaseLayout('Spread (pp)', '', ' pp', true, 'date');
+          sLayout.xaxis.tickformatstops = tickStops;
+          sLayout.xaxis.hoverformat = '%d %b %Y';
           if (window.Plotly) window.Plotly.react(container, spreadTraces, sLayout, PLOTLY_DEFAULT_CONFIG);
         } else {
           document.getElementById('regimeGraphHeading').textContent = activeSymbol + ' · Implied Volatility (ATM IV / India VIX) vs. Realized Volatility (HV10, HV30)';
@@ -972,7 +986,7 @@
               fillcolor: 'rgba(56, 189, 248, 0.12)',
               marker: { size: slice.length > 60 ? 2 : 4, color: '#38bdf8' },
               connectgaps: false,
-              hovertemplate: '%{x}<br>Implied Vol: <b>%{y:.2f}%</b><extra></extra>'
+              hovertemplate: '%{x|%d %b %Y}<br>Implied Vol: <b>%{y:.2f}%</b><extra></extra>'
             },
             {
               x: dates,
@@ -982,7 +996,7 @@
               mode: 'lines+markers',
               line: { color: '#f59e0b', width: 1.8 },
               marker: { size: slice.length > 60 ? 2 : 3, color: '#f59e0b' },
-              hovertemplate: '%{x}<br>HV10: <b>%{y:.2f}%</b><extra></extra>'
+              hovertemplate: '%{x|%d %b %Y}<br>HV10: <b>%{y:.2f}%</b><extra></extra>'
             },
             {
               x: dates,
@@ -992,11 +1006,13 @@
               mode: 'lines+markers',
               line: { color: '#10b981', width: 1.8 },
               marker: { size: slice.length > 60 ? 2 : 3, color: '#10b981' },
-              hovertemplate: '%{x}<br>HV30: <b>%{y:.2f}%</b><extra></extra>'
+              hovertemplate: '%{x|%d %b %Y}<br>HV30: <b>%{y:.2f}%</b><extra></extra>'
             }
           ];
 
-          var lLayout = getPlotlyBaseLayout('Volatility (%)', '', '%', false);
+          var lLayout = getPlotlyBaseLayout('Volatility (%)', '', '%', false, 'date');
+          lLayout.xaxis.tickformatstops = tickStops;
+          lLayout.xaxis.hoverformat = '%d %b %Y';
           if (window.Plotly) window.Plotly.react(container, levelsTraces, lLayout, PLOTLY_DEFAULT_CONFIG);
         }
 
@@ -1059,7 +1075,10 @@
 
           var expName = item.expiry || item.exp || '';
           var cycleName = item.kind || item.cycle || '';
-          labels.push(expName.slice(5) + ' (' + item.dte + 'd)');
+          var pExp = (expName || '').split('-');
+          var mExp = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(pExp[1], 10) - 1] || pExp[1];
+          var yrExp = pExp[0] ? "'" + pExp[0].slice(2) : '';
+          labels.push((pExp[2] || '') + ' ' + mExp + ' ' + yrExp + ' (' + item.dte + 'd)');
           ivData.push(Number(iv.toFixed(2)));
           fwdData.push(fwdVol);
           hvData.push(Number(r.hv30.toFixed(2)));
@@ -1745,12 +1764,18 @@
         if (document.getElementById('btLots')) document.getElementById('btLots').value = String(lots);
 
         var rows = computeBtRows();
-        var dates = ['Start'], netArr = [0], grossArr = [0], ddArr = [0];
+        var dates = [], netArr = [], grossArr = [], ddArr = [];
         var runG = 0, runN = 0, peak = 0;
+        if (rows.length > 0) {
+          dates.push(rows[0].date);
+          netArr.push(0);
+          grossArr.push(0);
+          ddArr.push(0);
+        }
         rows.forEach(function(r) {
           runG += r.gross;
           runN += r.net;
-          dates.push(r.date.slice(5) + (preset === 'ALL' ? (' ' + r.strat) : ''));
+          dates.push(r.date);
           grossArr.push(runG);
           netArr.push(runN);
           if (runN > peak) peak = runN;
@@ -1773,6 +1798,14 @@
         document.getElementById('resCharges').textContent = fmtInr(summary.totC, false);
 
         var mContainer = document.getElementById('btMainCanvas');
+        var btTickStops = [
+          { dtickrange: [null, 86400000], value: '%d %b %Y' },
+          { dtickrange: [86400000, 604800000], value: '%d %b' },
+          { dtickrange: [604800000, 'M1'], value: '%d %b' },
+          { dtickrange: ['M1', 'M12'], value: '%b %Y' },
+          { dtickrange: ['M12', null], value: '%Y' }
+        ];
+
         if (activeBtChartMode === 'dd') {
           var ddTraces = [
             {
@@ -1785,10 +1818,12 @@
               fill: 'tozeroy',
               fillcolor: 'rgba(244, 63, 94, 0.18)',
               marker: { size: 5, color: '#f43f5e' },
-              hovertemplate: '%{x}<br>Underwater Drawdown: <b>₹%{y:,.0f}</b><extra></extra>'
+              hovertemplate: '%{x|%d %b %Y}<br>Underwater Drawdown: <b>₹%{y:,.0f}</b><extra></extra>'
             }
           ];
-          var ddLayout = getPlotlyBaseLayout('Underwater Drawdown (₹)', '₹', '', true);
+          var ddLayout = getPlotlyBaseLayout('Underwater Drawdown (₹)', '₹', '', true, 'date');
+          ddLayout.xaxis.tickformatstops = btTickStops;
+          ddLayout.xaxis.hoverformat = '%d %b %Y';
           if (window.Plotly) window.Plotly.react(mContainer, ddTraces, ddLayout, PLOTLY_DEFAULT_CONFIG);
         } else {
           var eqTraces = [
@@ -1802,7 +1837,7 @@
               fill: 'tozeroy',
               fillcolor: 'rgba(16, 185, 129, 0.14)',
               marker: { size: 5, color: '#10b981' },
-              hovertemplate: '%{x}<br>Net P&L: <b>₹%{y:,.0f}</b><extra></extra>'
+              hovertemplate: '%{x|%d %b %Y}<br>Net P&L: <b>₹%{y:,.0f}</b><extra></extra>'
             },
             {
               x: dates,
@@ -1812,10 +1847,12 @@
               mode: 'lines+markers',
               line: { color: '#38bdf8', width: 2.0, dash: 'dash' },
               marker: { size: 4, color: '#38bdf8' },
-              hovertemplate: '%{x}<br>Gross P&L: <b>₹%{y:,.0f}</b><extra></extra>'
+              hovertemplate: '%{x|%d %b %Y}<br>Gross P&L: <b>₹%{y:,.0f}</b><extra></extra>'
             }
           ];
-          var eqLayout = getPlotlyBaseLayout('Cumulative P&L (₹)', '₹', '', true);
+          var eqLayout = getPlotlyBaseLayout('Cumulative P&L (₹)', '₹', '', true, 'date');
+          eqLayout.xaxis.tickformatstops = btTickStops;
+          eqLayout.xaxis.hoverformat = '%d %b %Y';
           if (window.Plotly) window.Plotly.react(mContainer, eqTraces, eqLayout, PLOTLY_DEFAULT_CONFIG);
         }
 
