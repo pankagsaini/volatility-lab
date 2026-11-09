@@ -84,7 +84,7 @@ def charge(day, segment, arg3, arg4, arg5='buy', brokerage=20.0):
     is_opt = (kind_norm == 'Options')
     is_sell = (action == 'sell')
 
-    brok = min(r['brokerage'], turnover * r['brokerage_rate']) if r.get('brokerage_rate') is not None else r['brokerage']
+    brok = min(float(r['brokerage']), 0.025 * turnover) if is_opt else (min(r['brokerage'], turnover * r['brokerage_rate']) if r.get('brokerage_rate') is not None else r['brokerage'])
     stt = turnover * (r['opt_stt'] if is_opt else r['fut_stt']) if is_sell else 0.0
     exch = turnover * (r['opt_exch'] if is_opt else r['fut_exch'])
     ipft = turnover * (r['ipft_opt'] if is_opt else r['ipft_fut'])

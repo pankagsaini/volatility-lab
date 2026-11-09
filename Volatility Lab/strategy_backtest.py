@@ -1,3 +1,4 @@
+from market_calendar import SPECIAL_SESSIONS
 """Multi-leg options strategy backtest engine with SOM margin floor, quiet-minute carry-forward, and 6 Trade Scenario Presets."""
 from datetime import datetime, timedelta
 import json
@@ -306,7 +307,7 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
     for idx_day, day in enumerate(days):
         if callback:
             callback(idx_day, len(days))
-        if weekdays_allowed and pd.Timestamp(day).strftime('%a') not in weekdays_allowed:
+        if weekdays_allowed and pd.Timestamp(day).strftime('%a') not in weekdays_allowed and pd.Timestamp(day).date() not in SPECIAL_SESSIONS:
             continue
         decision_ts = (datetime.fromisoformat(f'{day} {entry_time}') - timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M')
         spot_bar = spot_bars.get(decision_ts)
@@ -347,7 +348,7 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
         for spec in legs_spec:
             raw_off = float(spec.get('offset', 0.0))
             if symbol == 'BANKNIFTY' and raw_off % 100 != 0:
-                raw_off = round(raw_off / 50.0) * 100.0
+                raw_off = round(raw_off / 100.0) * 100.0
             target_k = spot_px + (raw_off if spec['kind'] == 'CE' else -raw_off)
             contract = pick_contract(spec['kind'], target_k)
             if not contract:
@@ -413,7 +414,16 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
                 mark_px = leg['last_close']
                 est_exit = mark_px * (1.0 - leg['side'] * slip_bps / 10000.0)
                 unreal_gross += leg['side'] * (est_exit - leg['entry']) * leg['quantity']
-            approx_net = unreal_gross - 2.0 * entry_fee_total
+            unreal_exit_fee = 0.0
+            for leg in active_legs:
+                mark_px = leg['last_close']
+                est_exit = mark_px * (1.0 - leg['side'] * slip_bps / 10000.0)
+                if use_upstox_fees:
+                    exit_act = 'sell' if leg['side'] > 0 else 'buy'
+                    unreal_exit_fee += sum(charge(day, 'Options', est_exit, leg['quantity'], exit_act).values())
+                else:
+                    unreal_exit_fee += order_fee
+            approx_net = unreal_gross - entry_fee_total - unreal_exit_fee
             if (stop_loss is not None and approx_net <= -abs(float(stop_loss))) or (
                 profit_target is not None and approx_net >= abs(float(profit_target))
             ):

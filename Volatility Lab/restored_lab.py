@@ -41,7 +41,7 @@ def _cached_intraday_snapshots(db_path_str: str, symbol: str, expiry: str, confi
     return load(Path(db_path_str), symbol, expiry, config)
 
 
-def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065):
+def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065, q=0.012):
     try:
         spot = float(spot)
         strike = float(strike)
@@ -55,22 +55,24 @@ def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065):
     sigma = max(0.01, vol_pct / 100.0)
     try:
         sqrt_t = math.sqrt(T)
-        d1 = (math.log(spot / strike) + (rate + 0.5 * sigma * sigma) * T) / (sigma * sqrt_t)
+        d1 = (math.log(spot / strike) + (rate - q + 0.5 * sigma * sigma) * T) / (sigma * sqrt_t)
         d2 = d1 - sigma * sqrt_t
         nd1 = float(ndtr(d1))
         nd2 = float(ndtr(d2))
         pdf_d1 = _INV_SQRT_2PI * math.exp(-0.5 * d1 * d1)
         df_r = math.exp(-rate * T)
-        call_p = spot * nd1 - strike * df_r * nd2
-        put_p = strike * df_r * (1.0 - nd2) - spot * (1.0 - nd1)
+        df_q = math.exp(-q * T)
+        call_p = spot * df_q * nd1 - strike * df_r * nd2
+        put_p = strike * df_r * (1.0 - nd2) - spot * df_q * (1.0 - nd1)
         straddle_p = call_p + put_p
-        call_d = nd1
-        put_d = call_d - 1.0
-        gamma = pdf_d1 / (spot * sigma * sqrt_t)
-        call_vega = spot * pdf_d1 * sqrt_t / 100.0
+        call_d = df_q * nd1
+        put_d = call_d - df_q
+        gamma = 2.0 * (df_q * pdf_d1 / (spot * sigma * sqrt_t))
+        call_vega = spot * df_q * pdf_d1 * sqrt_t / 100.0
         straddle_vega = call_vega * 2.0
-        theta_day = -(spot * pdf_d1 * sigma / (2.0 * sqrt_t)) / 365.0
-        straddle_theta = theta_day * 2.0
+        call_theta = -(spot * df_q * pdf_d1 * sigma / (2.0 * sqrt_t)) + q * spot * df_q * nd1 - rate * strike * df_r * nd2
+        put_theta = -(spot * df_q * pdf_d1 * sigma / (2.0 * sqrt_t)) - q * spot * df_q * (1.0 - nd1) + rate * strike * df_r * (1.0 - nd2)
+        straddle_theta = (call_theta + put_theta) / 365.0
     except (ValueError, ZeroDivisionError, OverflowError):
         return None
     return {

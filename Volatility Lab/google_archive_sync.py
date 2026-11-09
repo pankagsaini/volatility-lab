@@ -150,6 +150,7 @@ def import_report(obj,rate,dividend,spread):
             cloud_snapshot={'provider':'Upstox','schema':SCHEMA,'config':config, 'parameters':{'rate':rate,'dividend':dividend,'max_spread':spread}, 'timestamp':stamp.isoformat(),'rows':rows,'details':details, 'catalog':catalog,'india_vix':old.get('india_vix',{})}
             from relative_value import capture
             capture(DATA,cloud_snapshot)
+            write_snapshot(cloud_snapshot)
     import_futures(obj,quotes,stamp)
     return len(rows)
 
@@ -287,7 +288,7 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
         atomic_json(STORE/'status.json',{'status':'waiting','message':'Sign in to Google Drive desktop to connect the private archive.'});return 0
     manifest=read_json(STORE/'manifest.json', default={}) or {};count=0;errors=[]
     import re
-    pattern=re.compile(r'^\d{4}\-\d{2}\-\d{2}_(snapshot|test|eod)_\d{6}_(complete|partial)\.json\.gz$')
+    pattern=re.compile(r'^\d{4}\-\d{2}\-\d{2}_(snapshot|test|eod|1minute_consolidated|consolidated)(_\d{6})?_(complete|partial)\.json\.gz$')
     for path in sorted(source.glob('*.json.gz'), reverse=True):
         if not pattern.fullmatch(path.name):continue
         try:

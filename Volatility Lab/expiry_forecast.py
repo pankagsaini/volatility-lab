@@ -62,7 +62,7 @@ def _prepare_one_year_slice(frame: pd.DataFrame, cutoff_date) -> tuple[pd.DataFr
     if data.empty:
         raise ValueError('No completed candles available at the quote time.')
     last = data.index[-1].date()
-    elapsed = sessions(last + timedelta(days=1), cutoff_date)
+    elapsed = [d for d in sessions(last + timedelta(days=1), cutoff_date) if d not in SPECIAL_SESSIONS]
     if len(elapsed) > 5:
         raise ValueError('Latest completed session is missing; refresh underlying history.')
     data = data[data.index > data.index[-1] - pd.DateOffset(years=1)]
@@ -91,7 +91,7 @@ def _get_base_expiry_models(data: pd.DataFrame, last_str: str) -> tuple[float, n
     garch_vars = None
     garch_status = 'Ready'
     try:
-        _, diagnostics, path, _ = fit_garch(data, (245,), min_observations=200)
+        _, diagnostics, path, _ = fit_garch(data, (265,), min_observations=200)
         garch_vars = (path['Daily conditional vol %'].to_numpy(dtype=float) / 100.0) ** 2 / 245.0
         garch_status = '; '.join(diagnostics['warnings']) or 'Ready'
     except (ValueError, RuntimeError, FloatingPointError, ImportError) as error:

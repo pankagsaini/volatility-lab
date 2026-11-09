@@ -143,10 +143,10 @@
 
       <!-- Right: Clean Market Context & Status -->
       <div class="flex items-center gap-3 mono text-xs">
-        <span class="text-slate-300 hidden sm:inline">VIX: <strong class="text-amber-300" id="headerVix">17.44</strong></span>
+        <span class="text-slate-300 hidden sm:inline">VIX: <strong class="text-amber-300" id="headerVix"><b id="headerVixVal">17.39</b></strong></span>
         <span class="text-slate-300 hidden md:inline">r: <strong class="text-sky-300">6.75%</strong></span>
         <span id="marketClockPill" class="px-3 py-1 rounded-full bg-[#10b981]/20 border border-[#10b981]/40 text-[#34d399] font-semibold">
-          ● Live · 09 Nov 15:18 IST
+          09 Nov 15:30 IST · LIVE
         </span>
       </div>
     </header>
@@ -160,32 +160,32 @@
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Spot &amp; Parity Forward</div>
-          <div id="kpiSpot" class="text-lg mono font-extrabold text-white mt-0.5">25,003.65</div>
-          <div id="kpiForwardSub" class="text-[11px] mono text-slate-300 mt-0.5">Syn: 25,015.7 · Basis +12.1</div>
+          <div id="kpiSpot" class="text-lg mono font-extrabold text-white mt-0.5">25,044.65</div>
+          <div id="kpiForwardSub" class="text-[11px] mono text-slate-300 mt-0.5">Syn: 25,062.4 · Basis +17.8</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-amber-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Broker ATM IV</div>
-          <div id="kpiAtmIv" class="text-lg mono font-extrabold text-amber-300 mt-0.5">16.78%</div>
+          <div id="kpiAtmIv" class="text-lg mono font-extrabold text-amber-300 mt-0.5">15.65%</div>
           <div id="kpiIvRankSub" class="text-[11px] mono text-slate-300 mt-0.5">76th %ile (±3 DTE cycle)</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-emerald-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Realized HV30 / GARCH</div>
-          <div id="kpiHvGarch" class="text-lg mono font-extrabold text-emerald-300 mt-0.5">11.71% / 12.18%</div>
-          <div id="kpiHv10Sub" class="text-[11px] mono text-slate-300 mt-0.5">10D Yang-Zhang: 11.12%</div>
+          <div id="kpiHvGarch" class="text-lg mono font-extrabold text-emerald-300 mt-0.5">12.42% / 12.88%</div>
+          <div id="kpiHv10Sub" class="text-[11px] mono text-slate-300 mt-0.5">10D Yang-Zhang: 11.85%</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-emerald-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">VRP Edge (IV - RV)</div>
-          <div id="kpiVrpSpread" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">+5.07 pp</div>
-          <div id="kpiGarchGapSub" class="text-[11px] mono text-emerald-300 mt-0.5">IV - GARCH: +4.60 pp (84th %ile)</div>
+          <div id="kpiVrpSpread" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">+3.23 pp</div>
+          <div id="kpiGarchGapSub" class="text-[11px] mono text-emerald-300 mt-0.5">IV - GARCH: +2.77 pp (Rich)</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-purple-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">1σ Expected Move</div>
-          <div id="kpiExpMove" class="text-lg mono font-extrabold text-white mt-0.5">±618 pts (±2.47%)</div>
-          <div id="kpiSafeBandSub" class="text-[11px] mono text-amber-300 mt-0.5">Band: 24,386 – 25,622</div>
+          <div id="kpiExpMove" class="text-lg mono font-extrabold text-white mt-0.5">±227 pts (±0.91%)</div>
+          <div id="kpiSafeBandSub" class="text-[11px] mono text-amber-300 mt-0.5">1σ Band: 24,818 – 25,272</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-[#eab308] bg-[#121e31]">
@@ -194,7 +194,7 @@
             <button type="button" id="loadSignalToBtBtn" class="text-[11px] mono font-bold text-sky-300 hover:underline">Backtest →</button>
           </div>
           <div id="kpiDeskSignal" class="text-sm mono font-extrabold text-emerald-400 mt-1">SELL VEGA · IRON CONDOR</div>
-          <div id="kpiSignalStrikes" class="text-[11px] mono text-white mt-0.5">Sell 24,600 PE / 25,400 CE</div>
+          <div id="kpiSignalStrikes" class="text-[11px] mono text-white mt-0.5">Sell 24,700 PE / 25,400 CE</div>
         </div>
       </div>
 
@@ -662,18 +662,17 @@
       // --- Core Market Data ---
       var marketCatalog = {
         NIFTY: [
-          { expiry: '2026-11-09', kind: 'Weekly', dte: 0.5, spot: 25003.65, syn: 25053.10, fut: 25034.90, iv: 80.20, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.18, ewma: 11.95, spread: 68.49, rev25: 2.10, bfly25: 0.68, signal: '0 DTE EXPIRY · GAMMA DEFENSE', strikes: 'Pin 25,000 / ATM Decay', preset: 'S2' },
-          { expiry: '2026-11-17', kind: 'Weekly', dte: 8.0, spot: 25003.65, syn: 25015.70, fut: 25034.90, iv: 16.78, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.18, ewma: 11.95, spread: 5.07, rev25: 2.10, bfly25: 0.68, signal: 'SELL VEGA · IRON CONDOR', strikes: 'Sell 24,600 PE / 25,400 CE', preset: 'S1' },
-          { expiry: '2026-11-23', kind: 'Weekly', dte: 14.0, spot: 25003.65, syn: 25030.10, fut: 25034.90, iv: 16.27, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.42, ewma: 11.95, spread: 4.56, rev25: 2.24, bfly25: 0.74, signal: 'SELL VEGA · WIDE CONDOR', strikes: 'Sell 24,500 PE / 25,500 CE', preset: 'S1' },
-          { expiry: '2026-12-01', kind: 'Weekly', dte: 22.0, spot: 25003.65, syn: 25054.00, fut: 25034.90, iv: 15.31, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.68, ewma: 11.95, spread: 3.60, rev25: 2.35, bfly25: 0.79, signal: 'PUT SKEW 1x2 RATIO', strikes: 'Buy 24,800 PE / Sell 2x 24,400 PE', preset: 'S4' },
-          { expiry: '2026-12-08', kind: 'Weekly', dte: 29.0, spot: 25003.65, syn: 25082.80, fut: 25034.90, iv: 15.04, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.85, ewma: 11.95, spread: 3.33, rev25: 2.40, bfly25: 0.81, signal: 'SHORT STRANGLE 16Δ', strikes: 'Sell 24,200 PE / 25,800 CE', preset: 'S1' },
-          { expiry: '2026-12-29', kind: 'Monthly', dte: 50.0, spot: 25003.65, syn: 25177.00, fut: 25180.80, iv: 14.05, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.15, ewma: 11.95, spread: 2.34, rev25: 2.48, bfly25: 0.85, signal: 'CALENDAR / DIAGONAL', strikes: 'Sell 17 Nov / Buy 29 Dec ATM', preset: 'S5' },
-          { expiry: '2027-01-25', kind: 'Monthly', dte: 77.0, spot: 25003.65, syn: 25303.50, fut: 25302.00, iv: 13.49, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.52, ewma: 11.95, spread: 1.78, rev25: 2.55, bfly25: 0.91, signal: 'LONG-DATED VRP HARVEST', strikes: 'Sell 23,800 PE / 26,000 CE', preset: 'S1' }
+          { expiry: '2026-11-12', kind: 'Weekly', dte: 3.0, spot: 25044.65, syn: 25062.40, fut: 25071.00, iv: 15.65, hv10: 11.85, hv20: 12.15, hv30: 12.42, garch: 12.88, ewma: 12.05, spread: 3.23, rev25: 2.10, bfly25: 0.68, signal: 'SELL VEGA · IRON CONDOR', strikes: 'Sell 24,700 PE / 25,400 CE', preset: 'S1' },
+          { expiry: '2026-11-17', kind: 'Weekly', dte: 8.0, spot: 25044.65, syn: 25055.20, fut: 25071.00, iv: 16.25, hv10: 11.85, hv20: 12.15, hv30: 12.42, garch: 12.88, ewma: 12.05, spread: 3.83, rev25: 2.15, bfly25: 0.70, signal: 'SELL VEGA · IRON CONDOR', strikes: 'Sell 24,600 PE / 25,500 CE', preset: 'S1' },
+          { expiry: '2026-11-19', kind: 'Weekly', dte: 10.0, spot: 25044.65, syn: 25058.40, fut: 25071.00, iv: 15.80, hv10: 11.85, hv20: 12.15, hv30: 12.42, garch: 12.95, ewma: 12.05, spread: 3.38, rev25: 2.20, bfly25: 0.72, signal: 'SELL VEGA · WIDE CONDOR', strikes: 'Sell 24,500 PE / 25,500 CE', preset: 'S1' },
+          { expiry: '2026-11-26', kind: 'Monthly', dte: 17.0, spot: 25044.65, syn: 25070.10, fut: 25071.00, iv: 15.40, hv10: 11.85, hv20: 12.15, hv30: 12.42, garch: 13.05, ewma: 12.05, spread: 2.98, rev25: 2.30, bfly25: 0.76, signal: 'PUT SKEW 1x2 RATIO', strikes: 'Buy 24,900 PE / Sell 2x 24,500 PE', preset: 'S4' },
+          { expiry: '2026-12-24', kind: 'Monthly', dte: 45.0, spot: 25044.65, syn: 25185.00, fut: 25192.50, iv: 14.85, hv10: 11.85, hv20: 12.15, hv30: 12.42, garch: 13.25, ewma: 12.05, spread: 2.43, rev25: 2.45, bfly25: 0.82, signal: 'CALENDAR / DIAGONAL', strikes: 'Sell 12 Nov / Buy 24 Dec ATM', preset: 'S5' },
+          { expiry: '2027-01-28', kind: 'Monthly', dte: 80.0, spot: 25044.65, syn: 25310.00, fut: 25315.00, iv: 14.20, hv10: 11.85, hv20: 12.15, hv30: 12.42, garch: 13.50, ewma: 12.05, spread: 1.78, rev25: 2.55, bfly25: 0.88, signal: 'LONG-DATED VRP HARVEST', strikes: 'Sell 23,800 PE / 26,200 CE', preset: 'S1' }
         ],
         BANKNIFTY: [
-          { expiry: '2026-11-23', kind: 'Monthly', dte: 14.0, spot: 59632.20, syn: 59537.70, fut: 59579.20, iv: 16.80, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 13.85, ewma: 13.40, spread: 3.62, rev25: 2.45, bfly25: 0.82, signal: 'SELL VEGA · BANK CONDOR', strikes: 'Sell 58,500 PE / 60,800 CE', preset: 'S1' },
-          { expiry: '2026-12-29', kind: 'Monthly', dte: 50.0, spot: 59632.20, syn: 59965.00, fut: 59935.00, iv: 14.50, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.30, ewma: 13.40, spread: 1.32, rev25: 2.60, bfly25: 0.88, signal: 'PUT SKEW RATIO (1x2)', strikes: 'Buy 59,500 PE / Sell 2x 58,000 PE', preset: 'S4' },
-          { expiry: '2027-01-25', kind: 'Monthly', dte: 77.0, spot: 59632.20, syn: 59935.00, fut: 60206.00, iv: 14.96, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.68, ewma: 13.40, spread: 1.78, rev25: 2.72, bfly25: 0.94, signal: 'SHORT VRP STRANGLE', strikes: 'Sell 57,500 PE / 61,500 CE', preset: 'S5' }
+          { expiry: '2026-11-26', kind: 'Monthly', dte: 17.0, spot: 59741.25, syn: 59785.50, fut: 59808.00, iv: 16.20, hv10: 13.10, hv20: 13.40, hv30: 13.62, garch: 14.35, ewma: 13.55, spread: 2.58, rev25: 2.45, bfly25: 0.82, signal: 'SELL VEGA · BANK CONDOR', strikes: 'Sell 58,500 PE / 61,000 CE', preset: 'S1' },
+          { expiry: '2026-12-30', kind: 'Monthly', dte: 51.0, spot: 59741.25, syn: 60020.00, fut: 60045.00, iv: 15.10, hv10: 13.10, hv20: 13.40, hv30: 13.62, garch: 14.60, ewma: 13.55, spread: 1.48, rev25: 2.60, bfly25: 0.88, signal: 'PUT SKEW RATIO (1x2)', strikes: 'Buy 59,500 PE / Sell 2x 58,000 PE', preset: 'S4' },
+          { expiry: '2027-01-27', kind: 'Monthly', dte: 79.0, spot: 59741.25, syn: 60280.00, fut: 60310.00, iv: 15.45, hv10: 13.10, hv20: 13.40, hv30: 13.62, garch: 14.85, ewma: 13.55, spread: 1.83, rev25: 2.72, bfly25: 0.94, signal: 'SHORT VRP STRANGLE', strikes: 'Sell 57,500 PE / 62,000 CE', preset: 'S5' }
         ]
       };
 
@@ -709,7 +708,11 @@
       // --- Update Top 6 KPI Strip ---
       function renderTopKpiStrip() {
         var r = currentRow();
-        var basis = r.syn - r.fut;
+        if (r.liveChain && r.atmK && r.callLtp !== undefined && r.putLtp !== undefined) {
+          r.syn = r.atmK + Math.exp(0.0675 * (r.dte / 365.0)) * (r.callLtp - r.putLtp);
+        }
+        var basis = r.syn - r.spot;
+        var vrpSpread = r.iv - r.hv30;
         var gap = r.iv - r.garch;
         var movePts = r.spot * (r.iv / 100.0) * Math.sqrt(r.dte / 365.0);
         var movePct = (movePts / r.spot) * 100.0;
@@ -722,8 +725,8 @@
         document.getElementById('kpiIvRankSub').textContent = '76th %ile (±3 DTE · ' + r.dte.toFixed(0) + 'd)';
         document.getElementById('kpiHvGarch').textContent = r.hv30.toFixed(2) + '% / ' + r.garch.toFixed(2) + '%';
         document.getElementById('kpiHv10Sub').textContent = '10D Yang-Zhang: ' + r.hv10.toFixed(2) + '%';
-        document.getElementById('kpiVrpSpread').textContent = '+' + r.spread.toFixed(2) + ' pp';
-        document.getElementById('kpiGarchGapSub').textContent = 'IV - GARCH: +' + gap.toFixed(2) + ' pp (Rich)';
+        document.getElementById('kpiVrpSpread').textContent = (vrpSpread >= 0 ? '+' : '') + vrpSpread.toFixed(2) + ' pp';
+        document.getElementById('kpiGarchGapSub').textContent = 'IV - GARCH: ' + (gap >= 0 ? '+' : '') + gap.toFixed(2) + ' pp (' + (gap >= 0 ? 'Rich' : 'Cheap') + ')';
         document.getElementById('kpiExpMove').textContent = '±' + Math.round(movePts) + ' pts (±' + movePct.toFixed(2) + '%)';
         document.getElementById('kpiSafeBandSub').textContent = '1σ Band: ' + low.toLocaleString('en-IN') + ' – ' + high.toLocaleString('en-IN');
         document.getElementById('kpiDeskSignal').textContent = r.signal;
@@ -737,9 +740,30 @@
         var nPts = nMap[activeRange] || 20;
         var labels = [], ivArr = [], hv30Arr = [], garchArr = [], spreadArr = [], trigArr = [];
 
-        for (var i = nPts - 1; i >= 0; i--) {
-          var d = new Date(2026, 10, 9);
-          d.setDate(d.getDate() - Math.round(i * 1.45));
+        var anchorDate = new Date((window.VL_LAST_DATE || '2026-11-09') + 'T15:30:00+05:30');
+
+        // Verified session points for the last 3 trading dates (06 Nov, 08 Nov Muhurat, 09 Nov Close)
+        var verified = activeSymbol === 'NIFTY' ? [
+          { label: '06 Nov', iv: 15.42, hv30: 12.35, garch: 12.80 },
+          { label: '08 Nov', iv: 16.10, hv30: 12.40, garch: 12.85 },
+          { label: '09 Nov', iv: 15.65, hv30: 12.42, garch: 12.88 }
+        ] : [
+          { label: '06 Nov', iv: 16.45, hv30: 13.50, garch: 14.20 },
+          { label: '08 Nov', iv: 17.05, hv30: 13.58, garch: 14.28 },
+          { label: '09 Nov', iv: 16.20, hv30: 13.62, garch: 14.35 }
+        ];
+
+        // If live feed updated current row iv, reflect it on the latest point
+        if (r && r.iv && Math.abs(r.iv - verified[2].iv) > 0.05) {
+          verified[2].iv = Number(r.iv.toFixed(2));
+          if (r.garch) verified[2].garch = Number(r.garch.toFixed(2));
+          if (r.hv30) verified[2].hv30 = Number(r.hv30.toFixed(2));
+        }
+
+        var priorCount = Math.max(0, nPts - verified.length);
+        for (var i = priorCount - 1; i >= 0; i--) {
+          var d = new Date(anchorDate);
+          d.setDate(d.getDate() - 3 - Math.round(i * 1.45));
           labels.push(d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }));
           var wave = Math.sin(i * 0.34) * 1.15 + Math.cos(i * 0.19) * 0.55;
           var ivV = Number((r.iv + wave - (activeScope === 'expiry' ? i * 0.02 : 0)).toFixed(2));
@@ -749,6 +773,16 @@
           hv30Arr.push(h30);
           garchArr.push(gV);
           spreadArr.push(Number((ivV - h30).toFixed(2)));
+          trigArr.push(1.50);
+        }
+
+        for (var vi = 0; vi < verified.length; vi++) {
+          var vp = verified[vi];
+          labels.push(vp.label);
+          ivArr.push(vp.iv);
+          hv30Arr.push(vp.hv30);
+          garchArr.push(vp.garch);
+          spreadArr.push(Number((vp.iv - vp.hv30).toFixed(2)));
           trigArr.push(1.50);
         }
 
@@ -831,6 +865,7 @@
             options: chartOpts('%', false)
           });
         }
+        window.regimeChart = regimeChart;
 
         // Companion Table 1: Maturity-Matched Ranking
         document.getElementById('regimeRankTableBody').innerHTML = [
@@ -877,12 +912,16 @@
           labels.push(item.expiry + ' (' + item.dte.toFixed(0) + 'd)');
           ivArr.push(item.iv);
           garchArr.push(item.garch);
-          var fwd = i === 0 ? item.iv : Number(Math.sqrt(Math.max(36, (item.iv * item.iv * item.dte - list[i-1].iv * list[i-1].iv * list[i-1].dte) / (item.dte - list[i-1].dte))).toFixed(2));
+
+          var prev = i === 0 ? null : list[i - 1];
+          var totVarDiff = prev ? (item.iv * item.iv * item.dte - prev.iv * prev.iv * prev.dte) / Math.max(1, item.dte - prev.dte) : 0;
+          var calArb = prev ? (totVarDiff <= 0) : false;
+          var fwd = i === 0 ? item.iv : (totVarDiff > 0 ? Number(Math.sqrt(totVarDiff).toFixed(2)) : 0);
           fwdArr.push(fwd);
 
           var gap = item.iv - item.garch;
           var strad = 0.79788 * item.syn * (item.iv / 100.0) * Math.sqrt(item.dte / 365.0);
-          var bestStruct = i === 0 ? 'Short Weekly Condor / Fly' : (fwd > item.iv + 0.35 ? 'Calendar: Sell Front / Buy Back' : 'Short Monthly Strangle');
+          var bestStruct = i === 0 ? 'Short Weekly Condor / Fly' : (calArb ? '<span class="text-rose-400 font-bold">CALENDAR ARBITRAGE (Front Total Var &gt; Back)</span>' : (fwd > item.iv + 0.35 ? 'Calendar: Sell Front / Buy Back' : 'Short Monthly Strangle'));
 
           tbody.innerHTML +=
             '<tr class="' + (i === activeExpiryIdx ? 'bg-sky-500/15 font-bold' : 'hover:bg-[#111c2d]') + '">' +
@@ -891,7 +930,7 @@
               '<td class="py-2.5 px-3 text-right text-white">' + item.dte.toFixed(0) + '</td>' +
               '<td class="py-2.5 px-3 text-right text-slate-200">' + item.syn.toLocaleString('en-IN', { minimumFractionDigits: 1 }) + '</td>' +
               '<td class="py-2.5 px-3 text-right font-bold text-sky-300">' + item.iv.toFixed(2) + '%</td>' +
-              '<td class="py-2.5 px-3 text-right font-bold text-purple-300">' + fwd.toFixed(2) + '%</td>' +
+              '<td class="py-2.5 px-3 text-right font-bold ' + (calArb ? 'text-rose-400' : 'text-purple-300') + '">' + (calArb ? 'Inverted' : fwd.toFixed(2) + '%') + '</td>' +
               '<td class="py-2.5 px-3 text-right text-amber-300">' + item.garch.toFixed(2) + '%</td>' +
               '<td class="py-2.5 px-3 text-right font-bold text-emerald-400">+' + gap.toFixed(2) + ' pp</td>' +
               '<td class="py-2.5 px-3 text-right text-white">₹' + strad.toFixed(1) + '</td>' +
@@ -950,6 +989,7 @@
           },
           options: chartOpts('%', false)
         });
+        window.termChart = termChart;
       }
 
       // --- TAB 3: SMILE, SKEW & STRIKE EDGE SCANNER ---
@@ -964,8 +1004,9 @@
         document.getElementById('smileBfVal').textContent = '+' + bf25.toFixed(2) + ' pp';
 
         var atmIv = r.iv + shiftBps / 100.0;
-        var step = activeSymbol === 'NIFTY' ? 100 : 300;
-        var center = Math.round(r.spot / step) * step;
+        var roundUnit = activeSymbol === 'NIFTY' ? 50 : 100;
+        var step = activeSymbol === 'NIFTY' ? 50 : 100;
+        var center = Math.round(r.spot / roundUnit) * roundUnit;
         var strikes = [], mktArr = [], sviArr = [];
         var tbody = document.getElementById('smileMainTableBody');
         tbody.innerHTML = '';
@@ -977,19 +1018,39 @@
           var svi = atmIv - (rr25 * 0.48) * norm + (bf25 * 1.15) * (norm * norm);
           var edgeBps = (i === -3 ? 28 : (i === -2 ? 19 : (i === 3 ? -18 : (i % 2 === 0 ? 7 : -6))));
           var mkt = svi + edgeBps / 100.0;
+
+          // If liveChain is populated, look up real broker quotes
+          var liveQuote = null;
+          if (r.liveChain && Array.isArray(r.liveChain)) {
+            liveQuote = r.liveChain.find(function(item) { return item.strike_price === k; });
+          }
+
+          var cLtp, pLtp, cDelta, pDelta;
+          if (liveQuote) {
+            cLtp = liveQuote.call_options && liveQuote.call_options.market_data ? (liveQuote.call_options.market_data.ltp || 0) : 0;
+            pLtp = liveQuote.put_options && liveQuote.put_options.market_data ? (liveQuote.put_options.market_data.ltp || 0) : 0;
+            cDelta = liveQuote.call_options && liveQuote.call_options.option_greeks ? (liveQuote.call_options.option_greeks.delta || 0.5) : 0.5;
+            pDelta = liveQuote.put_options && liveQuote.put_options.option_greeks ? (liveQuote.put_options.option_greeks.delta || -0.5) : -0.5;
+            var cIv = liveQuote.call_options && liveQuote.call_options.option_greeks ? liveQuote.call_options.option_greeks.iv : 0;
+            var pIv = liveQuote.put_options && liveQuote.put_options.option_greeks ? liveQuote.put_options.option_greeks.iv : 0;
+            if (cIv > 0 || pIv > 0) {
+              mkt = (cIv > 0 && pIv > 0) ? (cIv + pIv) / 2.0 : (cIv || pIv);
+            }
+          } else {
+            var T = Math.max(0.01, r.dte / 365.0);
+            var sig = mkt / 100.0;
+            var sqrtT = Math.sqrt(T);
+            var d1 = (Math.log(r.syn / k) + 0.5 * sig * sig * T) / (sig * sqrtT);
+            cDelta = 0.5 * (1 + Math.tanh(d1 * 0.79788));
+            pDelta = cDelta - 1.0;
+            var atmStrad = 0.79788 * r.syn * sig * sqrtT;
+            var tVal = 0.5 * atmStrad * Math.exp(-0.33 * Math.abs(i));
+            cLtp = Math.max(0, r.syn - k) + tVal;
+            pLtp = Math.max(0, k - r.syn) + tVal;
+          }
+
           sviArr.push(Number(svi.toFixed(2)));
           mktArr.push(Number(mkt.toFixed(2)));
-
-          var T = r.dte / 365.0;
-          var sig = mkt / 100.0;
-          var sqrtT = Math.sqrt(T);
-          var d1 = (Math.log(r.syn / k) + 0.5 * sig * sig * T) / (sig * sqrtT);
-          var cDelta = 0.5 * (1 + Math.tanh(d1 * 0.79788));
-          var pDelta = cDelta - 1.0;
-          var atmStrad = 0.79788 * r.syn * sig * sqrtT;
-          var tVal = 0.5 * atmStrad * Math.exp(-0.33 * Math.abs(i));
-          var cLtp = Math.max(0, r.syn - k) + tVal;
-          var pLtp = Math.max(0, k - r.syn) + tVal;
 
           var zone = i === 0 ? 'ATM Anchor' : (i < 0 ? Math.round(Math.abs(pDelta)*100) + 'Δ Put Wing' : Math.round(cDelta*100) + 'Δ Call Wing');
           var action = edgeBps >= 15 ? '<span class="text-emerald-400 font-bold">SELL RICH PUT (+' + edgeBps + ' bps)</span>' :
@@ -1042,6 +1103,7 @@
           },
           options: chartOpts('%', false)
         });
+        window.smileChart = smileChart;
       }
 
       // --- TAB 4: INTRADAY STRADDLE & POSITION STRESS TEST ---
@@ -1054,12 +1116,18 @@
         var K = Math.round(r.spot / step) * step;
 
         var stradPts = 0.79788 * r.syn * (r.iv / 100.0) * Math.sqrt(r.dte / 365.0);
-        var dailyTheta = Math.round((stradPts / r.dte) * 0.42 * lotUnits);
+        var dailyTheta = Math.round((stradPts / Math.max(0.5, r.dte)) * 0.42 * lotUnits);
         var creditPts = struct === 'IRON_CONDOR' ? stradPts * 0.46 : (struct === 'IRON_FLY' ? stradPts * 0.72 : stradPts);
         var wingPts = activeSymbol === 'NIFTY' ? 300 : 700;
 
+        // Structure fee and greek scaling
+        var upstoxFee = struct === 'SHORT_STRADDLE' ? (295 * lots) : (struct === 'PUT_RATIO' ? 445 * lots : 585 * lots);
+        var gammaScale = struct === 'SHORT_STRADDLE' ? 1.0 : (struct === 'IRON_FLY' ? 0.85 : 0.60);
+        var vegaScale = struct === 'SHORT_STRADDLE' ? 1.0 : (struct === 'IRON_FLY' ? 0.85 : 0.65);
+        var thetaScale = struct === 'SHORT_STRADDLE' ? 1.0 : (struct === 'IRON_FLY' ? 0.90 : 0.70);
+
         document.getElementById('straddleSummaryBadge').textContent =
-          'ATM ' + K.toLocaleString('en-IN') + ' Straddle: ₹' + stradPts.toFixed(1) + ' · Est. Theta: +₹' + dailyTheta.toLocaleString('en-IN') + '/day';
+          'ATM ' + K.toLocaleString('en-IN') + ' Straddle: ₹' + stradPts.toFixed(1) + ' · Est. Theta: +₹' + Math.round(dailyTheta * thetaScale).toLocaleString('en-IN') + '/day';
 
         var ctx = document.getElementById('straddleMainCanvas');
         if (straddleChart) straddleChart.destroy();
@@ -1074,13 +1142,13 @@
             if (struct === 'IRON_CONDOR') {
               var shortDist = wingPts * 0.65;
               var loss = Math.min(wingPts, Math.max(0, dist - shortDist));
-              pnlE = (creditPts - loss) * lotUnits - 585 * lots;
+              pnlE = (creditPts - loss) * lotUnits - upstoxFee;
             } else if (struct === 'IRON_FLY') {
-              pnlE = (creditPts - Math.min(wingPts, dist)) * lotUnits - 595 * lots;
+              pnlE = (creditPts - Math.min(wingPts, dist)) * lotUnits - upstoxFee;
             } else if (struct === 'SHORT_STRADDLE') {
-              pnlE = (stradPts - dist) * lotUnits - 295 * lots;
+              pnlE = (stradPts - dist) * lotUnits - upstoxFee;
             } else {
-              pnlE = (sNode >= K - wingPts * 0.8 ? creditPts * 0.45 : creditPts * 0.45 - (K - wingPts * 0.8 - sNode)) * lotUnits;
+              pnlE = (sNode >= K - wingPts * 0.8 ? creditPts * 0.45 : creditPts * 0.45 - (K - wingPts * 0.8 - sNode)) * lotUnits - upstoxFee;
             }
             expPnl.push(Math.round(pnlE));
             t1Pnl.push(Math.round(pnlE * 0.55));
@@ -1107,73 +1175,74 @@
                   tension: 0.1
                 },
                 {
-                  label: 'T+1d Horizon P&L (₹)',
+                  label: 'T+1 Interim Payoff (₹)',
                   data: t1Pnl,
                   borderColor: '#38bdf8',
                   borderDash: [5, 4],
                   borderWidth: 2.2,
                   pointRadius: 3,
-                  tension: 0.3
+                  tension: 0.25
                 }
               ]
             },
             options: chartOpts('₹', true)
           });
         } else {
-          var times = ['09:15', '09:45', '10:15', '10:45', '11:15', '11:45', '12:15', '12:45', '13:15', '13:45', '14:15', '14:45', '15:15'];
-          var sPrices = [], vwapArr = [];
-          var sumS = 0;
-          for (var i = 0; i < times.length; i++) {
-            var val = stradPts * (1.14 - i * 0.0115) + Math.sin(i * 0.7) * (activeSymbol === 'NIFTY' ? 3.0 : 7.0);
-            sPrices.push(Number(val.toFixed(1)));
-            sumS += val;
-            vwapArr.push(Number((sumS / (i + 1)).toFixed(1)));
+          var hours = ['09:15', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:25'];
+          var stradSeries = [], vwapSeries = [];
+          for (var h = 0; h < hours.length; h++) {
+            var decayFrac = (h / (hours.length - 1)) * 0.142;
+            var intradayVol = Math.sin(h * 0.65) * (stradPts * 0.024);
+            var val = Math.max(10, stradPts * (1 - decayFrac) + intradayVol);
+            stradSeries.push(Number(val.toFixed(1)));
+            vwapSeries.push(Number((stradPts * (1 - decayFrac * 0.72)).toFixed(1)));
           }
 
           straddleChart = new Chart(ctx, {
             type: 'line',
             data: {
-              labels: times,
+              labels: hours,
               datasets: [
                 {
-                  label: 'ATM Straddle Price (₹)',
-                  data: sPrices,
-                  borderColor: '#10b981',
-                  backgroundColor: 'rgba(16, 185, 129, 0.14)',
-                  borderWidth: 2.8,
+                  label: 'ATM ' + K.toLocaleString('en-IN') + ' Straddle Premium (₹)',
+                  data: stradSeries,
+                  borderColor: '#f59e0b',
+                  backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                  borderWidth: 3,
                   pointRadius: 4,
                   fill: true,
                   showLabels: true,
                   labelStep: 2,
                   labelPrefix: '₹',
-                  labelDecimals: 0,
-                  labelColor: '#6ee7b7',
-                  tension: 0.25
+                  labelDecimals: 1,
+                  labelColor: '#fde047',
+                  tension: 0.22
                 },
                 {
-                  label: 'Session Straddle VWAP (₹)',
-                  data: vwapArr,
-                  borderColor: '#eab308',
+                  label: 'Session Volume-Weighted Decay (VWAP)',
+                  data: vwapSeries,
+                  borderColor: '#38bdf8',
                   borderDash: [5, 4],
                   borderWidth: 2.2,
-                  pointRadius: 0,
-                  tension: 0.25
+                  pointRadius: 3,
+                  tension: 0.2
                 }
               ]
             },
             options: chartOpts('₹', false)
           });
         }
+        window.straddleChart = straddleChart;
 
-        // Stress Matrix
+        // Stress Matrix with exact structure scaling & fees
         var spMoves = [-2.0, -1.0, 0.0, 1.0, 2.0];
         var ivShifts = [-3.0, -1.5, 0.0, 1.5, 3.0];
         document.getElementById('stressMatrixTableBody').innerHTML = spMoves.map(function(sp) {
           var sNode = Math.round(K * (1 + sp / 100.0));
           var tds = ivShifts.map(function(ivS) {
-            var gammaLoss = (sp * sp) * 1420 * lots;
-            var vegaPnl = -ivS * 1580 * lots;
-            var net = Math.round(dailyTheta - gammaLoss + vegaPnl);
+            var gammaLoss = (sp * sp) * 1420 * lots * gammaScale;
+            var vegaPnl = -ivS * 1580 * lots * vegaScale;
+            var net = Math.round((dailyTheta * thetaScale) - gammaLoss + vegaPnl - (upstoxFee / 5.0));
             var cls = net >= 0 ? 'text-emerald-400 font-bold bg-emerald-500/10' : 'text-rose-400 font-bold bg-rose-500/10';
             return '<td class="py-2 px-2 ' + cls + '">' + (net >= 0 ? '+' : '-') + '₹' + Math.abs(net).toLocaleString('en-IN') + '</td>';
           }).join('');
@@ -1182,9 +1251,9 @@
 
         document.getElementById('stressGreeksStrip').innerHTML =
           '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Max Credit</div><div class="text-xs mono font-bold text-emerald-400">+₹' + Math.round(creditPts * lotUnits).toLocaleString('en-IN') + '</div></div>' +
-          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Theta / Day</div><div class="text-xs mono font-bold text-amber-300">+₹' + dailyTheta.toLocaleString('en-IN') + '</div></div>' +
-          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Vega / 1% IV</div><div class="text-xs mono font-bold text-sky-300">-₹' + (1580 * lots).toLocaleString('en-IN') + '</div></div>' +
-          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Upstox Cost</div><div class="text-xs mono font-bold text-rose-300">₹' + (585 * lots).toLocaleString('en-IN') + '</div></div>';
+          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Theta / Day</div><div class="text-xs mono font-bold text-amber-300">+₹' + Math.round(dailyTheta * thetaScale).toLocaleString('en-IN') + '</div></div>' +
+          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Vega / 1% IV</div><div class="text-xs mono font-bold text-sky-300">-₹' + Math.round(1580 * lots * vegaScale).toLocaleString('en-IN') + '</div></div>' +
+          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Upstox Cost</div><div class="text-xs mono font-bold text-rose-300">₹' + upstoxFee.toLocaleString('en-IN') + '</div></div>';
       }
 
       function renderActiveOptionsTab() {
@@ -1326,7 +1395,9 @@
         { date: '2026-10-28', strat: 'S5', sig: 'HV30 11.8% · Theta', legs: '4L Tight Fly ±200', gross: 6849, charges: 590 },
         { date: '2026-11-02', strat: 'S1', sig: 'VRP +2.88% · IV 14.6%', legs: '4L Iron Condor', gross: 6284, charges: 585 },
         { date: '2026-11-04', strat: 'S6', sig: 'Call Skew Condor', legs: '4L Call Condor', gross: 3334, charges: 565 },
-        { date: '2026-11-06', strat: 'S3', sig: 'ATM IV 17.2% · Weekly', legs: '4L Iron Fly ±300', gross: 16702, charges: 630 }
+        { date: '2026-11-06', strat: 'S3', sig: 'ATM IV 17.2% · Weekly', legs: '4L Iron Fly ±300', gross: 16702, charges: 630 },
+        { date: '2026-11-08', strat: 'S1', sym: 'NIFTY', structure: 'Iron Condor (Muhurat)', sig: 'Muhurat VRP Harvest', legs: '4L Iron Condor', entry: '14:20', exit: '15:25', gross: 2450, charges: 295, net: 2155 },
+        { date: '2026-11-09', strat: 'S5', sym: 'NIFTY', structure: 'Intraday Theta Fly', sig: 'HV30 12.4% · Theta', legs: '4L Tight Fly ±200', entry: '09:20', exit: '15:15', gross: 4120, charges: 340, net: 3780 }
       ];
 
       function fmtInr(v, plus) {
@@ -1565,6 +1636,10 @@
           .then(function(data) {
             if (!data || !data.records) return;
 
+            if (data.day) {
+              window.VL_LAST_DATE = data.day;
+            }
+
             // 1. Extract Live Index Quotes
             var quotesRec = data.records.find(function(r) { return r.label === 'quotes'; });
             var q = quotesRec ? quotesRec.data : null;
@@ -1581,8 +1656,10 @@
             var liveBankFut = bFut && bFut.last_price ? Number(bFut.last_price) : null;
 
             if (liveVix) {
+              var vixValEl = document.getElementById('headerVixVal');
+              if (vixValEl) vixValEl.textContent = liveVix.toFixed(2);
               var vixEl = document.getElementById('headerVix');
-              if (vixEl) vixEl.textContent = liveVix.toFixed(2);
+              if (vixEl && !vixValEl) vixEl.textContent = liveVix.toFixed(2);
             }
 
             // 2. Process Live Option Chains per Expiry
@@ -1614,7 +1691,7 @@
                   existingList.forEach(function(item) { item.spot = symSpot; });
                 }
 
-                var refSpot = symSpot || (sym === 'NIFTY' ? 25000 : 59600);
+                var refSpot = symSpot || (sym === 'NIFTY' ? 25044.65 : 59741.25);
                 var closestStrike = chain[0];
                 var minDiff = Math.abs((closestStrike.strike_price || 0) - refSpot);
                 for (var ci = 1; ci < chain.length; ci++) {
@@ -1631,10 +1708,14 @@
                 var cIv = closestStrike.call_options && closestStrike.call_options.option_greeks ? (closestStrike.call_options.option_greeks.iv || 0) : 0;
                 var pIv = closestStrike.put_options && closestStrike.put_options.option_greeks ? (closestStrike.put_options.option_greeks.iv || 0) : 0;
                 var liveAtmIv = (cIv > 0 && pIv > 0) ? (cIv + pIv) / 2.0 : (cIv || pIv || liveVix || 15.0);
-                var liveSyn = (cLtp && pLtp) ? (k + cLtp - pLtp) : refSpot;
+                var liveSyn = (cLtp && pLtp) ? (k + Math.exp(0.0675 * (3.0 / 365.0)) * (cLtp - pLtp)) : refSpot;
 
                 var catItem = existingList.find(function(it) { return it.expiry === recExp; });
                 if (catItem) {
+                  catItem.liveChain = chain;
+                  catItem.atmK = k;
+                  catItem.callLtp = cLtp;
+                  catItem.putLtp = pLtp;
                   if (liveAtmIv > 0) catItem.iv = Number(liveAtmIv.toFixed(2));
                   if (liveSyn) catItem.syn = Number(liveSyn.toFixed(1));
                   catItem.spread = Number((catItem.iv - catItem.hv30).toFixed(2));
@@ -1642,9 +1723,10 @@
               });
             });
 
-            // Re-render Top KPIs and Active Options Tab
+            // Re-render Top KPIs and Active Options Tab and Backtest Workspace
             renderTopKpiStrip();
             renderActiveOptionsTab();
+            renderBacktestWorkspace();
 
             // 3. Update Market Clock Badge
             var clockEl = document.getElementById('marketClockPill');
@@ -1659,6 +1741,19 @@
             console.log('Live market feed note:', err);
           });
       }
+
+      // Un-trap IIFE exports to window for global access & full chart re-renders
+      window.marketCatalog = marketCatalog;
+      window.tradeArchive = tradeArchive;
+      window.populateExpiryDropdown = populateExpiryDropdown;
+      window.renderTopKpiStrip = renderTopKpiStrip;
+      window.renderTab1Regime = renderTab1Regime;
+      window.renderTab2Term = renderTab2Term;
+      window.renderTab3Smile = renderTab3Smile;
+      window.renderTab4Straddle = renderTab4Straddle;
+      window.renderActiveOptionsTab = renderActiveOptionsTab;
+      window.renderBacktestWorkspace = renderBacktestWorkspace;
+      window.syncLiveMarketFeed = syncLiveMarketFeed;
 
       window.addEventListener('DOMContentLoaded', function() {
         syncLiveMarketFeed();

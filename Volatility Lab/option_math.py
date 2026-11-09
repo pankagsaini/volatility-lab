@@ -134,7 +134,7 @@ def delta_iv_details(chain, kind, target):
     for column in ('iv', 'delta'):
         side[column] = pd.to_numeric(side[column], errors='coerce').astype(float)
     side = side[np.isfinite(side.iv) & np.isfinite(side.delta) & (side.iv > 0)]
-    side = side[side.delta.between(0, 1) if kind == 'CE' else side.delta.between(-1, 0)]
+    side = side[((side.delta > 1e-6) & (side.delta < 1.0 - 1e-6)) if kind == 'CE' else ((side.delta < -1e-6) & (side.delta > -1.0 + 1e-6))]
     if side.empty:
         return np.nan, 'Unavailable', chain.iloc[:0]
     side['abs_delta'] = side.delta.abs()

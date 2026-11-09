@@ -46,7 +46,73 @@ HOLIDAYS = {
 }
 
 # Recognized NSE Special / Muhurat Trading Sessions with verified timing windows (IST)
-SPECIAL_SESSIONS = {
+EXTRA_SESSIONS = {
+    date(2024, 11, 1): {
+        "name": "Diwali Muhurat Trading 2024",
+        "pre_open_start": (18, 0),
+        "trading_start": (18, 15),
+        "trading_end": (19, 15),
+        "snap_start_min": 1080,
+        "snap_end_min": 1170,
+        "eod_start_min": 1170,
+        "eod_end_min": 1320,
+    },
+    date(2025, 10, 21): {
+        "name": "Diwali Muhurat Trading 2025",
+        "pre_open_start": (18, 0),
+        "trading_start": (18, 15),
+        "trading_end": (19, 15),
+        "snap_start_min": 1080,
+        "snap_end_min": 1170,
+        "eod_start_min": 1170,
+        "eod_end_min": 1320,
+    },
+    date(2026, 11, 8): {
+        "name": "Diwali Muhurat Trading 2026 (14:00-16:00 IST)",
+        "pre_open_start": (14, 5),
+        "trading_start": (14, 20),
+        "trading_end": (15, 40),
+        "snap_start_min": 840,
+        "snap_end_min": 960,
+        "eod_start_min": 960,
+        "eod_end_min": 1320,
+    },
+    date(2027, 10, 29): {
+        "name": "Diwali Muhurat Trading 2027",
+        "pre_open_start": (18, 0),
+        "trading_start": (18, 15),
+        "trading_end": (19, 15),
+        "snap_start_min": 1080,
+        "snap_end_min": 1170,
+        "eod_start_min": 1170,
+        "eod_end_min": 1320,
+    },
+    date(2028, 10, 17): {
+        "name": "Diwali Muhurat Trading 2028",
+        "pre_open_start": (18, 0),
+        "trading_start": (18, 15),
+        "trading_end": (19, 15),
+        "snap_start_min": 1080,
+        "snap_end_min": 1170,
+        "eod_start_min": 1170,
+        "eod_end_min": 1320,
+    },
+}
+
+class SpecialSessionsSet(set):
+    """Set subclass supporting dictionary lookup and metadata access for backwards compatibility."""
+    def __getitem__(self, item):
+        return EXTRA_SESSIONS[item]
+    def get(self, item, default=None):
+        return EXTRA_SESSIONS.get(item, default)
+    def items(self):
+        return EXTRA_SESSIONS.items()
+    def values(self):
+        return EXTRA_SESSIONS.values()
+
+SPECIAL_SESSIONS = SpecialSessionsSet(EXTRA_SESSIONS.keys())
+
+_LEGACY_SPECIAL_SESSIONS = {
     date(2024, 11, 1): {
         "name": "Diwali Muhurat Trading 2024",
         "pre_open_start": (18, 0),

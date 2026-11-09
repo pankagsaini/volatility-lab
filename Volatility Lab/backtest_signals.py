@@ -93,7 +93,7 @@ def load_signals(symbol, path=None, start=None, end=None):
                         if iv_v is None or not math.isfinite(float(iv_v)):
                             continue
                         d_clean = str(d_str)[:10]
-                        t_eod = pd.Timestamp(f'{d_clean} 09:15:00', tz='Asia/Kolkata')
+                        t_eod = pd.Timestamp(f'{d_clean} 15:30:00', tz='Asia/Kolkata')
                         hv_v = hv_map.get(d_clean, float(iv_v) - float(spr_v) if spr_v is not None and math.isfinite(float(spr_v)) else 12.5)
                         spr_clean = float(spr_v) if spr_v is not None and math.isfinite(float(spr_v)) else (float(iv_v) - hv_v)
                         rec_d = {

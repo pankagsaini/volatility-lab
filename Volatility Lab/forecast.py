@@ -1,3 +1,4 @@
+MAX_HORIZON = 265
 """GARCH(1,1) forecasts: zero mean, normal innovations, daily returns (with LRU-cached MLE)."""
 from functools import lru_cache
 import hashlib
@@ -122,10 +123,10 @@ def _scipy_garch11_fallback(r: np.ndarray, max_h: int):
 
 @lru_cache(maxsize=8)
 def _cached_garch_mle(returns_digest: str, returns_bytes: bytes, n_obs: int):
-    """Fit GARCH(1,1) once per unique return series and project all 245 forward sessions."""
+    """Fit GARCH(1,1) once per unique return series and project all 265 forward sessions."""
     r_arr = np.frombuffer(returns_bytes, dtype=np.float64)
     r_series = pd.Series(r_arr)
-    max_h = 245
+    max_h = 265
     try:
         from arch import arch_model
         with warnings.catch_warnings(record=True) as caught:
