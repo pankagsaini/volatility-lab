@@ -3,6 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Institutional-grade volatility analytics, dynamic volatility surface modeling, VRP edge tracking, and systematic options backtesting for NSE NIFTY & BANKNIFTY." />
+  <meta name="theme-color" content="#040810" />
+  <meta property="og:title" content="Volatility Lab · Quantitative Volatility & Options Desk" />
+  <meta property="og:description" content="Real-time IV vs Realized Vol (HV10/HV30), Term Structure, Smile Decomposition, and Systematic Options Backtesting for NSE Index Derivatives." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://volatilitylab.in" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Volatility Lab · Quantitative Volatility Desk" />
+  <meta name="twitter:description" content="Real-time IV, VRP Spreads, and Systematic Options Backtesting for Indian Index Derivatives." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070d18'/%3E%3Cpath d='M6 18c3-8 5-8 8 0s5 8 8 0 5-8 8 0' fill='none' stroke='%2338bdf8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='14' cy='18' r='2' fill='%2310b981'/%3E%3C/svg%3E" />
   <title>Volatility Lab · Quantitative Volatility & Options Desk</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -42,16 +52,16 @@
         <button type="button" id="wsBacktestBtn" class="seg-btn">Strategy Backtest</button>
       </div>
 
-      <!-- Asset Symbol Selector -->
-      <div class="seg-group ml-1" id="headerOptionsControls">
-        <button type="button" data-sym="NIFTY" class="sym-btn seg-btn active">NIFTY</button>
-        <button type="button" data-sym="BANKNIFTY" class="sym-btn seg-btn">BANKNIFTY</button>
-      </div>
-
-      <!-- Expiry Dropdown -->
-      <div class="flex items-center gap-1.5 ml-1">
-        <span class="text-xs text-slate-300 hidden md:inline">Expiry:</span>
-        <select id="activeExpirySelect" aria-label="Listed Expiry" class="desk-select mono"></select>
+      <!-- Options Desk Asset & Expiry Controls -->
+      <div class="flex items-center gap-2" id="headerOptionsControls">
+        <div class="seg-group ml-1">
+          <button type="button" data-sym="NIFTY" class="sym-btn seg-btn active">NIFTY</button>
+          <button type="button" data-sym="BANKNIFTY" class="sym-btn seg-btn">BANKNIFTY</button>
+        </div>
+        <div class="flex items-center gap-1.5 ml-1">
+          <span class="text-xs text-slate-300 hidden md:inline">Expiry:</span>
+          <select id="activeExpirySelect" aria-label="Listed Expiry" class="desk-select mono"></select>
+        </div>
       </div>
     </div>
 
@@ -2042,17 +2052,15 @@
         // 1 initial fetch
         syncLiveMarketFeed();
 
-        // Only start 60s poll if market is live
-        var state = getMarketSessionState(new Date());
-        if (state.isOpen) {
-          setInterval(function() {
-            var currentState = getMarketSessionState(new Date());
-            updateMarketClock(new Date());
-            if (currentState.isOpen) {
-              syncLiveMarketFeed();
-            }
-          }, 60000);
-        }
+        // Continuous 30s timer: keeps clock badge live, detects session changes (e.g. 09:15 open), and polls live feed
+        setInterval(function() {
+          var now = new Date();
+          updateMarketClock(now);
+          var currentState = getMarketSessionState(now);
+          if (currentState.isOpen) {
+            syncLiveMarketFeed();
+          }
+        }, 30000);
       });
     })();
   </script>
