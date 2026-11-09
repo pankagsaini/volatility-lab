@@ -334,7 +334,7 @@ def simulate(contracts,series,spotkey,start,end,entry='09:20',exit='15:15',offse
   if not call or not put:record_skip(skips,day,'Missing contract definitions');continue
   legs=[(call,-1),(put,-1)]
   if wings:
-      c=nearest('CE',float(call['strike_price'])+wings);p=nearest('PE',float(put['strike_price'])-wings)
+   c=nearest('CE',float(call['strike_price'])+wings);p=nearest('PE',float(put['strike_price'])-wings)
    if not c or not p or float(c['strike_price'])<=float(call['strike_price']) or float(p['strike_price'])>=float(put['strike_price']):record_skip(skips,day,'Protective strikes unavailable');continue
    legs.extend([(c,1),(p,1)])
   fills=[];gross=slippage=turnover=0.;reason=None;cost_parts={}
