@@ -68,13 +68,13 @@ SPECIAL_SESSIONS = {
         "eod_end_min": 1320,
     },
     date(2026, 11, 8): {
-        "name": "Diwali Muhurat Trading 2026",
-        "pre_open_start": (18, 0),
-        "trading_start": (18, 15),
-        "trading_end": (19, 15),
-        "snap_start_min": 1080,
-        "snap_end_min": 1170,
-        "eod_start_min": 1170,
+        "name": "Diwali Muhurat Trading 2026 (14:00-16:00 IST)",
+        "pre_open_start": (14, 5),
+        "trading_start": (14, 20),
+        "trading_end": (15, 40),
+        "snap_start_min": 840,
+        "snap_end_min": 960,
+        "eod_start_min": 960,
         "eod_end_min": 1320,
     },
     date(2027, 10, 29): {
@@ -155,11 +155,21 @@ def is_market_open_now(dt: datetime | None = None) -> tuple[bool, str]:
     mins = now.hour * 60 + now.minute
 
     if cur_date in SPECIAL_SESSIONS:
-        if 1080 <= mins < 1095:
+        info = SPECIAL_SESSIONS[cur_date]
+        pre_start = info.get("pre_open_start", (18, 0))
+        trade_start = info.get("trading_start", (18, 15))
+        trade_end = info.get("trading_end", (19, 15))
+        snap_end = info.get("snap_end_min", 1170)
+
+        pre_min = pre_start[0] * 60 + pre_start[1]
+        trade_start_min = trade_start[0] * 60 + trade_start[1]
+        trade_end_min = trade_end[0] * 60 + trade_end[1]
+
+        if pre_min <= mins < trade_start_min:
             return True, 'SPECIAL_PRE_OPEN'
-        elif 1095 <= mins <= 1155:
+        elif trade_start_min <= mins <= trade_end_min:
             return True, 'SPECIAL_LIVE'
-        elif 1155 < mins <= 1170:
+        elif trade_end_min < mins <= snap_end:
             return True, 'SPECIAL_CLOSING'
         return False, 'SPECIAL_CLOSED'
 

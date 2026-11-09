@@ -296,12 +296,16 @@ class TestTrack4UIAndCloudCaching(unittest.TestCase):
         utc_night = datetime(2026, 10, 16, 14, 0, tzinfo=timezone.utc)
         self.assertFalse(refresh_policy.refresh_due(utc_night, result=None, elapsed=999.0))
 
-        # 12:45 UTC is 18:15 IST on Sunday 2026-11-08 (Diwali Muhurat live trading session!)
-        muhurat_live = datetime(2026, 11, 8, 12, 45, tzinfo=timezone.utc)
+        # 09:00 UTC is 14:30 IST on Sunday 2026-11-08 (Diwali Muhurat 2026 14:00-16:00 IST session!)
+        muhurat_live = datetime(2026, 11, 8, 9, 0, tzinfo=timezone.utc)
         self.assertTrue(refresh_policy.refresh_due(muhurat_live, result={"ok": True}, elapsed=65.0))
-        # 06:30 UTC is 12:00 IST on Sunday (outside evening Muhurat session)
-        muhurat_day = datetime(2026, 11, 8, 6, 30, tzinfo=timezone.utc)
-        self.assertFalse(refresh_policy.refresh_due(muhurat_day, result=None, elapsed=999.0))
+        # 04:30 UTC is 10:00 IST on Sunday (outside both 14:00-16:00 live and 16:00-22:00 EOD windows)
+        muhurat_morning = datetime(2026, 11, 8, 4, 30, tzinfo=timezone.utc)
+        self.assertFalse(refresh_policy.refresh_due(muhurat_morning, result=None, elapsed=999.0))
+        # 12:30 UTC is 18:00 IST on Sunday (inside 16:00-22:00 EOD candle window; 300s throttle applies)
+        muhurat_eod = datetime(2026, 11, 8, 12, 30, tzinfo=timezone.utc)
+        self.assertTrue(refresh_policy.refresh_due(muhurat_eod, result={"ok": True}, elapsed=350.0))
+        self.assertFalse(refresh_policy.refresh_due(muhurat_eod, result={"ok": True}, elapsed=60.0))
 
     def test_background_refresh_ttl_and_atomic_collect(self):
         state = {}
@@ -387,7 +391,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         self.assertIn("NSE LIVE", badge_live)
         badge_closed = ui_theme.market_session_badge_html(datetime(2026, 10, 18, 12, 0, tzinfo=ZoneInfo("Asia/Kolkata")))
         self.assertIn("NSE CLOSED", badge_closed)
-        badge_muhurat = ui_theme.market_session_badge_html(datetime(2026, 11, 8, 18, 30, tzinfo=ZoneInfo("Asia/Kolkata")))
+        badge_muhurat = ui_theme.market_session_badge_html(datetime(2026, 11, 8, 14, 30, tzinfo=ZoneInfo("Asia/Kolkata")))
         self.assertIn("MUHURAT SPECIAL SESSION", badge_muhurat)
         self.assertIn("● NSE LIVE", badge_muhurat)
 
@@ -412,7 +416,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         muhurat_date = date(2026, 11, 8)
         self.assertTrue(market_calendar.is_special_session(muhurat_date))
         self.assertTrue(market_calendar.is_trading_day(muhurat_date))
-        is_open, sess_type = market_calendar.is_market_open_now(datetime(2026, 11, 8, 18, 30, tzinfo=ZoneInfo("Asia/Kolkata")))
+        is_open, sess_type = market_calendar.is_market_open_now(datetime(2026, 11, 8, 14, 30, tzinfo=ZoneInfo("Asia/Kolkata")))
         self.assertTrue(is_open)
         self.assertEqual(sess_type, "SPECIAL_LIVE")
         is_open_noon, sess_type_noon = market_calendar.is_market_open_now(datetime(2026, 11, 8, 12, 0, tzinfo=ZoneInfo("Asia/Kolkata")))

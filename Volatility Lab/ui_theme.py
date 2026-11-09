@@ -615,19 +615,29 @@ def market_session_badge_html(now: datetime | None = None) -> str:
     cur_date = current.date()
 
     if cur_date in SPECIAL_SESSIONS:
-        if 1080 <= minute < 1095:
+        info = SPECIAL_SESSIONS[cur_date]
+        pre_start = info.get("pre_open_start", (18, 0))
+        trade_start = info.get("trading_start", (18, 15))
+        trade_end = info.get("trading_end", (19, 15))
+        snap_end = info.get("snap_end_min", 1170)
+
+        pre_min = pre_start[0] * 60 + pre_start[1]
+        trade_start_min = trade_start[0] * 60 + trade_start[1]
+        trade_end_min = trade_end[0] * 60 + trade_end[1]
+
+        if pre_min <= minute < trade_start_min:
             label = "◐ NSE · MUHURAT PRE-OPEN"
             style = (
                 "background:rgba(245,158,11,0.18); color:#fbbf24; "
                 "border:1px solid rgba(245,158,11,0.55); box-shadow:0 0 10px rgba(245,158,11,0.25);"
             )
-        elif 1095 <= minute <= 1155:
+        elif trade_start_min <= minute <= trade_end_min:
             label = "● NSE LIVE · MUHURAT SPECIAL SESSION"
             style = (
                 "background:rgba(245,158,11,0.22); color:#fef08a; "
                 "border:1px solid #eab308; box-shadow:0 0 16px rgba(234,179,8,0.45); font-weight:700;"
             )
-        elif 1155 < minute <= 1170:
+        elif trade_end_min < minute <= snap_end:
             label = "◐ NSE · MUHURAT CLOSING"
             style = (
                 "background:rgba(245,158,11,0.14); color:#fbbf24; "

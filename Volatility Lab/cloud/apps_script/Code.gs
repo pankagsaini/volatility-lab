@@ -34,7 +34,7 @@ const VL = {
 const SPECIAL_SESSIONS = {
   '2024-11-01': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2024' },
   '2025-10-21': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2025' },
-  '2026-11-08': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2026' },
+  '2026-11-08': { snap_start: 840, snap_end: 960, eod_start: 960, eod_end: 1320, name: 'Diwali Muhurat 2026 (14:00-16:00 IST)' },
   '2027-10-29': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2027' },
   '2028-10-17': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2028' }
 };
@@ -864,6 +864,123 @@ function auditStatus() {
  * Public Web API endpoint for Streamlit Cloud & external lab dashboards.
  * Returns the uncompressed JSON of the latest market snapshot in real-time.
  */
+
+/**
+ * Manual downloader to capture or backfill historical 1-minute data and snapshots.
+ * Discovers 1-minute candles from Upstox API and persists them as gzip snapshot archives.
+ */
+function manualDownloadSession(targetDay) {
+  const day = targetDay || '2026-11-08';
+  console.log('Starting manual 1-minute download for session: ' + day);
+
+  const keys = [
+    CONFIG.indices.NIFTY,
+    CONFIG.indices.BANKNIFTY,
+    'NSE_INDEX|India VIX'
+  ];
+
+  let catalogue = null;
+  try {
+    catalogue = catalogue_(new Date(Date.parse(day + 'T12:00:00+05:30')));
+    Object.values(catalogue.indices).forEach(idx => {
+      idx.futures.forEach(f => keys.push(f.instrument_key));
+    });
+  } catch (err) {
+    console.warn('Catalogue discovery fallback: ' + safeError_(err));
+  }
+
+  const results = {};
+  const errors = [];
+
+  keys.forEach(key => {
+    try {
+      const path = '/v3/historical-candle/' + encodeURIComponent(key) + '/minutes/1/' + day + '/' + day;
+      const data = api_(path);
+      results[key] = data.candles || [];
+    } catch (err) {
+      errors.push({ instrument: key, error: safeError_(err) });
+    }
+  });
+
+  const minutesSet = new Set();
+  Object.values(results).forEach(candles => {
+    candles.forEach(c => {
+      if (c && c[0]) {
+        minutesSet.add(String(c[0]));
+      }
+    });
+  });
+
+  const timestamps = [...minutesSet].sort();
+  console.log('Discovered ' + timestamps.length + ' 1-minute bars for ' + day);
+
+  if (!timestamps.length) {
+    console.log('No minute bars found; running EOD reconciliation for ' + day);
+    return capture_('eod', { target_day: day, catalogue: catalogue });
+  }
+
+  let savedCount = 0;
+  timestamps.forEach(stamp => {
+    const timePart = stamp.slice(11, 19).replace(/:/g, '');
+    const quotes = {};
+
+    Object.keys(results).forEach(key => {
+      const match = results[key].find(c => c[0] === stamp);
+      if (match) {
+        quotes[key] = {
+          instrument_token: key,
+          timestamp: stamp,
+          last_trade_time: stamp,
+          last_price: match[4],
+          ohlc: { open: match[1], high: match[2], low: match[3], close: match[4] },
+          volume: match[5]
+        };
+      }
+    });
+
+    const snapshot = {
+      schema: 1,
+      provider: 'Upstox',
+      day: day,
+      mode: 'snapshot',
+      retrieved_at: stamp,
+      status: 'complete',
+      records: [
+        { label: 'quotes', retrieved_at: stamp, data: quotes }
+      ],
+      errors: [],
+      pending: [],
+      catalogue: catalogue,
+      fetch_seconds: 0.05,
+      source: 'manual_historical_download'
+    };
+
+    save_(day + '_snapshot_' + timePart + '_complete', snapshot);
+    savedCount++;
+  });
+
+  const consolidated = {
+    schema: 1,
+    provider: 'Upstox',
+    day: day,
+    type: '1minute_historical_session',
+    downloaded_at: new Date().toISOString(),
+    instruments: results,
+    minutes_count: timestamps.length,
+    errors: errors
+  };
+  const consolidatedId = save_(day + '_1minute_consolidated_complete', consolidated);
+
+  return {
+    day: day,
+    saved_snapshots: savedCount,
+    consolidated_file_id: consolidatedId,
+    minutes: timestamps.length,
+    errors: errors
+  };
+}
+
+
 function doGet(e) {
   try {
     const properties = props_();
@@ -874,6 +991,24 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
     const action = e && e.parameter ? e.parameter.action : null;
+
+    if (action === 'manual_download' || action === 'download_muhurat') {
+      const targetDay = (e && e.parameter && e.parameter.day) ? e.parameter.day : '2026-11-08';
+      const result = manualDownloadSession(targetDay);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'candles') {
+      const instrument = (e && e.parameter && e.parameter.instrument) ? e.parameter.instrument : 'NSE_INDEX|Nifty 50';
+      const interval = (e && e.parameter && e.parameter.interval) ? e.parameter.interval : 'minutes/1';
+      const toDate = (e && e.parameter && e.parameter.to_date) ? e.parameter.to_date : '2026-11-08';
+      const fromDate = (e && e.parameter && e.parameter.from_date) ? e.parameter.from_date : toDate;
+      const path = '/v3/historical-candle/' + encodeURIComponent(instrument) + '/' + interval + '/' + toDate + '/' + fromDate;
+      const data = api_(path);
+      return ContentService.createTextOutput(JSON.stringify(data))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
 
     if (action === 'status') {
       let triggers = [];
