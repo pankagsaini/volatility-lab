@@ -143,10 +143,10 @@
 
       <!-- Right: Clean Market Context & Status -->
       <div class="flex items-center gap-3 mono text-xs">
-        <span class="text-slate-300 hidden sm:inline">VIX: <strong class="text-amber-300">14.82</strong></span>
+        <span class="text-slate-300 hidden sm:inline">VIX: <strong class="text-amber-300" id="headerVix">18.39</strong></span>
         <span class="text-slate-300 hidden md:inline">r: <strong class="text-sky-300">6.75%</strong></span>
         <span id="marketClockPill" class="px-3 py-1 rounded-full bg-[#070b12] border border-[#24344d] text-slate-200 font-semibold">
-          06 Nov 15:30 IST
+          09 Nov 09:20 IST
         </span>
       </div>
     </header>
@@ -160,7 +160,7 @@
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Spot &amp; Parity Forward</div>
-          <div id="kpiSpot" class="text-lg mono font-extrabold text-white mt-0.5">24,199.35</div>
+          <div id="kpiSpot" class="text-lg mono font-extrabold text-white mt-0.5">24,946.45</div>
           <div id="kpiForwardSub" class="text-[11px] mono text-slate-300 mt-0.5">Syn: 24,218.6 · Basis -14.2</div>
         </div>
 
@@ -662,16 +662,16 @@
       // --- Core Market Data ---
       var marketCatalog = {
         NIFTY: [
-          { expiry: '2026-11-12', kind: 'Weekly', dte: 6.0, spot: 24199.35, syn: 24218.60, fut: 24232.80, iv: 14.65, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.18, ewma: 11.95, spread: 2.94, rev25: 2.10, bfly25: 0.68, signal: 'SELL VEGA · IRON CONDOR', strikes: 'Sell 23,950 PE / 24,450 CE', preset: 'S1' },
-          { expiry: '2026-11-19', kind: 'Weekly', dte: 13.0, spot: 24199.35, syn: 24242.10, fut: 24232.80, iv: 14.92, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.42, ewma: 11.95, spread: 3.21, rev25: 2.24, bfly25: 0.74, signal: 'SELL VEGA · WIDE CONDOR', strikes: 'Sell 23,800 PE / 24,600 CE', preset: 'S1' },
-          { expiry: '2026-11-26', kind: 'Monthly', dte: 20.0, spot: 24199.35, syn: 24268.40, fut: 24259.90, iv: 15.18, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.68, ewma: 11.95, spread: 3.47, rev25: 2.35, bfly25: 0.79, signal: 'PUT SKEW 1x2 RATIO', strikes: 'Buy 24,000 PE / Sell 2x 23,700 PE', preset: 'S4' },
-          { expiry: '2026-12-24', kind: 'Monthly', dte: 48.0, spot: 24199.35, syn: 24384.20, fut: 24378.50, iv: 15.74, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.15, ewma: 11.95, spread: 4.03, rev25: 2.48, bfly25: 0.85, signal: 'CALENDAR / DIAGONAL', strikes: 'Sell 12 Nov / Buy 24 Dec ATM', preset: 'S5' },
-          { expiry: '2027-01-28', kind: 'Monthly', dte: 83.0, spot: 24199.35, syn: 24512.00, fut: 24504.10, iv: 16.15, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.52, ewma: 11.95, spread: 4.44, rev25: 2.55, bfly25: 0.91, signal: 'LONG-DATED VRP HARVEST', strikes: 'Sell 23,500 PE / 25,200 CE', preset: 'S1' }
+          { expiry: '2026-11-12', kind: 'Weekly', dte: 6.0, spot: 24946.45, syn: 24986.40, fut: 24995.00, iv: 18.39, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.18, ewma: 11.95, spread: 2.94, rev25: 2.10, bfly25: 0.68, signal: 'SELL VEGA · IRON CONDOR', strikes: 'Sell 23,950 PE / 24,450 CE', preset: 'S1' },
+          { expiry: '2026-11-19', kind: 'Weekly', dte: 13.0, spot: 24946.45, syn: 24242.10, fut: 24232.80, iv: 14.92, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.42, ewma: 11.95, spread: 3.21, rev25: 2.24, bfly25: 0.74, signal: 'SELL VEGA · WIDE CONDOR', strikes: 'Sell 23,800 PE / 24,600 CE', preset: 'S1' },
+          { expiry: '2026-11-26', kind: 'Monthly', dte: 20.0, spot: 24946.45, syn: 24268.40, fut: 24259.90, iv: 15.18, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.68, ewma: 11.95, spread: 3.47, rev25: 2.35, bfly25: 0.79, signal: 'PUT SKEW 1x2 RATIO', strikes: 'Buy 24,000 PE / Sell 2x 23,700 PE', preset: 'S4' },
+          { expiry: '2026-12-24', kind: 'Monthly', dte: 48.0, spot: 24946.45, syn: 24384.20, fut: 24378.50, iv: 15.74, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.15, ewma: 11.95, spread: 4.03, rev25: 2.48, bfly25: 0.85, signal: 'CALENDAR / DIAGONAL', strikes: 'Sell 12 Nov / Buy 24 Dec ATM', preset: 'S5' },
+          { expiry: '2027-01-28', kind: 'Monthly', dte: 83.0, spot: 24946.45, syn: 24512.00, fut: 24504.10, iv: 16.15, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.52, ewma: 11.95, spread: 4.44, rev25: 2.55, bfly25: 0.91, signal: 'LONG-DATED VRP HARVEST', strikes: 'Sell 23,500 PE / 25,200 CE', preset: 'S1' }
         ],
         BANKNIFTY: [
-          { expiry: '2026-11-25', kind: 'Monthly', dte: 19.0, spot: 51842.10, syn: 51986.40, fut: 51974.00, iv: 16.32, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 13.85, ewma: 13.40, spread: 3.14, rev25: 2.45, bfly25: 0.82, signal: 'SELL VEGA · BANK CONDOR', strikes: 'Sell 51,100 PE / 52,600 CE', preset: 'S1' },
-          { expiry: '2026-12-30', kind: 'Monthly', dte: 54.0, spot: 51842.10, syn: 52248.80, fut: 52235.50, iv: 16.95, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.30, ewma: 13.40, spread: 3.77, rev25: 2.60, bfly25: 0.88, signal: 'PUT SKEW RATIO (1x2)', strikes: 'Buy 51,500 PE / Sell 2x 50,800 PE', preset: 'S4' },
-          { expiry: '2027-01-27', kind: 'Monthly', dte: 82.0, spot: 51842.10, syn: 52495.20, fut: 52480.00, iv: 17.40, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.68, ewma: 13.40, spread: 4.22, rev25: 2.72, bfly25: 0.94, signal: 'SHORT VRP STRANGLE', strikes: 'Sell 50,500 PE / 53,500 CE', preset: 'S5' }
+          { expiry: '2026-11-25', kind: 'Monthly', dte: 19.0, spot: 59133.45, syn: 58850.65, fut: 58920.00, iv: 18.80, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 13.85, ewma: 13.40, spread: 3.14, rev25: 2.45, bfly25: 0.82, signal: 'SELL VEGA · BANK CONDOR', strikes: 'Sell 51,100 PE / 52,600 CE', preset: 'S1' },
+          { expiry: '2026-12-30', kind: 'Monthly', dte: 54.0, spot: 59133.45, syn: 52248.80, fut: 52235.50, iv: 16.95, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.30, ewma: 13.40, spread: 3.77, rev25: 2.60, bfly25: 0.88, signal: 'PUT SKEW RATIO (1x2)', strikes: 'Buy 51,500 PE / Sell 2x 50,800 PE', preset: 'S4' },
+          { expiry: '2027-01-27', kind: 'Monthly', dte: 82.0, spot: 59133.45, syn: 52495.20, fut: 52480.00, iv: 17.40, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.68, ewma: 13.40, spread: 4.22, rev25: 2.72, bfly25: 0.94, signal: 'SHORT VRP STRANGLE', strikes: 'Sell 50,500 PE / 53,500 CE', preset: 'S5' }
         ]
       };
 
@@ -1537,7 +1537,50 @@
         toast('Downloaded volatility_lab_backtest.csv');
       });
 
+      
+      // --- RC-1: 60-Second Real-Time Poll from Apps Script Web App ---
+      var LIVE_API_URL = 'https://script.google.com/macros/s/AKfycbxDbTwpiRAE9ZRoGGWTyTncZhwUPmTnimv0HyejOiJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec';
+      function syncLiveMarketFeed() {
+        fetch(LIVE_API_URL)
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            if (!data || !data.records) return;
+            var quotesRec = data.records.find(function(r) { return r.label === 'quotes'; });
+            if (!quotesRec || !quotesRec.data) return;
+            var q = quotesRec.data;
+            var nQ = q['NSE_INDEX|Nifty 50'];
+            var bQ = q['NSE_INDEX|Nifty Bank'];
+            var vQ = q['NSE_INDEX|India VIX'];
+
+            if (nQ && nQ.last_price) {
+              marketCatalog.NIFTY.forEach(function(item) { item.spot = Number(nQ.last_price); });
+            }
+            if (bQ && bQ.last_price) {
+              marketCatalog.BANKNIFTY.forEach(function(item) { item.spot = Number(bQ.last_price); });
+            }
+            if (vQ && vQ.last_price) {
+              var vixEl = document.getElementById('headerVix');
+              if (vixEl) vixEl.textContent = Number(vQ.last_price).toFixed(2);
+            }
+            renderTopKpiStrip();
+            renderActiveOptionsTab();
+
+            var clockEl = document.getElementById('marketClockPill');
+            if (clockEl && data.retrieved_at) {
+              var d = new Date(data.retrieved_at);
+              var timeStr = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+              clockEl.textContent = '● Live · ' + timeStr + ' IST';
+              clockEl.className = 'px-3 py-1 rounded-full bg-[#10b981]/20 border border-[#10b981]/40 text-[#34d399] font-semibold';
+            }
+          })
+          .catch(function(err) {
+            console.log('Live market feed note:', err);
+          });
+      }
+
       window.addEventListener('DOMContentLoaded', function() {
+        syncLiveMarketFeed();
+        setInterval(syncLiveMarketFeed, 60000);
         populateExpiryDropdown();
         renderActiveOptionsTab();
         renderBacktestWorkspace();

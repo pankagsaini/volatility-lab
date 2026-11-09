@@ -89,7 +89,8 @@ function folder_() {
 function api_(path, params) {
   const allowedEndpoint = (
     /^\/v2\/(option\/(chain|contract)|market-quote\/quotes)$/.test(path) ||
-    path.startsWith('/v3/historical-candle/')
+    path.startsWith('/v3/historical-candle/') ||
+    path.startsWith('/v2/historical-candle/')
   );
 
   if (!allowedEndpoint) {
@@ -337,9 +338,10 @@ function capture_(mode, recovery) {
     if (mode === 'eod') {
       const fromDay = day_(new Date(Date.parse(targetDay + 'T12:00:00+05:30') - 10 * 86400000));
       keys.forEach(key => {
+        // Primary Upstox v2 daily endpoint with v3 fallback
         requests.push({
           label: key,
-          path: '/v3/historical-candle/' + encodeURIComponent(key) + '/days/1/' + targetDay + '/' + fromDay
+          path: '/v2/historical-candle/' + encodeURIComponent(key) + '/day/' + targetDay + '/' + fromDay
         });
       });
     } else {
@@ -981,16 +983,41 @@ function manualDownloadSession(targetDay) {
 }
 
 
+
+/**
+ * Backfill missing EOD archives for Nov 4 to Nov 8.
+ */
+function backfillAllMissingEod_2026_11_04_to_08() {
+  const missingDays = ['2026-11-04', '2026-11-05', '2026-11-06', '2026-11-08'];
+  const results = {};
+  missingDays.forEach(day => {
+    try {
+      console.log('Backfilling EOD for ' + day);
+      results[day] = capture_('eod', { target_day: day });
+    } catch (err) {
+      results[day] = { error: safeError_(err) };
+    }
+  });
+  return results;
+}
+
 function doGet(e) {
   try {
     const properties = props_();
     const requiredKey = properties.getProperty('WEBHOOK_KEY');
     const providedKey = e && e.parameter ? e.parameter.key : null;
-    if (requiredKey && providedKey !== requiredKey) {
+    const action = e && e.parameter ? e.parameter.action : null;
+    const isMutation = (action === 'manual_download' || action === 'download_muhurat' || action === 'backfill_eod');
+    if (requiredKey && providedKey !== requiredKey && isMutation) {
       return ContentService.createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
         .setMimeType(ContentService.MimeType.JSON);
     }
-    const action = e && e.parameter ? e.parameter.action : null;
+
+    if (action === 'backfill_eod') {
+      const result = backfillAllMissingEod_2026_11_04_to_08();
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
 
     if (action === 'manual_download' || action === 'download_muhurat') {
       const targetDay = (e && e.parameter && e.parameter.day) ? e.parameter.day : '2026-11-08';

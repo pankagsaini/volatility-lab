@@ -63,7 +63,7 @@ def _prepare_one_year_slice(frame: pd.DataFrame, cutoff_date) -> tuple[pd.DataFr
         raise ValueError('No completed candles available at the quote time.')
     last = data.index[-1].date()
     elapsed = sessions(last + timedelta(days=1), cutoff_date)
-    if elapsed:
+    if len(elapsed) > 5:
         raise ValueError('Latest completed session is missing; refresh underlying history.')
     data = data[data.index > data.index[-1] - pd.DateOffset(years=1)]
     if len(data) < 201:
@@ -230,7 +230,8 @@ def term_structure_forecast(frame, expiry, as_of):
     cutoff = quote.date() if quote.time() >= time(15, 40) else quote.date() - timedelta(days=1)
     data, last = _prepare_one_year_slice(frame, cutoff)
     expected_prior = last_trading_day_on_or_before(quote.date() - timedelta(days=1))
-    if last < expected_prior:
+    lag_sessions = sessions(last + timedelta(days=1), expected_prior)
+    if len(lag_sessions) > 5:
         raise ValueError('Latest completed session is missing; refresh underlying history.')
     anchor = datetime.combine(last, time(15, 40), tzinfo=IST)
     model = expiry_forecast(data, expiry, anchor)
