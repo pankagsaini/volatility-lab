@@ -814,22 +814,17 @@
       // --- Core Market Catalog Across All Listed Expiries ---
       var marketCatalog = {
         NIFTY: [
-          { expiry: '2026-11-12', kind: 'Weekly', dte: 3.0, spot: 25044.65, syn: 25062.40, fut: 25071.00, iv: 15.65, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 3.23, rev25: 2.10, bfly25: 0.68 },
-          { expiry: '2026-11-17', kind: 'Weekly', dte: 8.0, spot: 25044.65, syn: 25055.20, fut: 25071.00, iv: 16.25, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 3.83, rev25: 2.15, bfly25: 0.70 },
-          { expiry: '2026-11-23', kind: 'Weekly', dte: 14.0, spot: 25044.65, syn: 25064.00, fut: 25071.00, iv: 15.90, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 3.48, rev25: 2.22, bfly25: 0.72 },
-          { expiry: '2026-11-26', kind: 'Monthly', dte: 17.0, spot: 25044.65, syn: 25070.10, fut: 25071.00, iv: 15.40, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 2.98, rev25: 2.30, bfly25: 0.76 },
-          { expiry: '2026-12-01', kind: 'Weekly', dte: 22.0, spot: 25044.65, syn: 25088.00, fut: 25192.50, iv: 15.20, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 2.78, rev25: 2.35, bfly25: 0.78 },
-          { expiry: '2026-12-29', kind: 'Monthly', dte: 50.0, spot: 25044.65, syn: 25195.00, fut: 25205.00, iv: 14.80, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 2.38, rev25: 2.45, bfly25: 0.82 },
-          { expiry: '2027-01-25', kind: 'Monthly', dte: 77.0, spot: 25044.65, syn: 25305.00, fut: 25315.00, iv: 14.20, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 1.78, rev25: 2.55, bfly25: 0.88 }
+          { expiry: '2026-11-17', kind: 'Weekly', dte: 7.5, spot: 25044.65, syn: 25055.20, fut: 25071.00, iv: 16.57, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 4.15, rev25: 2.15, bfly25: 0.70 },
+          { expiry: '2026-11-23', kind: 'Weekly', dte: 13.5, spot: 25044.65, syn: 25064.00, fut: 25071.00, iv: 16.05, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 3.63, rev25: 2.22, bfly25: 0.72 },
+          { expiry: '2026-12-01', kind: 'Weekly', dte: 21.5, spot: 25044.65, syn: 25088.00, fut: 25192.50, iv: 15.30, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 2.88, rev25: 2.35, bfly25: 0.78 },
+          { expiry: '2026-12-08', kind: 'Weekly', dte: 28.5, spot: 25044.65, syn: 25120.00, fut: 25192.50, iv: 14.89, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 2.47, rev25: 2.40, bfly25: 0.80 },
+          { expiry: '2026-12-29', kind: 'Monthly', dte: 49.5, spot: 25044.65, syn: 25195.00, fut: 25205.00, iv: 13.98, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 1.56, rev25: 2.45, bfly25: 0.82 },
+          { expiry: '2027-01-25', kind: 'Monthly', dte: 76.5, spot: 25044.65, syn: 25305.00, fut: 25315.00, iv: 13.50, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 1.08, rev25: 2.55, bfly25: 0.88 }
         ],
         BANKNIFTY: [
-          { expiry: '2026-11-12', kind: 'Weekly', dte: 3.0, spot: 59741.25, syn: 59765.00, fut: 59808.00, iv: 16.85, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 3.23, rev25: 2.30, bfly25: 0.76 },
-          { expiry: '2026-11-17', kind: 'Weekly', dte: 8.0, spot: 59741.25, syn: 59772.00, fut: 59808.00, iv: 16.50, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 2.88, rev25: 2.38, bfly25: 0.78 },
-          { expiry: '2026-11-23', kind: 'Weekly', dte: 14.0, spot: 59741.25, syn: 59780.00, fut: 59808.00, iv: 16.35, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 2.73, rev25: 2.40, bfly25: 0.80 },
-          { expiry: '2026-11-26', kind: 'Monthly', dte: 17.0, spot: 59741.25, syn: 59785.50, fut: 59808.00, iv: 16.20, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 2.58, rev25: 2.45, bfly25: 0.82 },
-          { expiry: '2026-12-01', kind: 'Weekly', dte: 22.0, spot: 59741.25, syn: 59850.00, fut: 60045.00, iv: 15.65, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 2.03, rev25: 2.52, bfly25: 0.84 },
-          { expiry: '2026-12-29', kind: 'Monthly', dte: 50.0, spot: 59741.25, syn: 60015.00, fut: 60045.00, iv: 15.10, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 1.48, rev25: 2.60, bfly25: 0.88 },
-          { expiry: '2027-01-25', kind: 'Monthly', dte: 77.0, spot: 59741.25, syn: 60275.00, fut: 60310.00, iv: 15.45, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 1.83, rev25: 2.72, bfly25: 0.94 }
+          { expiry: '2026-11-23', kind: 'Monthly', dte: 13.5, spot: 59741.25, syn: 59780.00, fut: 59808.00, iv: 16.84, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 3.22, rev25: 2.40, bfly25: 0.80 },
+          { expiry: '2026-12-29', kind: 'Monthly', dte: 49.5, spot: 59741.25, syn: 60015.00, fut: 60045.00, iv: 14.68, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 1.06, rev25: 2.60, bfly25: 0.88 },
+          { expiry: '2027-01-25', kind: 'Monthly', dte: 76.5, spot: 59741.25, syn: 60275.00, fut: 60310.00, iv: 15.50, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 1.88, rev25: 2.72, bfly25: 0.94 }
         ]
       };
 
@@ -850,9 +845,19 @@
 
       function populateExpiryDropdown() {
         var sel = document.getElementById('activeExpirySelect');
-        var list = marketCatalog[activeSymbol];
+        var now = new Date();
+        // Prune any expired contracts that passed 15:30 IST on their expiry day
+        marketCatalog[activeSymbol] = (marketCatalog[activeSymbol] || []).filter(function(item) {
+          var expDate = new Date(item.expiry + 'T15:30:00+05:30');
+          return expDate.getTime() >= now.getTime();
+        });
+        var list = marketCatalog[activeSymbol] || [];
+        if (activeExpiryIdx >= list.length) activeExpiryIdx = 0;
         sel.innerHTML = list.map(function(item, idx) {
-          return '<option value="' + idx + '"' + (idx === activeExpiryIdx ? ' selected' : '') + '>' + item.expiry + ' · ' + item.kind + ' (' + item.dte.toFixed(0) + ' DTE)</option>';
+          var expDate = new Date(item.expiry + 'T15:30:00+05:30');
+          var liveDte = Math.max(0.1, (expDate.getTime() - now.getTime()) / (1000 * 86400));
+          item.dte = Number(liveDte.toFixed(1));
+          return '<option value="' + idx + '"' + (idx === activeExpiryIdx ? ' selected' : '') + '>' + item.expiry + ' · ' + item.kind + ' (' + Math.ceil(liveDte) + ' DTE)</option>';
         }).join('');
       }
 
@@ -2102,6 +2107,14 @@
                 var chain = Array.isArray(rec.data) ? rec.data : [];
                 if (chain.length === 0) return;
 
+                // Skip expired contracts (already past 15:30 IST on expiry day)
+                var expDate = new Date(recExp + 'T15:30:00+05:30');
+                var now = new Date();
+                var dte = (expDate.getTime() - now.getTime()) / (1000 * 86400);
+                if (dte < 0) {
+                  return;
+                }
+
                 if (!symSpot && chain[0].underlying_spot_price) {
                   symSpot = Number(chain[0].underlying_spot_price);
                   existingList.forEach(function(item) { item.spot = symSpot; });
@@ -2123,13 +2136,24 @@
                 var pLtp = closestStrike.put_options && closestStrike.put_options.market_data ? (closestStrike.put_options.market_data.ltp || 0) : 0;
                 var cIv = closestStrike.call_options && closestStrike.call_options.option_greeks ? (closestStrike.call_options.option_greeks.iv || 0) : 0;
                 var pIv = closestStrike.put_options && closestStrike.put_options.option_greeks ? (closestStrike.put_options.option_greeks.iv || 0) : 0;
-                var liveAtmIv = (cIv > 0 && pIv > 0) ? (cIv + pIv) / 2.0 : (cIv || pIv || liveVix || 15.0);
-                var liveSyn = (cLtp && pLtp) ? (k + Math.exp(0.0675 * (3.0 / 365.0)) * (cLtp - pLtp)) : refSpot;
+                
+                // Sanity filter on individual leg IV to prevent pin-risk / 0-DTE mathematical explosion
+                var validCIv = (cIv > 5.0 && cIv < 50.0) ? cIv : 0;
+                var validPIv = (pIv > 5.0 && pIv < 50.0) ? pIv : 0;
+                var liveAtmIv;
+                if (validCIv > 0 && validPIv > 0) {
+                  liveAtmIv = (validCIv + validPIv) / 2.0;
+                } else if (validCIv > 0) {
+                  liveAtmIv = validCIv;
+                } else if (validPIv > 0) {
+                  liveAtmIv = validPIv;
+                } else {
+                  liveAtmIv = liveVix || (catItem ? catItem.iv : null) || 15.5;
+                }
+                var liveSyn = (cLtp && pLtp) ? (k + Math.exp(0.0675 * (Math.max(1, dte) / 365.0)) * (cLtp - pLtp)) : refSpot;
 
                 var catItem = existingList.find(function(it) { return it.expiry === recExp; });
                 if (!catItem) {
-                  var expDate = new Date(recExp + 'T15:30:00+05:30');
-                  var dte = Math.max(0.2, (expDate.getTime() - new Date().getTime()) / (1000 * 86400));
                   var isMonthly = false;
                   if (data.catalogue && data.catalogue.indices && data.catalogue.indices[sym]) {
                     var futs = data.catalogue.indices[sym].futures || [];
@@ -2161,6 +2185,7 @@
                   existingList.sort(function(a, b) { return a.expiry.localeCompare(b.expiry); });
                   populateExpiryDropdown();
                 } else {
+                  catItem.dte = Number(dte.toFixed(1));
                   catItem.liveChain = chain;
                   catItem.atmK = k;
                   catItem.callLtp = cLtp;
@@ -2169,6 +2194,11 @@
                   if (liveSyn) catItem.syn = Number(liveSyn.toFixed(1));
                   catItem.spread = Number((catItem.iv - catItem.hv30).toFixed(2));
                 }
+              });
+              // Prune any expired contracts that have concluded
+              var now = new Date();
+              marketCatalog[sym] = (marketCatalog[sym] || []).filter(function(it) {
+                return new Date(it.expiry + 'T15:30:00+05:30').getTime() >= now.getTime();
               });
             });
 
