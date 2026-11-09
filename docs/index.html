@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js" onload="if(window.ensurePlotlyAndRender)window.ensurePlotlyAndRender()"></script>
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; background: #040810; color: #f1f5f9; }
     .mono { font-family: 'JetBrains Mono', monospace; }
@@ -886,12 +886,12 @@
         var dates = [], ivArr = [], hv10Arr = [], hv30Arr = [], spread30Arr = [], spread10Arr = [], trigArr = [];
         for (var i = 0; i < slice.length; i++) {
           var item = slice[i];
-          var d = item.date;
-          dates.push(d.slice(5));
+          var d = item.d || item.date || '';
+          dates.push(d ? d.slice(5) : (item.l || ''));
           var isLast = (i === slice.length - 1);
           var curIv = isLast ? r.iv : item.iv;
-          var curH10 = isLast ? r.hv10 : item.hv10;
-          var curH30 = isLast ? r.hv30 : item.hv30;
+          var curH10 = isLast ? r.hv10 : (item.h10 !== undefined ? item.h10 : item.hv10);
+          var curH30 = isLast ? r.hv30 : (item.h30 !== undefined ? item.h30 : item.hv30);
 
           ivArr.push(curIv !== null && curIv !== undefined ? curIv : null);
           hv10Arr.push(curH10);
@@ -946,7 +946,7 @@
           ];
 
           var sLayout = getPlotlyBaseLayout('Spread (pp)', '', ' pp', true);
-          if (window.Plotly) Plotly.react(container, spreadTraces, sLayout, PLOTLY_DEFAULT_CONFIG);
+          if (window.Plotly) window.Plotly.react(container, spreadTraces, sLayout, PLOTLY_DEFAULT_CONFIG);
         } else {
           document.getElementById('regimeGraphHeading').textContent = activeSymbol + ' · Implied Volatility (ATM IV / India VIX) vs. Realized Volatility (HV10, HV30)';
           var levelsTraces = [
@@ -986,7 +986,7 @@
           ];
 
           var lLayout = getPlotlyBaseLayout('Volatility (%)', '', '%', false);
-          if (window.Plotly) Plotly.react(container, levelsTraces, lLayout, PLOTLY_DEFAULT_CONFIG);
+          if (window.Plotly) window.Plotly.react(container, levelsTraces, lLayout, PLOTLY_DEFAULT_CONFIG);
         }
 
         // Companion Table 1: Maturity-Matched Ranking (Pure Data, No Opinion Column)
@@ -1023,7 +1023,7 @@
 
       // --- 3. TAB 2: TERM STRUCTURE (PLOTLY.JS OBSIDIAN THEME) ---
       function renderTab2Term() {
-        var catalog = EXPIRY_CATALOG[activeSymbol] || [];
+        var catalog = marketCatalog[activeSymbol] || [];
         var r = currentRow();
         var tbody = document.getElementById('termMainTableBody');
         tbody.innerHTML = '';
@@ -1044,15 +1044,17 @@
           prevTotVar = curTotVar;
           prevT = T;
 
-          labels.push(item.exp.slice(5) + ' (' + item.dte + 'd)');
+          var expName = item.expiry || item.exp || '';
+          var cycleName = item.kind || item.cycle || '';
+          labels.push(expName.slice(5) + ' (' + item.dte + 'd)');
           ivData.push(Number(iv.toFixed(2)));
           fwdData.push(fwdVol);
           hvData.push(Number(r.hv30.toFixed(2)));
 
           tbody.innerHTML +=
             '<tr class="' + (i === activeExpiryIdx ? 'bg-sky-500/15 font-bold' : 'hover:bg-[#111c2d]') + '">' +
-              '<td class="py-2 px-3 text-white">' + item.exp + '</td>' +
-              '<td class="py-2 px-3 text-slate-300">' + item.cycle + '</td>' +
+              '<td class="py-2 px-3 text-white">' + expName + '</td>' +
+              '<td class="py-2 px-3 text-slate-300">' + cycleName + '</td>' +
               '<td class="py-2 px-3 text-right text-slate-300">' + item.dte + 'd</td>' +
               '<td class="py-2 px-3 text-right font-bold text-sky-300">' + iv.toFixed(2) + '%</td>' +
               '<td class="py-2 px-3 text-right font-bold text-amber-300">' + (fwdVol ? fwdVol.toFixed(2) + '%' : '—') + '</td>' +
@@ -1101,7 +1103,7 @@
         ];
 
         var tLayout = getPlotlyBaseLayout('Implied & Forward Volatility (%)', '', '%', false);
-        if (window.Plotly) Plotly.react(container, termTraces, tLayout, PLOTLY_DEFAULT_CONFIG);
+        if (window.Plotly) window.Plotly.react(container, termTraces, tLayout, PLOTLY_DEFAULT_CONFIG);
       }
 
       // --- 4. TAB 3: SMILE & SKEW (PLOTLY.JS OBSIDIAN THEME) ---
@@ -1207,7 +1209,7 @@
         ];
 
         var sLayout = getPlotlyBaseLayout('Implied Volatility (%)', '', '%', false);
-        if (window.Plotly) Plotly.react(container, smileTraces, sLayout, PLOTLY_DEFAULT_CONFIG);
+        if (window.Plotly) window.Plotly.react(container, smileTraces, sLayout, PLOTLY_DEFAULT_CONFIG);
       }
 
       // --- 5. TAB 4: INTRADAY STRADDLE & STRESS TEST (PLOTLY.JS OBSIDIAN THEME) ---
@@ -1282,7 +1284,7 @@
           ];
 
           var pLayout = getPlotlyBaseLayout('Net P&L (₹)', '₹', '', true);
-          if (window.Plotly) Plotly.react(container, payoffTraces, pLayout, PLOTLY_DEFAULT_CONFIG);
+          if (window.Plotly) window.Plotly.react(container, payoffTraces, pLayout, PLOTLY_DEFAULT_CONFIG);
         } else {
           var hours = ['09:15', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:25'];
           var stradSeries = [], vwapSeries = [];
@@ -1319,7 +1321,7 @@
           ];
 
           var iLayout = getPlotlyBaseLayout('Straddle Premium (₹)', '₹', '', false);
-          if (window.Plotly) Plotly.react(container, intraTraces, iLayout, PLOTLY_DEFAULT_CONFIG);
+          if (window.Plotly) window.Plotly.react(container, intraTraces, iLayout, PLOTLY_DEFAULT_CONFIG);
         }
 
         var spMoves = [-2.0, -1.0, 0.0, 1.0, 2.0];
@@ -1754,7 +1756,7 @@
             }
           ];
           var ddLayout = getPlotlyBaseLayout('Underwater Drawdown (₹)', '₹', '', true);
-          if (window.Plotly) Plotly.react(mContainer, ddTraces, ddLayout, PLOTLY_DEFAULT_CONFIG);
+          if (window.Plotly) window.Plotly.react(mContainer, ddTraces, ddLayout, PLOTLY_DEFAULT_CONFIG);
         } else {
           var eqTraces = [
             {
@@ -1781,7 +1783,7 @@
             }
           ];
           var eqLayout = getPlotlyBaseLayout('Cumulative P&L (₹)', '₹', '', true);
-          if (window.Plotly) Plotly.react(mContainer, eqTraces, eqLayout, PLOTLY_DEFAULT_CONFIG);
+          if (window.Plotly) window.Plotly.react(mContainer, eqTraces, eqLayout, PLOTLY_DEFAULT_CONFIG);
         }
 
         // 6-Strategy Scorecard & Grouped Bar Chart
@@ -1844,7 +1846,7 @@
         var cmpLayout = getPlotlyBaseLayout('P&L (₹)', '₹', '', true);
         cmpLayout.barmode = 'group';
         cmpLayout.margin = { l: 50, r: 15, t: 25, b: 32 };
-        if (window.Plotly) Plotly.react(cContainer, compareTraces, cmpLayout, PLOTLY_DEFAULT_CONFIG);
+        if (window.Plotly) window.Plotly.react(cContainer, compareTraces, cmpLayout, PLOTLY_DEFAULT_CONFIG);
 
         // Trade Ledger with Capital Used & Trade ROC %
         document.getElementById('btLedgerBody').innerHTML = rows.map(function(r) {
@@ -1877,7 +1879,7 @@
         ['regimeMainCanvas', 'termMainCanvas', 'smileMainCanvas', 'straddleMainCanvas', 'btMainCanvas', 'btCompareCanvas'].forEach(function(id) {
           var el = document.getElementById(id);
           if (el && el.offsetParent !== null) {
-            Plotly.Plots.resize(el);
+            window.Plotly.Plots.resize(el);
           }
         });
       }
@@ -2129,11 +2131,32 @@
       window.renderBacktestWorkspace = renderBacktestWorkspace;
       window.syncLiveMarketFeed = syncLiveMarketFeed;
 
+      function ensurePlotlyAndRender() {
+        if (!window._domReady) return;
+        if (window.Plotly) {
+          renderActiveOptionsTab();
+          renderBacktestWorkspace();
+        } else {
+          var attempts = 0;
+          var checkTimer = setInterval(function() {
+            attempts++;
+            if (window.Plotly) {
+              clearInterval(checkTimer);
+              renderActiveOptionsTab();
+              renderBacktestWorkspace();
+            } else if (attempts > 200) {
+              clearInterval(checkTimer);
+            }
+          }, 50);
+        }
+      }
+      window.ensurePlotlyAndRender = ensurePlotlyAndRender;
+
       window.addEventListener('DOMContentLoaded', function() {
+        window._domReady = true;
         updateMarketClock(new Date());
         populateExpiryDropdown();
-        renderActiveOptionsTab();
-        renderBacktestWorkspace();
+        ensurePlotlyAndRender();
 
         // 1 initial fetch
         syncLiveMarketFeed();
