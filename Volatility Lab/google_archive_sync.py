@@ -241,21 +241,47 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
     STORE.mkdir(parents=True,exist_ok=True)
     source=source_folder()
     if source is None:
-        web_url = (read_json(CONFIG, default={}) or {}).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpIRAEOZRoGGwTyTncZhwUPmTnimv0Hyej0iJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
+        web_url = (read_json(CONFIG, default={}) or {}).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpiRAE9ZRoGGWTyTncZhwUPmTnimv0HyejOiJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
         try:
             import requests
-            resp = requests.get(web_url, timeout=12, allow_redirects=True)
+            imported = 0
+            # 1. Real-time snapshot ingestion
+            resp = requests.get(web_url, timeout=15, allow_redirects=True)
             if resp.status_code == 200:
                 obj = resp.json()
                 if obj.get('schema') == 1 and obj.get('records'):
                     retrieved_at = str(obj.get('retrieved_at') or '')
                     prev_status = read_json(STORE/'status.json', default={}) or {}
-                    if prev_status.get('mode') == 'web_cloud' and prev_status.get('updated') == retrieved_at and retrieved_at:
-                        return 0
-                    with data_lock(timeout=120):
-                        import_report(obj, rate, dividend, spread)
-                    atomic_json(STORE/'status.json',{'status':'ready','mode':'web_cloud','updated':retrieved_at or pd.Timestamp.now(tz='UTC').isoformat(),'total_files':int(prev_status.get('total_files', 0)) + 1,'source':web_url})
-                    return 1
+                    if not (prev_status.get('mode') == 'web_cloud' and prev_status.get('updated') == retrieved_at and retrieved_at):
+                        with data_lock(timeout=120):
+                            import_report(obj, rate, dividend, spread)
+                        imported += 1
+                        atomic_json(STORE/'status.json',{'status':'ready','mode':'web_cloud','updated':retrieved_at or pd.Timestamp.now(tz='UTC').isoformat(),'total_files':int(prev_status.get('total_files', 0)) + 1,'source':web_url})
+
+            # 2. Historical & previous session backfill
+            try:
+                days_resp = requests.get(f"{web_url}?action=list_days", timeout=12, allow_redirects=True)
+                if days_resp.status_code == 200:
+                    avail_days = days_resp.json().get('days', [])
+                    for d in avail_days[:5]:
+                        d_marker = STORE / f"{d}_synced.json"
+                        if not d_marker.exists():
+                            d_resp = requests.get(f"{web_url}?day={d}", timeout=15, allow_redirects=True)
+                            if d_resp.status_code == 200:
+                                d_obj = d_resp.json()
+                                if d_obj.get('schema') == 1 and d_obj.get('records'):
+                                    with data_lock(timeout=120):
+                                        import_report(d_obj, rate, dividend, spread)
+                                    atomic_json(d_marker, {'day': d, 'imported_at': pd.Timestamp.now(tz='UTC').isoformat()})
+                                    imported += 1
+            except Exception:
+                pass
+
+            if imported > 0:
+                return imported
+            prev_status = read_json(STORE/'status.json', default={}) or {}
+            if prev_status.get('status') == 'ready':
+                return 0
         except Exception as exc:
             pass
         atomic_json(STORE/'status.json',{'status':'waiting','message':'Sign in to Google Drive desktop to connect the private archive.'});return 0

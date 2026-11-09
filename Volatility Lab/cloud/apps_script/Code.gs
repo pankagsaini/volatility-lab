@@ -1027,27 +1027,39 @@ function doGet(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === 'list_days') {
+      const folder = folder_();
+      const files = folder.getFiles();
+      const days = new Set();
+      let count = 0;
+      while (files.hasNext() && count < 200) {
+        const f = files.next();
+        count++;
+        const name = f.getName();
+        if ((name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
+          const match = name.match(/^(\d{4}-\d{2}-\d{2})/);
+          if (match) days.add(match[1]);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        days: Array.from(days).sort().reverse()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     let fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
     let file = null;
 
-    if (fileId) {
-      try {
-        file = DriveApp.getFileById(fileId);
-      } catch (err) {
-        file = null;
-      }
-    }
-
-    if (!file) {
+    const requestedDay = e && e.parameter && e.parameter.day ? e.parameter.day : null;
+    if (requestedDay) {
       const folder = folder_();
       const files = folder.getFiles();
       let latestTime = 0;
       let count = 0;
-      while (files.hasNext() && count < 60) {
+      while (files.hasNext() && count < 150) {
         const f = files.next();
         count++;
         const name = f.getName();
-        if (name.endsWith('_complete.json.gz')) {
+        if (name.startsWith(requestedDay) && (name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
           const time = f.getLastUpdated().getTime();
           if (time > latestTime) {
             latestTime = time;
@@ -1055,10 +1067,37 @@ function doGet(e) {
           }
         }
       }
+    } else {
+      if (fileId) {
+        try {
+          file = DriveApp.getFileById(fileId);
+        } catch (err) {
+          file = null;
+        }
+      }
+
+      if (!file) {
+        const folder = folder_();
+        const files = folder.getFiles();
+        let latestTime = 0;
+        let count = 0;
+        while (files.hasNext() && count < 60) {
+          const f = files.next();
+          count++;
+          const name = f.getName();
+          if (name.endsWith('_complete.json.gz')) {
+            const time = f.getLastUpdated().getTime();
+            if (time > latestTime) {
+              latestTime = time;
+              file = f;
+            }
+          }
+        }
+      }
     }
 
     if (!file) {
-      return ContentService.createTextOutput(JSON.stringify({ error: 'No snapshot files found' }))
+      return ContentService.createTextOutput(JSON.stringify({ error: 'No snapshot files found' + (requestedDay ? ' for ' + requestedDay : '') }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
