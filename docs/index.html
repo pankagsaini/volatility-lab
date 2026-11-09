@@ -143,10 +143,10 @@
 
       <!-- Right: Clean Market Context & Status -->
       <div class="flex items-center gap-3 mono text-xs">
-        <span class="text-slate-300 hidden sm:inline">VIX: <strong class="text-amber-300" id="headerVix">18.39</strong></span>
+        <span class="text-slate-300 hidden sm:inline">VIX: <strong class="text-amber-300" id="headerVix">17.44</strong></span>
         <span class="text-slate-300 hidden md:inline">r: <strong class="text-sky-300">6.75%</strong></span>
-        <span id="marketClockPill" class="px-3 py-1 rounded-full bg-[#070b12] border border-[#24344d] text-slate-200 font-semibold">
-          09 Nov 09:20 IST
+        <span id="marketClockPill" class="px-3 py-1 rounded-full bg-[#10b981]/20 border border-[#10b981]/40 text-[#34d399] font-semibold">
+          ● Live · 09 Nov 15:18 IST
         </span>
       </div>
     </header>
@@ -160,13 +160,13 @@
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Spot &amp; Parity Forward</div>
-          <div id="kpiSpot" class="text-lg mono font-extrabold text-white mt-0.5">24,946.45</div>
-          <div id="kpiForwardSub" class="text-[11px] mono text-slate-300 mt-0.5">Syn: 24,218.6 · Basis -14.2</div>
+          <div id="kpiSpot" class="text-lg mono font-extrabold text-white mt-0.5">25,003.65</div>
+          <div id="kpiForwardSub" class="text-[11px] mono text-slate-300 mt-0.5">Syn: 25,015.7 · Basis +12.1</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-amber-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Broker ATM IV</div>
-          <div id="kpiAtmIv" class="text-lg mono font-extrabold text-amber-300 mt-0.5">14.65%</div>
+          <div id="kpiAtmIv" class="text-lg mono font-extrabold text-amber-300 mt-0.5">16.78%</div>
           <div id="kpiIvRankSub" class="text-[11px] mono text-slate-300 mt-0.5">76th %ile (±3 DTE cycle)</div>
         </div>
 
@@ -178,14 +178,14 @@
 
         <div class="kpi-card border-t-2 border-t-emerald-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">VRP Edge (IV - RV)</div>
-          <div id="kpiVrpSpread" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">+2.94 pp</div>
-          <div id="kpiGarchGapSub" class="text-[11px] mono text-emerald-300 mt-0.5">IV - GARCH: +2.47 pp (84th %ile)</div>
+          <div id="kpiVrpSpread" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">+5.07 pp</div>
+          <div id="kpiGarchGapSub" class="text-[11px] mono text-emerald-300 mt-0.5">IV - GARCH: +4.60 pp (84th %ile)</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-purple-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">1σ Expected Move</div>
-          <div id="kpiExpMove" class="text-lg mono font-extrabold text-white mt-0.5">±265 pts (±1.10%)</div>
-          <div id="kpiSafeBandSub" class="text-[11px] mono text-amber-300 mt-0.5">Band: 23,934 – 24,464</div>
+          <div id="kpiExpMove" class="text-lg mono font-extrabold text-white mt-0.5">±618 pts (±2.47%)</div>
+          <div id="kpiSafeBandSub" class="text-[11px] mono text-amber-300 mt-0.5">Band: 24,386 – 25,622</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-[#eab308] bg-[#121e31]">
@@ -194,7 +194,7 @@
             <button type="button" id="loadSignalToBtBtn" class="text-[11px] mono font-bold text-sky-300 hover:underline">Backtest →</button>
           </div>
           <div id="kpiDeskSignal" class="text-sm mono font-extrabold text-emerald-400 mt-1">SELL VEGA · IRON CONDOR</div>
-          <div id="kpiSignalStrikes" class="text-[11px] mono text-white mt-0.5">Sell 23,950 PE / 24,450 CE</div>
+          <div id="kpiSignalStrikes" class="text-[11px] mono text-white mt-0.5">Sell 24,600 PE / 25,400 CE</div>
         </div>
       </div>
 
@@ -662,16 +662,18 @@
       // --- Core Market Data ---
       var marketCatalog = {
         NIFTY: [
-          { expiry: '2026-11-12', kind: 'Weekly', dte: 6.0, spot: 24946.45, syn: 24986.40, fut: 24995.00, iv: 18.39, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.18, ewma: 11.95, spread: 2.94, rev25: 2.10, bfly25: 0.68, signal: 'SELL VEGA · IRON CONDOR', strikes: 'Sell 23,950 PE / 24,450 CE', preset: 'S1' },
-          { expiry: '2026-11-19', kind: 'Weekly', dte: 13.0, spot: 24946.45, syn: 24242.10, fut: 24232.80, iv: 14.92, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.42, ewma: 11.95, spread: 3.21, rev25: 2.24, bfly25: 0.74, signal: 'SELL VEGA · WIDE CONDOR', strikes: 'Sell 23,800 PE / 24,600 CE', preset: 'S1' },
-          { expiry: '2026-11-26', kind: 'Monthly', dte: 20.0, spot: 24946.45, syn: 24268.40, fut: 24259.90, iv: 15.18, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.68, ewma: 11.95, spread: 3.47, rev25: 2.35, bfly25: 0.79, signal: 'PUT SKEW 1x2 RATIO', strikes: 'Buy 24,000 PE / Sell 2x 23,700 PE', preset: 'S4' },
-          { expiry: '2026-12-24', kind: 'Monthly', dte: 48.0, spot: 24946.45, syn: 24384.20, fut: 24378.50, iv: 15.74, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.15, ewma: 11.95, spread: 4.03, rev25: 2.48, bfly25: 0.85, signal: 'CALENDAR / DIAGONAL', strikes: 'Sell 12 Nov / Buy 24 Dec ATM', preset: 'S5' },
-          { expiry: '2027-01-28', kind: 'Monthly', dte: 83.0, spot: 24946.45, syn: 24512.00, fut: 24504.10, iv: 16.15, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.52, ewma: 11.95, spread: 4.44, rev25: 2.55, bfly25: 0.91, signal: 'LONG-DATED VRP HARVEST', strikes: 'Sell 23,500 PE / 25,200 CE', preset: 'S1' }
+          { expiry: '2026-11-09', kind: 'Weekly', dte: 0.5, spot: 25003.65, syn: 25053.10, fut: 25034.90, iv: 80.20, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.18, ewma: 11.95, spread: 68.49, rev25: 2.10, bfly25: 0.68, signal: '0 DTE EXPIRY · GAMMA DEFENSE', strikes: 'Pin 25,000 / ATM Decay', preset: 'S2' },
+          { expiry: '2026-11-17', kind: 'Weekly', dte: 8.0, spot: 25003.65, syn: 25015.70, fut: 25034.90, iv: 16.78, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.18, ewma: 11.95, spread: 5.07, rev25: 2.10, bfly25: 0.68, signal: 'SELL VEGA · IRON CONDOR', strikes: 'Sell 24,600 PE / 25,400 CE', preset: 'S1' },
+          { expiry: '2026-11-23', kind: 'Weekly', dte: 14.0, spot: 25003.65, syn: 25030.10, fut: 25034.90, iv: 16.27, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.42, ewma: 11.95, spread: 4.56, rev25: 2.24, bfly25: 0.74, signal: 'SELL VEGA · WIDE CONDOR', strikes: 'Sell 24,500 PE / 25,500 CE', preset: 'S1' },
+          { expiry: '2026-12-01', kind: 'Weekly', dte: 22.0, spot: 25003.65, syn: 25054.00, fut: 25034.90, iv: 15.31, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.68, ewma: 11.95, spread: 3.60, rev25: 2.35, bfly25: 0.79, signal: 'PUT SKEW 1x2 RATIO', strikes: 'Buy 24,800 PE / Sell 2x 24,400 PE', preset: 'S4' },
+          { expiry: '2026-12-08', kind: 'Weekly', dte: 29.0, spot: 25003.65, syn: 25082.80, fut: 25034.90, iv: 15.04, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 12.85, ewma: 11.95, spread: 3.33, rev25: 2.40, bfly25: 0.81, signal: 'SHORT STRANGLE 16Δ', strikes: 'Sell 24,200 PE / 25,800 CE', preset: 'S1' },
+          { expiry: '2026-12-29', kind: 'Monthly', dte: 50.0, spot: 25003.65, syn: 25177.00, fut: 25180.80, iv: 14.05, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.15, ewma: 11.95, spread: 2.34, rev25: 2.48, bfly25: 0.85, signal: 'CALENDAR / DIAGONAL', strikes: 'Sell 17 Nov / Buy 29 Dec ATM', preset: 'S5' },
+          { expiry: '2027-01-25', kind: 'Monthly', dte: 77.0, spot: 25003.65, syn: 25303.50, fut: 25302.00, iv: 13.49, hv10: 11.12, hv20: 11.48, hv30: 11.71, garch: 13.52, ewma: 11.95, spread: 1.78, rev25: 2.55, bfly25: 0.91, signal: 'LONG-DATED VRP HARVEST', strikes: 'Sell 23,800 PE / 26,000 CE', preset: 'S1' }
         ],
         BANKNIFTY: [
-          { expiry: '2026-11-25', kind: 'Monthly', dte: 19.0, spot: 59133.45, syn: 58850.65, fut: 58920.00, iv: 18.80, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 13.85, ewma: 13.40, spread: 3.14, rev25: 2.45, bfly25: 0.82, signal: 'SELL VEGA · BANK CONDOR', strikes: 'Sell 51,100 PE / 52,600 CE', preset: 'S1' },
-          { expiry: '2026-12-30', kind: 'Monthly', dte: 54.0, spot: 59133.45, syn: 52248.80, fut: 52235.50, iv: 16.95, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.30, ewma: 13.40, spread: 3.77, rev25: 2.60, bfly25: 0.88, signal: 'PUT SKEW RATIO (1x2)', strikes: 'Buy 51,500 PE / Sell 2x 50,800 PE', preset: 'S4' },
-          { expiry: '2027-01-27', kind: 'Monthly', dte: 82.0, spot: 59133.45, syn: 52495.20, fut: 52480.00, iv: 17.40, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.68, ewma: 13.40, spread: 4.22, rev25: 2.72, bfly25: 0.94, signal: 'SHORT VRP STRANGLE', strikes: 'Sell 50,500 PE / 53,500 CE', preset: 'S5' }
+          { expiry: '2026-11-23', kind: 'Monthly', dte: 14.0, spot: 59632.20, syn: 59537.70, fut: 59579.20, iv: 16.80, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 13.85, ewma: 13.40, spread: 3.62, rev25: 2.45, bfly25: 0.82, signal: 'SELL VEGA · BANK CONDOR', strikes: 'Sell 58,500 PE / 60,800 CE', preset: 'S1' },
+          { expiry: '2026-12-29', kind: 'Monthly', dte: 50.0, spot: 59632.20, syn: 59965.00, fut: 59935.00, iv: 14.50, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.30, ewma: 13.40, spread: 1.32, rev25: 2.60, bfly25: 0.88, signal: 'PUT SKEW RATIO (1x2)', strikes: 'Buy 59,500 PE / Sell 2x 58,000 PE', preset: 'S4' },
+          { expiry: '2027-01-25', kind: 'Monthly', dte: 77.0, spot: 59632.20, syn: 59935.00, fut: 60206.00, iv: 14.96, hv10: 12.64, hv20: 12.92, hv30: 13.18, garch: 14.68, ewma: 13.40, spread: 1.78, rev25: 2.72, bfly25: 0.94, signal: 'SHORT VRP STRANGLE', strikes: 'Sell 57,500 PE / 61,500 CE', preset: 'S5' }
         ]
       };
 
@@ -736,7 +738,7 @@
         var labels = [], ivArr = [], hv30Arr = [], garchArr = [], spreadArr = [], trigArr = [];
 
         for (var i = nPts - 1; i >= 0; i--) {
-          var d = new Date(2026, 10, 6);
+          var d = new Date(2026, 10, 9);
           d.setDate(d.getDate() - Math.round(i * 1.45));
           labels.push(d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }));
           var wave = Math.sin(i * 0.34) * 1.15 + Math.cos(i * 0.19) * 0.55;
@@ -963,7 +965,7 @@
 
         var atmIv = r.iv + shiftBps / 100.0;
         var step = activeSymbol === 'NIFTY' ? 100 : 300;
-        var center = activeSymbol === 'NIFTY' ? 24200 : 51900;
+        var center = Math.round(r.spot / step) * step;
         var strikes = [], mktArr = [], sviArr = [];
         var tbody = document.getElementById('smileMainTableBody');
         tbody.innerHTML = '';
@@ -1538,37 +1540,117 @@
       });
 
       
-      // --- RC-1: 60-Second Real-Time Poll from Apps Script Web App ---
+      // --- RC-1: Real-Time Poll from Apps Script Web App (Live Quotes & Chains) ---
       var LIVE_API_URL = 'https://script.google.com/macros/s/AKfycbxDbTwpiRAE9ZRoGGWTyTncZhwUPmTnimv0HyejOiJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec';
+
+      function findQuoteInMap(map, query) {
+        if (!map) return null;
+        var qNorm = query.toLowerCase().replace(/[^a-z0-9]/g, '');
+        for (var k in map) {
+          var kNorm = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (kNorm.indexOf(qNorm) !== -1 || qNorm.indexOf(kNorm) !== -1) {
+            return map[k];
+          }
+        }
+        return null;
+      }
+
       function syncLiveMarketFeed() {
-        fetch(LIVE_API_URL)
-          .then(function(res) { return res.json(); })
+        var pollUrl = LIVE_API_URL + (LIVE_API_URL.indexOf('?') === -1 ? '?' : '&') + '_ts=' + new Date().getTime();
+        fetch(pollUrl)
+          .then(function(res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+          })
           .then(function(data) {
             if (!data || !data.records) return;
-            var quotesRec = data.records.find(function(r) { return r.label === 'quotes'; });
-            if (!quotesRec || !quotesRec.data) return;
-            var q = quotesRec.data;
-            var nQ = q['NSE_INDEX|Nifty 50'];
-            var bQ = q['NSE_INDEX|Nifty Bank'];
-            var vQ = q['NSE_INDEX|India VIX'];
 
-            if (nQ && nQ.last_price) {
-              marketCatalog.NIFTY.forEach(function(item) { item.spot = Number(nQ.last_price); });
-            }
-            if (bQ && bQ.last_price) {
-              marketCatalog.BANKNIFTY.forEach(function(item) { item.spot = Number(bQ.last_price); });
-            }
-            if (vQ && vQ.last_price) {
+            // 1. Extract Live Index Quotes
+            var quotesRec = data.records.find(function(r) { return r.label === 'quotes'; });
+            var q = quotesRec ? quotesRec.data : null;
+            var nQ = findQuoteInMap(q, 'nifty 50');
+            var bQ = findQuoteInMap(q, 'nifty bank');
+            var vQ = findQuoteInMap(q, 'vix');
+            var nFut = findQuoteInMap(q, 'nifty26novfut') || findQuoteInMap(q, 'niftyfut');
+            var bFut = findQuoteInMap(q, 'banknifty26novfut') || findQuoteInMap(q, 'bankniftyfut');
+
+            var liveNiftySpot = nQ && (nQ.last_price || (nQ.ohlc && nQ.ohlc.close)) ? Number(nQ.last_price || nQ.ohlc.close) : null;
+            var liveBankSpot = bQ && (bQ.last_price || (bQ.ohlc && bQ.ohlc.close)) ? Number(bQ.last_price || bQ.ohlc.close) : null;
+            var liveVix = vQ && (vQ.last_price || (vQ.ohlc && vQ.ohlc.close)) ? Number(vQ.last_price || vQ.ohlc.close) : null;
+            var liveNiftyFut = nFut && nFut.last_price ? Number(nFut.last_price) : null;
+            var liveBankFut = bFut && bFut.last_price ? Number(bFut.last_price) : null;
+
+            if (liveVix) {
               var vixEl = document.getElementById('headerVix');
-              if (vixEl) vixEl.textContent = Number(vQ.last_price).toFixed(2);
+              if (vixEl) vixEl.textContent = liveVix.toFixed(2);
             }
+
+            // 2. Process Live Option Chains per Expiry
+            var chainRecords = data.records.filter(function(r) { return r.label && r.label.indexOf('|') !== -1; });
+
+            ['NIFTY', 'BANKNIFTY'].forEach(function(sym) {
+              var symSpot = sym === 'NIFTY' ? liveNiftySpot : liveBankSpot;
+              var symFut = sym === 'NIFTY' ? liveNiftyFut : liveBankFut;
+              var existingList = marketCatalog[sym];
+
+              // Update existing items spot and fut
+              existingList.forEach(function(item) {
+                if (symSpot) item.spot = symSpot;
+                if (symFut) item.fut = symFut;
+              });
+
+              // Process chains for this symbol
+              chainRecords.forEach(function(rec) {
+                var parts = rec.label.split('|');
+                var recSym = parts[0].toUpperCase();
+                var recExp = parts[1];
+                if (recSym !== sym) return;
+
+                var chain = Array.isArray(rec.data) ? rec.data : [];
+                if (chain.length === 0) return;
+
+                if (!symSpot && chain[0].underlying_spot_price) {
+                  symSpot = Number(chain[0].underlying_spot_price);
+                  existingList.forEach(function(item) { item.spot = symSpot; });
+                }
+
+                var refSpot = symSpot || (sym === 'NIFTY' ? 25000 : 59600);
+                var closestStrike = chain[0];
+                var minDiff = Math.abs((closestStrike.strike_price || 0) - refSpot);
+                for (var ci = 1; ci < chain.length; ci++) {
+                  var diff = Math.abs((chain[ci].strike_price || 0) - refSpot);
+                  if (diff < minDiff) {
+                    minDiff = diff;
+                    closestStrike = chain[ci];
+                  }
+                }
+
+                var k = closestStrike.strike_price;
+                var cLtp = closestStrike.call_options && closestStrike.call_options.market_data ? (closestStrike.call_options.market_data.ltp || 0) : 0;
+                var pLtp = closestStrike.put_options && closestStrike.put_options.market_data ? (closestStrike.put_options.market_data.ltp || 0) : 0;
+                var cIv = closestStrike.call_options && closestStrike.call_options.option_greeks ? (closestStrike.call_options.option_greeks.iv || 0) : 0;
+                var pIv = closestStrike.put_options && closestStrike.put_options.option_greeks ? (closestStrike.put_options.option_greeks.iv || 0) : 0;
+                var liveAtmIv = (cIv > 0 && pIv > 0) ? (cIv + pIv) / 2.0 : (cIv || pIv || liveVix || 15.0);
+                var liveSyn = (cLtp && pLtp) ? (k + cLtp - pLtp) : refSpot;
+
+                var catItem = existingList.find(function(it) { return it.expiry === recExp; });
+                if (catItem) {
+                  if (liveAtmIv > 0) catItem.iv = Number(liveAtmIv.toFixed(2));
+                  if (liveSyn) catItem.syn = Number(liveSyn.toFixed(1));
+                  catItem.spread = Number((catItem.iv - catItem.hv30).toFixed(2));
+                }
+              });
+            });
+
+            // Re-render Top KPIs and Active Options Tab
             renderTopKpiStrip();
             renderActiveOptionsTab();
 
+            // 3. Update Market Clock Badge
             var clockEl = document.getElementById('marketClockPill');
             if (clockEl && data.retrieved_at) {
               var d = new Date(data.retrieved_at);
-              var timeStr = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+              var timeStr = d.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
               clockEl.textContent = '● Live · ' + timeStr + ' IST';
               clockEl.className = 'px-3 py-1 rounded-full bg-[#10b981]/20 border border-[#10b981]/40 text-[#34d399] font-semibold';
             }
