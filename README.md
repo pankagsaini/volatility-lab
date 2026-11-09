@@ -29,7 +29,7 @@ The repository hosts both the full **Streamlit Cloud Analytical Engine** and the
                                                       ▼
 ┌─────────────────────────────────┐   ┌────────────────────────────────┐   ┌─────────────────────────────────┐
 │     volatilitylab.in Portal     │   │     Streamlit Cloud Engine     │   │      Local Development          │
-│   (docs/index.html + CNAME)     │   │       (streamlit_app.py)       │   │     (LAUNCH_ANY_DEVICE.py)      │
+│   (docs/index.html + CNAME)     │   │       (streamlit_app.py)       │   │    (streamlit_desk/run.py)      │
 │  - 0-delay browser execution    │   │  - Memory-bounded runtime (v11)│   │  - Auto-discovers LAN IP        │
 │  - Options Quant Desk           │   │  - Full mathematical modules   │   │  - Multi-device local testing   │
 │  - SVI What-If Sliders          │   │  - Plotly interactive charts   │   │  - Offline fallback datasets    │
@@ -42,8 +42,11 @@ The repository hosts both the full **Streamlit Cloud Analytical Engine** and the
 
 ```
 .
-├── .streamlit/
-│   └── config.toml               # Institutional Obsidian theme (#090d16) and low-memory config
+├── streamlit_desk/               # Dedicated Streamlit analytical workbench package
+│   ├── .streamlit/config.toml    # Institutional Obsidian theme (#090d16) and low-memory config
+│   ├── app.py                    # High-performance memory-bounded Streamlit entrypoint
+│   ├── run.py                    # Cross-device LAN runner (auto-discovers local Wi-Fi IP)
+│   └── README.md                 # Complete reactivation, deployment & secrets guide
 ├── docs/                         # GitHub Pages static production build
 │   ├── index.html                # High-performance Quant Desk web portal (volatilitylab.in)
 │   └── CNAME                     # Custom domain pointer (volatilitylab.in)
@@ -83,11 +86,10 @@ The repository hosts both the full **Streamlit Cloud Analytical Engine** and the
 │   ├── vol_surface_3d.py         # 3D interactive volatility surface generator
 │   └── test_backtest_rules.py    # 9 automated trading rules backtest suite
 ├── CNAME                         # Root custom domain pointer
-├── LAUNCH_ANY_DEVICE.py          # Dual LAN / WAN cross-device local runner
 ├── MAIN_AUDIT.md                 # Master Audit & Technical Architecture Reference
 ├── README.md                     # This file
 ├── requirements.txt              # Production dependency specifications
-├── streamlit_app.py              # Memory-bounded Streamlit entrypoint
+├── streamlit_app.py              # Lightweight root delegator forwarding to streamlit_desk/app.py
 └── test_audit_remediations.py    # Comprehensive 31-test audit verification suite
 ```
 
@@ -109,17 +111,22 @@ cd volatility-lab
 pip install -r requirements.txt
 ```
 
-### Launching the Dashboard
+### Launching the Streamlit Workbench (Optional / Local Dev)
+
+The primary production portal is deployed at **[https://volatilitylab.in](https://volatilitylab.in)**.
+All Streamlit analytical tools and UI runners are organized under `streamlit_desk/`:
 
 #### 1. Standard Streamlit Run
 ```bash
 streamlit run streamlit_app.py
+# Or run directly from the package:
+streamlit run streamlit_desk/app.py
 ```
 
 #### 2. Any-Device LAN Runner
 To access the dashboard from your phone, tablet, or another machine on the same Wi-Fi:
 ```bash
-python LAUNCH_ANY_DEVICE.py
+python streamlit_desk/run.py
 ```
 This automatically binds to `0.0.0.0:8501`, identifies your local LAN IP address, and outputs a convenient link.
 
