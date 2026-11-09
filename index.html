@@ -990,7 +990,8 @@
         }
 
         // Companion Table 1: Maturity-Matched Ranking (Pure Data, No Opinion Column)
-        document.getElementById('regimeRankTableBody').innerHTML = [
+        var rkEl = document.getElementById('regimeRankTableBody');
+        if (rkEl) rkEl.innerHTML = [
           { m: 'Broker ATM IV (%)', c: r.iv.toFixed(2) + '%', med: (r.iv - 1.15).toFixed(2) + '%', p: '76th %ile', z: '+1.18σ' },
           { m: 'IV - HV30 Spread', c: '+' + r.spread.toFixed(2) + ' pp', med: '+1.45 pp', p: '84th %ile', z: '+1.54σ' },
           { m: 'IV - HV10 Spread', c: '+' + (r.iv - r.hv10).toFixed(2) + ' pp', med: '+0.95 pp', p: '81st %ile', z: '+1.38σ' },
@@ -1012,7 +1013,8 @@
           { h: 'HV20 (1-Month)', v: (r.hv30 * 0.97).toFixed(2) + '%', r: 'Normal Realized' },
           { h: 'HV30 (Quarter)', v: r.hv30.toFixed(2) + '%', r: 'Anchor Baseline' }
         ];
-        document.getElementById('regimeHvTableBody').innerHTML = hTerms.map(function(x) {
+        var hvEl = document.getElementById('regimeHorizonTableBody') || document.getElementById('regimeHvTableBody');
+        if (hvEl) hvEl.innerHTML = hTerms.map(function(x) {
           return '<tr class="hover:bg-[#111c2d]">' +
             '<td class="py-2 px-3 font-bold text-white">' + x.h + '</td>' +
             '<td class="py-2 px-3 text-right font-bold text-sky-300">' + x.v + '</td>' +
@@ -2132,7 +2134,6 @@
       window.syncLiveMarketFeed = syncLiveMarketFeed;
 
       function ensurePlotlyAndRender() {
-        if (!window._domReady) return;
         if (window.Plotly) {
           renderActiveOptionsTab();
           renderBacktestWorkspace();
@@ -2146,14 +2147,14 @@
               renderBacktestWorkspace();
             } else if (attempts > 200) {
               clearInterval(checkTimer);
+              console.error("Plotly CDN load timeout");
             }
           }, 50);
         }
       }
       window.ensurePlotlyAndRender = ensurePlotlyAndRender;
 
-      window.addEventListener('DOMContentLoaded', function() {
-        window._domReady = true;
+      function initApp() {
         updateMarketClock(new Date());
         populateExpiryDropdown();
         ensurePlotlyAndRender();
@@ -2170,7 +2171,13 @@
             syncLiveMarketFeed();
           }
         }, 30000);
-      });
+      }
+
+      if (document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', initApp);
+      } else {
+        initApp();
+      }
     })();
   </script>
 </body>
