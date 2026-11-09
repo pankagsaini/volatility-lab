@@ -142,7 +142,7 @@
             <button type="button" data-tab="term" class="res-tab-btn seg-btn">2. Term Structure &amp; Forward Vol</button>
             <button type="button" data-tab="smile" class="res-tab-btn seg-btn">3. Smile, Skew &amp; Strike Edge</button>
             <button type="button" data-tab="straddle" class="res-tab-btn seg-btn">4. Intraday Straddle &amp; Payoff Stress</button>
-            <button type="button" data-tab="tradeid" id="tabBtn5TradeId" class="tab-btn res-tab-btn seg-btn">5. Trade Identification (All Expiries × 6 Strategies)</button>
+            <button type="button" data-tab="tradeid" id="tabBtn5TradeId" class="tab-btn res-tab-btn seg-btn">5. Trade Identification (NIFTY &amp; BANKNIFTY × 6 Strategies)</button>
           </div>
 
           <!-- Tab 1 Context Controls (Metric & Range only; Continuous toggle removed) -->
@@ -373,11 +373,17 @@
               <div>
                 <h3 class="text-sm font-bold uppercase text-white flex items-center gap-2">
                   <span>🎯 Real-Time Strategy Matrix</span>
-                  <span class="text-xs text-sky-400 font-semibold">(All Listed Expiries × Inbuilt Strategies S1 to S6)</span>
+                  <span class="text-xs text-sky-400 font-semibold">(NIFTY &amp; BANKNIFTY Expiries × Inbuilt Strategies S1 to S6)</span>
+                  <span id="tradeIdQualifiedCount" class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">Scanning...</span>
                 </h3>
-                <p class="text-xs text-slate-300 mt-1">Quantitative trigger evaluation matching live market variance, term structure, skew, and basis dislocations to actionable multi-leg options structures.</p>
+                <p class="text-xs text-slate-300 mt-1">Quantitative trigger evaluation matching live market variance, term structure, skew, and basis dislocations across NIFTY 50 and BANKNIFTY to actionable multi-leg options structures.</p>
               </div>
               <div class="flex items-center gap-2">
+                <select id="tradeIdFilterSymbol" class="desk-select text-xs py-1 font-semibold text-sky-400">
+                  <option value="ALL" selected>Both Indices (NIFTY &amp; BANKNIFTY)</option>
+                  <option value="NIFTY">NIFTY 50 Only</option>
+                  <option value="BANKNIFTY">BANKNIFTY Only</option>
+                </select>
                 <select id="tradeIdFilterStrat" class="desk-select text-xs py-1">
                   <option value="ALL" selected>All Strategies (S1–S6)</option>
                   <option value="S1">S1 · VRP Harvest Iron Condor</option>
@@ -398,6 +404,7 @@
               <table class="w-full text-left border-collapse text-xs mono">
                 <thead>
                   <tr class="border-b border-[#24344d] bg-[#111c2d] text-white font-bold">
+                    <th class="py-2.5 px-3">Index</th>
                     <th class="py-2.5 px-3">Expiry (DTE)</th>
                     <th class="py-2.5 px-3">Strategy</th>
                     <th class="py-2.5 px-3">Condition Status (Metrics)</th>
@@ -812,7 +819,11 @@
           { expiry: '2027-01-25', kind: 'Monthly', dte: 77.0, spot: 25044.65, syn: 25305.00, fut: 25315.00, iv: 14.20, hv10: 11.85, hv20: 12.15, hv30: 12.42, spread: 1.78, rev25: 2.55, bfly25: 0.88 }
         ],
         BANKNIFTY: [
+          { expiry: '2026-11-12', kind: 'Weekly', dte: 3.0, spot: 59741.25, syn: 59765.00, fut: 59808.00, iv: 16.85, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 3.23, rev25: 2.30, bfly25: 0.76 },
+          { expiry: '2026-11-17', kind: 'Weekly', dte: 8.0, spot: 59741.25, syn: 59772.00, fut: 59808.00, iv: 16.50, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 2.88, rev25: 2.38, bfly25: 0.78 },
+          { expiry: '2026-11-23', kind: 'Weekly', dte: 14.0, spot: 59741.25, syn: 59780.00, fut: 59808.00, iv: 16.35, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 2.73, rev25: 2.40, bfly25: 0.80 },
           { expiry: '2026-11-26', kind: 'Monthly', dte: 17.0, spot: 59741.25, syn: 59785.50, fut: 59808.00, iv: 16.20, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 2.58, rev25: 2.45, bfly25: 0.82 },
+          { expiry: '2026-12-01', kind: 'Weekly', dte: 22.0, spot: 59741.25, syn: 59850.00, fut: 60045.00, iv: 15.65, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 2.03, rev25: 2.52, bfly25: 0.84 },
           { expiry: '2026-12-29', kind: 'Monthly', dte: 50.0, spot: 59741.25, syn: 60015.00, fut: 60045.00, iv: 15.10, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 1.48, rev25: 2.60, bfly25: 0.88 },
           { expiry: '2027-01-25', kind: 'Monthly', dte: 77.0, spot: 59741.25, syn: 60275.00, fut: 60310.00, iv: 15.45, hv10: 13.10, hv20: 13.40, hv30: 13.62, spread: 1.83, rev25: 2.72, bfly25: 0.94 }
         ]
@@ -1349,116 +1360,135 @@
 
       // --- 6. TAB 5: TRADE IDENTIFICATION (ALL EXPIRIES × 6 STRATEGIES) ---
       function renderTab5TradeIdentification() {
-        var list = marketCatalog[activeSymbol];
-        var stratFilter = document.getElementById('tradeIdFilterStrat').value || 'ALL';
-        var statusFilter = document.getElementById('tradeIdFilterStatus').value || 'ALL';
+        var symFilter = (document.getElementById('tradeIdFilterSymbol') && document.getElementById('tradeIdFilterSymbol').value) || 'ALL';
+        var stratFilter = (document.getElementById('tradeIdFilterStrat') && document.getElementById('tradeIdFilterStrat').value) || 'ALL';
+        var statusFilter = (document.getElementById('tradeIdFilterStatus') && document.getElementById('tradeIdFilterStatus').value) || 'ALL';
 
-        var step = activeSymbol === 'NIFTY' ? 50 : 100;
-        var lotSize = activeSymbol === 'NIFTY' ? 75 : 30;
-        var wingSpan = activeSymbol === 'NIFTY' ? 300 : 500;
-
+        var symbolsToRender = symFilter === 'ALL' ? ['NIFTY', 'BANKNIFTY'] : [symFilter];
         var rowsHtml = '';
+        var totalQualified = 0;
+        var totalSetups = 0;
 
-        list.forEach(function(item) {
-          var K = Math.round(item.spot / step) * step;
-          var vrp = item.iv - item.hv30;
-          var hvDiff = Math.abs(item.hv10 - item.hv30);
-          var rr25 = item.rev25 || 2.10;
-          var basis = item.syn - item.spot;
-          var movePts = Math.round(item.spot * (item.iv / 100.0) * Math.sqrt(Math.max(1, item.dte) / 365.0) / step) * step;
-          var stradPrem = Math.round(0.79788 * item.syn * (item.iv / 100.0) * Math.sqrt(Math.max(1, item.dte) / 365.0));
+        symbolsToRender.forEach(function(sym) {
+          var list = marketCatalog[sym] || [];
+          var step = sym === 'NIFTY' ? 50 : 100;
+          var lotSize = sym === 'NIFTY' ? 75 : 30;
+          var wingSpan = sym === 'NIFTY' ? 300 : 700;
 
-          // 6 Inbuilt Strategies Definitions
-          var strats = [
-            {
-              id: 'S1',
-              name: 'S1 · VRP Harvest Iron Condor',
-              isMet: vrp >= 2.0 && hvDiff <= 1.5,
-              condText: 'IV-HV30 +' + vrp.toFixed(2) + ' pp (>= +2.0) · |HV10-HV30| ' + hvDiff.toFixed(2) + ' pp (<= 1.5)',
-              strikes: 'Sell ' + (K - movePts).toLocaleString('en-IN') + ' PE / ' + (K + movePts).toLocaleString('en-IN') + ' CE · Buy ' + (K - movePts - wingSpan).toLocaleString('en-IN') + ' PE / ' + (K + movePts + wingSpan).toLocaleString('en-IN') + ' CE',
-              netInr: activeSymbol === 'NIFTY' ? '+₹3,850' : '+₹4,950',
-              capital: activeSymbol === 'NIFTY' ? '₹58,500' : '₹64,000',
-              payoff: 'Max +₹' + (activeSymbol === 'NIFTY' ? 3850 : 4950).toLocaleString('en-IN') + ' | BE: ' + (K - movePts - 51).toLocaleString('en-IN') + ' – ' + (K + movePts + 51).toLocaleString('en-IN')
-            },
-            {
-              id: 'S2',
-              name: 'S2 · Gamma Expansion Long Straddle',
-              isMet: vrp <= 1.2 || item.hv10 > item.hv30,
-              condText: 'VRP +' + vrp.toFixed(2) + ' pp (<= +1.2) or HV10 ' + item.hv10.toFixed(2) + '% > HV30 ' + item.hv30.toFixed(2) + '%',
-              strikes: 'Buy ' + K.toLocaleString('en-IN') + ' CE & Buy ' + K.toLocaleString('en-IN') + ' PE',
-              netInr: '-₹' + (stradPrem * lotSize).toLocaleString('en-IN'),
-              capital: '₹' + (stradPrem * lotSize).toLocaleString('en-IN'),
-              payoff: 'Unlimited Max Gain | BE: ' + (K - stradPrem).toLocaleString('en-IN') + ' – ' + (K + stradPrem).toLocaleString('en-IN')
-            },
-            {
-              id: 'S3',
-              name: 'S3 · Front-Week Vol Crush Iron Fly',
-              isMet: item.dte <= 15 && vrp >= 3.0,
-              condText: 'DTE ' + item.dte.toFixed(0) + 'd (<= 15d) · VRP +' + vrp.toFixed(2) + ' pp (>= +3.0)',
-              strikes: 'Sell ' + K.toLocaleString('en-IN') + ' CE/PE · Buy ' + (K - (activeSymbol === 'NIFTY' ? 350 : 700)).toLocaleString('en-IN') + ' PE / ' + (K + (activeSymbol === 'NIFTY' ? 350 : 700)).toLocaleString('en-IN') + ' CE',
-              netInr: activeSymbol === 'NIFTY' ? '+₹8,900' : '+₹11,400',
-              capital: activeSymbol === 'NIFTY' ? '₹54,000' : '₹59,000',
-              payoff: 'Max +₹' + (activeSymbol === 'NIFTY' ? 8900 : 11400).toLocaleString('en-IN') + ' | BE: ' + (K - 119).toLocaleString('en-IN') + ' – ' + (K + 119).toLocaleString('en-IN')
-            },
-            {
-              id: 'S4',
-              name: 'S4 · Steep Put Skew 1x2 Ratio',
-              isMet: rr25 >= 1.40,
-              condText: '25Δ RR +' + rr25.toFixed(2) + ' pp (>= +1.40 pp Put Skew)',
-              strikes: 'Buy ' + (K - (activeSymbol === 'NIFTY' ? 50 : 100)).toLocaleString('en-IN') + ' PE · Sell 2x ' + (K - (activeSymbol === 'NIFTY' ? 250 : 500)).toLocaleString('en-IN') + ' PE · Buy ' + (K - (activeSymbol === 'NIFTY' ? 550 : 1100)).toLocaleString('en-IN') + ' PE',
-              netInr: activeSymbol === 'NIFTY' ? '+₹1,850' : '+₹2,400',
-              capital: activeSymbol === 'NIFTY' ? '₹1,15,000' : '₹1,28,000',
-              payoff: 'Max +₹' + (activeSymbol === 'NIFTY' ? 16850 : 14400).toLocaleString('en-IN') + ' | Protected Wings'
-            },
-            {
-              id: 'S5',
-              name: 'S5 · Intraday Theta Iron Fly',
-              isMet: item.dte <= 22 && item.iv > item.hv10,
-              condText: 'DTE ' + item.dte.toFixed(0) + 'd (<= 22d) · IV ' + item.iv.toFixed(2) + '% > HV10 ' + item.hv10.toFixed(2) + '%',
-              strikes: 'Sell ' + K.toLocaleString('en-IN') + ' CE/PE · Buy ' + (K - (activeSymbol === 'NIFTY' ? 250 : 500)).toLocaleString('en-IN') + ' PE / ' + (K + (activeSymbol === 'NIFTY' ? 250 : 500)).toLocaleString('en-IN') + ' CE',
-              netInr: activeSymbol === 'NIFTY' ? '+₹7,200' : '+₹9,100',
-              capital: activeSymbol === 'NIFTY' ? '₹52,000' : '₹57,000',
-              payoff: 'Theta +₹' + (activeSymbol === 'NIFTY' ? 2100 : 2650).toLocaleString('en-IN') + '/d | BE: ' + (K - 96).toLocaleString('en-IN') + ' – ' + (K + 96).toLocaleString('en-IN')
-            },
-            {
-              id: 'S6',
-              name: 'S6 · Synthetic Basis Skewed Condor',
-              isMet: Math.abs(basis) >= 12,
-              condText: 'Dislocation: Basis ' + (basis >= 0 ? '+' : '') + basis.toFixed(1) + ' pts (|Basis| >= 12 pts)',
-              strikes: 'Sell ' + (K - (activeSymbol === 'NIFTY' ? 200 : 400)).toLocaleString('en-IN') + ' PE & ' + (K + (activeSymbol === 'NIFTY' ? 250 : 500)).toLocaleString('en-IN') + ' CE (Asymmetric Wings)',
-              netInr: activeSymbol === 'NIFTY' ? '+₹4,100' : '+₹5,200',
-              capital: activeSymbol === 'NIFTY' ? '₹58,500' : '₹64,000',
-              payoff: 'Max +₹' + (activeSymbol === 'NIFTY' ? 4100 : 5200).toLocaleString('en-IN') + ' | Basis Dislocation Tilt'
-            }
-          ];
+          list.forEach(function(item) {
+            var K = Math.round(item.spot / step) * step;
+            var vrp = item.iv - item.hv30;
+            var hvDiff = Math.abs(item.hv10 - item.hv30);
+            var rr25 = item.rev25 || (sym === 'NIFTY' ? 2.10 : 2.45);
+            var basis = item.syn - item.spot;
+            var movePts = Math.round(item.spot * (item.iv / 100.0) * Math.sqrt(Math.max(1, item.dte) / 365.0) / step) * step;
+            var stradPrem = Math.round(0.79788 * item.syn * (item.iv / 100.0) * Math.sqrt(Math.max(1, item.dte) / 365.0));
 
-          strats.forEach(function(st) {
-            if (stratFilter !== 'ALL' && st.id !== stratFilter) return;
-            if (statusFilter === 'MET' && !st.isMet) return;
+            // 6 Inbuilt Strategies Definitions
+            var strats = [
+              {
+                id: 'S1',
+                name: 'S1 · VRP Harvest Iron Condor',
+                isMet: vrp >= 2.0 && hvDiff <= 1.5,
+                condText: 'IV-HV30 +' + vrp.toFixed(2) + ' pp (>= +2.0) · |HV10-HV30| ' + hvDiff.toFixed(2) + ' pp (<= 1.5)',
+                strikes: 'Sell ' + (K - movePts).toLocaleString('en-IN') + ' PE / ' + (K + movePts).toLocaleString('en-IN') + ' CE · Buy ' + (K - movePts - wingSpan).toLocaleString('en-IN') + ' PE / ' + (K + movePts + wingSpan).toLocaleString('en-IN') + ' CE',
+                netInr: sym === 'NIFTY' ? '+₹3,850' : '+₹4,950',
+                capital: sym === 'NIFTY' ? '₹58,500' : '₹64,000',
+                payoff: 'Max +₹' + (sym === 'NIFTY' ? 3850 : 4950).toLocaleString('en-IN') + ' | BE: ' + (K - movePts - (sym === 'NIFTY' ? 51 : 165)).toLocaleString('en-IN') + ' – ' + (K + movePts + (sym === 'NIFTY' ? 51 : 165)).toLocaleString('en-IN')
+              },
+              {
+                id: 'S2',
+                name: 'S2 · Gamma Expansion Long Straddle',
+                isMet: vrp <= 1.2 || item.hv10 > item.hv30,
+                condText: 'VRP +' + vrp.toFixed(2) + ' pp (<= +1.2) or HV10 ' + item.hv10.toFixed(2) + '% > HV30 ' + item.hv30.toFixed(2) + '%',
+                strikes: 'Buy ' + K.toLocaleString('en-IN') + ' CE & Buy ' + K.toLocaleString('en-IN') + ' PE',
+                netInr: '-₹' + (stradPrem * lotSize).toLocaleString('en-IN'),
+                capital: '₹' + (stradPrem * lotSize).toLocaleString('en-IN'),
+                payoff: 'Unlimited Max Gain | BE: ' + (K - stradPrem).toLocaleString('en-IN') + ' – ' + (K + stradPrem).toLocaleString('en-IN')
+              },
+              {
+                id: 'S3',
+                name: 'S3 · Front-Week Vol Crush Iron Fly',
+                isMet: item.dte <= 15 && vrp >= 2.5,
+                condText: 'DTE ' + item.dte.toFixed(0) + 'd (<= 15d) · VRP +' + vrp.toFixed(2) + ' pp (>= +2.5)',
+                strikes: 'Sell ' + K.toLocaleString('en-IN') + ' CE/PE · Buy ' + (K - (sym === 'NIFTY' ? 350 : 800)).toLocaleString('en-IN') + ' PE / ' + (K + (sym === 'NIFTY' ? 350 : 800)).toLocaleString('en-IN') + ' CE',
+                netInr: sym === 'NIFTY' ? '+₹8,900' : '+₹11,400',
+                capital: sym === 'NIFTY' ? '₹54,000' : '₹59,000',
+                payoff: 'Max +₹' + (sym === 'NIFTY' ? 8900 : 11400).toLocaleString('en-IN') + ' | BE: ' + (K - (sym === 'NIFTY' ? 119 : 380)).toLocaleString('en-IN') + ' – ' + (K + (sym === 'NIFTY' ? 119 : 380)).toLocaleString('en-IN')
+              },
+              {
+                id: 'S4',
+                name: 'S4 · Steep Put Skew 1x2 Ratio',
+                isMet: rr25 >= (sym === 'NIFTY' ? 1.40 : 1.60),
+                condText: '25Δ RR +' + rr25.toFixed(2) + ' pp (>=' + (sym === 'NIFTY' ? ' +1.40' : ' +1.60') + ' pp Put Skew)',
+                strikes: 'Buy ' + (K - (sym === 'NIFTY' ? 50 : 100)).toLocaleString('en-IN') + ' PE · Sell 2x ' + (K - (sym === 'NIFTY' ? 250 : 600)).toLocaleString('en-IN') + ' PE · Buy ' + (K - (sym === 'NIFTY' ? 550 : 1400)).toLocaleString('en-IN') + ' PE',
+                netInr: sym === 'NIFTY' ? '+₹1,850' : '+₹2,400',
+                capital: sym === 'NIFTY' ? '₹1,15,000' : '₹1,28,000',
+                payoff: 'Max +₹' + (sym === 'NIFTY' ? 16850 : 14400).toLocaleString('en-IN') + ' | Protected Wings'
+              },
+              {
+                id: 'S5',
+                name: 'S5 · Intraday Theta Iron Fly',
+                isMet: item.dte <= 22 && item.iv > item.hv10,
+                condText: 'DTE ' + item.dte.toFixed(0) + 'd (<= 22d) · IV ' + item.iv.toFixed(2) + '% > HV10 ' + item.hv10.toFixed(2) + '%',
+                strikes: 'Sell ' + K.toLocaleString('en-IN') + ' CE/PE · Buy ' + (K - (sym === 'NIFTY' ? 250 : 600)).toLocaleString('en-IN') + ' PE / ' + (K + (sym === 'NIFTY' ? 250 : 600)).toLocaleString('en-IN') + ' CE',
+                netInr: sym === 'NIFTY' ? '+₹7,200' : '+₹9,100',
+                capital: sym === 'NIFTY' ? '₹52,000' : '₹57,000',
+                payoff: 'Theta +₹' + (sym === 'NIFTY' ? 2100 : 2650).toLocaleString('en-IN') + '/d | BE: ' + (K - (sym === 'NIFTY' ? 96 : 303)).toLocaleString('en-IN') + ' – ' + (K + (sym === 'NIFTY' ? 96 : 303)).toLocaleString('en-IN')
+              },
+              {
+                id: 'S6',
+                name: 'S6 · Synthetic Basis Skewed Condor',
+                isMet: Math.abs(basis) >= (sym === 'NIFTY' ? 12 : 30),
+                condText: 'Dislocation: Basis ' + (basis >= 0 ? '+' : '') + basis.toFixed(1) + ' pts (|Basis| >= ' + (sym === 'NIFTY' ? '12' : '30') + ' pts)',
+                strikes: 'Sell ' + (K - (sym === 'NIFTY' ? 200 : 500)).toLocaleString('en-IN') + ' PE & ' + (K + (sym === 'NIFTY' ? 250 : 600)).toLocaleString('en-IN') + ' CE (Asymmetric Wings)',
+                netInr: sym === 'NIFTY' ? '+₹4,100' : '+₹5,200',
+                capital: sym === 'NIFTY' ? '₹58,500' : '₹64,000',
+                payoff: 'Max +₹' + (sym === 'NIFTY' ? 4100 : 5200).toLocaleString('en-IN') + ' | Basis Dislocation Tilt'
+              }
+            ];
 
-            var statusBadge = st.isMet ?
-              '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">TRIGGER MET</span>' :
-              '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">WATCHING</span>';
+            strats.forEach(function(st) {
+              totalSetups++;
+              if (st.isMet) totalQualified++;
 
-            rowsHtml +=
-              '<tr class="hover:bg-[#111c2d]">' +
-                '<td class="py-2.5 px-3 font-bold text-white">' + item.expiry + ' <span class="text-slate-400 font-normal">(' + item.dte.toFixed(0) + 'd)</span></td>' +
-                '<td class="py-2.5 px-3 font-bold text-amber-300">' + st.name + '</td>' +
-                '<td class="py-2.5 px-3">' +
-                  '<div class="flex items-center gap-1.5">' + statusBadge + '<span class="text-[11px] text-slate-300">' + st.condText + '</span></div>' +
-                '</td>' +
-                '<td class="py-2.5 px-3 text-slate-200">' + st.strikes + '</td>' +
-                '<td class="py-2.5 px-3 text-right font-bold ' + (st.netInr.indexOf('+') !== -1 ? 'text-emerald-400' : 'text-rose-400') + '">' + st.netInr + '</td>' +
-                '<td class="py-2.5 px-3 text-right text-purple-300 font-bold">' + st.capital + '</td>' +
-                '<td class="py-2.5 px-3 text-right text-[11px] text-slate-300">' + st.payoff + '</td>' +
-                '<td class="py-2.5 px-3 text-center">' +
-                  '<button type="button" class="px-2.5 py-1 rounded bg-[#111c2d] hover:bg-sky-600/30 text-sky-300 hover:text-white font-bold border border-sky-500/40" onclick="window.testStratInBacktest(&apos;' + st.id + '&apos;, &apos;' + activeSymbol + '&apos;)">Test in Backtest →</button>' +
-                '</td>' +
-              '</tr>';
+              if (stratFilter !== 'ALL' && st.id !== stratFilter) return;
+              if (statusFilter === 'MET' && !st.isMet) return;
+
+              var statusBadge = st.isMet ?
+                '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">TRIGGER MET</span>' :
+                '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">WATCHING</span>';
+
+              var symBadge = sym === 'NIFTY' ?
+                '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">NIFTY</span>' :
+                '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">BANKNIFTY</span>';
+
+              rowsHtml +=
+                '<tr class="hover:bg-[#111c2d]">' +
+                  '<td class="py-2.5 px-3 font-bold">' + symBadge + '</td>' +
+                  '<td class="py-2.5 px-3 font-bold text-white">' + item.expiry + ' <span class="text-slate-400 font-normal">(' + item.dte.toFixed(0) + 'd)</span></td>' +
+                  '<td class="py-2.5 px-3 font-bold text-amber-300">' + st.name + '</td>' +
+                  '<td class="py-2.5 px-3">' +
+                    '<div class="flex items-center gap-1.5">' + statusBadge + '<span class="text-[11px] text-slate-300">' + st.condText + '</span></div>' +
+                  '</td>' +
+                  '<td class="py-2.5 px-3 text-slate-200">' + st.strikes + '</td>' +
+                  '<td class="py-2.5 px-3 text-right font-bold ' + (st.netInr.indexOf('+') !== -1 ? 'text-emerald-400' : 'text-rose-400') + '">' + st.netInr + '</td>' +
+                  '<td class="py-2.5 px-3 text-right text-purple-300 font-bold">' + st.capital + '</td>' +
+                  '<td class="py-2.5 px-3 text-right text-[11px] text-slate-300">' + st.payoff + '</td>' +
+                  '<td class="py-2.5 px-3 text-center">' +
+                    '<button type="button" class="px-2.5 py-1 rounded bg-[#111c2d] hover:bg-sky-600/30 text-sky-300 hover:text-white font-bold border border-sky-500/40" onclick="window.testStratInBacktest(&apos;' + st.id + '&apos;, &apos;' + sym + '&apos;)">Test in Backtest →</button>' +
+                  '</td>' +
+                '</tr>';
+            });
           });
         });
 
-        document.getElementById('tradeIdMatrixBody').innerHTML = rowsHtml || '<tr><td colspan="8" class="py-6 text-center text-slate-400">No strategies match the selected filters.</td></tr>';
+        document.getElementById('tradeIdMatrixBody').innerHTML = rowsHtml || '<tr><td colspan="9" class="py-6 text-center text-slate-400">No strategies match the selected filters.</td></tr>';
+
+        var countEl = document.getElementById('tradeIdQualifiedCount');
+        if (countEl) {
+          countEl.textContent = totalQualified + ' Qualified / ' + totalSetups + ' Total Setups';
+        }
       }
 
       function renderActiveOptionsTab() {
@@ -1552,8 +1582,9 @@
         el.addEventListener('input', renderTab4Straddle);
       });
 
-      ['tradeIdFilterStrat', 'tradeIdFilterStatus'].forEach(function(id) {
-        document.getElementById(id).addEventListener('change', renderTab5TradeIdentification);
+      ['tradeIdFilterStrat', 'tradeIdFilterStatus', 'tradeIdFilterSymbol'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('change', renderTab5TradeIdentification);
       });
 
       // --- 7. WORKSPACE 2: BACKTEST ENGINE (72 REAL AUDITED UPSTOX TRADES + PLOTLY CHARTS) ---
