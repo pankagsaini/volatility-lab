@@ -1306,7 +1306,7 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
 
 
     def test_40_sensibull_standard_black76_and_greeks_parity(self):
-        """Verify Sensibull standard Black-76 pricing engine, Greeks parity, and default reference."""
+        """Verify Black-76 pricing engine, Greeks parity, and BSM primary model preservation."""
         import option_math
         from pricing import (
             DEFAULT_PRICING_MODEL,
@@ -1317,8 +1317,9 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
             calculate_greeks,
             calculate_iv,
         )
-        self.assertEqual(DEFAULT_PRICING_MODEL, "sensibull")
-        self.assertEqual(option_math.DEFAULT_PRICING_MODEL, "sensibull")
+        # BSM remains the default primary model for backward compatibility
+        self.assertEqual(DEFAULT_PRICING_MODEL, "bsm")
+        self.assertEqual(option_math.DEFAULT_PRICING_MODEL, "bsm")
 
         # 1. Black-76 roundtrip
         F, K, T, r, true_vol = 25018.6, 25050.0, 8.0 / 365.0, 0.0585, 0.1665
@@ -1338,16 +1339,76 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
         self.assertAlmostEqual(c_iv, p_iv, places=4)
         self.assertAlmostEqual(c_iv * 100, 16.65, delta=0.05)
 
-        # 3. Default calculate_greeks uses Sensibull Black-76
-        calc_g = calculate_greeks(f_syn, K, T, r, c_iv, "CE")
+        # 3. Model selector in calculate_greeks
+        calc_b76 = calculate_greeks(f_syn, K, T, r, c_iv, "CE", model="black76")
         sb_g = sensibull_greeks(f_syn, K, T, r, c_iv, "CE")
-        self.assertAlmostEqual(calc_g["delta"], sb_g["delta"], places=6)
-        self.assertAlmostEqual(calc_g["gamma"], sb_g["gamma"], places=6)
+        self.assertAlmostEqual(calc_b76["delta"], sb_g["delta"], places=6)
+        self.assertAlmostEqual(calc_b76["gamma"], sb_g["gamma"], places=6)
 
         # 4. Vectorized parity
         vec_g = option_math.black76_greeks_vec([f_syn, f_syn], [K, K], [T, T], iv=[c_iv, p_iv], rate=r, kind=["CE", "PE"])
         self.assertAlmostEqual(vec_g["delta"][0], sb_g["delta"], places=6)
         self.assertTrue(vec_g["delta"][1] < 0)
+
+    def test_42_black76_edge_cases_and_bsm_equivalence(self):
+        """Verify Black-76 edge cases: T=0 intrinsic value, invalid inputs, and exact BSM equivalence."""
+        import math
+        from pricing import black76_greeks, compare_bsm_and_black76
+
+        # 1. T=0 returns exact intrinsic value
+        c_itm = black76_greeks(25100.0, 25000.0, 0.0, 0.0585, 0.165, "CE")
+        self.assertEqual(c_itm["price"], 100.0)
+        self.assertEqual(c_itm["delta"], 1.0)
+        self.assertEqual(c_itm["gamma"], 0.0)
+        self.assertEqual(c_itm["vega"], 0.0)
+
+        c_otm = black76_greeks(24900.0, 25000.0, 0.0, 0.0585, 0.165, "CE")
+        self.assertEqual(c_otm["price"], 0.0)
+        self.assertEqual(c_otm["delta"], 0.0)
+
+        p_itm = black76_greeks(24900.0, 25000.0, 0.0, 0.0585, 0.165, "PE")
+        self.assertEqual(p_itm["price"], 100.0)
+        self.assertEqual(p_itm["delta"], -1.0)
+
+        p_otm = black76_greeks(25100.0, 25000.0, 0.0, 0.0585, 0.165, "PE")
+        self.assertEqual(p_otm["price"], 0.0)
+        self.assertEqual(p_otm["delta"], 0.0)
+
+        # 2. Invalid inputs raise ValueError
+        with self.assertRaises(ValueError):
+            black76_greeks(0.0, 25000.0, 0.1, 0.0585, 0.165, "CE")
+        with self.assertRaises(ValueError):
+            black76_greeks(25000.0, -100.0, 0.1, 0.0585, 0.165, "CE")
+        with self.assertRaises(ValueError):
+            black76_greeks(25000.0, 25000.0, 0.1, 0.0585, -0.1, "CE")
+        with self.assertRaises(ValueError):
+            black76_greeks(25000.0, 25000.0, 0.1, 0.0585, 0.165, "INVALID")
+
+        # 3. Exact Mathematical Equivalence between Spot BSM and Black-76
+        # When F = S * exp((r - q) * T), European Black-76 and Spot BSM agree (< 1e-10)
+        comp = compare_bsm_and_black76(
+            spot=25044.65,
+            strike=25000.0,
+            years=8.0 / 365.0,
+            rate=0.0585,
+            vol=0.165,
+            kind="CE",
+            dividend=0.0142,
+            future_price=25060.0,
+        )
+        self.assertLess(comp["price_diff_theo"], 1e-10)
+        self.assertAlmostEqual(comp["bsm"]["price"], comp["black76_theoretical"]["price"], places=8)
+        self.assertAlmostEqual(comp["bsm"]["vega"], comp["black76_theoretical"]["vega"], places=8)
+        self.assertIn("black76_traded", comp)
+        self.assertIn("market_basis", comp)
+
+        # 4. Put-Call Parity: C - P = D * (F - K)
+        F, K, T, r, vol = 25050.0, 25000.0, 14.0 / 365.0, 0.06, 0.18
+        c = black76_greeks(F, K, T, r, vol, "CE")
+        p = black76_greeks(F, K, T, r, vol, "PE")
+        discount = math.exp(-r * T)
+        parity_diff = (c["price"] - p["price"]) - discount * (F - K)
+        self.assertLess(abs(parity_diff), 1e-10)
 
 
 

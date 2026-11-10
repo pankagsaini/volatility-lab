@@ -1,4 +1,4 @@
-"""Quantitative pricing & Greeks modules: Sensibull-standard Black-76 (default) and BSM."""
+"""Quantitative pricing & Greeks modules: BSM (primary default) and Black-76 (second model)."""
 try:
     from .. import dividend_yield, option_math, risk_free, smile, synthetic_future, vol_lib, vol_surface_3d
     from ..option_math import (
@@ -12,6 +12,7 @@ try:
         sensibull_dte_years,
         calculate_greeks,
         calculate_iv,
+        compare_bsm_and_black76,
         bsm_greeks,
         bsm_greeks_vec,
         solve_iv,
@@ -30,6 +31,7 @@ except (ImportError, ValueError):
         sensibull_dte_years,
         calculate_greeks,
         calculate_iv,
+        compare_bsm_and_black76,
         bsm_greeks,
         bsm_greeks_vec,
         solve_iv,
@@ -55,6 +57,7 @@ __all__ = [
     "sensibull_dte_years",
     "calculate_greeks",
     "calculate_iv",
+    "compare_bsm_and_black76",
     "bsm_greeks",
     "bsm_greeks_vec",
     "solve_iv",
