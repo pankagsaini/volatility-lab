@@ -192,9 +192,12 @@ The repository powers **[https://volatilitylab.in](https://volatilitylab.in)** v
 
 ## 📊 Core Quantitative Models
 
-1. **Black-Scholes-Merton Engine** ([`option_math.py`](volatility_lab/pricing/option_math.py)):
-   - Dividend-adjusted BSM analytical pricing with vectorized Greeks ($\Delta$, $\Gamma$, $\mathcal{V}$, $\Theta$).
-   - High-precision root finder using Brent-Dekker algorithm with pure-Python fallback.
+1. **Black-76 & BSM Options Pricing Engine** ([`option_math.py`](volatility_lab/option_math.py)):
+   - Native institutional Black-76 engine (Sensibull standard) anchored to Synthetic Forwards ($F_{\text{syn}} = K_{\text{ATM}} + C_{\text{ATM}} - P_{\text{ATM}}$) or listed index futures, ensuring strict ATM Put-Call parity symmetry.
+   - Continuous ACT/365 time-to-expiry calculation precisely down to `15:30:00 IST` on expiry day (`sensibull_dte_years`).
+   - Vectorized Indian market Greeks: Forward Delta ($e^{-rT} N(d_1)$), $\Gamma$, $\mathcal{V}$ (per 1% vol), and daily calendar $\Theta$ (ACT/365).
+   - High-precision arbitrage-bounded Brentq implied volatility solver ($[0.01\%, 500\%]$).
+   - 100% self-contained and offline-capable with zero external runtime dependencies.
 
 2. **GARCH(1,1) Volatility Forecasting** ([`forecast.py`](volatility_lab/forecasting/forecast.py)):
    - Maximum Likelihood Estimation (MLE) of conditional variance with Nelder-Mead simplex optimizer.
