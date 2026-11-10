@@ -233,23 +233,23 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
     matched_exp = next((e for e in available if e['expiry'] == expiry), None)
     dte_val = float(matched_exp['dte']) if matched_exp else 0.0
 
-    synthetic_future = None
-    if atm_row and atm_row['call']['ltp'] > 0 and atm_row['put']['ltp'] > 0:
-        synthetic_future = round(atm_strike + atm_row['call']['ltp'] - atm_row['put']['ltp'], 2)
-
-    future_price = None
+    future_quote = None
     for q_key, q_val in content.get('quotes', {}).items():
-        if 'FUT' in q_key and isinstance(q_val, dict) and q_val.get('last_price'):
-            p_val = float(q_val['last_price'])
-            if p_val > 0:
-                future_price = p_val
-                break
+        if 'FUT' in q_key and isinstance(q_val, dict):
+            future_quote = q_val
+            break
 
     from synthetic_future import determine_forward
-    fut_dict = {'last_price': future_price} if future_price else None
-    fwd_res = determine_forward(raw_chain, spot, future_quote=fut_dict, dte_days=dte_val)
-    effective_forward = fwd_res.get('forward') or future_price or synthetic_future or spot
-    forward_source = fwd_res.get('source') or ('listed_future' if future_price else 'synthetic_forward')
+    valuation_now = pd.Timestamp.now(tz='Asia/Kolkata')
+    fwd_res = determine_forward(
+        raw_chain, spot, future_quote=future_quote, dte_days=dte_val,
+        expiry=expiry, as_of=valuation_now, spot_timestamp=content.get('valuation'),
+    )
+    forward_value = fwd_res.get('forward')
+    effective_forward = float(forward_value) if forward_value is not None and np.isfinite(forward_value) and forward_value > 0 else None
+    forward_source = fwd_res.get('source')
+    future_price = effective_forward if forward_source == 'listed_future' else None
+    synthetic_future = effective_forward if forward_source == 'synthetic_forward' else None
 
     future_basis = round(future_price - spot, 2) if future_price and spot else None
     synthetic_basis = round(synthetic_future - spot, 2) if synthetic_future and spot else None

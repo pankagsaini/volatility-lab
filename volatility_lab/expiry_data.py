@@ -262,8 +262,40 @@ class ExpiryMonitor(base.Monitor):
                     future_contract,future_reference=future_by_expiry.get(expiry,(None,'No listed monthly future for expiry month'))
                     future_quote=quotes.get('NFO:'+future_contract['tradingsymbol'],{}) if future_contract else None
                     from synthetic_future import calculate as synthetic_future
-                    parity=synthetic_future(broker_raw,spot,future_quote,future_contract)
-                    parity.update({'Month future LTP':parity.get('Listed future'),'Future reference':future_reference})
+                    from quote_quality import assess_quote
+                    synthetic_rows=[]
+                    contract_symbols={str(item['instrument_key']):str(item['tradingsymbol']) for item in sub.to_dict('records')}
+                    for chain_row in broker_raw:
+                        if str(chain_row.get('expiry'))!=str(expiry):
+                            continue
+                        for side,kind in (('call_options','CE'),('put_options','PE')):
+                            leg=chain_row.get(side) or {}
+                            symbol_name=contract_symbols.get(str(leg.get('instrument_key')))
+                            quote=quotes.get('NFO:'+symbol_name,{}) if symbol_name else {}
+                            quality=assess_quote(quote,received,max_spread,closing=False)
+                            if quality['accepted']:
+                                synthetic_rows.append({
+                                    'expiry':str(expiry),'strike':chain_row['strike_price'],'option_type':kind,
+                                    'bid':quality['bid'],'ask':quality['ask'],'timestamp':quality['quote_timestamp'],
+                                })
+                    validated_future=None
+                    if future_contract and future_quote:
+                        future_quality=assess_quote(future_quote,received,max_spread,closing=False)
+                        if future_quality['accepted']:
+                            validated_future={
+                                'expiry':str(future_contract['expiry']),'bid':future_quality['bid'],
+                                'ask':future_quality['ask'],'timestamp':future_quality['quote_timestamp'],
+                            }
+                    expiry_close=datetime.combine(expiry,time(15,30),tzinfo=IST)
+                    valuation_dt=pd.Timestamp(valuation).to_pydatetime()
+                    years_to_expiry=(expiry_close-valuation_dt).total_seconds()/(365.0*86400.0)
+                    parity=synthetic_future(
+                        synthetic_rows,spot,rate=rate,years=years_to_expiry,
+                        future_quote=validated_future,expiry=str(expiry),as_of=received,
+                        spot_timestamp=spotq.get('timestamp'),
+                        future_contract=future_contract,
+                    )
+                    parity.update({'Future reference':future_reference})
 
                     audit=chain.attrs.get('quote_quality',[])
 

@@ -12,7 +12,7 @@ except ImportError:
     IST = ZoneInfo('Asia/Kolkata')
 from market_calendar import HOLIDAYS, SPECIAL_SESSIONS, last_trading_day_on_or_before
 
-VERSION = 'expiry-v4-session-annualized-nse2026'
+VERSION = 'expiry-v5-yz-close-close-nse2026'
 TERM_VERSION = 'term-v1-last-completed-close'
 CALENDAR_SOURCE = 'https://nsearchives.nseindia.com/content/circulars/FAOP71777.pdf'
 SPECIAL = pd.Timestamp('2026-11-08').date()

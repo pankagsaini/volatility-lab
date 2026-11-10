@@ -6,6 +6,10 @@ from contextlib import closing
 from pathlib import Path
 import numpy as np
 import pandas as pd
+try:
+    from market_calendar import last_trading_day_on_or_before
+except ModuleNotFoundError:
+    from .market_calendar import last_trading_day_on_or_before
 
 ROOT = Path(__file__).resolve().parent
 DB = ROOT / 'data' / 'monitor.sqlite'
@@ -124,23 +128,24 @@ def decide(rows, expiry, day, entry, filters):
     exp_str = str(expiry)[:10]
     day_str = str(day)[:10]
     at = pd.Timestamp(day_str + ' ' + str(entry), tz='Asia/Kolkata')
-    # 1. Strict point-in-time same-day & same-expiry guard: t <= at within 160 minutes before entry
+    try:
+        previous_session = last_trading_day_on_or_before(
+            pd.Timestamp(day_str).date() - pd.Timedelta(days=1)
+        )
+    except ValueError:
+        previous_session = None
+
+    # Prefer a same-day observation; otherwise allow only the prior session's EOD record.
     candidates = [
-        r for exp, t, r in rows
-        if exp == exp_str and t <= at and str(t.date()) == day_str and 0 <= (at - t).total_seconds() <= 9600
+        (t, r) for exp, t, r in rows
+        if exp == exp_str and t <= at and (
+            (t.date().isoformat() == day_str and 0 <= (at - t).total_seconds() <= 9600)
+            or (previous_session is not None and t.date() == previous_session and t.time() >= pd.Timestamp('15:30').time())
+        )
     ]
     if not candidates:
-        # 2. Check same-day pre-entry observation across active expiries on `day_str`
-        same_day_any_exp = [
-            r for exp, t, r in rows
-            if t <= at and str(t.date()) == day_str and 0 <= (at - t).total_seconds() <= 9600
-        ]
-        has_exact_exp_today = any(exp == exp_str and str(t.date()) == day_str for exp, t, _ in rows)
-        if same_day_any_exp and not has_exact_exp_today:
-            candidates = [same_day_any_exp[-1]]
-    if not candidates:
         return False, 'Missing signal known before entry'
-    r = candidates[-1]
+    _, r = max(candidates, key=lambda item: item[0])
     for metric, low, high in filters:
         canon = _METRIC_ALIASES.get(metric, metric)
         v = r.get(metric, r.get(canon))

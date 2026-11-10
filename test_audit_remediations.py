@@ -1418,7 +1418,13 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
         import web_data
 
         # 1. Listed future precedence
-        res_fut = determine_forward([], spot=25000.0, future_quote={'last_price': 25035.0})
+        quote_time = '2026-11-10T09:20:00+05:30'
+        expiry = '2026-11-17'
+        res_fut = determine_forward(
+            [], spot=25000.0,
+            future_quote={'expiry': expiry, 'timestamp': quote_time, 'bid_price': 25034.0, 'ask_price': 25036.0},
+            expiry=expiry, as_of=quote_time, spot_timestamp=quote_time,
+        )
         self.assertEqual(res_fut['source'], 'listed_future')
         self.assertEqual(res_fut['forward'], 25035.0)
         self.assertEqual(res_fut['basis'], 35.0)
@@ -1427,12 +1433,13 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
         # 2. Synthetic Forward derivation on sample option chain
         mock_chain = [
             {
+                'expiry': expiry,
                 'strike_price': 25000,
-                'call_options': {'market_data': {'ltp': 240.0, 'bid_price': 239.0, 'ask_price': 241.0}},
-                'put_options': {'market_data': {'ltp': 210.0, 'bid_price': 209.0, 'ask_price': 211.0}},
+                'call_options': {'market_data': {'timestamp': quote_time, 'ltp': 240.0, 'bid_price': 239.0, 'ask_price': 241.0}},
+                'put_options': {'market_data': {'timestamp': quote_time, 'ltp': 210.0, 'bid_price': 209.0, 'ask_price': 211.0}},
             }
         ]
-        res_syn = determine_forward(mock_chain, spot=25005.0, r=0.06, dte_days=7.0)
+        res_syn = determine_forward(mock_chain, spot=25005.0, r=0.06, dte_days=7.0, expiry=expiry, as_of=quote_time, spot_timestamp=quote_time)
         self.assertEqual(res_syn['source'], 'synthetic_forward')
         self.assertTrue(res_syn['is_synthetic'])
         self.assertEqual(res_syn['atm_strike'], 25000.0)
@@ -1467,6 +1474,8 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
                 return m
         synthetic_future = _load_vl_mod("synthetic_future")
         market_table = _load_vl_mod("market_table")
+        expiry = '2026-11-17'
+        quote_time = '2026-11-10T09:20:00+05:30'
 
         # 1. Parity with BSM when F = S * exp((r - q) * T)
         spot = 25044.65
@@ -1534,10 +1543,10 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
 
         # Verify synthetic_future and market_table helpers
         chain_df = pd.DataFrame([
-            {"strike": 25050.0, "option_type": "CE", "ltp": 232.15, "iv": 16.01},
-            {"strike": 25050.0, "option_type": "PE", "ltp": 269.20, "iv": 17.90},
+            {"expiry": expiry, "strike": 25050.0, "option_type": "CE", "bid": 231.0, "ask": 233.3, "ltp": 232.15, "timestamp": quote_time, "iv": 16.01},
+            {"expiry": expiry, "strike": 25050.0, "option_type": "PE", "bid": 268.0, "ask": 270.4, "ltp": 269.20, "timestamp": quote_time, "iv": 17.90},
         ])
-        syn_res = synthetic_future.calculate(chain_df, spot=25044.65, rate=rate, years=years)
+        syn_res = synthetic_future.calculate(chain_df, spot=25044.65, rate=rate, years=years, expiry=expiry, as_of=quote_time, spot_timestamp=quote_time)
         self.assertIn("Black-76", syn_res["Pricing model"])
         self.assertAlmostEqual(syn_res["Synthetic future"], f_real, places=2)
         self.assertAlmostEqual(syn_res["Black-76 ATM IV"], 16.95, places=1)
@@ -1608,6 +1617,131 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
             self.assertIn('"b76CallIv":16.95,"b76PutIv":16.95', html)
 
 
+
+
+class TestIndependentQuantitativeAuditRegressions(unittest.TestCase):
+    def test_yang_zhang_uses_close_to_close_variance(self):
+        opens = np.array([100.0, 111.0, 107.0, 122.0, 118.0])
+        closes = np.array([104.0, 109.0, 115.0, 119.0, 124.0])
+        frame = pd.DataFrame({
+            'Date': pd.date_range('2026-01-05', periods=len(opens), freq='B'),
+            'Open': opens,
+            'High': np.maximum(opens, closes) + 2.0,
+            'Low': np.minimum(opens, closes) - 2.0,
+            'Close': closes,
+        })
+        window, annualization = 3, 252
+        result = vol_lib.rolling_rv_suite(frame, window=window, ann_factor=annualization)
+        close, open_s = pd.Series(closes), pd.Series(opens)
+        returns = np.log(close / close.shift(1))
+        overnight = np.log(open_s / close.shift(1))
+        high = pd.Series(np.maximum(opens, closes) + 2.0)
+        low = pd.Series(np.minimum(opens, closes) - 2.0)
+        rs = np.log(high / close) * np.log(high / open_s) + np.log(low / close) * np.log(low / open_s)
+        k = 0.34 / (1.34 + (window + 1) / (window - 1))
+        expected_var = (
+            overnight.rolling(window).var(ddof=1).iloc[-1]
+            + k * returns.rolling(window).var(ddof=1).iloc[-1]
+            + (1.0 - k) * rs.rolling(window).mean().iloc[-1]
+        )
+        self.assertAlmostEqual(result['yang_zhang_rv'].iloc[-1] ** 2 / annualization, expected_var, places=12)
+        self.assertEqual(vol_lib.rv_snapshot(frame, window, ann_factor=annualization)['yang_zhang_version'], vol_lib.YANG_ZHANG_VERSION)
+
+    def test_bsm_scalar_and_vector_expiry_return_intrinsic_and_zero_greeks(self):
+        call = option_math.bsm_greeks(105.0, 100.0, 0.0, 0.05, 0.2, 'CE')
+        put = option_math.bsm_greeks(105.0, 100.0, -0.1, 0.05, 0.0, 'PE')
+        self.assertEqual(float(call['price']), 5.0)
+        self.assertEqual(float(call['delta']), 1.0)
+        self.assertEqual(float(call['gamma']), 0.0)
+        self.assertEqual(float(call['vega']), 0.0)
+        self.assertEqual(float(call['theta_daily']), 0.0)
+        self.assertEqual(float(put['price']), 0.0)
+        self.assertEqual(float(put['delta']), 0.0)
+        self.assertEqual(float(put['fwd_delta']), 0.0)
+
+        vector = option_math.bsm_greeks_vec(
+            [105.0, 95.0, 100.0], [100.0] * 3, [0.0, -0.1, 0.25],
+            vol=0.2, rate=0.05, kind=['CE', 'PE', 'CE'],
+        )
+        np.testing.assert_allclose(vector['price'][:2], [5.0, 5.0])
+        np.testing.assert_allclose(vector['delta'][:2], [1.0, -1.0])
+        np.testing.assert_allclose(vector['gamma'][:2], [0.0, 0.0])
+        np.testing.assert_allclose(vector['vega'][:2], [0.0, 0.0])
+        np.testing.assert_allclose(vector['theta'][:2], [0.0, 0.0])
+        self.assertGreater(vector['gamma'][2], 0.0)
+
+    def test_prior_session_eod_signal_is_eligible_but_other_expiry_is_not(self):
+        import backtest_signals
+
+        expiry = '2026-11-12'
+        rows = [
+            (expiry, pd.Timestamp('2026-11-09 15:30', tz='Asia/Kolkata'), {'IV': 15.0}),
+            ('2026-11-19', pd.Timestamp('2026-11-10 09:18', tz='Asia/Kolkata'), {'IV': 18.0}),
+        ]
+        ok, _ = backtest_signals.decide(rows, expiry, '2026-11-10', '09:20', [('IV', 10.0, 20.0)])
+        self.assertTrue(ok)
+        rows.append((expiry, pd.Timestamp('2026-11-10 09:18', tz='Asia/Kolkata'), {'IV': 25.0}))
+        ok, reason = backtest_signals.decide(rows, expiry, '2026-11-10', '09:20', [('IV', 10.0, 20.0)])
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'IV outside entry range')
+
+    def test_synthetic_forward_rejects_stale_ltp_unmatched_expiry_and_bad_book(self):
+        from synthetic_future import calculate, determine_forward
+
+        as_of = '2026-11-10T09:20:00+05:30'
+        valid_rows = [
+            {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'CE', 'bid': 239.0, 'ask': 241.0, 'timestamp': as_of},
+            {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'PE', 'bid': 209.0, 'ask': 211.0, 'timestamp': as_of},
+        ]
+        good = calculate(valid_rows, 25005.0, years=7 / 365, expiry='2026-11-17', as_of=as_of, spot_timestamp=as_of)
+        self.assertIsNotNone(good['Synthetic future'])
+
+        stale_ltp = [
+            {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'CE', 'ltp': 240.0, 'timestamp': '2026-11-09T09:20:00+05:30'},
+            {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'PE', 'ltp': 210.0, 'timestamp': '2026-11-09T09:20:00+05:30'},
+        ]
+        stale = calculate(stale_ltp, 25005.0, years=7 / 365, expiry='2026-11-17', as_of=as_of, spot_timestamp=as_of)
+        self.assertIsNone(stale['Synthetic future'])
+
+        unrelated = calculate(valid_rows, 25005.0, years=7 / 365, expiry='2026-12-17', as_of=as_of, spot_timestamp=as_of)
+        self.assertIsNone(unrelated['Synthetic future'])
+        bad_book = [dict(valid_rows[0], bid=242.0, ask=241.0), valid_rows[1]]
+        self.assertIsNone(calculate(bad_book, 25005.0, years=7 / 365, expiry='2026-11-17', as_of=as_of, spot_timestamp=as_of)['Synthetic future'])
+
+        unmatched_future = calculate(
+            valid_rows, 25005.0, years=7 / 365, expiry='2026-11-17', as_of=as_of,
+            spot_timestamp=as_of,
+            future_quote={'expiry': '2026-12-31', 'timestamp': as_of, 'bid': 25030.0, 'ask': 25032.0},
+            future_contract={'expiry': '2026-11-26'},
+        )
+        self.assertIsNone(unmatched_future['Month future LTP'])
+        self.assertIsNone(unmatched_future['Basis'])
+
+        unvalidated_future = determine_forward(
+            [], spot=25000.0, future_quote={'last_price': 25035.0},
+            expiry='2026-11-17', as_of=as_of, spot_timestamp=as_of,
+        )
+        self.assertEqual(unvalidated_future['source'], 'cost_of_carry_forward')
+        self.assertNotEqual(unvalidated_future['forward'], 25035.0)
+        missing_spot_time = determine_forward(
+            [], spot=25000.0, expiry='2026-11-17', as_of=as_of,
+        )
+        self.assertEqual(missing_spot_time['source'], 'unavailable')
+        self.assertIsNone(missing_spot_time['forward'])
+
+    def test_sharpe_and_sortino_use_daily_returns_and_daily_sessions(self):
+        trades = pd.DataFrame([
+            {'Date': '2026-10-26 10:00', 'Net': 100.0, 'Capital required': 1000.0},
+            {'Date': '2026-10-26 15:00', 'Net': -20.0, 'Capital required': 1000.0},
+            {'Date': '2026-10-28', 'Net': -10.0, 'Capital required': 1000.0},
+        ])
+        summary = strategy_backtest.summarize_performance(trades, annualization=245.0)
+        returns = np.array([0.04, 0.0, -0.01])
+        expected_sharpe = returns.mean() / returns.std(ddof=1) * np.sqrt(245.0)
+        expected_sortino = returns.mean() / np.sqrt(np.mean(np.square(np.minimum(returns, 0.0)))) * np.sqrt(245.0)
+        self.assertAlmostEqual(summary['sharpe'], expected_sharpe, places=12)
+        self.assertAlmostEqual(summary['sortino'], expected_sortino, places=12)
+        self.assertEqual(summary['risk_metric_version'], strategy_backtest.RISK_METRIC_VERSION)
 
 
 if __name__ == "__main__":

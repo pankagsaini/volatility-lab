@@ -6,6 +6,8 @@ Windows and annualization use trading sessions, not calendar days.
 import numpy as np
 import pandas as pd
 
+YANG_ZHANG_VERSION = 'yang-zhang-2000-close-close-v2'
+
 
 def validate_ohlc(frame):
     if isinstance(frame, pd.DataFrame) and getattr(frame, '_ohlc_validated', False):
@@ -33,7 +35,7 @@ def validate_ohlc(frame):
 
 
 def rolling_rv_suite(frame, window=20, lam=0.94, ann_factor=245):
-    """Vectorized rolling Close-to-Close, Parkinson, Garman-Klass, Rogers-Satchell, Yang-Zhang, and EWMA."""
+    """Vectorized rolling volatility estimators; EWMA uses zero-mean squared log returns."""
     if isinstance(window, bool) or not isinstance(window, int) or window < 2:
         raise ValueError('window must be an integer of at least 2 sessions')
     if not 0 < lam < 1 or not np.isfinite(ann_factor) or ann_factor <= 0:
@@ -50,11 +52,11 @@ def rolling_rv_suite(frame, window=20, lam=0.94, ann_factor=245):
     k = 0.34 / (1.34 + (window + 1) / (window - 1))
     overnight_var = overnight.rolling(window).var(ddof=1)
     rs_var = rs.rolling(window).mean().clip(lower=0.0)
-    intraday_var = k * intraday.rolling(window).var(ddof=1) + (1.0 - k) * rs_var
+    cc_var = returns.rolling(window).var(ddof=1)
+    intraday_var = k * cc_var + (1.0 - k) * rs_var
     yz_var = (overnight_var + intraday_var).clip(lower=0.0)
     parkinson_var = (hl ** 2).rolling(window).mean() / (4.0 * np.log(2.0))
     gk_var = (0.5 * (hl ** 2) - (2.0 * np.log(2.0) - 1.0) * (intraday ** 2)).rolling(window).mean().clip(lower=0.0)
-    cc_var = returns.rolling(window).var(ddof=1)
     ewma_var = returns.dropna().pow(2).ewm(alpha=1.0 - lam, adjust=False).mean().reindex(df.index)
     return pd.DataFrame({
         'close_to_close_rv': np.sqrt(cc_var * ann_factor),
@@ -73,6 +75,7 @@ def rv_snapshot(frame, window=20, lam=0.94, ann_factor=245):
     last = suite.iloc[-1]
     return {
         'as_of': suite.index[-1].isoformat(),
+        'yang_zhang_version': YANG_ZHANG_VERSION,
         'window_trading_sessions': window,
         'annualization_sessions': ann_factor,
         'close_to_close_rv': float(last['close_to_close_rv']),

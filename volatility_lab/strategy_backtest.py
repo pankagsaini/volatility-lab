@@ -500,14 +500,19 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
 
 
 
+RISK_METRIC_VERSION = 'daily-capital-return-v2'
+
+
 def summarize_performance(trades: pd.DataFrame, annualization: float = 245.0) -> dict:
-    """Compute guarded Sharpe, Sortino, Max Drawdown, Win Rate, and PnL Attribution."""
+    """Compute risk ratios from daily returns on summed committed capital."""
+    if not np.isfinite(annualization) or annualization <= 0:
+        raise ValueError('annualization must be finite and positive')
     if trades is None or trades.empty or 'Net' not in trades.columns:
         return {
             'trades': 0, 'win_rate_pct': 0.0, 'avg_capital_inr': 0.0, 'total_premium_inr': 0.0,
             'gross_pnl': 0.0, 'slippage': 0.0, 'charges': 0.0, 'net_pnl': 0.0,
             'roi_pct': 0.0, 'max_drawdown_inr': 0.0, 'max_drawdown_pct': 0.0,
-            'sharpe': 0.0, 'sortino': 0.0,
+            'sharpe': 0.0, 'sortino': 0.0, 'risk_metric_version': RISK_METRIC_VERSION,
         }
     net = pd.to_numeric(trades['Net'], errors='coerce').dropna().to_numpy(dtype=float)
     n = len(net)
@@ -516,7 +521,7 @@ def summarize_performance(trades: pd.DataFrame, annualization: float = 245.0) ->
             'trades': 0, 'win_rate_pct': 0.0, 'avg_capital_inr': 0.0, 'total_premium_inr': 0.0,
             'gross_pnl': 0.0, 'slippage': 0.0, 'charges': 0.0, 'net_pnl': 0.0,
             'roi_pct': 0.0, 'max_drawdown_inr': 0.0, 'max_drawdown_pct': 0.0,
-            'sharpe': 0.0, 'sortino': 0.0,
+            'sharpe': 0.0, 'sortino': 0.0, 'risk_metric_version': RISK_METRIC_VERSION,
         }
     cum = np.cumsum(net)
     peaks = np.maximum.accumulate(np.insert(cum, 0, 0.0))[1:]
@@ -528,13 +533,33 @@ def summarize_performance(trades: pd.DataFrame, annualization: float = 245.0) ->
     denom = max_cap + max(0.0, float(np.max(peaks)))
     max_dd_pct = float(max_dd_inr / denom * 100.0) if denom > 0 else 0.0
 
-    mean_pnl = float(np.mean(net))
-    std_pnl = float(np.std(net, ddof=1)) if n > 1 else 0.0
-    sharpe = float((mean_pnl / std_pnl) * math.sqrt(annualization)) if std_pnl > 1e-9 else 0.0
+    if {'Date', 'Capital required'}.issubset(trades.columns):
+        dated = trades.assign(Date=pd.to_datetime(trades['Date'], format='mixed').dt.normalize())
+        daily = dated.groupby('Date').agg(
+            Net=('Net', 'sum'), Capital=('Capital required', 'sum')
+        )
+        daily['Return'] = daily['Net'] / daily['Capital'].where(daily['Capital'] > 0.0)
+        try:
+            try:
+                from market_calendar import is_trading_day
+            except ModuleNotFoundError:
+                from .market_calendar import is_trading_day
+            sessions = [
+                stamp for stamp in pd.date_range(daily.index.min(), daily.index.max(), freq='D')
+                if is_trading_day(stamp.date(), include_special=True)
+            ]
+        except ValueError:
+            sessions = list(pd.bdate_range(daily.index.min(), daily.index.max()))
+        daily_returns = daily['Return'].reindex(sessions, fill_value=0.0).dropna().to_numpy(dtype=float)
+    else:
+        daily_returns = np.array([], dtype=float)
+    mean_return = float(np.mean(daily_returns)) if daily_returns.size else 0.0
+    std_return = float(np.std(daily_returns, ddof=1)) if daily_returns.size > 1 else 0.0
+    sharpe = float((mean_return / std_return) * math.sqrt(annualization)) if std_return > 1e-9 else 0.0
 
-    downside = np.minimum(0.0, net)
-    down_dev = float(math.sqrt(np.mean(np.square(downside))))
-    sortino = float((mean_pnl / down_dev) * math.sqrt(annualization)) if down_dev > 1e-9 else (sharpe if mean_pnl > 0 else 0.0)
+    downside = np.minimum(0.0, daily_returns)
+    down_dev = float(math.sqrt(np.mean(np.square(downside)))) if downside.size else 0.0
+    sortino = float((mean_return / down_dev) * math.sqrt(annualization)) if down_dev > 1e-9 else (sharpe if mean_return > 0 else 0.0)
 
     net_sum = float(net.sum())
     return {
@@ -551,4 +576,5 @@ def summarize_performance(trades: pd.DataFrame, annualization: float = 245.0) ->
         'max_drawdown_pct': max_dd_pct,
         'sharpe': sharpe,
         'sortino': sortino,
+        'risk_metric_version': RISK_METRIC_VERSION,
     }
