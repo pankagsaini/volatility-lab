@@ -11,6 +11,10 @@ __pycache__/
 *$py.class
 .pytest_cache/
 .ruff_cache/
+*.egg-info/
+*.egg
+build/
+dist/
 
 # Windows Batch & Untracked Shell Scripts
 *.cmd
@@ -29,6 +33,8 @@ volatility_lab/.streamlit/secrets.toml
 *.tmp
 .clasprc.json
 .env
+.env.*
+!.env.example
 
 # System Diagnostic Logs
 volatility_lab/logs/
