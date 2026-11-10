@@ -162,9 +162,9 @@ python -c "from streamlit.testing.v1 import AppTest; at = AppTest.from_file('str
 
 Continuous Integration is automated via [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
 - **Matrix Testing**: Validates code quality on Python 3.10, 3.11, and 3.12 using `pip install -e .[dev]`.
-- **Linting & Audit Tests**: Runs `ruff check` and `test_audit_remediations.py`.
+- **Focused Linting & Audit Tests**: Runs `ruff check volatility_lab/ scripts/ pyproject.toml` (scoped to maintained packages only) and `test_audit_remediations.py`.
 - **Web Parity Verification**: Enforces that `docs/index.html` and `index.html` maintain byte-level SHA-256 parity and validates `docs/CNAME`.
-- **Safe Branch Synchronization**: Provides a guarded `workflow_dispatch` trigger to fast-forward `main` from `master` (`--ff-only`) without dangerous force-pushes.
+- **Zero-Risk Read-Only CI**: CI uses strict read-only token permissions (`contents: read`) with zero automated branch pushing.
 
 ---
 

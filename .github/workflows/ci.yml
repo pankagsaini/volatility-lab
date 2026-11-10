@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test-and-lint:
@@ -34,7 +34,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[dev]
 
-      - name: Run Focused Ruff Linter
+      - name: Run Focused Ruff Linter (volatility_lab & scripts)
         run: |
           ruff check volatility_lab/ scripts/ pyproject.toml
 
@@ -67,23 +67,3 @@ jobs:
           assert open('docs/CNAME').read().strip() == 'volatilitylab.in', 'docs/CNAME must be volatilitylab.in'
           print('CNAME verified: volatilitylab.in')
           "
-
-  sync-branches:
-    name: Sync Master to Main (Manual Fast-Forward Only)
-    needs: [ test-and-lint, deployment-parity ]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Fast-forward main to master (Safe, Non-Force)
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout main
-          git merge --ff-only master
-          git push origin main
