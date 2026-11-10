@@ -240,6 +240,22 @@ def position_greeks(context: dict[str, Any], position: pd.DataFrame) -> dict[str
     }
 
 
+def gap_summary(frame: pd.DataFrame, as_of: Any = None) -> pd.DataFrame:
+    """Historical overnight gap distributions for underlying spot."""
+    if frame is None or frame.empty:
+        return pd.DataFrame(columns=["Statistic", "Value"])
+    moves = frame["Close"].pct_change().dropna() if "Close" in frame.columns else pd.Series(dtype=float)
+    if moves.empty:
+        return pd.DataFrame(columns=["Statistic", "Value"])
+    return pd.DataFrame([
+        {"Statistic": "Mean Overnight Move", "Value": f"{moves.mean() * 100:.2f}%"},
+        {"Statistic": "Median Overnight Move", "Value": f"{moves.median() * 100:.2f}%"},
+        {"Statistic": "Max Overnight Gap", "Value": f"{moves.max() * 100:.2f}%"},
+        {"Statistic": "Min Overnight Gap", "Value": f"{moves.min() * 100:.2f}%"},
+        {"Statistic": "Standard Deviation", "Value": f"{moves.std() * 100:.2f}%"},
+    ])
+
+
 class _StressResult(dict):
     """Dict that also supports 2-tuple unpacking `scenarios, summary = stress_position(...)` for UI compatibility."""
     def __init__(self, grid_df: pd.DataFrame, max_loss: float | None):
