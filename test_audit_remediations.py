@@ -36,9 +36,9 @@ if "msvcrt" not in sys.modules:
 # Add patched directory to sys.path when running in sandbox or local repo
 HERE_DIR = Path(__file__).resolve().parent
 PATCH_DIR = (
-    (HERE_DIR / "Volatility Lab")
-    if (HERE_DIR / "Volatility Lab").exists()
-    else (HERE_DIR.parent / "intermediate" / "patched" if (HERE_DIR.parent / "intermediate" / "patched").exists() else HERE_DIR)
+    (HERE_DIR / "volatility_lab")
+    if (HERE_DIR / "volatility_lab").exists()
+    else ((HERE_DIR / "Volatility Lab") if (HERE_DIR / "Volatility Lab").exists() else HERE_DIR)
 )
 for candidate in (HERE_DIR, PATCH_DIR):
     if candidate.exists():
@@ -370,7 +370,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         import importlib.util
         ui_p = Path(__file__).resolve().parent / "ui_theme.py"
         if not ui_p.exists():
-            ui_p = Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py"
+            ui_p = (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py")
         spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
         ui_theme = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ui_theme)
@@ -472,7 +472,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         import importlib.util
         ui_p = Path(__file__).resolve().parent / "ui_theme.py"
         if not ui_p.exists():
-            ui_p = Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py"
+            ui_p = (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py")
         spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
         ui_theme = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ui_theme)
@@ -971,7 +971,7 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
     def test_v18_clean_repository_structure_and_entrypoints(self):
         """Verify v18 clean repository structure, zero duplicate module pollution, updated 2026-11-09 expiry_latest.json, and 100% real-data docs/index.html."""
         repo_root = Path(__file__).resolve().parent
-        vl_dir = repo_root / "Volatility Lab"
+        vl_dir = (repo_root / "volatility_lab") if (repo_root / "volatility_lab").exists() else (repo_root / "Volatility Lab")
         desk_dir = repo_root / "streamlit_desk"
         if not vl_dir.is_dir():
             return

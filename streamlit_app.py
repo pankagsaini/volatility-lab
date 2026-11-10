@@ -1,7 +1,7 @@
 """Root Streamlit Entrypoint delegating to organized streamlit_desk package.
 
 Maintains full backward compatibility for Streamlit Cloud and local CLI (`streamlit run streamlit_app.py`)
-while keeping all Streamlit setup code neatly organized in `streamlit_desk/` and `Volatility Lab/`.
+while keeping all Streamlit setup code neatly organized in `streamlit_desk/` and `volatility_lab/`.
 """
 from pathlib import Path
 import os
@@ -14,7 +14,7 @@ os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("MALLOC_TRIM_THRESHOLD_", "65536")
 
 ROOT = Path(__file__).resolve().parent
-LAB_DIR = ROOT / "Volatility Lab"
+LAB_DIR = (ROOT / "volatility_lab") if (ROOT / "volatility_lab").exists() else (ROOT / "Volatility Lab")
 if str(LAB_DIR) in sys.path:
     sys.path.remove(str(LAB_DIR))
 sys.path.insert(0, str(LAB_DIR))
