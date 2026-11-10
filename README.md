@@ -109,13 +109,20 @@ All sensitive credentials (Upstox API keys, Google Drive access tokens, session 
 2. Populate `.env` with your broker credentials and settings.
 3. `.env` and `.env.*` are strictly ignored by Git (`.gitignore`) to prevent accidental leaks.
 
-### Data Hydration Utility
+### Data Hydration & Snapshot Verification Utility
 
-To initialize or verify the local historical SQLite database and baseline archives:
+To verify local market data snapshots, inspect database health, and hydrate `monitor.sqlite` tables from committed Upstox captures:
 ```bash
-python scripts/fetch_market_data.py
+python scripts/fetch_market_data.py --status  # Check database tables and snapshot counts
+python scripts/fetch_market_data.py --seed    # Initialize schema & hydrate from committed snapshots
 ```
-This utility verifies local data availability and ensures the database schema is initialized without checking large binary data into source control.
+This utility ensures local database readiness without checking multi-megabyte binary database files into source control.
+
+### Cloud Webhook & Deployment Security (`Code.gs`)
+
+Google Apps Script (`volatility_lab/cloud/apps_script/Code.gs`) powers 24x7 option-chain collection and paper forward testing:
+- **Public Read Mode (Default)**: When `WEBHOOK_KEY` is not set in Script Properties, `doGet()` serves read-only market snapshots and forward-test summaries to enable direct web dashboard queries on [volatilitylab.in](https://volatilitylab.in) without exposing API secrets.
+- **Private / Authorized Mode**: To restrict access in private institutional deployments, configure `WEBHOOK_KEY` in Google Apps Script > Project Settings > Script Properties. All requests must then supply `?key=<WEBHOOK_KEY>` or be rejected with HTTP 401 Unauthorized.
 
 ---
 

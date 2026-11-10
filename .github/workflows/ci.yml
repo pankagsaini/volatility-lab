@@ -42,6 +42,37 @@ jobs:
         run: |
           python test_audit_remediations.py
 
+      - name: Build Wheel & Verify Distributable Package Data
+        run: |
+          pip install build
+          python -m build --wheel
+          python -c "
+          import glob, zipfile
+          whls = glob.glob('dist/*.whl')
+          assert whls, 'No wheel file generated in dist/'
+          with zipfile.ZipFile(whls[0]) as z:
+              names = z.namelist()
+              print(f'Wheel archive contents: {len(names)} files')
+              assert any('volatility_lab/data/expiry_latest.json' in n for n in names), 'expiry_latest.json missing from wheel'
+              assert any('volatility_lab/data/banknifty_one_year.csv' in n for n in names), 'csv data missing from wheel'
+          print('Wheel package-data verification passed.')
+          "
+
+      - name: Smoke-Test Installed Wheel in Clean Virtualenv
+        run: |
+          python -m venv clean_env
+          clean_env/bin/python -m pip install --upgrade pip
+          clean_env/bin/python -m pip install dist/*.whl
+          clean_env/bin/python -c "
+          import volatility_lab
+          from volatility_lab.forward_test import load_forward_test_ledger, LOT_SIZES
+          from volatility_lab.market_calendar import is_trading_day
+          ledger = load_forward_test_ledger()
+          assert ledger['version'] == 'forward-test-v19.1-clean', 'Bad ledger version'
+          assert LOT_SIZES['NIFTY'] == 65, 'Bad NIFTY lot size'
+          print('Installed wheel clean-env smoke test passed successfully!')
+          "
+
   deployment-parity:
     name: Verify Web & Deployment Parity
     runs-on: ubuntu-latest

@@ -1171,5 +1171,138 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
         self.assertIn("payload.forward_test_ledger", code_gs)
 
 
+
+class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
+    """Verify paper-trading data integrity, quote freshness, engine configuration parity & wheel packaging."""
+
+    def test_35_parity_between_python_and_apps_script_constants(self):
+        """Assert Python and Apps Script engines agree on lot sizes, capital and constants."""
+        from forward_test import LOT_SIZES, STRATEGY_CAPITAL_PER_LOT, MIN_FORWARD_DATE
+        self.assertEqual(LOT_SIZES["NIFTY"], 65)
+        self.assertEqual(LOT_SIZES["BANKNIFTY"], 30)
+        self.assertEqual(MIN_FORWARD_DATE, "2026-11-11")
+
+        code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
+        self.assertIn("const lotQty = sym === 'NIFTY' ? 65 : 30;", code_gs)
+        self.assertIn("const lotQty = pos.sym === 'NIFTY' ? 65 : 30;", code_gs)
+        self.assertNotIn("sym === 'NIFTY' ? 75 : 30", code_gs)
+        self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", code_gs)
+
+        # Assert capital parity for S1-S6
+        for sym in ("NIFTY", "BANKNIFTY"):
+            for sc in ("S1", "S2", "S3", "S4", "S5", "S6"):
+                py_cap = STRATEGY_CAPITAL_PER_LOT[sym][sc]
+                pattern = f"{sc}: {py_cap}"
+                self.assertIn(pattern, code_gs, f"Missing or mismatched {sym} {sc} capital in Code.gs")
+
+    def test_36_quote_absence_and_no_price_fabrication(self):
+        """Verify evaluate_strategies_for_chain never fabricates fill prices when leg quotes are missing."""
+        from forward_test import evaluate_strategies_for_chain
+
+        # Test A: Chain with missing ATM strike completely
+        res_empty = evaluate_strategies_for_chain(
+            symbol="NIFTY",
+            expiry="2026-11-17",
+            spot=25044.65,
+            chain_rows=[],
+            hv10=14.0,
+            hv30=15.0,
+            dte=8,
+        )
+        self.assertEqual(res_empty, [], "Must return empty list when chain strikes are missing")
+
+        # Test B: Chain with incomplete strikes (ATM present, but OTM wing strike missing)
+        incomplete_chain = [
+            {"strike": 25050, "cLtp": 180.0, "pLtp": 190.0, "cIv": 15.5, "pIv": 15.5},
+            {"strike": 25250, "cLtp": 90.0, "pLtp": 0.0, "cIv": 15.0, "pIv": 0.0},
+        ]
+        res_partial = evaluate_strategies_for_chain(
+            symbol="NIFTY",
+            expiry="2026-11-17",
+            spot=25044.65,
+            chain_rows=incomplete_chain,
+            hv10=14.0,
+            hv30=15.0,
+            dte=8,
+        )
+        # S1 requires K-200, K+200, K-500, K+500. Since they are missing, S1 must NOT be triggered.
+        s1_setups = [s for s in res_partial if s.get("strat") == "S1"]
+        self.assertEqual(s1_setups, [], "S1 must be rejected when wing quotes are missing (no fallback fabrication)")
+
+    def test_37_stale_marks_prevent_automated_exits(self):
+        """Verify that stale or missing quotes flag freshness='STALE' and do NOT trigger automated SL/TP exits."""
+        from forward_test import mark_open_positions_to_market
+
+        mock_pos = {
+            "id": "OPEN-20261111-NIF-1117-S1",
+            "date": "2026-11-11",
+            "session_date": "2026-11-11",
+            "sym": "NIFTY",
+            "exp": "2026-11-17",
+            "strat": "S1",
+            "capital": 28037,
+            "maxLoss": 7800,
+            "maxCredit": 11000,
+            "entryPx": 150.0,
+            "grossMtm": -4000.0,
+            "legs": [
+                {"side": -1, "mult": 1, "strike": 25250, "type": "CE", "entryPx": 150.0, "curPx": 150.0},
+                {"side": -1, "mult": 1, "strike": 24850, "type": "PE", "entryPx": 160.0, "curPx": 160.0},
+            ],
+        }
+
+        # Mark against EMPTY live chains (quotes absent/stale)
+        still_open, newly_closed = mark_open_positions_to_market(
+            open_positions=[mock_pos],
+            live_chains={},
+            sl_rule="SL_50_MAXLOSS",
+            tp_rule="TP_50_30",
+            current_time_ist="11:30 IST",
+            auto_close_intraday_1515=False,
+        )
+
+        self.assertEqual(len(still_open), 1, "Stale position must remain open and not be falsely auto-closed")
+        self.assertEqual(len(newly_closed), 0, "No exit should trigger on stale quotes")
+        self.assertEqual(still_open[0].get("freshness"), "STALE")
+        self.assertIn("Missing live quote", still_open[0].get("staleReason", ""))
+
+    def test_38_wheel_build_and_package_data(self):
+        """Verify pyproject.toml package-data inclusion for wheel distribution."""
+        pyproject_text = (HERE_DIR / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertIn("[tool.setuptools.package-data]", pyproject_text)
+        self.assertIn("volatility_lab = [", pyproject_text)
+        self.assertIn('"data/*.json"', pyproject_text)
+        self.assertIn('"data/*.csv"', pyproject_text)
+        self.assertIn('"data/*.sqlite"', pyproject_text)
+
+    def test_39_market_calendar_horizon_boundary_and_warning(self):
+        """Verify market calendar boundary protections and horizon warning protocol."""
+        from market_calendar import (
+            MIN_SUPPORTED_YEAR,
+            MAX_SUPPORTED_YEAR,
+            CalendarHorizonError,
+            is_trading_day,
+            check_horizon_warning,
+        )
+        import datetime
+        self.assertEqual(MIN_SUPPORTED_YEAR, 2023)
+        self.assertEqual(MAX_SUPPORTED_YEAR, 2028)
+
+        # 1. Queries outside horizon raise CalendarHorizonError
+        with self.assertRaises(CalendarHorizonError):
+            is_trading_day(datetime.date(2022, 12, 31))
+        with self.assertRaises(CalendarHorizonError):
+            is_trading_day(datetime.date(2029, 1, 1))
+
+        # 2. Horizon warning check returns None for normal active years
+        self.assertIsNone(check_horizon_warning(datetime.date(2026, 11, 10)))
+
+        # 3. Horizon warning returns alert when within 365 days of 2028-12-31
+        warn = check_horizon_warning(datetime.date(2028, 6, 1))
+        self.assertIsNotNone(warn)
+        self.assertIn("WARNING", warn)
+        self.assertIn("expires in", warn)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

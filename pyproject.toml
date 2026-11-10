@@ -45,6 +45,14 @@ dev = [
 where = ["."]
 include = ["volatility_lab*"]
 
+[tool.setuptools.package-data]
+volatility_lab = [
+    "data/*.json",
+    "data/*.csv",
+    "data/*.sqlite",
+    "data/google_archive/*.json.gz",
+]
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"

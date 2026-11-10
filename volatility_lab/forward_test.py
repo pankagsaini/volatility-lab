@@ -50,6 +50,8 @@ SPECIAL_SESSIONS: dict[str, dict[str, Any]] = {
     "2028-10-17": {"start_mins": 18 * 60, "end_mins": 19 * 60 + 30, "label": "MUHURAT"},
 }
 
+LOT_SIZES: dict[str, int] = {"NIFTY": 65, "BANKNIFTY": 30}
+
 STRATEGY_CAPITAL_PER_LOT: dict[str, dict[str, int]] = {
     "NIFTY": {"S1": 28037, "S2": 56074, "S3": 28037, "S4": 56074, "S5": 28037, "S6": 56074},
     "BANKNIFTY": {"S1": 26570, "S2": 46718, "S3": 26570, "S4": 53140, "S5": 26570, "S6": 53140},
@@ -351,11 +353,16 @@ def evaluate_strategies_for_chain(
                 "pIv": float(row.get("pIv") or row.get("iv") or 0.0),
             }
 
-    if strike_map and K not in strike_map:
-        K = min(strike_map.keys(), key=lambda x: abs(x - K))
+    if not strike_map or K not in strike_map:
+        # Data integrity gate: cannot evaluate setups without valid ATM strikes
+        return []
 
-    atm_node = strike_map.get(K, {"cLtp": 150.0, "pLtp": 150.0, "cIv": 16.0, "pIv": 16.0})
-    iv = round(0.5 * (atm_node["cIv"] + atm_node["pIv"]), 2) if (atm_node["cIv"] > 0 and atm_node["pIv"] > 0) else 16.0
+    atm_node = strike_map[K]
+    if atm_node.get("cLtp", 0.0) <= 0 or atm_node.get("pLtp", 0.0) <= 0:
+        # Reject: missing real market quotes for ATM strike
+        return []
+
+    iv = round(0.5 * (atm_node["cIv"] + atm_node["pIv"]), 2) if (atm_node.get("cIv", 0) > 0 and atm_node.get("pIv", 0) > 0) else 16.0
     strad_pts = round(atm_node["cLtp"] + atm_node["pLtp"], 2)
     syn_fut = round(K + atm_node["cLtp"] - atm_node["pLtp"], 2)
     fut_val = float(fut_price) if fut_price is not None else spot
@@ -386,20 +393,22 @@ def evaluate_strategies_for_chain(
     results = []
     for s_code, is_trig, metrics_txt in trig_defs:
         legs = build_strategy_legs(sym, K, s_code)
+        has_missing_quote = False
         for l in legs:
             k_target = l["strike"]
             fld = "cLtp" if l["type"] == "CE" else "pLtp"
-            px = strike_map.get(k_target, {}).get(fld, 0.0)
-            if px <= 0 and strike_map:
-                avail = [k2 for k2, v2 in strike_map.items() if v2.get(fld, 0.0) > 0]
-                if avail:
-                    best_k = min(avail, key=lambda x: abs(x - k_target))
-                    l["strike"] = best_k
-                    px = strike_map[best_k][fld]
-            if px <= 0:
-                px = round(max(10.0, strad_pts * 0.2), 2)
+            node = strike_map.get(k_target)
+            if not node or node.get(fld, 0.0) <= 0:
+                has_missing_quote = True
+                break
+            px = float(node[fld])
             l["entryPx"] = round(px, 2)
             l["curPx"] = round(px, 2)
+
+        if has_missing_quote:
+            # Data Integrity: NEVER substitute estimated or fabricated prices.
+            # Skip setup entry entirely when real quote is unavailable.
+            continue
 
         cap_base = STRATEGY_CAPITAL_PER_LOT.get(sym, STRATEGY_CAPITAL_PER_LOT["NIFTY"])[s_code] * max(1, int(lots))
         if s_code == "S2":
@@ -485,12 +494,23 @@ def mark_open_positions_to_market(
                     "pIv": float(r.get("pIv") or r.get("iv") or 0.0),
                 }
 
-        gross = 0.0
+        all_legs_fresh = bool(strike_map)
         for leg in pos.get("legs", []):
             k = int(leg["strike"])
             fld = "cLtp" if leg["type"] == "CE" else "pLtp"
             if k in strike_map and strike_map[k].get(fld, 0.0) > 0:
                 leg["curPx"] = round(strike_map[k][fld], 2)
+            else:
+                all_legs_fresh = False
+
+        pos["freshness"] = "FRESH" if all_legs_fresh else "STALE"
+        if not all_legs_fresh:
+            pos["staleReason"] = f"Missing live quote in snapshot for {key}"
+        else:
+            pos.pop("staleReason", None)
+
+        gross = 0.0
+        for leg in pos.get("legs", []):
             cur_px = float(leg.get("curPx", leg["entryPx"]))
             e_px = float(leg["entryPx"])
             qty = lot_qty * int(leg.get("mult", 1))
@@ -501,8 +521,8 @@ def mark_open_positions_to_market(
         pos["netMtm"] = round(pos["grossMtm"] - pos["estCharges"], 2)
         pos["markedAt"] = current_time_ist
 
-        mtm_path = list(pos.get("mtmPath") or [{"t": "09:20 IST", "gross": 0.0, "iv": pos.get("entryIv", 16.0)}])
-        mtm_path.append({"t": current_time_ist, "gross": pos["grossMtm"], "iv": pos.get("curIv", pos.get("entryIv", 16.0))})
+        mtm_path = list(pos.get("mtmPath") or [{"t": "09:20 IST", "gross": 0.0, "iv": pos.get("entryIv", 16.0), "fresh": True}])
+        mtm_path.append({"t": current_time_ist, "gross": pos["grossMtm"], "iv": pos.get("curIv", pos.get("entryIv", 16.0)), "fresh": all_legs_fresh})
         pos["mtmPath"] = mtm_path
 
         cap = float(pos.get("capital", 28037))
@@ -524,9 +544,10 @@ def mark_open_positions_to_market(
             tp_thresh = (0.50 * max_loss) if pos["strat"] == "S2" else (0.75 * max_cr)
 
         close_reason = None
-        if sl_thresh is not None and pos["grossMtm"] <= sl_thresh:
+        # OPERATIONAL SAFETY: Stale marks CANNOT drive automated SL/TP exits!
+        if all_legs_fresh and sl_thresh is not None and pos["grossMtm"] <= sl_thresh:
             close_reason = f"Stop-Loss Hit ({sl_rule})"
-        elif tp_thresh is not None and pos["grossMtm"] >= tp_thresh:
+        elif all_legs_fresh and tp_thresh is not None and pos["grossMtm"] >= tp_thresh:
             close_reason = f"Target Hit ({tp_rule})"
         elif auto_close_intraday_1515:
             close_reason = "15:15 IST Auto-Close"

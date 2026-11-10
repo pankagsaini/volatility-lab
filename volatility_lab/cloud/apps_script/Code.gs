@@ -829,6 +829,17 @@ function auditStatus() {
  * Public Web API endpoint for Streamlit Cloud & external lab dashboards.
  * Returns the uncompressed JSON of the latest market snapshot in real-time.
  */
+/**
+ * HTTP GET Webhook / API Endpoint.
+ *
+ * Security & Access Control Model:
+ * - Public Read Mode (Default): When WEBHOOK_KEY is empty in Script Properties,
+ *   doGet serves public, read-only market snapshots (expiry_latest.json and forward test summaries)
+ *   to enable direct browser queries on https://volatilitylab.in without exposing API secrets.
+ * - Private / Key-Enforced Mode: To restrict access to authorized callers, set WEBHOOK_KEY
+ *   in Project Settings > Script Properties. All requests without ?key=<WEBHOOK_KEY>
+ *   are rejected with HTTP 401 Unauthorized.
+ */
 function doGet(e) {
   try {
     const properties = props_();
@@ -912,7 +923,7 @@ function doGet(e) {
 // v19 AUTOMATED 24/7 CLOUD FORWARD TESTING (LIVE PAPER-TRADING) ENGINE
 // ============================================================================
 const STRATEGY_CAPITAL_PER_LOT = {
-  NIFTY: { S1: 28037, S2: 37590, S3: 28037, S4: 56074, S5: 28037, S6: 56074 },
+  NIFTY: { S1: 28037, S2: 56074, S3: 28037, S4: 56074, S5: 28037, S6: 56074 },
   BANKNIFTY: { S1: 26570, S2: 46718, S3: 26570, S4: 53140, S5: 26570, S6: 53140 }
 };
 
@@ -1132,7 +1143,7 @@ function upstoxOptionCharge_(price, qty, isSell) {
 }
 
 function positionCharges_(legs, sym, includeExit) {
-  const lotQty = sym === 'NIFTY' ? 75 : 30;
+  const lotQty = sym === 'NIFTY' ? 65 : 30;
   let total = 0.0;
   (legs || []).forEach(l => {
     const qty = lotQty * Number(l.mult || 1);
@@ -1373,7 +1384,7 @@ function evaluateForwardTest_(report) {
       const ch = chainMap[key];
       if (!ch || !ch.spot) return;
       const step = sym === 'NIFTY' ? 50 : 100;
-      const lotQty = sym === 'NIFTY' ? 75 : 30;
+      const lotQty = sym === 'NIFTY' ? 65 : 30;
       const K = Math.round(ch.spot / step) * step;
       const atmNode = ch.strikes[K];
       if (!atmNode || !atmNode.cIv || !atmNode.pIv) return;
@@ -1405,12 +1416,20 @@ function evaluateForwardTest_(report) {
         const sCode = item[0], isTrig = item[1], metricsTxt = item[2];
         if (!isTrig || existingKeys.has(sym + '|' + exp + '|' + sCode)) return;
         const legs = buildStrategyLegs_(sym, K, sCode);
+        let allLegsValid = true;
         legs.forEach(l => {
-          const node = ch.strikes[l.strike] || atmNode;
-          const px = Number((l.type === 'CE' ? node.cLtp : node.pLtp) || 25.0);
+          const node = ch.strikes[l.strike];
+          if (!node) { allLegsValid = false; return; }
+          const px = Number(l.type === 'CE' ? node.cLtp : node.pLtp);
+          if (!px || px <= 0) { allLegsValid = false; return; }
           l.entryPx = Number(px.toFixed(2));
           l.curPx = Number(px.toFixed(2));
         });
+        if (!allLegsValid) {
+          // Data Integrity: NEVER substitute estimated ATM or fixed 25 price.
+          // Skip entry when genuine quote is missing.
+          return;
+        }
         const cap = (STRATEGY_CAPITAL_PER_LOT[sym] || STRATEGY_CAPITAL_PER_LOT.NIFTY)[sCode];
         const credPts = Math.max(15.0, legs.reduce((acc, l) => acc + (-l.side) * l.mult * l.entryPx, 0));
         const maxCr = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty * 0.65) : Math.round(credPts * lotQty);
@@ -1452,15 +1471,28 @@ function evaluateForwardTest_(report) {
   ledger.open_positions.forEach(pos => {
     const key = pos.sym + '|' + pos.exp;
     const ch = chainMap[key];
-    const lotQty = pos.sym === 'NIFTY' ? 75 : 30;
-    if (ch && ch.strikes) {
-      let gross = 0.0;
+    const lotQty = pos.sym === 'NIFTY' ? 65 : 30;
+    let allLegsFresh = !!(ch && ch.strikes);
+    if (allLegsFresh) {
       (pos.legs || []).forEach(l => {
         const node = ch.strikes[l.strike];
         const fld = l.type === 'CE' ? 'cLtp' : 'pLtp';
-        if (node && node[fld] > 0) {
-          l.curPx = Number(node[fld].toFixed(2));
+        if (!node || !node[fld] || node[fld] <= 0) {
+          allLegsFresh = false;
+          return;
         }
+        l.curPx = Number(node[fld].toFixed(2));
+      });
+    }
+    pos.freshness = allLegsFresh ? 'FRESH' : 'STALE';
+    if (!allLegsFresh) {
+      pos.staleReason = 'Missing live strike quote in chain snapshot';
+    } else {
+      delete pos.staleReason;
+    }
+    if (allLegsFresh) {
+      let gross = 0.0;
+      (pos.legs || []).forEach(l => {
         const curPx = Number(l.curPx !== undefined ? l.curPx : l.entryPx);
         const ePx = Number(l.entryPx || 0);
         const qty = lotQty * Number(l.mult || 1);
@@ -1472,14 +1504,18 @@ function evaluateForwardTest_(report) {
       pos.markedAt = timeIstLabel;
     }
 
-    const slThresh = -0.50 * Number(pos.maxLoss || 9000);
-    const tpThresh = pos.strat === 'S2' ? 0.30 * Number(pos.maxLoss || 37590) : 0.50 * Number(pos.maxCredit || 12000);
+    const slThresh = -0.50 * Number(pos.maxLoss || 7800);
+    const tpThresh = pos.strat === 'S2' ? 0.30 * Number(pos.maxLoss || 56074) : 0.50 * Number(pos.maxCredit || 12000);
     const isIntradayExit = mins >= 915;
 
-    if (pos.grossMtm <= slThresh || pos.grossMtm >= tpThresh || isIntradayExit) {
-      const reason = pos.grossMtm <= slThresh
+    // Operational safety: only fresh marks can drive automated SL/TP exits!
+    const slHit = allLegsFresh && (pos.grossMtm <= slThresh);
+    const tpHit = allLegsFresh && (pos.grossMtm >= tpThresh);
+
+    if (slHit || tpHit || isIntradayExit) {
+      const reason = slHit
         ? 'Stop-Loss Hit (-50% MaxLoss)'
-        : (pos.grossMtm >= tpThresh ? 'Profit Target Hit (+50% Cr)' : '15:15 IST Auto-Close');
+        : (tpHit ? 'Profit Target Hit (+50% Cr)' : '15:15 IST Auto-Close');
       (pos.legs || []).forEach(l => { l.exitPx = l.curPx; });
       ledger.closed_trades.unshift({
         id: String(pos.id || '').replace('OPEN-', 'FWD-'),

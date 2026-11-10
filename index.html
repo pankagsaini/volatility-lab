@@ -2599,12 +2599,20 @@
         else if (stratCode === 'S5') rawLegs = [{side:-1,mult:1,strike:K,type:'CE'},{side:-1,mult:1,strike:K,type:'PE'},{side:1,mult:1,strike:K+tightWing,type:'CE'},{side:1,mult:1,strike:K-tightWing,type:'PE'}];
         else rawLegs = [{side:-1,mult:2,strike:K+rShort,type:'CE'},{side:1,mult:2,strike:K+rLong,type:'CE'},{side:-1,mult:1,strike:K-tightWing,type:'PE'},{side:1,mult:1,strike:K-tightWing-(wLong-wShort),type:'PE'}];
 
+        var hasMissing = false;
         rawLegs.forEach(function(l) {
           var node = chainMap[l.strike];
-          var px = node ? (l.type === 'CE' ? node.cLtp : node.pLtp) : (item.strad * 0.22);
-          l.entryPx = Number((px || 25.0).toFixed(2));
-          l.curPx = l.entryPx;
+          var px = node ? Number((l.type === 'CE' ? node.cLtp : node.pLtp) || 0) : 0;
+          if (!node || px <= 0) {
+            hasMissing = true;
+            l.entryPx = 0.0;
+            l.curPx = 0.0;
+          } else {
+            l.entryPx = Number(px.toFixed(2));
+            l.curPx = l.entryPx;
+          }
         });
+        rawLegs.hasMissing = hasMissing;
         return rawLegs;
       }
 
@@ -2788,9 +2796,12 @@
             openTbody.innerHTML = '<tr><td colspan="12" class="py-6 px-4 text-center text-emerald-300 font-semibold mono">' + ARMED_ROW_MSG + '</td></tr>';
           } else {
             openTbody.innerHTML = openList.map(function(p) {
+              var freshBadge = p.freshness === 'STALE'
+                ? '<span class="ml-1 px-1 py-0.5 rounded text-[9px] font-bold bg-amber-950/80 border border-amber-500/40 text-amber-300" title="' + (p.staleReason || 'Quote missing') + '">STALE</span>'
+                : '<span class="ml-1 px-1 py-0.5 rounded text-[9px] font-bold bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">LIVE</span>';
               return '<tr class="hover:bg-[#111c2d]">' +
                 '<td class="py-2.5 px-2.5 text-slate-200 whitespace-nowrap"><div>' + p.trigTime + '</div><div class="text-[10px] text-slate-400">Marked: ' + (p.markedAt || '09:20 IST') + '</div></td>' +
-                '<td class="py-2.5 px-2.5 font-bold text-white whitespace-nowrap"><span class="px-1.5 py-0.5 mr-1 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 text-[10px]">' + p.sym + '</span>' + p.exp + ' <span class="text-slate-400 font-normal">(' + p.kind + ' · ' + p.dte + 'd)</span></td>' +
+                '<td class="py-2.5 px-2.5 font-bold text-white whitespace-nowrap"><span class="px-1.5 py-0.5 mr-1 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 text-[10px]">' + p.sym + '</span>' + freshBadge + ' ' + p.exp + ' <span class="text-slate-400 font-normal">(' + p.kind + ' · ' + p.dte + 'd)</span></td>' +
                 '<td class="py-2.5 px-2.5 font-bold text-sky-300 whitespace-nowrap">' + p.stratName + '</td>' +
                 '<td class="py-2.5 px-2.5 text-slate-200">' + p.metrics + '</td>' +
                 '<td class="py-2.5 px-2.5 text-slate-200">' + formatFwdLegs(p.legs, 'entry') + '</td>' +
@@ -3204,6 +3215,7 @@
                 var key = sym + '|' + item.expiry + '|' + s.code;
                 if (existingKeys[key]) return;
                 var legs = buildStrategyLegsForItem(item, sym, s.code);
+                if (legs.hasMissing) return; // Data integrity: never enter trade on missing quotes
                 var chg = calcPositionUpstoxCharges(legs, sym, 1, true);
                 forwardOpenPositions.push({
                   id: 'OPEN-' + snapshotDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + item.expiry.replace(/-/g, '').slice(4) + '-' + s.code,
@@ -3247,14 +3259,27 @@
         forwardOpenPositions.forEach(function(pos) {
           var sMap = chainLookup[pos.sym + '|' + pos.exp];
           var lotQty = pos.sym === 'NIFTY' ? 65 : 30;
+          var allLegsFresh = !!sMap;
           if (sMap) {
-            var gross = 0.0;
             (pos.legs || []).forEach(function(l) {
               var node = sMap[l.strike];
               var fld = l.type === 'CE' ? 'cLtp' : 'pLtp';
-              if (node && node[fld] > 0) {
-                l.curPx = Number(node[fld].toFixed(2));
+              if (!node || !node[fld] || node[fld] <= 0) {
+                allLegsFresh = false;
+                return;
               }
+              l.curPx = Number(node[fld].toFixed(2));
+            });
+          }
+          pos.freshness = allLegsFresh ? 'FRESH' : 'STALE';
+          if (!allLegsFresh) {
+            pos.staleReason = 'Missing live quote for key ' + pos.sym + '|' + pos.exp;
+          } else {
+            delete pos.staleReason;
+          }
+          if (allLegsFresh) {
+            var gross = 0.0;
+            (pos.legs || []).forEach(function(l) {
               var ePx = Number(l.entryPx || 0);
               var cPx = Number(l.curPx !== undefined ? l.curPx : ePx);
               var qty = lotQty * Number(l.mult || 1);
@@ -3265,7 +3290,7 @@
             pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
             pos.markedAt = mkt.clockStr;
             if (!Array.isArray(pos.mtmPath)) pos.mtmPath = [];
-            pos.mtmPath.push({ t: mkt.hmStr, gross: pos.grossMtm, iv: pos.curIv || pos.entryIv || 16.0 });
+            pos.mtmPath.push({ t: mkt.hmStr, gross: pos.grossMtm, iv: pos.curIv || pos.entryIv || 16.0, fresh: true });
             updatedCount++;
           }
 
@@ -3275,7 +3300,11 @@
           var tpThresh = tpRule === 'TP_50_30' ? (pos.strat === 'S2' ? 0.30 * maxLoss : 0.50 * maxCr) : (tpRule === 'TP_75' ? (pos.strat === 'S2' ? 0.50 * maxLoss : 0.75 * maxCr) : null);
           var is1515AutoClose = mkt.mins >= 915;
 
-          if (forwardAutoCaptureOn && ((slThresh !== null && pos.grossMtm <= slThresh) || (tpThresh !== null && pos.grossMtm >= tpThresh) || is1515AutoClose)) {
+          // Operational safety: Stale marks CANNOT drive automated SL/TP exits!
+          var slHit = allLegsFresh && (slThresh !== null && pos.grossMtm <= slThresh);
+          var tpHit = allLegsFresh && (tpThresh !== null && pos.grossMtm >= tpThresh);
+
+          if (forwardAutoCaptureOn && (slHit || tpHit || is1515AutoClose)) {
             (pos.legs || []).forEach(function(l) { l.exitPx = l.curPx !== undefined ? l.curPx : l.entryPx; });
             var exitRsn = (slThresh !== null && pos.grossMtm <= slThresh)
               ? 'Auto SL Hit'
