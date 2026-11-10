@@ -16,6 +16,7 @@ try:
         bsm_greeks_vec,
         solve_iv,
     )
+    from ..synthetic_future import determine_forward
 except (ImportError, ValueError):
     import dividend_yield, option_math, risk_free, smile, synthetic_future, vol_lib, vol_surface_3d
     from option_math import (
@@ -33,6 +34,7 @@ except (ImportError, ValueError):
         bsm_greeks_vec,
         solve_iv,
     )
+    from synthetic_future import determine_forward
 
 __all__ = [
     "DEFAULT_PRICING_MODEL",
@@ -41,6 +43,7 @@ __all__ = [
     "risk_free",
     "smile",
     "synthetic_future",
+    "determine_forward",
     "vol_lib",
     "vol_surface_3d",
     "black76_greeks",

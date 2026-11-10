@@ -8,7 +8,7 @@ version = "18.0.0"
 description = "Institutional-grade options volatility analytics and 6-strategy backtest engine"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Pankaj Saini", email = "pankajsaini2148@gmail.com"}
 ]

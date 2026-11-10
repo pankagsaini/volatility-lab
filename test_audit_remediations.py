@@ -1350,5 +1350,41 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
         self.assertTrue(vec_g["delta"][1] < 0)
 
 
+
+    def test_41_black76_forward_determination_and_weekly_synthetic_parity(self):
+        """Verify Black-76 forward determination across listed futures and weekly synthetic forward."""
+        from synthetic_future import determine_forward
+        import web_data
+
+        # 1. Listed future precedence
+        res_fut = determine_forward([], spot=25000.0, future_quote={'last_price': 25035.0})
+        self.assertEqual(res_fut['source'], 'listed_future')
+        self.assertEqual(res_fut['forward'], 25035.0)
+        self.assertEqual(res_fut['basis'], 35.0)
+        self.assertFalse(res_fut['is_synthetic'])
+
+        # 2. Synthetic Forward derivation on sample option chain
+        mock_chain = [
+            {
+                'strike_price': 25000,
+                'call_options': {'market_data': {'ltp': 240.0, 'bid_price': 239.0, 'ask_price': 241.0}},
+                'put_options': {'market_data': {'ltp': 210.0, 'bid_price': 209.0, 'ask_price': 211.0}},
+            }
+        ]
+        res_syn = determine_forward(mock_chain, spot=25005.0, r=0.06, dte_days=7.0)
+        self.assertEqual(res_syn['source'], 'synthetic_forward')
+        self.assertTrue(res_syn['is_synthetic'])
+        self.assertEqual(res_syn['atm_strike'], 25000.0)
+        self.assertTrue(res_syn['forward'] > 25000.0)
+
+        # 3. Web Data Option Chain Table includes forward metadata
+        chain_table = web_data.get_option_chain_table('NIFTY')
+        if 'error' not in chain_table:
+            self.assertIn('forward_price', chain_table)
+            self.assertIn('forward_source', chain_table)
+            self.assertIn('pricing_model', chain_table)
+            self.assertEqual(chain_table['pricing_model'], 'Black-76 (Forward Anchored)')
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

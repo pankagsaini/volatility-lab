@@ -230,6 +230,9 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
     atm_straddle = (atm_row['call']['ltp'] + atm_row['put']['ltp']) if atm_row else 0.0
     pcr = round(total_put_oi / total_call_oi, 2) if total_call_oi > 0 else 1.0
 
+    matched_exp = next((e for e in available if e['expiry'] == expiry), None)
+    dte_val = float(matched_exp['dte']) if matched_exp else 0.0
+
     synthetic_future = None
     if atm_row and atm_row['call']['ltp'] > 0 and atm_row['put']['ltp'] > 0:
         synthetic_future = round(atm_strike + atm_row['call']['ltp'] - atm_row['put']['ltp'], 2)
@@ -242,11 +245,14 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
                 future_price = p_val
                 break
 
+    from synthetic_future import determine_forward
+    fut_dict = {'last_price': future_price} if future_price else None
+    fwd_res = determine_forward(raw_chain, spot, future_quote=fut_dict, dte_days=dte_val)
+    effective_forward = fwd_res.get('forward') or future_price or synthetic_future or spot
+    forward_source = fwd_res.get('source') or ('listed_future' if future_price else 'synthetic_forward')
+
     future_basis = round(future_price - spot, 2) if future_price and spot else None
     synthetic_basis = round(synthetic_future - spot, 2) if synthetic_future and spot else None
-
-    matched_exp = next((e for e in available if e['expiry'] == expiry), None)
-    dte_val = float(matched_exp['dte']) if matched_exp else 0.0
 
     return {
         'symbol': symbol,
@@ -257,6 +263,9 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
         'future_basis': future_basis,
         'synthetic_future': synthetic_future,
         'synthetic_basis': synthetic_basis,
+        'forward_price': effective_forward,
+        'forward_source': forward_source,
+        'pricing_model': 'Black-76 (Forward Anchored)',
         'atm_strike': atm_strike,
         'straddle_ltp': round(atm_straddle, 2),
         'atm_straddle': round(atm_straddle, 2),
