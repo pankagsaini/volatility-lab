@@ -1201,6 +1201,65 @@ function buildStrategyLegs_(sym, K, stratCode) {
   ];
 }
 
+const MIN_FORWARD_DATE = '2026-11-11';
+
+function getNseMarketStatusIST(nowOpt) {
+  const d = nowOpt instanceof Date ? nowOpt : (nowOpt ? new Date(nowOpt) : new Date());
+  const isoDay = day_(d);
+  const mins = minute_(d);
+  const hmLabel = Utilities.formatDate(d, CONFIG.timeZone, 'HH:mm');
+  const timeIstLabel = Utilities.formatDate(d, CONFIG.timeZone, 'dd MMM HH:mm') + ' IST';
+  if (SPECIAL_SESSIONS[isoDay]) {
+    const sp = SPECIAL_SESSIONS[isoDay];
+    const openSp = mins >= sp.startMins && mins <= sp.endMins;
+    return { open: openSp, isOpen: openSp, isoDay: isoDay, mins: mins, hmLabel: hmLabel, timeIstLabel: timeIstLabel };
+  }
+  const dow = Number(Utilities.formatDate(d, CONFIG.timeZone, 'u')); // 1=Mon .. 7=Sun
+  const isWeekend = dow >= 6;
+  const closedToday = (isoDay === '2026-11-10') || isWeekend;
+  const inHours = mins >= (9 * 60 + 15) && mins <= (15 * 60 + 30);
+  const isOpen = !closedToday && inHours;
+  return { open: isOpen, isOpen: isOpen, isoDay: isoDay, mins: mins, hmLabel: hmLabel, timeIstLabel: timeIstLabel };
+}
+
+function isValidForwardRecord_(rec) {
+  if (!rec || typeof rec !== 'object') return false;
+  const sDate = String(rec.session_date || rec.date || '').slice(0, 10);
+  if (!sDate || sDate < MIN_FORWARD_DATE) return false;
+  const trig = String(rec.triggerTime || rec.trigTime || rec.entryTime || '');
+  if (trig.indexOf('2026-11-0') === 0 || /^0[1-9]\s+Nov/i.test(trig)) return false;
+  return true;
+}
+
+function cleanSlateForwardLedger_() {
+  return {
+    schema: 1,
+    version: 'forward-test-v19.1-clean',
+    inception_date: MIN_FORWARD_DATE,
+    min_trigger_date: MIN_FORWARD_DATE,
+    updated_at: '2026-11-10T13:15:00+05:30',
+    status: 'ARMED_WAITING_FOR_NEXT_SESSION',
+    open_positions: [],
+    closed_trades: [],
+    intraday_mtm_series: []
+  };
+}
+
+function sanitizeForwardLedger_(raw) {
+  const base = cleanSlateForwardLedger_();
+  if (!raw || typeof raw !== 'object') return base;
+  base.open_positions = Array.isArray(raw.open_positions) ? raw.open_positions.filter(isValidForwardRecord_) : [];
+  base.closed_trades = Array.isArray(raw.closed_trades) ? raw.closed_trades.filter(isValidForwardRecord_) : [];
+  base.intraday_mtm_series = Array.isArray(raw.intraday_mtm_series)
+    ? raw.intraday_mtm_series.filter(pt => pt && String(pt.session_date || pt.date || MIN_FORWARD_DATE).slice(0, 10) >= MIN_FORWARD_DATE)
+    : [];
+  if (raw.updated_at) base.updated_at = raw.updated_at;
+  base.status = (base.open_positions.length || base.closed_trades.length)
+    ? (raw.status || 'ACTIVE_FORWARD_TESTING')
+    : 'ARMED_WAITING_FOR_NEXT_SESSION';
+  return base;
+}
+
 function loadForwardLedger_() {
   const properties = props_();
   const folder = folder_();
@@ -1221,22 +1280,19 @@ function loadForwardLedger_() {
   }
   if (file) {
     try {
-      return JSON.parse(file.getBlob().getDataAsString());
+      const parsed = JSON.parse(file.getBlob().getDataAsString());
+      return sanitizeForwardLedger_(parsed);
     } catch (e) {}
   }
-  return {
-    schema: 1,
-    updated_at: new Date().toISOString(),
-    open_positions: [],
-    closed_trades: []
-  };
+  return cleanSlateForwardLedger_();
 }
 
 function saveForwardLedger_(ledger) {
   const properties = props_();
   const folder = folder_();
-  ledger.updated_at = new Date().toISOString();
-  const content = JSON.stringify(ledger, null, 2);
+  const clean = sanitizeForwardLedger_(ledger);
+  clean.updated_at = new Date().toISOString();
+  const content = JSON.stringify(clean, null, 2);
   let file = null;
   const cachedId = properties.getProperty('FORWARD_LEDGER_FILE_ID');
   if (cachedId) {
@@ -1260,20 +1316,24 @@ function saveForwardLedger_(ledger) {
 
 /**
  * Evaluates all active expiries against S1–S6 during capture_('snapshot'),
- * marks open paper positions to market every minute using real Upstox LTPs,
- * auto-closes at 15:15 IST or on Stop-Loss/Target hit, and opens newly triggered setups.
+ * strictly enforcing MIN_FORWARD_DATE = '2026-11-11' AND live market hours (09:15-15:30 IST).
  */
 function evaluateForwardTest_(report) {
   if (!report || !Array.isArray(report.records) || !report.records.length) return null;
-  const now = new Date();
-  const todayStr = report.day || day_(now);
-  const mins = minute_(now);
-  const timeIstLabel = Utilities.formatDate(now, CONFIG.timeZone, 'dd MMM HH:mm') + ' IST';
-  const hmLabel = Utilities.formatDate(now, CONFIG.timeZone, 'HH:mm');
+  const snapDate = report.retrieved_at ? new Date(report.retrieved_at) : new Date();
+  const mkt = getNseMarketStatusIST(snapDate);
+  const snapshotDay = String(report.day || mkt.isoDay).slice(0, 10);
+  const mins = mkt.mins;
+  const timeIstLabel = mkt.timeIstLabel;
+  const hmLabel = mkt.hmLabel;
 
   const ledger = loadForwardLedger_();
-  if (!Array.isArray(ledger.open_positions)) ledger.open_positions = [];
-  if (!Array.isArray(ledger.closed_trades)) ledger.closed_trades = [];
+
+  // Strict Forward-Only Trigger Gate: never auto-trigger prior to 2026-11-11 or when market is closed
+  if (snapshotDay < MIN_FORWARD_DATE || !mkt.open) {
+    report.forward_test_ledger = ledger;
+    return ledger;
+  }
 
   // 1. Build live option chain lookup from report.records
   const chainMap = {};
@@ -1297,7 +1357,97 @@ function evaluateForwardTest_(report) {
     chainMap[rec.label] = { spot: spot, strikes: strikes };
   });
 
-  // 2. Mark all open paper positions to market & check 15:15 IST / SL / Target exits
+  // 2. At 09:20 IST onwards (mins >= 560 && mins < 915), open newly triggered paper positions
+  const existingKeys = new Set(
+    ledger.open_positions.map(p => p.sym + '|' + p.exp + '|' + p.strat).concat(
+      ledger.closed_trades
+        .filter(t => String(t.session_date || t.date || '').slice(0, 10) === snapshotDay)
+        .map(t => t.sym + '|' + t.exp + '|' + t.strat)
+    )
+  );
+
+  if (mins >= 560 && mins < 915) {
+    Object.keys(chainMap).forEach(key => {
+      const parts = key.split('|');
+      const sym = parts[0], exp = parts[1];
+      const ch = chainMap[key];
+      if (!ch || !ch.spot) return;
+      const step = sym === 'NIFTY' ? 50 : 100;
+      const lotQty = sym === 'NIFTY' ? 75 : 30;
+      const K = Math.round(ch.spot / step) * step;
+      const atmNode = ch.strikes[K];
+      if (!atmNode || !atmNode.cIv || !atmNode.pIv) return;
+
+      const iv = Number((0.5 * (atmNode.cIv + atmNode.pIv)).toFixed(2));
+      const hv10 = sym === 'NIFTY' ? 14.82 : 17.70;
+      const hv30 = sym === 'NIFTY' ? 14.45 : 15.76;
+      const vrp30 = Number((iv - hv30).toFixed(2));
+      const vrp10 = Number((iv - hv10).toFixed(2));
+      const dte = Math.max(1, Math.round((Date.parse(exp + 'T15:30:00+05:30') - snapDate.getTime()) / 86400000));
+      const wShort = sym === 'NIFTY' ? 200 : 400;
+      const p25Node = ch.strikes[K - wShort] || atmNode;
+      const c25Node = ch.strikes[K + wShort] || atmNode;
+      const rev25 = Number(((p25Node.pIv || iv) - (c25Node.cIv || iv)).toFixed(2));
+      const bfly25 = Number((0.5 * ((p25Node.pIv || iv) + (c25Node.cIv || iv)) - iv).toFixed(2));
+      const syn = Number((K + atmNode.cLtp - atmNode.pLtp).toFixed(2));
+      const basis = Number((syn - ch.spot).toFixed(1));
+
+      const trigs = [
+        ['S1', vrp30 >= 1.50 && hv30 <= 16.5 && dte >= 2 && dte <= 35, 'IV ' + iv + '% · HV30 ' + hv30 + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp'],
+        ['S2', vrp30 <= -0.25 || iv < hv10, 'IV ' + iv + '% · HV10 ' + hv10 + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp'],
+        ['S3', iv >= 15.2 && vrp30 >= 1.0 && dte <= 22, 'ATM IV ' + iv + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp · DTE ' + dte + 'd'],
+        ['S4', rev25 >= 1.50 && dte >= 5, 'RR25 ' + (rev25 >= 0 ? '+' : '') + rev25 + ' pp · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp'],
+        ['S5', vrp10 >= 0.80 && dte <= 16, 'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp · HV10 ' + hv10 + '% · DTE ' + dte + 'd'],
+        ['S6', Math.abs(basis) >= (sym === 'NIFTY' ? 10.0 : 35.0) || Math.abs(bfly25) >= 0.25, 'Basis ' + (basis >= 0 ? '+' : '') + basis + ' pts · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp']
+      ];
+
+      trigs.forEach(item => {
+        const sCode = item[0], isTrig = item[1], metricsTxt = item[2];
+        if (!isTrig || existingKeys.has(sym + '|' + exp + '|' + sCode)) return;
+        const legs = buildStrategyLegs_(sym, K, sCode);
+        legs.forEach(l => {
+          const node = ch.strikes[l.strike] || atmNode;
+          const px = Number((l.type === 'CE' ? node.cLtp : node.pLtp) || 25.0);
+          l.entryPx = Number(px.toFixed(2));
+          l.curPx = Number(px.toFixed(2));
+        });
+        const cap = (STRATEGY_CAPITAL_PER_LOT[sym] || STRATEGY_CAPITAL_PER_LOT.NIFTY)[sCode];
+        const credPts = Math.max(15.0, legs.reduce((acc, l) => acc + (-l.side) * l.mult * l.entryPx, 0));
+        const maxCr = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty * 0.65) : Math.round(credPts * lotQty);
+        const maxLoss = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty) : Math.round((sym === 'NIFTY' ? 120 : 300) * lotQty);
+        const chg = positionCharges_(legs, sym, true);
+
+        ledger.open_positions.push({
+          id: 'OPEN-' + snapshotDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + exp.replace(/-/g, '').slice(4) + '-' + sCode,
+          date: snapshotDay,
+          session_date: snapshotDay,
+          triggerTime: snapshotDay + 'T' + hmLabel + ':00+05:30',
+          trigTime: timeIstLabel,
+          markedAt: timeIstLabel,
+          sym: sym,
+          exp: exp,
+          kind: dte <= 10 ? 'Weekly' : 'Monthly',
+          dte: dte,
+          frontScope: dte <= 16,
+          strat: sCode,
+          stratName: STRATEGY_NAMES[sCode],
+          metrics: metricsTxt,
+          legs: legs,
+          capital: cap,
+          maxCredit: maxCr,
+          maxLoss: maxLoss,
+          entryIv: iv,
+          curIv: iv,
+          grossMtm: 0.0,
+          estCharges: chg,
+          netMtm: Number((-chg).toFixed(2))
+        });
+        existingKeys.add(sym + '|' + exp + '|' + sCode);
+      });
+    });
+  }
+
+  // 3. Mark all open paper positions to market & check 15:15 IST / SL / Target exits
   const stillOpen = [];
   ledger.open_positions.forEach(pos => {
     const key = pos.sym + '|' + pos.exp;
@@ -1324,7 +1474,7 @@ function evaluateForwardTest_(report) {
 
     const slThresh = -0.50 * Number(pos.maxLoss || 9000);
     const tpThresh = pos.strat === 'S2' ? 0.30 * Number(pos.maxLoss || 37590) : 0.50 * Number(pos.maxCredit || 12000);
-    const isIntradayExit = (mins >= 915 && mins <= 925 && (pos.strat === 'S5' || pos.dte <= 1));
+    const isIntradayExit = mins >= 915;
 
     if (pos.grossMtm <= slThresh || pos.grossMtm >= tpThresh || isIntradayExit) {
       const reason = pos.grossMtm <= slThresh
@@ -1333,7 +1483,9 @@ function evaluateForwardTest_(report) {
       (pos.legs || []).forEach(l => { l.exitPx = l.curPx; });
       ledger.closed_trades.unshift({
         id: String(pos.id || '').replace('OPEN-', 'FWD-'),
-        date: pos.date || todayStr,
+        date: pos.date || snapshotDay,
+        session_date: pos.session_date || pos.date || snapshotDay,
+        triggerTime: pos.triggerTime || (snapshotDay + 'T09:20:00+05:30'),
         entryTime: pos.trigTime || '09:20 IST',
         exitTime: hmLabel + ' IST',
         sym: pos.sym,
@@ -1359,85 +1511,7 @@ function evaluateForwardTest_(report) {
     }
   });
   ledger.open_positions = stillOpen;
-
-  // 3. At 09:20 IST (or when new triggers appear on active expiries), open triggered paper positions
-  const existingKeys = new Set(ledger.open_positions.map(p => p.sym + '|' + p.exp + '|' + p.strat));
-  Object.keys(chainMap).forEach(key => {
-    const parts = key.split('|');
-    const sym = parts[0], exp = parts[1];
-    const ch = chainMap[key];
-    if (!ch || !ch.spot) return;
-    const step = sym === 'NIFTY' ? 50 : 100;
-    const lotQty = sym === 'NIFTY' ? 75 : 30;
-    const K = Math.round(ch.spot / step) * step;
-    const atmNode = ch.strikes[K];
-    if (!atmNode || !atmNode.cIv || !atmNode.pIv) return;
-
-    const iv = Number((0.5 * (atmNode.cIv + atmNode.pIv)).toFixed(2));
-    const hv10 = sym === 'NIFTY' ? 14.82 : 17.70;
-    const hv30 = sym === 'NIFTY' ? 14.45 : 15.76;
-    const vrp30 = Number((iv - hv30).toFixed(2));
-    const vrp10 = Number((iv - hv10).toFixed(2));
-    const dte = Math.max(1, Math.round((Date.parse(exp + 'T15:30:00+05:30') - now.getTime()) / 86400000));
-    const wShort = sym === 'NIFTY' ? 200 : 400;
-    const p25Node = ch.strikes[K - wShort] || atmNode;
-    const c25Node = ch.strikes[K + wShort] || atmNode;
-    const rev25 = Number(((p25Node.pIv || iv) - (c25Node.cIv || iv)).toFixed(2));
-    const bfly25 = Number((0.5 * ((p25Node.pIv || iv) + (c25Node.cIv || iv)) - iv).toFixed(2));
-    const syn = Number((K + atmNode.cLtp - atmNode.pLtp).toFixed(2));
-    const basis = Number((syn - ch.spot).toFixed(1));
-
-    const trigs = [
-      ['S1', vrp30 >= 1.50 && hv30 <= 16.5 && dte >= 2 && dte <= 35, 'IV ' + iv + '% · HV30 ' + hv30 + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp'],
-      ['S2', vrp30 <= -0.25 || iv < hv10, 'IV ' + iv + '% · HV10 ' + hv10 + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp'],
-      ['S3', iv >= 15.2 && vrp30 >= 1.0 && dte <= 22, 'ATM IV ' + iv + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp · DTE ' + dte + 'd'],
-      ['S4', rev25 >= 1.50 && dte >= 5, 'RR25 ' + (rev25 >= 0 ? '+' : '') + rev25 + ' pp · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp'],
-      ['S5', vrp10 >= 0.80 && dte <= 16, 'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp · HV10 ' + hv10 + '% · DTE ' + dte + 'd'],
-      ['S6', Math.abs(basis) >= (sym === 'NIFTY' ? 10.0 : 35.0) || Math.abs(bfly25) >= 0.25, 'Basis ' + (basis >= 0 ? '+' : '') + basis + ' pts · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp']
-    ];
-
-    trigs.forEach(item => {
-      const sCode = item[0], isTrig = item[1], metricsTxt = item[2];
-      if (!isTrig || existingKeys.has(sym + '|' + exp + '|' + sCode)) return;
-      const legs = buildStrategyLegs_(sym, K, sCode);
-      legs.forEach(l => {
-        const node = ch.strikes[l.strike] || atmNode;
-        const px = Number((l.type === 'CE' ? node.cLtp : node.pLtp) || 25.0);
-        l.entryPx = Number(px.toFixed(2));
-        l.curPx = Number(px.toFixed(2));
-      });
-      const cap = (STRATEGY_CAPITAL_PER_LOT[sym] || STRATEGY_CAPITAL_PER_LOT.NIFTY)[sCode];
-      const credPts = Math.max(15.0, legs.reduce((acc, l) => acc + (-l.side) * l.mult * l.entryPx, 0));
-      const maxCr = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty * 0.65) : Math.round(credPts * lotQty);
-      const maxLoss = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty) : Math.round((sym === 'NIFTY' ? 120 : 300) * lotQty);
-      const chg = positionCharges_(legs, sym, true);
-
-      ledger.open_positions.push({
-        id: 'OPEN-' + todayStr.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + exp.replace(/-/g, '').slice(4) + '-' + sCode,
-        date: todayStr,
-        trigTime: timeIstLabel,
-        markedAt: timeIstLabel,
-        sym: sym,
-        exp: exp,
-        kind: dte <= 10 ? 'Weekly' : 'Monthly',
-        dte: dte,
-        frontScope: dte <= 16,
-        strat: sCode,
-        stratName: STRATEGY_NAMES[sCode],
-        metrics: metricsTxt,
-        legs: legs,
-        capital: cap,
-        maxCredit: maxCr,
-        maxLoss: maxLoss,
-        entryIv: iv,
-        curIv: iv,
-        grossMtm: 0.0,
-        estCharges: chg,
-        netMtm: Number((-chg).toFixed(2))
-      });
-      existingKeys.add(sym + '|' + exp + '|' + sCode);
-    });
-  });
+  ledger.status = stillOpen.length ? 'ACTIVE_LIVE_SESSION' : (ledger.closed_trades.length ? 'SESSION_COMPLETED_1515_IST' : 'ARMED_WAITING_FOR_NEXT_SESSION');
 
   saveForwardLedger_(ledger);
   report.forward_test_ledger = ledger;

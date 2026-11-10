@@ -981,6 +981,7 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
         allowed_root_py = {
             "streamlit_app.py",
             "test_audit_remediations.py",
+            "rebuild_clean_project_v19.py",
             "rebuild_clean_project_v18.py",
             "patch_1_master_audit_v16.py",
             "patch_2_trader_feedback_v17.py",
@@ -1023,7 +1024,7 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
 
 
 class TestV19AutomatedForwardTesting(unittest.TestCase):
-    """Verify v19 Automated Forward Testing (Live Paper-Trading) Engine across Web, Cloud Code.gs & Python."""
+    """Verify v19.1 Clean-Slate Automated Forward Testing Engine (First Trade Tomorrow 2026-11-11 Onwards)."""
 
     def test_32_website_forward_test_workspace_and_controls(self):
         for rel in ("docs/index.html", "index.html"):
@@ -1041,6 +1042,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 "fwdStopLossRule",
                 "fwdProfitTargetRule",
                 "fwdScanNowBtn",
+                "fwdResetSeedBtn",
                 "fwdExportCsvBtn",
                 "fwdKpiOpenCount",
                 "fwdKpiOpenMtm",
@@ -1055,33 +1057,111 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 "fwdStrategyBarCanvas",
             ):
                 self.assertIn(f'id="{ctrl_id}"', html, f"Missing {ctrl_id} in {rel}")
+            self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", html)
+            self.assertIn("vl_forward_ledger_v19_clean", html)
+            self.assertIn("localStorage.removeItem('vl_forward_ledger_v19')", html)
+            self.assertIn("Reset / Clear Ledger", html)
+            self.assertIn("Forward Test is armed for tomorrow (11 Nov 2026 09:20 IST) — waiting for live market open to place first trade.", html)
+            self.assertIn("0 trades placed yet · Forward Test Engine is ARMED for first trade tomorrow (11 Nov 2026 · 09:20 IST) when live Upstox option-chain captures begin.", html)
+            self.assertIn("ARMED · 11 NOV 09:20 IST", html)
+            self.assertIn("NIFTY (Lot 65)", html)
+            self.assertIn("NIFTY 50 (Lot 65)", html)
             self.assertIn("window.markForwardPositionsFromPayload", html)
             self.assertIn("window.closeForwardPosition", html)
             self.assertIn("window.autoForwardTrackSetup", html)
             self.assertIn("Auto-Forward Track →", html)
             self.assertIn("animation: false", html)
 
-    def test_33_python_forward_test_engine_and_real_ledger(self):
+    def test_33_python_forward_test_clean_slate_and_2026_11_11_simulation(self):
+        import copy
+        import gzip
         from forward_test import (
+            MIN_FORWARD_DATE,
             load_forward_test_ledger,
             evaluate_forward_test_scorecard,
-            mark_open_positions_from_snapshot,
+            process_live_upstox_snapshot,
         )
+        self.assertEqual(MIN_FORWARD_DATE, "2026-11-11")
+
+        # 1. Verify initial clean-slate ledger has 0 open positions and 0 closed trades
         ledger = load_forward_test_ledger()
-        self.assertEqual(len(ledger.get("open_positions", [])), 27)
-        front_open = [p for p in ledger["open_positions"] if p.get("frontScope")]
-        self.assertEqual(len(front_open), 11)
-        self.assertEqual(len(ledger.get("closed_trades", [])), 28)
+        self.assertEqual(ledger.get("version"), "forward-test-v19.1-clean")
+        self.assertEqual(ledger.get("inception_date"), "2026-11-11")
+        self.assertEqual(ledger.get("min_trigger_date"), "2026-11-11")
+        self.assertEqual(ledger.get("status"), "ARMED_WAITING_FOR_NEXT_SESSION")
+        self.assertEqual(ledger.get("open_positions"), [])
+        self.assertEqual(ledger.get("closed_trades"), [])
+        self.assertEqual(ledger.get("intraday_mtm_series"), [])
 
         summary = evaluate_forward_test_scorecard(ledger, index_filter="ALL", expiry_scope="FRONT", lots=1)
-        self.assertEqual(summary["open_count"], 11)
-        self.assertEqual(summary["closed_count"], 28)
-        self.assertAlmostEqual(summary["closed_gross_pnl"], 40280.25, places=1)
-        self.assertAlmostEqual(summary["closed_net_pnl"], 31834.63, delta=2.0)
+        self.assertEqual(summary["open_count"], 0)
+        self.assertEqual(summary["closed_count"], 0)
+        self.assertEqual(summary["closed_net_pnl"], 0.0)
+        self.assertEqual(summary["portfolio_roc_pct"], 0.0)
         self.assertEqual(len(summary["scorecard"]), 6)
+        for row in summary["scorecard"]:
+            self.assertEqual(row["open_count"], 0)
+            self.assertEqual(row["closed_count"], 0)
+            self.assertEqual(row["total_net_pnl"], 0.0)
+            self.assertIn(row["unit_capital"], (28037, 56074))
+            self.assertEqual(row["roc_pct"], 0.0)
+            self.assertEqual(row["status"], "ARMED · 11 NOV 09:20 IST")
+
+        # 2. Verify polling the 2026-11-09 snapshot does NOT trigger any trades
+        snap_gz = PATCH_DIR / "data" / "google_archive" / "2026-11-09_snapshot_154842_complete.json.gz"
+        snap_payload_09 = json.loads(gzip.decompress(snap_gz.read_bytes()).decode("utf-8"))
+        after_09 = process_live_upstox_snapshot(snap_payload_09, ledger=ledger, now_ist="2026-11-10T13:15:00+05:30")
+        self.assertEqual(after_09["open_positions"], [])
+        self.assertEqual(after_09["closed_trades"], [])
+        self.assertTrue(after_09.get("gate_blocked"))
+
+        # 3. Simulate a live 2026-11-11T09:20:42+05:30 Upstox snapshot during market hours (>= 2026-11-11)
+        snap_11_0920 = copy.deepcopy(snap_payload_09)
+        snap_11_0920["day"] = "2026-11-11"
+        snap_11_0920["retrieved_at"] = "2026-11-11T09:20:42+05:30"
+        after_11_open = process_live_upstox_snapshot(
+            snap_11_0920,
+            ledger=after_09,
+            now_ist="2026-11-11T09:20:42+05:30",
+        )
+        self.assertFalse(after_11_open.get("gate_blocked"))
+        self.assertGreater(len(after_11_open["open_positions"]), 0)
+        self.assertEqual(len(after_11_open["closed_trades"]), 0)
+        for pos in after_11_open["open_positions"]:
+            self.assertEqual(pos["date"], "2026-11-11")
+            self.assertEqual(pos["session_date"], "2026-11-11")
+            if pos["sym"] == "NIFTY" and pos["strat"] == "S6":
+                self.assertEqual(pos["maxLoss"], 7800)  # 120 max loss pts * 65 NIFTY lot size
+
+        # 4. Simulate mid-day mark-to-market at 2026-11-11T12:30:00+05:30 and auto-close at 2026-11-11T15:15:00+05:30
+        snap_11_1230 = copy.deepcopy(snap_11_0920)
+        snap_11_1230["retrieved_at"] = "2026-11-11T12:30:00+05:30"
+        after_11_mid = process_live_upstox_snapshot(
+            snap_11_1230,
+            ledger=after_11_open,
+            now_ist="2026-11-11T12:30:00+05:30",
+        )
+        self.assertGreater(len(after_11_mid["open_positions"]), 0)
+        self.assertGreaterEqual(len(after_11_mid["intraday_mtm_series"]), 2)
+
+        snap_11_1515 = copy.deepcopy(snap_11_0920)
+        snap_11_1515["retrieved_at"] = "2026-11-11T15:15:00+05:30"
+        after_11_close = process_live_upstox_snapshot(
+            snap_11_1515,
+            ledger=after_11_mid,
+            now_ist="2026-11-11T15:15:00+05:30",
+        )
+        self.assertEqual(len(after_11_close["open_positions"]), 0)
+        self.assertGreater(len(after_11_close["closed_trades"]), 0)
+        for tr in after_11_close["closed_trades"]:
+            self.assertEqual(tr["date"], "2026-11-11")
+            self.assertEqual(tr["exitTime"], "15:15 IST")
+            self.assertIn("15:15 IST", tr["exitReason"])
 
     def test_34_cloud_code_gs_forward_test_24x7_hooks(self):
         code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
+        self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", code_gs)
+        self.assertIn("function getNseMarketStatusIST(", code_gs)
         self.assertIn("function evaluateForwardTest_(report)", code_gs)
         self.assertIn("function loadForwardLedger_()", code_gs)
         self.assertIn("function saveForwardLedger_(ledger)", code_gs)

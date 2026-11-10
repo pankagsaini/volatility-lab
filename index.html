@@ -692,18 +692,18 @@
             </span>
             <button type="button" id="fwdAutoModeToggle" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-bold text-xs mono transition hover:bg-emerald-900/80">
               <span id="fwdAutoPulseDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span id="fwdAutoModeLabel">AUTO-CAPTURE ON (09:20 IST &amp; Live Triggers)</span>
+              <span id="fwdAutoModeLabel">ARMED · AUTO-CAPTURE ON (Starts 11 Nov 2026 09:20 IST)</span>
             </button>
             <span id="fwdLastMarkedBadge" class="text-[11px] mono text-slate-300">
-              Last Marked: <strong class="text-sky-300">09 Nov 2026 15:30 IST (27 Real Upstox Captures)</strong>
+              Status: <strong class="text-emerald-300">ARMED_WAITING_FOR_NEXT_SESSION · Inception 2026-11-11 (09:20 IST)</strong>
             </span>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <button type="button" id="fwdScanNowBtn" class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs transition">
               Scan &amp; Trigger Qualified Setups Now
             </button>
-            <button type="button" id="fwdResetSeedBtn" class="px-2.5 py-1.5 rounded-lg bg-[#090f1a] hover:bg-slate-800 text-slate-300 font-semibold text-xs border border-[#24344d]">
-              Reset Ledger
+            <button type="button" id="fwdResetSeedBtn" class="px-2.5 py-1.5 rounded-lg bg-[#090f1a] hover:bg-slate-800 text-rose-300 font-semibold text-xs border border-rose-500/40">
+              Reset / Clear Ledger
             </button>
             <button type="button" id="fwdExportCsvBtn" class="px-3 py-1.5 rounded-lg bg-[#090f1a] hover:bg-slate-800 text-sky-300 font-bold text-xs border border-sky-500/40">
               Export Forward Ledger CSV
@@ -767,33 +767,33 @@
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">1. Active Open Paper Positions</div>
-          <div id="fwdKpiOpenCount" class="text-lg mono font-extrabold text-white mt-0.5">11 Open</div>
-          <div id="fwdKpiOpenSub" class="text-[11px] mono text-sky-300 mt-0.5">3 Active Expiries (Carry-Forward)</div>
+          <div id="fwdKpiOpenCount" class="text-lg mono font-extrabold text-white mt-0.5">0 Open</div>
+          <div id="fwdKpiOpenSub" class="text-[11px] mono text-emerald-300 mt-0.5">Armed · Starts 11 Nov 2026 09:20 IST</div>
         </div>
         <div class="kpi-card border-t-2 border-t-emerald-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">2. Live Unrealized MTM P&amp;L (₹)</div>
-          <div id="fwdKpiOpenMtm" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">+₹1,576</div>
-          <div id="fwdKpiOpenMtmSub" class="text-[11px] mono text-slate-300 mt-0.5">Gross: +₹5,326 · Est Exit Cost: ₹3,749</div>
+          <div id="fwdKpiOpenMtm" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">₹0</div>
+          <div id="fwdKpiOpenMtmSub" class="text-[11px] mono text-slate-300 mt-0.5">Gross: ₹0 · Est Cost: ₹0</div>
         </div>
         <div class="kpi-card border-t-2 border-t-emerald-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">3. Closed Forward Net P&amp;L (₹)</div>
-          <div id="fwdKpiClosedNet" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">+₹31,644</div>
-          <div id="fwdKpiClosedNetSub" class="text-[11px] mono text-slate-300 mt-0.5">28 Auto-Triggered · Gross: +₹40,280</div>
+          <div id="fwdKpiClosedNet" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">₹0</div>
+          <div id="fwdKpiClosedNetSub" class="text-[11px] mono text-slate-300 mt-0.5">0 Auto-Triggered · Gross: ₹0</div>
         </div>
         <div class="kpi-card border-t-2 border-t-amber-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">4. Total Capital Deployed (₹)</div>
-          <div id="fwdKpiCapital" class="text-lg mono font-extrabold text-amber-300 mt-0.5">₹4,36,052</div>
-          <div id="fwdKpiCapitalSub" class="text-[11px] mono text-slate-300 mt-0.5">Active SPAN+Exp · Peak: ₹4,36,052</div>
+          <div id="fwdKpiCapital" class="text-lg mono font-extrabold text-amber-300 mt-0.5">₹0</div>
+          <div id="fwdKpiCapitalSub" class="text-[11px] mono text-slate-300 mt-0.5">SPAN+Exp (0 Pos) · Unit Cap: ₹56,074</div>
         </div>
         <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">5. Forward Portfolio ROC %</div>
-          <div id="fwdKpiRoc" class="text-lg mono font-extrabold text-emerald-300 mt-0.5">+59.24%</div>
-          <div id="fwdKpiRocSub" class="text-[11px] mono text-slate-300 mt-0.5">Total Net P&amp;L / Single-Set Peak Cap</div>
+          <div id="fwdKpiRoc" class="text-lg mono font-extrabold text-emerald-300 mt-0.5">0.00%</div>
+          <div id="fwdKpiRocSub" class="text-[11px] mono text-slate-300 mt-0.5">Total Net (₹0) / Unit Cap</div>
         </div>
         <div class="kpi-card border-t-2 border-t-amber-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">6. Trigger Hit Rate &amp; PF</div>
-          <div id="fwdKpiWinPf" class="text-lg mono font-extrabold text-white mt-0.5">57.1% · PF 4.52</div>
-          <div id="fwdKpiChargesSub" class="text-[11px] mono text-amber-300 mt-0.5">Upstox Statutory Costs: ₹8,636</div>
+          <div id="fwdKpiWinPf" class="text-lg mono font-extrabold text-white mt-0.5">0.0% · PF 0.00</div>
+          <div id="fwdKpiChargesSub" class="text-[11px] mono text-amber-300 mt-0.5">Upstox Statutory Costs: ₹0</div>
         </div>
       </div>
 
@@ -803,11 +803,11 @@
           <div>
             <span class="text-xs font-bold uppercase text-white">Panel 1 — Active / Open Forward-Test Positions (Live Mark-to-Market vs Real Upstox Option Chains)</span>
             <p id="fwdOpenTableSub" class="text-[11px] mono text-slate-300 mt-0.5">
-              Carry-Forward multi-day setups triggered on 2026-11-09, marked to real 15:30 IST Upstox closing LTPs &amp; dynamically updated on every live snapshot.
+              Clean-slate forward testing engine armed for tomorrow onwards (2026-11-11 09:20 IST). Historical 02–09 Nov 2026 trades are strictly in Strategy Backtest.
             </p>
           </div>
-          <span class="px-2.5 py-1 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 text-[11px] mono font-bold">
-            Live Option-Chain Strike Re-Marking Active
+          <span class="px-2.5 py-1 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[11px] mono font-bold">
+            ARMED · 11 NOV 2026 09:20 IST
           </span>
         </div>
         <table class="w-full text-left border-collapse text-xs mono">
@@ -835,10 +835,10 @@
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
         <div class="lg:col-span-7 desk-panel space-y-2.5">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <span class="text-xs font-bold uppercase text-white">Forward-Test Intraday MTM (27 Captures on 09 Nov) &amp; Cumulative Paper Equity Curve</span>
+            <span class="text-xs font-bold uppercase text-white">Forward-Test Intraday MTM &amp; Cumulative Paper Equity Curve (From 11 Nov 2026 Onwards)</span>
             <div class="seg-group" id="fwdChartModeGroup">
-              <button type="button" data-fwdchart="intraday" class="fwdchart-btn seg-btn active">09 Nov Intraday MTM (25 Snaps)</button>
-              <button type="button" data-fwdchart="equity" class="fwdchart-btn seg-btn">Cumulative Paper Equity (02–09 Nov)</button>
+              <button type="button" data-fwdchart="intraday" class="fwdchart-btn seg-btn active">Live Session Intraday MTM</button>
+              <button type="button" data-fwdchart="equity" class="fwdchart-btn seg-btn">Cumulative Forward Equity</button>
             </div>
           </div>
           <div class="relative" style="height: 320px;">
@@ -849,7 +849,7 @@
         <div class="lg:col-span-5 desk-panel space-y-2.5">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold uppercase text-white">6-Strategy Forward-Test Net P&amp;L (Closed + Open MTM)</span>
-            <span class="text-[11px] mono text-emerald-400">100% Real Triggered Setups</span>
+            <span class="text-[11px] mono text-emerald-400">Clean-Slate · Starts 11 Nov 2026</span>
           </div>
           <div class="relative" style="height: 320px;">
             <canvas id="fwdStrategyBarCanvas"></canvas>
@@ -860,7 +860,7 @@
       <!-- 6-Strategy Forward-Test Scorecard Table -->
       <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#0d1522]">
         <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
-          <span class="text-xs font-bold uppercase text-white">6-Strategy Forward-Test Scorecard Table (Auto-Triggered Setups Only)</span>
+          <span class="text-xs font-bold uppercase text-white">6-Strategy Forward-Test Scorecard Table (Auto-Triggered Setups · 11 Nov 2026 Onwards)</span>
           <span class="text-[11px] mono text-amber-300">Click any strategy row to filter Open &amp; Closed Forward Ledgers</span>
         </div>
         <table class="w-full text-left border-collapse text-xs mono">
@@ -875,9 +875,9 @@
               <th class="py-2.5 px-3 text-right">Upstox Charges</th>
               <th class="py-2.5 px-3 text-right text-emerald-300">Closed Net P&amp;L (₹)</th>
               <th class="py-2.5 px-3 text-right text-sky-300">Total Forward Net (₹)</th>
-              <th class="py-2.5 px-3 text-right text-amber-300">Single-Lot Capital (₹)</th>
+              <th class="py-2.5 px-3 text-right text-amber-300">Unit Capital (₹)</th>
               <th class="py-2.5 px-3 text-right text-emerald-300">Forward ROC %</th>
-              <th class="py-2.5 px-3 text-right">Profit Factor</th>
+              <th class="py-2.5 px-3 text-right">Status / PF</th>
             </tr>
           </thead>
           <tbody id="fwdScorecardBody" class="divide-y divide-[#1a2639]"></tbody>
@@ -887,8 +887,8 @@
       <!-- Panel 2 — Completed Auto-Triggered Intraday Forward Trade Ledger -->
       <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#0d1522]">
         <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
-          <span class="text-xs font-bold uppercase text-white">Panel 2 — Completed Auto-Triggered Forward Trade Ledger (02 Nov – 09 Nov 2026 · 09:20 IST Entry → 15:15 IST / SL-TP Exit)</span>
-          <span class="text-[11px] mono text-slate-300">Strictly setups where quantitative trigger condition was met at 09:20 IST · 27 Intraday Captures tracked on 2026-11-09</span>
+          <span class="text-xs font-bold uppercase text-white">Panel 2 — Completed Auto-Triggered Forward Trade Ledger (From 11 Nov 2026 · 09:20 IST Entry → 15:15 IST / SL-TP Exit)</span>
+          <span class="text-[11px] mono text-slate-300">Strictly live forward trades triggered from 2026-11-11 09:20 IST onwards · Zero historical backtest contamination</span>
         </div>
         <table class="w-full text-left border-collapse text-xs mono">
           <thead>
@@ -1080,8 +1080,12 @@
       var latestAsOfLabel = '09 Nov 15:30 IST';
       var lastSyncedRetrievedAt = '2026-11-09T10:18:42.334Z';
 
+      var latestSnapshotDay = '2026-11-09';
+
       function getMarketSessionState(nowDate) {
-        var d = nowDate || new Date();
+        var raw = nowDate !== undefined ? nowDate : (window._simulatedNowIST !== undefined ? window._simulatedNowIST : new Date());
+        var d = (raw instanceof Date && !isNaN(raw.getTime())) ? raw : new Date(raw);
+        if (isNaN(d.getTime())) d = new Date();
         var utcMs = d.getTime() + (d.getTimezoneOffset() * 60000);
         var istDate = new Date(utcMs + 19800000); // UTC + 05:30
         var yyyy = istDate.getFullYear();
@@ -1090,31 +1094,36 @@
         var isoDay = yyyy + '-' + mm + '-' + dd;
         var dayOfWeek = istDate.getDay(); // 0 = Sun, 6 = Sat
         var mins = istDate.getHours() * 60 + istDate.getMinutes();
+        var hmStr = String(istDate.getHours()).padStart(2, '0') + ':' + String(istDate.getMinutes()).padStart(2, '0');
         var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        var clockStr = dd + ' ' + months[istDate.getMonth()] + ' ' + String(istDate.getHours()).padStart(2, '0') + ':' + String(istDate.getMinutes()).padStart(2, '0') + ' IST';
+        var clockStr = dd + ' ' + months[istDate.getMonth()] + ' ' + hmStr + ' IST';
 
         var spec = SPECIAL_SESSIONS[isoDay];
         if (spec) {
           if (mins >= spec.startMins && mins <= spec.endMins) {
-            return { isOpen: true, status: 'LIVE', badgeText: clockStr + ' · LIVE (' + spec.label + ')', isoDay: isoDay };
+            return { open: true, isOpen: true, status: 'LIVE', badgeText: clockStr + ' · LIVE (' + spec.label + ')', isoDay: isoDay, day: isoDay, mins: mins, hmStr: hmStr, clockStr: clockStr };
           }
           if (mins >= spec.startMins - 15 && mins < spec.startMins) {
-            return { isOpen: false, status: 'PRE-OPEN', badgeText: clockStr + ' · PRE-OPEN', isoDay: isoDay };
+            return { open: false, isOpen: false, status: 'PRE-OPEN', badgeText: clockStr + ' · PRE-OPEN', isoDay: isoDay, day: isoDay, mins: mins, hmStr: hmStr, clockStr: clockStr };
           }
-          return { isOpen: false, status: 'MARKET CLOSED', badgeText: latestAsOfLabel + ' · MARKET CLOSED', isoDay: isoDay };
+          return { open: false, isOpen: false, status: 'MARKET CLOSED', badgeText: latestAsOfLabel + ' · MARKET CLOSED', isoDay: isoDay, day: isoDay, mins: mins, hmStr: hmStr, clockStr: clockStr };
         }
 
         if (dayOfWeek === 0 || dayOfWeek === 6 || NSE_HOLIDAYS[isoDay]) {
-          return { isOpen: false, status: 'MARKET CLOSED', badgeText: latestAsOfLabel + ' · MARKET CLOSED', isoDay: isoDay };
+          return { open: false, isOpen: false, status: 'MARKET CLOSED', badgeText: latestAsOfLabel + ' · MARKET CLOSED', isoDay: isoDay, day: isoDay, mins: mins, hmStr: hmStr, clockStr: clockStr };
         }
 
         if (mins >= 555 && mins <= 930) { // 09:15 to 15:30 IST
-          return { isOpen: true, status: 'LIVE', badgeText: clockStr + ' · LIVE', isoDay: isoDay };
+          return { open: true, isOpen: true, status: 'LIVE', badgeText: clockStr + ' · LIVE', isoDay: isoDay, day: isoDay, mins: mins, hmStr: hmStr, clockStr: clockStr };
         }
         if (mins >= 540 && mins < 555) { // 09:00 to 09:15 IST
-          return { isOpen: false, status: 'PRE-OPEN', badgeText: clockStr + ' · PRE-OPEN', isoDay: isoDay };
+          return { open: false, isOpen: false, status: 'PRE-OPEN', badgeText: clockStr + ' · PRE-OPEN', isoDay: isoDay, day: isoDay, mins: mins, hmStr: hmStr, clockStr: clockStr };
         }
-        return { isOpen: false, status: 'MARKET CLOSED', badgeText: latestAsOfLabel + ' · MARKET CLOSED', isoDay: isoDay };
+        return { open: false, isOpen: false, status: 'MARKET CLOSED', badgeText: latestAsOfLabel + ' · MARKET CLOSED', isoDay: isoDay, day: isoDay, mins: mins, hmStr: hmStr, clockStr: clockStr };
+      }
+
+      function getNseMarketStatusIST(nowDate) {
+        return getMarketSessionState(nowDate);
       }
 
       function updateMarketClock(nowDate) {
@@ -2406,16 +2415,129 @@
 
 
       // ===================================================================
-      // v19 AUTOMATED FORWARD TESTING (LIVE PAPER-TRADING) ENGINE (S1–S6)
+      // v19.1 CLEAN-SLATE AUTOMATED FORWARD TESTING ENGINE (S1–S6)
+      // Strict Forward-Only Gate: snapshotDay >= '2026-11-11' & 09:15–15:30 IST
       // ===================================================================
-      var FORWARD_SEED_OPEN = [{"id": "OPEN-20261109-NIF-1117-S1", "date": "2026-11-09", "trigTime": "09 Nov 13:30 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-11-17", "kind": "Weekly", "dte": 8, "frontScope": true, "strat": "S1", "stratName": "S1 \u00b7 VRP Harvest Iron Condor", "metrics": "IV 16.95% \u00b7 HV30 14.45% \u00b7 VRP +2.50 pp", "legs": [{"side": -1, "mult": 1, "strike": 25250, "type": "CE", "entryPx": 114.95, "curPx": 153.15}, {"side": -1, "mult": 1, "strike": 24850, "type": "PE", "entryPx": 240.35, "curPx": 175.15}, {"side": 1, "mult": 1, "strike": 25550, "type": "CE", "entryPx": 57.6, "curPx": 75.75}, {"side": 1, "mult": 1, "strike": 24550, "type": "PE", "entryPx": 121.5, "curPx": 81.85}], "capital": 28037, "maxCredit": 13215.0, "maxLoss": 9285.0, "entryIv": 16.95, "curIv": 16.95, "grossMtm": 412.5, "estCharges": 279.82, "netMtm": 132.68, "unitLegs": 300}, {"id": "OPEN-20261109-NIF-1117-S3", "date": "2026-11-09", "trigTime": "09 Nov 13:30 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-11-17", "kind": "Weekly", "dte": 8, "frontScope": true, "strat": "S3", "stratName": "S3 \u00b7 Post-Event Front-Week Crush Fly", "metrics": "ATM IV 16.95% \u00b7 VRP +2.50 pp \u00b7 DTE 8d", "legs": [{"side": -1, "mult": 1, "strike": 25050, "type": "CE", "entryPx": 177.25, "curPx": 232.15}, {"side": -1, "mult": 1, "strike": 25050, "type": "PE", "entryPx": 353.95, "curPx": 269.2}, {"side": 1, "mult": 1, "strike": 25400, "type": "CE", "entryPx": 81.55, "curPx": 108.65}, {"side": 1, "mult": 1, "strike": 24700, "type": "PE", "entryPx": 172.7, "curPx": 121.7}], "capital": 28037, "maxCredit": 20771.25, "maxLoss": 2250.0, "entryIv": 16.95, "curIv": 16.95, "grossMtm": 446.25, "estCharges": 324.01, "netMtm": 122.24, "unitLegs": 300}, {"id": "OPEN-20261109-NIF-1117-S5", "date": "2026-11-09", "trigTime": "09 Nov 13:30 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-11-17", "kind": "Weekly", "dte": 8, "frontScope": true, "strat": "S5", "stratName": "S5 \u00b7 Intraday Theta Iron Butterfly", "metrics": "IV\u2212HV10 +2.13 pp \u00b7 HV10 14.82% \u00b7 DTE 8d", "legs": [{"side": -1, "mult": 1, "strike": 25050, "type": "CE", "entryPx": 177.25, "curPx": 232.15}, {"side": -1, "mult": 1, "strike": 25050, "type": "PE", "entryPx": 353.95, "curPx": 269.2}, {"side": 1, "mult": 1, "strike": 25300, "type": "CE", "entryPx": 102.5, "curPx": 137.15}, {"side": 1, "mult": 1, "strike": 24800, "type": "PE", "entryPx": 215.6, "curPx": 154.85}], "capital": 28037, "maxCredit": 15982.5, "maxLoss": 6517.5, "entryIv": 16.95, "curIv": 16.95, "grossMtm": 281.25, "estCharges": 335.05, "netMtm": -53.8, "unitLegs": 300}, {"id": "OPEN-20261109-NIF-1117-S6", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-11-17", "kind": "Weekly", "dte": 8, "frontScope": true, "strat": "S6", "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor", "metrics": "Basis -17.0 pts \u00b7 BF25 +0.21 pp", "legs": [{"side": -1, "mult": 2, "strike": 25200, "type": "CE", "entryPx": 171.5, "curPx": 170.9}, {"side": 1, "mult": 2, "strike": 25500, "type": "CE", "entryPx": 88.0, "curPx": 85.8}, {"side": -1, "mult": 1, "strike": 24800, "type": "PE", "entryPx": 155.35, "curPx": 154.85}, {"side": 1, "mult": 1, "strike": 24500, "type": "PE", "entryPx": 72.3, "curPx": 71.65}], "capital": 56074, "maxCredit": 18753.75, "maxLoss": 9000, "entryIv": 16.95, "curIv": 16.95, "grossMtm": -251.25, "estCharges": 320.78, "netMtm": -572.03, "unitLegs": 450}, {"id": "OPEN-20261109-NIF-1123-S1", "date": "2026-11-09", "trigTime": "09 Nov 12:30 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "frontScope": true, "strat": "S1", "stratName": "S1 \u00b7 VRP Harvest Iron Condor", "metrics": "IV 16.11% \u00b7 HV30 14.45% \u00b7 VRP +1.66 pp", "legs": [{"side": -1, "mult": 1, "strike": 25250, "type": "CE", "entryPx": 178.05, "curPx": 215.9}, {"side": -1, "mult": 1, "strike": 24850, "type": "PE", "entryPx": 296.75, "curPx": 237.9}, {"side": 1, "mult": 1, "strike": 25550, "type": "CE", "entryPx": 100.0, "curPx": 121.1}, {"side": 1, "mult": 1, "strike": 24550, "type": "PE", "entryPx": 179.05, "curPx": 141.8}], "capital": 28037, "maxCredit": 14681.25, "maxLoss": 7818.75, "entryIv": 16.11, "curIv": 16.11, "grossMtm": 363.75, "estCharges": 319.81, "netMtm": 43.94, "unitLegs": 300}, {"id": "OPEN-20261109-NIF-1123-S3", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "frontScope": true, "strat": "S3", "stratName": "S3 \u00b7 Post-Event Front-Week Crush Fly", "metrics": "ATM IV 16.11% \u00b7 VRP +1.66 pp \u00b7 DTE 14d", "legs": [{"side": -1, "mult": 1, "strike": 25050, "type": "CE", "entryPx": 307.25, "curPx": 303.45}, {"side": -1, "mult": 1, "strike": 25050, "type": "PE", "entryPx": 330.5, "curPx": 327.0}, {"side": 1, "mult": 1, "strike": 25400, "type": "CE", "entryPx": 165.0, "curPx": 163.4}, {"side": 1, "mult": 1, "strike": 24700, "type": "PE", "entryPx": 188.25, "curPx": 185.0}], "capital": 28037, "maxCredit": 21337.5, "maxLoss": 2250.0, "entryIv": 16.11, "curIv": 16.11, "grossMtm": 183.75, "estCharges": 364.07, "netMtm": -180.32, "unitLegs": 300}, {"id": "OPEN-20261109-NIF-1123-S5", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "frontScope": true, "strat": "S5", "stratName": "S5 \u00b7 Intraday Theta Iron Butterfly", "metrics": "IV\u2212HV10 +1.29 pp \u00b7 HV10 14.82% \u00b7 DTE 14d", "legs": [{"side": -1, "mult": 1, "strike": 25050, "type": "CE", "entryPx": 307.25, "curPx": 303.45}, {"side": -1, "mult": 1, "strike": 25050, "type": "PE", "entryPx": 330.5, "curPx": 327.0}, {"side": 1, "mult": 1, "strike": 25300, "type": "CE", "entryPx": 199.6, "curPx": 197.5}, {"side": 1, "mult": 1, "strike": 24800, "type": "PE", "entryPx": 222.3, "curPx": 218.85}], "capital": 28037, "maxCredit": 16188.75, "maxLoss": 6311.25, "entryIv": 16.11, "curIv": 16.11, "grossMtm": 131.25, "estCharges": 376.18, "netMtm": -244.93, "unitLegs": 300}, {"id": "OPEN-20261109-NIF-1123-S6", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "frontScope": true, "strat": "S6", "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor", "metrics": "Basis -3.5 pts \u00b7 BF25 +0.37 pp", "legs": [{"side": -1, "mult": 2, "strike": 25200, "type": "CE", "entryPx": 240.0, "curPx": 236.7}, {"side": 1, "mult": 2, "strike": 25500, "type": "CE", "entryPx": 135.45, "curPx": 134.1}, {"side": -1, "mult": 1, "strike": 24800, "type": "PE", "entryPx": 222.3, "curPx": 218.85}, {"side": 1, "mult": 1, "strike": 24500, "type": "PE", "entryPx": 132.1, "curPx": 129.2}], "capital": 56074, "maxCredit": 22447.5, "maxLoss": 9000, "entryIv": 16.11, "curIv": 16.11, "grossMtm": 333.75, "estCharges": 384.19, "netMtm": -50.44, "unitLegs": 450}, {"id": "OPEN-20261109-NIF-1201-S4", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-12-01", "kind": "Weekly", "dte": 22, "frontScope": false, "strat": "S4", "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)", "metrics": "RR25 +2.69 pp \u00b7 BF25 +0.42 pp", "legs": [{"side": -1, "mult": 2, "strike": 24900, "type": "PE", "entryPx": 310.45, "curPx": 303.65}, {"side": 1, "mult": 2, "strike": 24600, "type": "PE", "entryPx": 206.2, "curPx": 203.85}, {"side": -1, "mult": 1, "strike": 25300, "type": "CE", "entryPx": 265.15, "curPx": 258.7}, {"side": 1, "mult": 1, "strike": 25600, "type": "CE", "entryPx": 161.25, "curPx": 162.3}], "capital": 56074, "maxCredit": 23430.0, "maxLoss": 9000, "entryIv": 15.28, "curIv": 15.28, "grossMtm": 1230.0, "estCharges": 447.15, "netMtm": 782.85, "unitLegs": 450}, {"id": "OPEN-20261109-NIF-1201-S6", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-12-01", "kind": "Weekly", "dte": 22, "frontScope": false, "strat": "S6", "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor", "metrics": "Basis -128.9 pts \u00b7 BF25 +0.42 pp", "legs": [{"side": -1, "mult": 2, "strike": 25200, "type": "CE", "entryPx": 307.35, "curPx": 306.0}, {"side": 1, "mult": 2, "strike": 25500, "type": "CE", "entryPx": 192.35, "curPx": 193.3}, {"side": -1, "mult": 1, "strike": 24800, "type": "PE", "entryPx": 270.45, "curPx": 266.2}, {"side": 1, "mult": 1, "strike": 24500, "type": "PE", "entryPx": 179.65, "curPx": 176.4}], "capital": 56074, "maxCredit": 24060.0, "maxLoss": 9000, "entryIv": 15.28, "curIv": 15.28, "grossMtm": 420.0, "estCharges": 446.11, "netMtm": -26.11, "unitLegs": 450}, {"id": "OPEN-20261109-NIF-1208-S4", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-12-08", "kind": "Weekly", "dte": 29, "frontScope": false, "strat": "S4", "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)", "metrics": "RR25 +2.54 pp \u00b7 BF25 +0.20 pp", "legs": [{"side": -1, "mult": 2, "strike": 24900, "type": "PE", "entryPx": 341.25, "curPx": 338.05}, {"side": 1, "mult": 2, "strike": 24600, "type": "PE", "entryPx": 238.0, "curPx": 238.0}, {"side": -1, "mult": 1, "strike": 25300, "type": "CE", "entryPx": 319.0, "curPx": 317.9}, {"side": 1, "mult": 1, "strike": 25600, "type": "CE", "entryPx": 207.0, "curPx": 206.65}], "capital": 56074, "maxCredit": 23887.5, "maxLoss": 9000, "entryIv": 15.09, "curIv": 15.09, "grossMtm": 536.25, "estCharges": 488.03, "netMtm": 48.22, "unitLegs": 450}, {"id": "OPEN-20261109-NIF-1208-S6", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-12-08", "kind": "Weekly", "dte": 29, "frontScope": false, "strat": "S6", "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor", "metrics": "Basis -86.1 pts \u00b7 BF25 +0.20 pp", "legs": [{"side": -1, "mult": 2, "strike": 25200, "type": "CE", "entryPx": 362.9, "curPx": 364.5}, {"side": 1, "mult": 2, "strike": 25500, "type": "CE", "entryPx": 237.3, "curPx": 240.8}, {"side": -1, "mult": 1, "strike": 24800, "type": "PE", "entryPx": 301.55, "curPx": 302.25}, {"side": 1, "mult": 1, "strike": 24500, "type": "PE", "entryPx": 211.3, "curPx": 212.55}], "capital": 56074, "maxCredit": 25608.75, "maxLoss": 9000, "entryIv": 15.09, "curIv": 15.09, "grossMtm": 326.25, "estCharges": 494.76, "netMtm": -168.51, "unitLegs": 450}, {"id": "OPEN-20261109-NIF-1229-S2", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-12-29", "kind": "Monthly", "dte": 50, "frontScope": false, "strat": "S2", "stratName": "S2 \u00b7 Gamma Expansion Long Straddle", "metrics": "IV 14.16% \u00b7 HV10 14.82% \u00b7 IV\u2212HV10 -0.66 pp", "legs": [{"side": 1, "mult": 1, "strike": 25050, "type": "CE", "entryPx": 583.2, "curPx": 592.35}, {"side": 1, "mult": 1, "strike": 25050, "type": "PE", "entryPx": 462.5, "curPx": 462.75}], "capital": 78427, "maxCredit": 50977.88, "maxLoss": 78427.5, "entryIv": 14.16, "curIv": 14.16, "grossMtm": 705.0, "estCharges": 281.7, "netMtm": 423.3, "unitLegs": 150}, {"id": "OPEN-20261109-NIF-1229-S4", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-12-29", "kind": "Monthly", "dte": 50, "frontScope": false, "strat": "S4", "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)", "metrics": "RR25 +2.15 pp \u00b7 BF25 +0.26 pp", "legs": [{"side": -1, "mult": 2, "strike": 24900, "type": "PE", "entryPx": 399.2, "curPx": 399.5}, {"side": 1, "mult": 2, "strike": 24600, "type": "PE", "entryPx": 303.55, "curPx": 303.65}, {"side": -1, "mult": 1, "strike": 25300, "type": "CE", "entryPx": 455.7, "curPx": 458.95}, {"side": 1, "mult": 1, "strike": 25600, "type": "CE", "entryPx": 325.55, "curPx": 331.2}], "capital": 56074, "maxCredit": 24108.75, "maxLoss": 9000, "entryIv": 14.16, "curIv": 14.16, "grossMtm": 150.0, "estCharges": 578.61, "netMtm": -428.61, "unitLegs": 450}, {"id": "OPEN-20261109-NIF-1229-S6", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2026-12-29", "kind": "Monthly", "dte": 50, "frontScope": false, "strat": "S6", "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor", "metrics": "Basis -6.8 pts \u00b7 BF25 +0.26 pp", "legs": [{"side": -1, "mult": 2, "strike": 25200, "type": "CE", "entryPx": 506.5, "curPx": 508.15}, {"side": 1, "mult": 2, "strike": 25500, "type": "CE", "entryPx": 366.55, "curPx": 369.6}, {"side": -1, "mult": 1, "strike": 24800, "type": "PE", "entryPx": 365.0, "curPx": 363.7}, {"side": 1, "mult": 1, "strike": 24500, "type": "PE", "entryPx": 274.55, "curPx": 273.85}], "capital": 56074, "maxCredit": 27776.25, "maxLoss": 9000, "entryIv": 14.16, "curIv": 14.16, "grossMtm": 255.0, "estCharges": 613.85, "netMtm": -358.85, "unitLegs": 450}, {"id": "OPEN-20261109-NIF-0125-S2", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2027-01-25", "kind": "Monthly", "dte": 77, "frontScope": false, "strat": "S2", "stratName": "S2 \u00b7 Gamma Expansion Long Straddle", "metrics": "IV 13.31% \u00b7 HV10 14.82% \u00b7 IV\u2212HV10 -1.51 pp", "legs": [{"side": 1, "mult": 1, "strike": 25050, "type": "CE", "entryPx": 743.75, "curPx": 743.75}, {"side": 1, "mult": 1, "strike": 25050, "type": "PE", "entryPx": 506.1, "curPx": 502.2}], "capital": 93738, "maxCredit": 60930.19, "maxLoss": 93738.75, "entryIv": 13.31, "curIv": 13.31, "grossMtm": -292.5, "estCharges": 316.08, "netMtm": -608.58, "unitLegs": 150}, {"id": "OPEN-20261109-NIF-0125-S4", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2027-01-25", "kind": "Monthly", "dte": 77, "frontScope": false, "strat": "S4", "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)", "metrics": "RR25 +2.27 pp \u00b7 BF25 +0.38 pp", "legs": [{"side": -1, "mult": 2, "strike": 24900, "type": "PE", "entryPx": 446.15, "curPx": 450.0}, {"side": 1, "mult": 2, "strike": 24600, "type": "PE", "entryPx": 358.7, "curPx": 356.0}, {"side": -1, "mult": 1, "strike": 25300, "type": "CE", "entryPx": 620.0, "curPx": 612.3}, {"side": 1, "mult": 1, "strike": 25600, "type": "CE", "entryPx": 460.6, "curPx": 471.15}], "capital": 56074, "maxCredit": 25072.5, "maxLoss": 9000, "entryIv": 13.31, "curIv": 13.31, "grossMtm": 386.25, "estCharges": 667.92, "netMtm": -281.67, "unitLegs": 450}, {"id": "OPEN-20261109-NIF-0125-S6", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "NIFTY", "exp": "2027-01-25", "kind": "Monthly", "dte": 77, "frontScope": false, "strat": "S6", "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor", "metrics": "Basis -18.5 pts \u00b7 BF25 +0.38 pp", "legs": [{"side": -1, "mult": 2, "strike": 25200, "type": "CE", "entryPx": 668.0, "curPx": 672.35}, {"side": 1, "mult": 2, "strike": 25500, "type": "CE", "entryPx": 510.55, "curPx": 512.0}, {"side": -1, "mult": 1, "strike": 24800, "type": "PE", "entryPx": 414.7, "curPx": 416.3}, {"side": 1, "mult": 1, "strike": 24500, "type": "PE", "entryPx": 324.1, "curPx": 324.9}], "capital": 56074, "maxCredit": 30412.5, "maxLoss": 9000, "entryIv": 13.31, "curIv": 13.31, "grossMtm": -495.0, "estCharges": 740.18, "netMtm": -1235.18, "unitLegs": 450}, {"id": "OPEN-20261109-BAN-1123-S2", "date": "2026-11-09", "trigTime": "09 Nov 13:30 IST", "markedAt": "09 Nov 15:30 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "frontScope": true, "strat": "S2", "stratName": "S2 \u00b7 Gamma Expansion Long Straddle", "metrics": "IV 16.70% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -1.00 pp", "legs": [{"side": 1, "mult": 1, "strike": 59100, "type": "CE", "entryPx": 767.6, "curPx": 1048.3}, {"side": 1, "mult": 1, "strike": 59100, "type": "PE", "entryPx": 830.0, "curPx": 576.0}], "capital": 47928, "maxCredit": 31153.2, "maxLoss": 47928.0, "entryIv": 16.7, "curIv": 16.7, "grossMtm": 801.0, "estCharges": 209.57, "netMtm": 591.43, "unitLegs": 60}, {"id": "OPEN-20261109-BAN-1123-S4", "date": "2026-11-09", "trigTime": "09 Nov 13:30 IST", "markedAt": "09 Nov 15:30 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "frontScope": true, "strat": "S4", "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)", "metrics": "RR25 +2.22 pp \u00b7 BF25 +0.60 pp", "legs": [{"side": -1, "mult": 2, "strike": 59400, "type": "PE", "entryPx": 989.25, "curPx": 695.15}, {"side": 1, "mult": 2, "strike": 58800, "type": "PE", "entryPx": 690.25, "curPx": 472.45}, {"side": -1, "mult": 1, "strike": 60200, "type": "CE", "entryPx": 348.8, "curPx": 502.0}, {"side": 1, "mult": 1, "strike": 60800, "type": "CE", "entryPx": 216.4, "curPx": 312.0}], "capital": 53140, "maxCredit": 21912.0, "maxLoss": 9000, "entryIv": 16.7, "curIv": 16.7, "grossMtm": 2850.0, "estCharges": 442.45, "netMtm": 2407.55, "unitLegs": 180}, {"id": "OPEN-20261109-BAN-1123-S6", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "frontScope": true, "strat": "S6", "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor", "metrics": "Basis -46.4 pts \u00b7 BF25 +0.60 pp", "legs": [{"side": -1, "mult": 2, "strike": 60000, "type": "CE", "entryPx": 568.0, "curPx": 583.25}, {"side": 1, "mult": 2, "strike": 60600, "type": "CE", "entryPx": 358.05, "curPx": 366.1}, {"side": -1, "mult": 1, "strike": 59200, "type": "PE", "entryPx": 640.7, "curPx": 612.05}, {"side": 1, "mult": 1, "strike": 58600, "type": "PE", "entryPx": 436.5, "curPx": 414.7}], "capital": 53140, "maxCredit": 18723.0, "maxLoss": 9000, "entryIv": 16.7, "curIv": 16.7, "grossMtm": -226.5, "estCharges": 396.85, "netMtm": -623.35, "unitLegs": 180}, {"id": "OPEN-20261109-BAN-1229-S2", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "BANKNIFTY", "exp": "2026-12-29", "kind": "Monthly", "dte": 50, "frontScope": false, "strat": "S2", "stratName": "S2 \u00b7 Gamma Expansion Long Straddle", "metrics": "IV 14.48% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -3.22 pp", "legs": [{"side": 1, "mult": 1, "strike": 59700, "type": "CE", "entryPx": 1425.95, "curPx": 1423.8}, {"side": 1, "mult": 1, "strike": 59700, "type": "PE", "entryPx": 1175.0, "curPx": 1147.95}], "capital": 78028, "maxCredit": 50718.53, "maxLoss": 78028.5, "entryIv": 14.48, "curIv": 14.48, "grossMtm": -876.0, "estCharges": 277.71, "netMtm": -1153.71, "unitLegs": 60}, {"id": "OPEN-20261109-BAN-1229-S4", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "BANKNIFTY", "exp": "2026-12-29", "kind": "Monthly", "dte": 50, "frontScope": false, "strat": "S4", "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)", "metrics": "RR25 +1.76 pp \u00b7 BF25 +0.35 pp", "legs": [{"side": -1, "mult": 2, "strike": 59400, "type": "PE", "entryPx": 1045.05, "curPx": 1045.05}, {"side": 1, "mult": 2, "strike": 58800, "type": "PE", "entryPx": 825.1, "curPx": 808.1}, {"side": -1, "mult": 1, "strike": 60200, "type": "CE", "entryPx": 1160.0, "curPx": 1147.05}, {"side": 1, "mult": 1, "strike": 60800, "type": "CE", "entryPx": 885.75, "curPx": 885.75}], "capital": 53140, "maxCredit": 21424.5, "maxLoss": 9000, "entryIv": 14.48, "curIv": 14.48, "grossMtm": -631.5, "estCharges": 598.2, "netMtm": -1229.7, "unitLegs": 180}, {"id": "OPEN-20261109-BAN-1229-S6", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "BANKNIFTY", "exp": "2026-12-29", "kind": "Monthly", "dte": 50, "frontScope": false, "strat": "S6", "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor", "metrics": "Basis +5.8 pts \u00b7 BF25 +0.35 pp", "legs": [{"side": -1, "mult": 2, "strike": 60000, "type": "CE", "entryPx": 1259.65, "curPx": 1266.0}, {"side": 1, "mult": 2, "strike": 60600, "type": "CE", "entryPx": 978.0, "curPx": 966.15}, {"side": -1, "mult": 1, "strike": 59200, "type": "PE", "entryPx": 974.85, "curPx": 944.75}, {"side": 1, "mult": 1, "strike": 58600, "type": "PE", "entryPx": 760.0, "curPx": 745.85}], "capital": 53140, "maxCredit": 23344.5, "maxLoss": 9000, "entryIv": 14.48, "curIv": 14.48, "grossMtm": -613.5, "estCharges": 628.09, "netMtm": -1241.59, "unitLegs": 180}, {"id": "OPEN-20261109-BAN-0125-S2", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "BANKNIFTY", "exp": "2027-01-25", "kind": "Monthly", "dte": 77, "frontScope": false, "strat": "S2", "stratName": "S2 \u00b7 Gamma Expansion Long Straddle", "metrics": "IV 14.12% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -3.58 pp", "legs": [{"side": 1, "mult": 1, "strike": 59500, "type": "CE", "entryPx": 1908.0, "curPx": 1963.45}, {"side": 1, "mult": 1, "strike": 59500, "type": "PE", "entryPx": 1200.0, "curPx": 1200.0}], "capital": 93240, "maxCredit": 60606.0, "maxLoss": 93240.0, "entryIv": 14.12, "curIv": 14.12, "grossMtm": 1663.5, "estCharges": 318.65, "netMtm": 1344.85, "unitLegs": 60}, {"id": "OPEN-20261109-BAN-0125-S4", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "BANKNIFTY", "exp": "2027-01-25", "kind": "Monthly", "dte": 77, "frontScope": false, "strat": "S4", "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)", "metrics": "RR25 +13.65 pp \u00b7 BF25 +6.04 pp", "legs": [{"side": -1, "mult": 2, "strike": 59200, "type": "PE", "entryPx": 1444.4, "curPx": 1444.4}, {"side": 1, "mult": 2, "strike": 58600, "type": "PE", "entryPx": 1020.0, "curPx": 1020.0}, {"side": -1, "mult": 1, "strike": 60000, "type": "CE", "entryPx": 1610.0, "curPx": 1619.0}, {"side": 1, "mult": 1, "strike": 60600, "type": "CE", "entryPx": 417.1, "curPx": 417.1}], "capital": 53140, "maxCredit": 61251.0, "maxLoss": 9000, "entryIv": 14.12, "curIv": 14.12, "grossMtm": -270.0, "estCharges": 683.67, "netMtm": -953.67, "unitLegs": 180}, {"id": "OPEN-20261109-BAN-0125-S6", "date": "2026-11-09", "trigTime": "09 Nov 15:15 IST", "markedAt": "09 Nov 15:30 IST", "sym": "BANKNIFTY", "exp": "2027-01-25", "kind": "Monthly", "dte": 77, "frontScope": false, "strat": "S6", "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor", "metrics": "Basis +13.4 pts \u00b7 BF25 +6.04 pp", "legs": [{"side": -1, "mult": 2, "strike": 59800, "type": "CE", "entryPx": 537.8, "curPx": 537.8}, {"side": 1, "mult": 2, "strike": 60400, "type": "CE", "entryPx": 1268.35, "curPx": 1268.35}, {"side": -1, "mult": 1, "strike": 59000, "type": "PE", "entryPx": 1004.0, "curPx": 990.0}, {"side": 1, "mult": 1, "strike": 58400, "type": "PE", "entryPx": 1189.4, "curPx": 1189.4}], "capital": 53140, "maxCredit": 450.0, "maxLoss": 9000, "entryIv": 14.12, "curIv": 14.12, "grossMtm": 420.0, "estCharges": 601.55, "netMtm": -181.55, "unitLegs": 180}];
-      var FORWARD_SEED_CLOSED = [{"id": "FWD-20261102-BAN-S4", "date": "2026-11-02", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 21, "strat": "S4", "trigReason": "Put Skew RR25 +2.77 pp >= +1.50 pp \u00b7 DTE 21d", "sig": "RR25 +2.77 pp \u00b7 VRP +1.05 pp", "legsText": "S2 54700PE (581.1\u2192600.2) / B2 54100PE (400.6\u2192410.6) / S 55500CE (619.5\u2192563.1) / B 56100CE (376.6\u2192335.1)", "legs": [{"side": -1, "mult": 2, "strike": 54700, "type": "PE", "entryPx": 581.1, "exitPx": 600.2}, {"side": 1, "mult": 2, "strike": 54100, "type": "PE", "entryPx": 400.6, "exitPx": 410.6}, {"side": -1, "mult": 1, "strike": 55500, "type": "CE", "entryPx": 619.5, "exitPx": 563.1}, {"side": 1, "mult": 1, "strike": 56100, "type": "CE", "entryPx": 376.6, "exitPx": 335.1}], "capital": 49463, "maxCredit": 18117.0, "maxLoss": 9000, "entryIv": 14.84, "gross": -93.0, "charges": 397.83, "net": -490.83, "unitLegs": 180, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 14.84}, {"t": "11:15", "gross": 398.85, "iv": 14.54}, {"t": "13:30", "gross": -429.05, "iv": 14.25}, {"t": "15:15", "gross": -93.0, "iv": 14.84}]}, {"id": "FWD-20261102-NIF-S1", "date": "2026-11-02", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 7, "strat": "S1", "trigReason": "VRP30 +2.51 pp >= +1.50 \u00b7 HV30 12.69% <= 16.5%", "sig": "IV 15.20% \u00b7 HV30 12.69% \u00b7 VRP +2.51 pp", "legsText": "S 23450CE (117.3\u2192133.0) / S 23050PE (111.7\u219289.3) / B 23750CE (37.0\u219244.9) / B 22750PE (52.5\u219239.2)", "legs": [{"side": -1, "mult": 1, "strike": 23450, "type": "CE", "entryPx": 117.3, "exitPx": 133.0}, {"side": -1, "mult": 1, "strike": 23050, "type": "PE", "entryPx": 111.7, "exitPx": 89.3}, {"side": 1, "mult": 1, "strike": 23750, "type": "CE", "entryPx": 37.0, "exitPx": 44.9}, {"side": 1, "mult": 1, "strike": 22750, "type": "PE", "entryPx": 52.5, "exitPx": 39.2}], "capital": 26174, "maxCredit": 10462.5, "maxLoss": 12037.5, "entryIv": 15.2, "gross": 90.0, "charges": 244.43, "net": -154.43, "unitLegs": 300, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 15.2}, {"t": "11:15", "gross": 399.5, "iv": 14.9}, {"t": "13:30", "gross": 326.5, "iv": 14.59}, {"t": "15:15", "gross": 90.0, "iv": 15.2}]}, {"id": "FWD-20261102-NIF-S3", "date": "2026-11-02", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 7, "strat": "S3", "trigReason": "ATM IV 15.20% >= 15.2% \u00b7 VRP30 +2.51 pp \u00b7 DTE 7d", "sig": "ATM IV 15.20% \u2192 14.64% \u00b7 DTE 7d", "legsText": "S 23250CE (215.8\u2192234.7) / S 23250PE (184.6\u2192153.6) / B 23600CE (67.8\u219279.4) / B 22900PE (77.1\u219258.6)", "legs": [{"side": -1, "mult": 1, "strike": 23250, "type": "CE", "entryPx": 215.8, "exitPx": 234.7}, {"side": -1, "mult": 1, "strike": 23250, "type": "PE", "entryPx": 184.6, "exitPx": 153.6}, {"side": 1, "mult": 1, "strike": 23600, "type": "CE", "entryPx": 67.8, "exitPx": 79.4}, {"side": 1, "mult": 1, "strike": 22900, "type": "PE", "entryPx": 77.1, "exitPx": 58.6}], "capital": 26174, "maxCredit": 19162.5, "maxLoss": 7087.5, "entryIv": 15.2, "gross": 390.0, "charges": 284.35, "net": 105.65, "unitLegs": 300, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 15.2}, {"t": "11:15", "gross": 564.5, "iv": 14.9}, {"t": "13:30", "gross": 581.5, "iv": 14.59}, {"t": "15:15", "gross": 390.0, "iv": 15.2}]}, {"id": "FWD-20261102-NIF-S4", "date": "2026-11-02", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 7, "strat": "S4", "trigReason": "Put Skew RR25 +2.90 pp >= +1.50 pp \u00b7 DTE 7d", "sig": "RR25 +2.90 pp \u00b7 VRP +2.51 pp", "legsText": "S2 23100PE (127.8\u2192102.4) / B2 22800PE (60.2\u219245.2) / S 23500CE (99.3\u2192112.8) / B 23800CE (29.8\u219237.1)", "legs": [{"side": -1, "mult": 2, "strike": 23100, "type": "PE", "entryPx": 127.8, "exitPx": 102.4}, {"side": 1, "mult": 2, "strike": 22800, "type": "PE", "entryPx": 60.2, "exitPx": 45.2}, {"side": -1, "mult": 1, "strike": 23500, "type": "CE", "entryPx": 99.3, "exitPx": 112.8}, {"side": 1, "mult": 1, "strike": 23800, "type": "CE", "entryPx": 29.8, "exitPx": 37.1}], "capital": 52347, "maxCredit": 15352.5, "maxLoss": 9000, "entryIv": 15.2, "gross": 1095.0, "charges": 274.09, "net": 820.91, "unitLegs": 450, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 15.2}, {"t": "11:15", "gross": 952.25, "iv": 14.9}, {"t": "13:30", "gross": 1180.75, "iv": 14.59}, {"t": "15:15", "gross": 1095.0, "iv": 15.2}]}, {"id": "FWD-20261103-BAN-S4", "date": "2026-11-03", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 20, "strat": "S4", "trigReason": "Put Skew RR25 +2.83 pp >= +1.50 pp \u00b7 DTE 20d", "sig": "RR25 +2.83 pp \u00b7 VRP +0.67 pp", "legsText": "S2 55000PE (559.5\u2192537.4) / B2 54400PE (373.1\u2192361.2) / S 55800CE (567.5\u2192610.9) / B 56400CE (332.3\u2192365.9)", "legs": [{"side": -1, "mult": 2, "strike": 55000, "type": "PE", "entryPx": 559.5, "exitPx": 537.4}, {"side": 1, "mult": 2, "strike": 54400, "type": "PE", "entryPx": 373.1, "exitPx": 361.2}, {"side": -1, "mult": 1, "strike": 55800, "type": "CE", "entryPx": 567.5, "exitPx": 610.9}, {"side": 1, "mult": 1, "strike": 56400, "type": "CE", "entryPx": 332.3, "exitPx": 365.9}], "capital": 49765, "maxCredit": 18240.0, "maxLoss": 9000, "entryIv": 14.39, "gross": 325.5, "charges": 386.02, "net": -60.52, "unitLegs": 180, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 14.39}, {"t": "11:15", "gross": 529.02, "iv": 14.1}, {"t": "13:30", "gross": 526.67, "iv": 13.81}, {"t": "15:15", "gross": 325.5, "iv": 14.39}]}, {"id": "FWD-20261103-NIF-S1", "date": "2026-11-03", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 6, "strat": "S1", "trigReason": "VRP30 +2.04 pp >= +1.50 \u00b7 HV30 12.85% <= 16.5%", "sig": "IV 14.89% \u00b7 HV30 12.85% \u00b7 VRP +2.04 pp", "legsText": "S 23800CE (87.5\u2192142.8) / S 23400PE (116.3\u219279.7) / B 24100CE (27.2\u219254.6) / B 23100PE (51.3\u219237.3)", "legs": [{"side": -1, "mult": 1, "strike": 23800, "type": "CE", "entryPx": 87.5, "exitPx": 142.8}, {"side": -1, "mult": 1, "strike": 23400, "type": "PE", "entryPx": 116.3, "exitPx": 79.7}, {"side": 1, "mult": 1, "strike": 24100, "type": "CE", "entryPx": 27.2, "exitPx": 54.6}, {"side": 1, "mult": 1, "strike": 23100, "type": "PE", "entryPx": 51.3, "exitPx": 37.3}], "capital": 26533, "maxCredit": 9397.5, "maxLoss": 13102.5, "entryIv": 14.89, "gross": -397.5, "charges": 241.56, "net": -639.06, "unitLegs": 300, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 14.89}, {"t": "11:15", "gross": 231.37, "iv": 14.59}, {"t": "13:30", "gross": -687.88, "iv": 14.29}, {"t": "15:15", "gross": -397.5, "iv": 14.89}]}, {"id": "FWD-20261103-NIF-S4", "date": "2026-11-03", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 6, "strat": "S4", "trigReason": "Put Skew RR25 +3.11 pp >= +1.50 pp \u00b7 DTE 6d", "sig": "RR25 +3.11 pp \u00b7 VRP +2.04 pp", "legsText": "S2 23450PE (133.8\u219291.5) / B2 23150PE (59.1\u219242.3) / S 23850CE (72.5\u2192123.0) / B 24150CE (22.6\u219246.5)", "legs": [{"side": -1, "mult": 2, "strike": 23450, "type": "PE", "entryPx": 133.8, "exitPx": 91.5}, {"side": 1, "mult": 2, "strike": 23150, "type": "PE", "entryPx": 59.1, "exitPx": 42.3}, {"side": -1, "mult": 1, "strike": 23850, "type": "CE", "entryPx": 72.5, "exitPx": 123.0}, {"side": 1, "mult": 1, "strike": 24150, "type": "CE", "entryPx": 22.6, "exitPx": 46.5}], "capital": 53065, "maxCredit": 14947.5, "maxLoss": 9000, "entryIv": 14.89, "gross": 1830.0, "charges": 271.77, "net": 1558.23, "unitLegs": 450, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 14.89}, {"t": "11:15", "gross": 1356.5, "iv": 14.59}, {"t": "13:30", "gross": 1805.5, "iv": 14.29}, {"t": "15:15", "gross": 1830.0, "iv": 14.89}]}, {"id": "FWD-20261104-BAN-S4", "date": "2026-11-04", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 19, "strat": "S4", "trigReason": "Put Skew RR25 +3.25 pp >= +1.50 pp \u00b7 DTE 19d", "sig": "RR25 +3.25 pp \u00b7 VRP +0.89 pp", "legsText": "S2 55500PE (626.7\u2192534.0) / B2 54900PE (429.9\u2192354.6) / S 56300CE (522.0\u2192525.2) / B 56900CE (298.9\u2192296.6)", "legs": [{"side": -1, "mult": 2, "strike": 55500, "type": "PE", "entryPx": 626.7, "exitPx": 534.0}, {"side": 1, "mult": 2, "strike": 54900, "type": "PE", "entryPx": 429.9, "exitPx": 354.6}, {"side": -1, "mult": 1, "strike": 56300, "type": "CE", "entryPx": 522.0, "exitPx": 525.2}, {"side": 1, "mult": 1, "strike": 56900, "type": "CE", "entryPx": 298.9, "exitPx": 296.6}], "capital": 50180, "maxCredit": 18501.0, "maxLoss": 9000, "entryIv": 14.86, "gross": 883.5, "charges": 386.22, "net": 497.28, "unitLegs": 180, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 14.86}, {"t": "11:15", "gross": 835.92, "iv": 14.56}, {"t": "13:30", "gross": 1000.98, "iv": 14.27}, {"t": "15:15", "gross": 883.5, "iv": 14.86}]}, {"id": "FWD-20261104-NIF-S1", "date": "2026-11-04", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 5, "strat": "S1", "trigReason": "VRP30 +3.83 pp >= +1.50 \u00b7 HV30 13.11% <= 16.5%", "sig": "IV 16.94% \u00b7 HV30 13.11% \u00b7 VRP +3.83 pp", "legsText": "S 24100CE (102.2\u219293.5) / S 23700PE (121.7\u219272.8) / B 24400CE (38.7\u219230.8) / B 23400PE (51.5\u219224.9)", "legs": [{"side": -1, "mult": 1, "strike": 24100, "type": "CE", "entryPx": 102.2, "exitPx": 93.5}, {"side": -1, "mult": 1, "strike": 23700, "type": "PE", "entryPx": 121.7, "exitPx": 72.8}, {"side": 1, "mult": 1, "strike": 24400, "type": "CE", "entryPx": 38.7, "exitPx": 30.8}, {"side": 1, "mult": 1, "strike": 23400, "type": "PE", "entryPx": 51.5, "exitPx": 24.9}], "capital": 26884, "maxCredit": 10027.5, "maxLoss": 12472.5, "entryIv": 16.94, "gross": 1728.75, "charges": 237.71, "net": 1491.04, "unitLegs": 300, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 16.94}, {"t": "11:15", "gross": 1300.81, "iv": 16.6}, {"t": "13:30", "gross": 1719.44, "iv": 16.26}, {"t": "15:15", "gross": 1728.75, "iv": 16.94}]}, {"id": "FWD-20261104-NIF-S3", "date": "2026-11-04", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 5, "strat": "S3", "trigReason": "ATM IV 16.94% >= 15.2% \u00b7 VRP30 +3.83 pp \u00b7 DTE 5d", "sig": "ATM IV 16.94% \u2192 14.47% \u00b7 DTE 5d", "legsText": "S 23900CE (182.3\u2192178.9) / S 23900PE (206.4\u2192145.6) / B 24250CE (63.4\u219254.2) / B 23550PE (79.1\u219241.9)", "legs": [{"side": -1, "mult": 1, "strike": 23900, "type": "CE", "entryPx": 182.3, "exitPx": 178.9}, {"side": -1, "mult": 1, "strike": 23900, "type": "PE", "entryPx": 206.4, "exitPx": 145.6}, {"side": 1, "mult": 1, "strike": 24250, "type": "CE", "entryPx": 63.4, "exitPx": 54.2}, {"side": 1, "mult": 1, "strike": 23550, "type": "PE", "entryPx": 79.1, "exitPx": 41.9}], "capital": 26884, "maxCredit": 18465.0, "maxLoss": 7785.0, "entryIv": 16.94, "gross": 1338.75, "charges": 274.41, "net": 1064.34, "unitLegs": 300, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 16.94}, {"t": "11:15", "gross": 1086.31, "iv": 16.6}, {"t": "13:30", "gross": 1387.94, "iv": 16.26}, {"t": "15:15", "gross": 1338.75, "iv": 16.94}]}, {"id": "FWD-20261104-NIF-S4", "date": "2026-11-04", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 5, "strat": "S4", "trigReason": "Put Skew RR25 +2.44 pp >= +1.50 pp \u00b7 DTE 5d", "sig": "RR25 +2.44 pp \u00b7 VRP +3.83 pp", "legsText": "S2 23750PE (139.2\u219287.2) / B2 23450PE (59.2\u219229.4) / S 24150CE (87.7\u219278.2) / B 24450CE (32.8\u219225.6)", "legs": [{"side": -1, "mult": 2, "strike": 23750, "type": "PE", "entryPx": 139.2, "exitPx": 87.2}, {"side": 1, "mult": 2, "strike": 23450, "type": "PE", "entryPx": 59.2, "exitPx": 29.4}, {"side": -1, "mult": 1, "strike": 24150, "type": "CE", "entryPx": 87.7, "exitPx": 78.2}, {"side": 1, "mult": 1, "strike": 24450, "type": "CE", "entryPx": 32.8, "exitPx": 25.6}], "capital": 53769, "maxCredit": 16117.5, "maxLoss": 9000, "entryIv": 16.94, "gross": 3517.5, "charges": 267.32, "net": 3250.18, "unitLegs": 450, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 16.94}, {"t": "11:15", "gross": 2284.62, "iv": 16.6}, {"t": "13:30", "gross": 3239.88, "iv": 16.26}, {"t": "15:15", "gross": 3517.5, "iv": 16.94}]}, {"id": "FWD-20261104-NIF-S5", "date": "2026-11-04", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 5, "strat": "S5", "trigReason": "IV\u2212HV10 +1.92 pp >= +0.80 pp \u00b7 DTE 5d", "sig": "Straddle \u20b9388.8 \u2192 \u20b9324.5 \u00b7 IV\u2212HV10 +1.92 pp", "legsText": "S 23900CE (182.3\u2192178.9) / S 23900PE (206.4\u2192145.6) / B 24150CE (87.7\u219278.2) / B 23650PE (105.7\u219260.6)", "legs": [{"side": -1, "mult": 1, "strike": 23900, "type": "CE", "entryPx": 182.3, "exitPx": 178.9}, {"side": -1, "mult": 1, "strike": 23900, "type": "PE", "entryPx": 206.4, "exitPx": 145.6}, {"side": 1, "mult": 1, "strike": 24150, "type": "CE", "entryPx": 87.7, "exitPx": 78.2}, {"side": 1, "mult": 1, "strike": 23650, "type": "PE", "entryPx": 105.7, "exitPx": 60.6}], "capital": 26884, "maxCredit": 14647.5, "maxLoss": 4102.5, "entryIv": 16.94, "gross": 720.0, "charges": 282.27, "net": 437.73, "unitLegs": 300, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 16.94}, {"t": "11:15", "gross": 746.0, "iv": 16.6}, {"t": "13:30", "gross": 862.0, "iv": 16.26}, {"t": "15:15", "gross": 720.0, "iv": 16.94}]}, {"id": "FWD-20261104-NIF-S6", "date": "2026-11-04", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 5, "strat": "S6", "trigReason": "Basis -46.1 pts \u00b7 BF25 +0.44 pp", "sig": "Basis -46.1 pts \u00b7 BF25 +0.44 pp", "legsText": "S2 24050CE (118.8\u2192111.5) / B2 24350CE (45.6\u219237.2) / S 23650PE (105.7\u219260.6) / B 23350PE (44.5\u219221.4)", "legs": [{"side": -1, "mult": 2, "strike": 24050, "type": "CE", "entryPx": 118.8, "exitPx": 111.5}, {"side": 1, "mult": 2, "strike": 24350, "type": "CE", "entryPx": 45.6, "exitPx": 37.2}, {"side": -1, "mult": 1, "strike": 23650, "type": "PE", "entryPx": 105.7, "exitPx": 60.6}, {"side": 1, "mult": 1, "strike": 23350, "type": "PE", "entryPx": 44.5, "exitPx": 21.4}], "capital": 53769, "maxCredit": 15570.0, "maxLoss": 9000, "entryIv": 16.94, "gross": 1500.0, "charges": 266.23, "net": 1233.77, "unitLegs": 450, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 16.94}, {"t": "11:15", "gross": 1175.0, "iv": 16.6}, {"t": "13:30", "gross": 1525.0, "iv": 16.26}, {"t": "15:15", "gross": 1500.0, "iv": 16.94}]}, {"id": "FWD-20261105-BAN-S2", "date": "2026-11-05", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 18, "strat": "S2", "trigReason": "IV 13.31% < HV10 13.65% (IV\u2212HV10 -0.34 pp)", "sig": "IV 13.31% \u00b7 HV10 13.65% \u00b7 IV\u2212HV10 -0.34 pp", "legsText": "B 56900CE (679.2\u21921330.9) / B 56900PE (672.0\u2192359.4)", "legs": [{"side": 1, "mult": 1, "strike": 56900, "type": "CE", "entryPx": 679.2, "exitPx": 1330.9}, {"side": 1, "mult": 1, "strike": 56900, "type": "PE", "entryPx": 672.0, "exitPx": 359.4}], "capital": 40538, "maxCredit": 26348.4, "maxLoss": 40536.0, "entryIv": 13.31, "gross": 10173.0, "charges": 210.05, "net": 9962.95, "unitLegs": 60, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 13.31}, {"t": "11:15", "gross": 5945.15, "iv": 13.04}, {"t": "13:30", "gross": 8897.05, "iv": 12.78}, {"t": "15:15", "gross": 10173.0, "iv": 13.31}]}, {"id": "FWD-20261105-BAN-S4", "date": "2026-11-05", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 18, "strat": "S4", "trigReason": "Put Skew RR25 +2.48 pp >= +1.50 pp \u00b7 DTE 18d", "sig": "RR25 +2.48 pp \u00b7 VRP -0.73 pp", "legsText": "S2 56600PE (542.0\u2192293.2) / B2 56000PE (350.2\u2192200.4) / S 57400CE (441.4\u2192986.1) / B 58000CE (233.9\u2192650.0)", "legs": [{"side": -1, "mult": 2, "strike": 56600, "type": "PE", "entryPx": 542.0, "exitPx": 293.2}, {"side": 1, "mult": 2, "strike": 56000, "type": "PE", "entryPx": 350.2, "exitPx": 200.4}, {"side": -1, "mult": 1, "strike": 57400, "type": "CE", "entryPx": 441.4, "exitPx": 986.1}, {"side": 1, "mult": 1, "strike": 58000, "type": "CE", "entryPx": 233.9, "exitPx": 650.0}], "capital": 51187, "maxCredit": 17733.0, "maxLoss": 9000, "entryIv": 13.31, "gross": 2077.5, "charges": 371.09, "net": 1706.41, "unitLegs": 180, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 13.31}, {"t": "11:15", "gross": 1492.62, "iv": 13.04}, {"t": "13:30", "gross": 2015.88, "iv": 12.78}, {"t": "15:15", "gross": 2077.5, "iv": 13.31}]}, {"id": "FWD-20261105-NIF-S1", "date": "2026-11-05", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 4, "strat": "S1", "trigReason": "VRP30 +1.61 pp >= +1.50 \u00b7 HV30 13.18% <= 16.5%", "sig": "IV 14.79% \u00b7 HV30 13.18% \u00b7 VRP +1.61 pp", "legsText": "S 24550CE (74.0\u2192157.5) / S 24150PE (80.0\u219233.8) / B 24850CE (26.2\u219259.0) / B 23850PE (27.2\u219213.2)", "legs": [{"side": -1, "mult": 1, "strike": 24550, "type": "CE", "entryPx": 74.0, "exitPx": 157.5}, {"side": -1, "mult": 1, "strike": 24150, "type": "PE", "entryPx": 80.0, "exitPx": 33.8}, {"side": 1, "mult": 1, "strike": 24850, "type": "CE", "entryPx": 26.2, "exitPx": 59.0}, {"side": 1, "mult": 1, "strike": 23850, "type": "PE", "entryPx": 27.2, "exitPx": 13.2}], "capital": 27386, "maxCredit": 7545.0, "maxLoss": 14955.0, "entryIv": 14.79, "gross": -1380.0, "charges": 229.65, "net": -1609.65, "unitLegs": 300, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 14.79}, {"t": "11:15", "gross": -309.0, "iv": 15.97}, {"t": "13:30", "gross": -1523.0, "iv": 14.2}, {"t": "15:15", "gross": -1380.0, "iv": 14.79}]}, {"id": "FWD-20261105-NIF-S5", "date": "2026-11-05", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-09", "kind": "Weekly", "dte": 4, "strat": "S5", "trigReason": "IV\u2212HV10 +1.24 pp >= +0.80 pp \u00b7 DTE 4d", "sig": "Straddle \u20b9309.9 \u2192 \u20b9311.9 \u00b7 IV\u2212HV10 +1.24 pp", "legsText": "S 24350CE (147.6\u2192275.1) / S 24350PE (162.2\u219273.5) / B 24600CE (61.6\u2192135.0) / B 24100PE (66.6\u219228.0)", "legs": [{"side": -1, "mult": 1, "strike": 24350, "type": "CE", "entryPx": 147.6, "exitPx": 275.1}, {"side": -1, "mult": 1, "strike": 24350, "type": "PE", "entryPx": 162.2, "exitPx": 73.5}, {"side": 1, "mult": 1, "strike": 24600, "type": "CE", "entryPx": 61.6, "exitPx": 135.0}, {"side": 1, "mult": 1, "strike": 24100, "type": "PE", "entryPx": 66.6, "exitPx": 28.0}], "capital": 27386, "maxCredit": 13620.0, "maxLoss": 5130.0, "entryIv": 14.79, "gross": -300.0, "charges": 273.02, "net": -573.02, "unitLegs": 300, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 14.79}, {"t": "11:15", "gross": 285.0, "iv": 14.49}, {"t": "13:30", "gross": -605.0, "iv": 14.2}, {"t": "15:15", "gross": -300.0, "iv": 14.79}]}, {"id": "FWD-20261106-BAN-S2", "date": "2026-11-06", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 17, "strat": "S2", "trigReason": "IV 15.66% < HV10 17.34% (IV\u2212HV10 -1.68 pp)", "sig": "IV 15.66% \u00b7 HV10 17.34% \u00b7 IV\u2212HV10 -1.68 pp", "legsText": "B 57600CE (732.0\u21921680.8) / B 57600PE (831.1\u2192373.2)", "legs": [{"side": 1, "mult": 1, "strike": 57600, "type": "CE", "entryPx": 732.0, "exitPx": 1680.8}, {"side": 1, "mult": 1, "strike": 57600, "type": "PE", "entryPx": 831.1, "exitPx": 373.2}], "capital": 46893, "maxCredit": 30480.45, "maxLoss": 46893.0, "entryIv": 15.66, "gross": 14728.5, "charges": 233.86, "net": 14494.64, "unitLegs": 60, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 15.66}, {"t": "11:15", "gross": 8450.68, "iv": 15.35}, {"t": "13:30", "gross": 12769.23, "iv": 15.03}, {"t": "15:15", "gross": 14728.5, "iv": 15.66}]}, {"id": "FWD-20261106-BAN-S4", "date": "2026-11-06", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 17, "strat": "S4", "trigReason": "Put Skew RR25 +2.85 pp >= +1.50 pp \u00b7 DTE 17d", "sig": "RR25 +2.85 pp \u00b7 VRP +0.09 pp", "legsText": "S2 57300PE (696.2\u2192313.8) / B2 56700PE (486.1\u2192225.2) / S 58100CE (506.4\u21921308.9) / B 58700CE (309.2\u2192936.0)", "legs": [{"side": -1, "mult": 2, "strike": 57300, "type": "PE", "entryPx": 696.2, "exitPx": 313.8}, {"side": 1, "mult": 2, "strike": 56700, "type": "PE", "entryPx": 486.1, "exitPx": 225.2}, {"side": -1, "mult": 1, "strike": 58100, "type": "CE", "entryPx": 506.4, "exitPx": 1308.9}, {"side": 1, "mult": 1, "strike": 58700, "type": "CE", "entryPx": 309.2, "exitPx": 936.0}], "capital": 51801, "maxCredit": 18522.0, "maxLoss": 9000, "entryIv": 15.66, "gross": 2022.0, "charges": 421.56, "net": 1600.44, "unitLegs": 180, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 15.66}, {"t": "11:15", "gross": 1462.1, "iv": 15.35}, {"t": "13:30", "gross": 1968.7, "iv": 15.03}, {"t": "15:15", "gross": 2022.0, "iv": 15.66}]}, {"id": "FWD-20261109-BAN-S1", "date": "2026-11-09", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "strat": "S1", "trigReason": "VRP30 +1.99 pp >= +1.50 \u00b7 HV30 15.55% <= 16.5%", "sig": "IV 17.54% \u00b7 HV30 15.55% \u00b7 VRP +1.99 pp", "legsText": "S 59400CE (620.8\u2192861.0) / S 58600PE (649.0\u2192436.5) / B 60000CE (407.0\u2192568.0) / B 58000PE (441.1\u2192297.1)", "legs": [{"side": -1, "mult": 1, "strike": 59400, "type": "CE", "entryPx": 620.8, "exitPx": 861.0}, {"side": -1, "mult": 1, "strike": 58600, "type": "PE", "entryPx": 649.0, "exitPx": 436.5}, {"side": 1, "mult": 1, "strike": 60000, "type": "CE", "entryPx": 407.0, "exitPx": 568.0}, {"side": 1, "mult": 1, "strike": 58000, "type": "PE", "entryPx": 441.1, "exitPx": 297.1}], "capital": 26570, "maxCredit": 12651.0, "maxLoss": 5349.0, "entryIv": 17.54, "gross": -324.0, "charges": 340.79, "net": -664.79, "unitLegs": 120, "mtmPath": [{"t": "09:20", "gross": 1.5, "iv": 17.54}, {"t": "09:30", "gross": -153.0, "iv": 17.66}, {"t": "09:45", "gross": -111.0, "iv": 17.27}, {"t": "10:00", "gross": -163.5, "iv": 17.09}, {"t": "10:15", "gross": 265.5, "iv": 16.97}, {"t": "10:30", "gross": -75.0, "iv": 16.8}, {"t": "10:45", "gross": 235.5, "iv": 16.67}, {"t": "11:01", "gross": 117.0, "iv": 16.74}, {"t": "11:15", "gross": 58.5, "iv": 16.71}, {"t": "11:30", "gross": 90.0, "iv": 16.79}, {"t": "11:45", "gross": -42.0, "iv": 17.1}, {"t": "12:00", "gross": -18.0, "iv": 17.06}, {"t": "12:15", "gross": 40.5, "iv": 17.24}, {"t": "12:30", "gross": -54.0, "iv": 17.41}, {"t": "12:45", "gross": -1.5, "iv": 17.41}, {"t": "13:00", "gross": -67.5, "iv": 17.37}, {"t": "13:15", "gross": 180.0, "iv": 17.24}, {"t": "13:30", "gross": -51.0, "iv": 17.26}, {"t": "13:45", "gross": -16.5, "iv": 17.12}, {"t": "14:00", "gross": -43.5, "iv": 17.05}, {"t": "14:15", "gross": -216.0, "iv": 17.02}, {"t": "14:30", "gross": -166.5, "iv": 17.05}, {"t": "14:45", "gross": -256.5, "iv": 17.07}, {"t": "15:00", "gross": -189.0, "iv": 16.86}, {"t": "15:15", "gross": -322.5, "iv": 16.97}]}, {"id": "FWD-20261109-BAN-S2", "date": "2026-11-09", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "strat": "S2", "trigReason": "IV 17.54% < HV10 17.70% (IV\u2212HV10 -0.16 pp)", "sig": "IV 17.54% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -0.16 pp", "legsText": "B 59000CE (802.0\u21921091.9) / B 59000PE (830.0\u2192565.5)", "legs": [{"side": 1, "mult": 1, "strike": 59000, "type": "CE", "entryPx": 802.0, "exitPx": 1091.9}, {"side": 1, "mult": 1, "strike": 59000, "type": "PE", "entryPx": 830.0, "exitPx": 565.5}], "capital": 48960, "maxCredit": 31824.0, "maxLoss": 48960.0, "entryIv": 17.54, "gross": 760.5, "charges": 211.94, "net": 548.56, "unitLegs": 60, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 17.54}, {"t": "09:30", "gross": 178.5, "iv": 17.66}, {"t": "09:45", "gross": -576.0, "iv": 17.27}, {"t": "10:00", "gross": -1125.0, "iv": 17.09}, {"t": "10:15", "gross": -1398.0, "iv": 16.97}, {"t": "10:30", "gross": -1923.0, "iv": 16.8}, {"t": "10:45", "gross": -2589.0, "iv": 16.67}, {"t": "11:01", "gross": -2274.0, "iv": 16.74}, {"t": "11:15", "gross": -1902.0, "iv": 16.71}, {"t": "11:30", "gross": -1303.5, "iv": 16.79}, {"t": "11:45", "gross": 250.5, "iv": 17.1}, {"t": "12:00", "gross": -795.0, "iv": 17.06}, {"t": "12:15", "gross": -415.5, "iv": 17.24}, {"t": "12:30", "gross": -120.0, "iv": 17.41}, {"t": "12:45", "gross": -159.0, "iv": 17.41}, {"t": "13:00", "gross": -199.5, "iv": 17.37}, {"t": "13:15", "gross": -496.5, "iv": 17.24}, {"t": "13:30", "gross": -1006.5, "iv": 17.26}, {"t": "13:45", "gross": -1023.0, "iv": 17.12}, {"t": "14:00", "gross": -730.5, "iv": 17.05}, {"t": "14:15", "gross": 52.5, "iv": 17.02}, {"t": "14:30", "gross": 52.5, "iv": 17.05}, {"t": "14:45", "gross": 1041.0, "iv": 17.07}, {"t": "15:00", "gross": 862.5, "iv": 16.86}, {"t": "15:15", "gross": 760.5, "iv": 16.97}]}, {"id": "FWD-20261109-BAN-S3", "date": "2026-11-09", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "strat": "S3", "trigReason": "ATM IV 17.54% >= 15.2% \u00b7 VRP30 +1.99 pp \u00b7 DTE 14d", "sig": "ATM IV 17.54% \u2192 16.97% \u00b7 DTE 14d", "legsText": "S 59000CE (802.0\u21921091.9) / S 59000PE (830.0\u2192565.5) / B 59700CE (504.2\u2192711.0) / B 58300PE (540.0\u2192359.7)", "legs": [{"side": -1, "mult": 1, "strike": 59000, "type": "CE", "entryPx": 802.0, "exitPx": 1091.9}, {"side": -1, "mult": 1, "strike": 59000, "type": "PE", "entryPx": 830.0, "exitPx": 565.5}, {"side": 1, "mult": 1, "strike": 59700, "type": "CE", "entryPx": 504.2, "exitPx": 711.0}, {"side": 1, "mult": 1, "strike": 58300, "type": "PE", "entryPx": 540.0, "exitPx": 359.7}], "capital": 26570, "maxCredit": 17634.0, "maxLoss": 3366.0, "entryIv": 17.54, "gross": 37.5, "charges": 381.02, "net": -343.52, "unitLegs": 120, "mtmPath": [{"t": "09:20", "gross": -1.5, "iv": 17.54}, {"t": "09:30", "gross": -63.0, "iv": 17.66}, {"t": "09:45", "gross": -193.5, "iv": 17.27}, {"t": "10:00", "gross": -105.0, "iv": 17.09}, {"t": "10:15", "gross": -157.5, "iv": 16.97}, {"t": "10:30", "gross": -249.0, "iv": 16.8}, {"t": "10:45", "gross": -85.5, "iv": 16.67}, {"t": "11:01", "gross": -186.0, "iv": 16.74}, {"t": "11:15", "gross": -64.5, "iv": 16.71}, {"t": "11:30", "gross": -220.5, "iv": 16.79}, {"t": "11:45", "gross": -412.5, "iv": 17.1}, {"t": "12:00", "gross": 66.0, "iv": 17.06}, {"t": "12:15", "gross": -387.0, "iv": 17.24}, {"t": "12:30", "gross": -181.5, "iv": 17.41}, {"t": "12:45", "gross": -282.0, "iv": 17.41}, {"t": "13:00", "gross": -189.0, "iv": 17.37}, {"t": "13:15", "gross": -195.0, "iv": 17.24}, {"t": "13:30", "gross": -124.5, "iv": 17.26}, {"t": "13:45", "gross": 40.5, "iv": 17.12}, {"t": "14:00", "gross": -130.5, "iv": 17.05}, {"t": "14:15", "gross": -303.0, "iv": 17.02}, {"t": "14:30", "gross": -90.0, "iv": 17.05}, {"t": "14:45", "gross": -75.0, "iv": 17.07}, {"t": "15:00", "gross": -78.0, "iv": 16.86}, {"t": "15:15", "gross": 36.0, "iv": 16.97}]}, {"id": "FWD-20261109-BAN-S4", "date": "2026-11-09", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "strat": "S4", "trigReason": "Put Skew RR25 +1.91 pp >= +1.50 pp \u00b7 DTE 14d", "sig": "RR25 +1.91 pp \u00b7 VRP +1.99 pp", "legsText": "S2 58700PE (694.5\u2192465.0) / B2 58100PE (477.1\u2192316.1) / S 59500CE (580.1\u2192804.5) / B 60100CE (375.7\u2192526.9)", "legs": [{"side": -1, "mult": 2, "strike": 58700, "type": "PE", "entryPx": 694.5, "exitPx": 465.0}, {"side": 1, "mult": 2, "strike": 58100, "type": "PE", "entryPx": 477.1, "exitPx": 316.1}, {"side": -1, "mult": 1, "strike": 59500, "type": "CE", "entryPx": 580.1, "exitPx": 804.5}, {"side": 1, "mult": 1, "strike": 60100, "type": "CE", "entryPx": 375.7, "exitPx": 526.9}], "capital": 53140, "maxCredit": 19176.0, "maxLoss": 9000, "entryIv": 17.54, "gross": 1912.5, "charges": 410.44, "net": 1502.06, "unitLegs": 180, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 17.54}, {"t": "09:30", "gross": -66.0, "iv": 17.66}, {"t": "09:45", "gross": 420.0, "iv": 17.27}, {"t": "10:00", "gross": 673.5, "iv": 17.09}, {"t": "10:15", "gross": 628.5, "iv": 16.97}, {"t": "10:30", "gross": 472.5, "iv": 16.8}, {"t": "10:45", "gross": -445.5, "iv": 16.67}, {"t": "11:01", "gross": 520.5, "iv": 16.74}, {"t": "11:15", "gross": 1272.0, "iv": 16.71}, {"t": "11:30", "gross": 1287.0, "iv": 16.79}, {"t": "11:45", "gross": 1660.5, "iv": 17.1}, {"t": "12:00", "gross": 897.0, "iv": 17.06}, {"t": "12:15", "gross": 880.5, "iv": 17.24}, {"t": "12:30", "gross": 820.5, "iv": 17.41}, {"t": "12:45", "gross": 693.0, "iv": 17.41}, {"t": "13:00", "gross": 624.0, "iv": 17.37}, {"t": "13:15", "gross": 634.5, "iv": 17.24}, {"t": "13:30", "gross": 352.5, "iv": 17.26}, {"t": "13:45", "gross": 445.5, "iv": 17.12}, {"t": "14:00", "gross": 1312.5, "iv": 17.05}, {"t": "14:15", "gross": 1447.5, "iv": 17.02}, {"t": "14:30", "gross": 1489.5, "iv": 17.05}, {"t": "14:45", "gross": 1851.0, "iv": 17.07}, {"t": "15:00", "gross": 1813.5, "iv": 16.86}, {"t": "15:15", "gross": 1912.5, "iv": 16.97}]}, {"id": "FWD-20261109-BAN-S6", "date": "2026-11-09", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "BANKNIFTY", "exp": "2026-11-23", "kind": "Monthly", "dte": 14, "strat": "S6", "trigReason": "Basis +14.2 pts \u00b7 BF25 +0.55 pp", "sig": "Basis +14.2 pts \u00b7 BF25 +0.55 pp", "legsText": "S2 59300CE (663.0\u2192917.0) / B2 59900CE (436.2\u2192613.5) / S 58500PE (611.8\u2192410.9) / B 57900PE (426.9\u2192278.4)", "legs": [{"side": -1, "mult": 2, "strike": 59300, "type": "CE", "entryPx": 663.0, "exitPx": 917.0}, {"side": 1, "mult": 2, "strike": 59900, "type": "CE", "entryPx": 436.2, "exitPx": 613.5}, {"side": -1, "mult": 1, "strike": 58500, "type": "PE", "entryPx": 611.8, "exitPx": 410.9}, {"side": 1, "mult": 1, "strike": 57900, "type": "PE", "entryPx": 426.9, "exitPx": 278.4}], "capital": 53140, "maxCredit": 19155.0, "maxLoss": 9000, "entryIv": 17.54, "gross": -3034.5, "charges": 435.06, "net": -3469.56, "unitLegs": 180, "mtmPath": [{"t": "09:20", "gross": 6.0, "iv": 17.54}, {"t": "09:30", "gross": -151.5, "iv": 17.66}, {"t": "09:45", "gross": -592.5, "iv": 17.27}, {"t": "10:00", "gross": -639.0, "iv": 17.09}, {"t": "10:15", "gross": -361.5, "iv": 16.97}, {"t": "10:30", "gross": -391.5, "iv": 16.8}, {"t": "10:45", "gross": 537.0, "iv": 16.67}, {"t": "11:01", "gross": -9.0, "iv": 16.74}, {"t": "11:15", "gross": -1063.5, "iv": 16.71}, {"t": "11:30", "gross": -1272.0, "iv": 16.79}, {"t": "11:45", "gross": -2184.0, "iv": 17.1}, {"t": "12:00", "gross": -1578.0, "iv": 17.06}, {"t": "12:15", "gross": -1320.0, "iv": 17.24}, {"t": "12:30", "gross": -1078.5, "iv": 17.41}, {"t": "12:45", "gross": -1284.0, "iv": 17.41}, {"t": "13:00", "gross": -1597.5, "iv": 17.37}, {"t": "13:15", "gross": -1171.5, "iv": 17.24}, {"t": "13:30", "gross": -555.0, "iv": 17.26}, {"t": "13:45", "gross": -811.5, "iv": 17.12}, {"t": "14:00", "gross": -1491.0, "iv": 17.05}, {"t": "14:15", "gross": -2176.5, "iv": 17.02}, {"t": "14:30", "gross": -2163.0, "iv": 17.05}, {"t": "14:45", "gross": -2539.5, "iv": 17.07}, {"t": "15:00", "gross": -2826.0, "iv": 16.86}, {"t": "15:15", "gross": -3028.5, "iv": 16.97}]}, {"id": "FWD-20261109-NIF-S1", "date": "2026-11-09", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-17", "kind": "Weekly", "dte": 8, "strat": "S1", "trigReason": "VRP30 +4.23 pp >= +1.50 \u00b7 HV30 14.27% <= 16.5%", "sig": "IV 18.50% \u00b7 HV30 14.27% \u00b7 VRP +4.23 pp", "legsText": "S 25100CE (200.0\u2192211.0) / S 24700PE (180.3\u2192121.8) / B 25400CE (110.0\u2192110.2) / B 24400PE (94.7\u219255.5)", "legs": [{"side": -1, "mult": 1, "strike": 25100, "type": "CE", "entryPx": 200.0, "exitPx": 211.0}, {"side": -1, "mult": 1, "strike": 24700, "type": "PE", "entryPx": 180.3, "exitPx": 121.8}, {"side": 1, "mult": 1, "strike": 25400, "type": "CE", "entryPx": 110.0, "exitPx": 110.2}, {"side": 1, "mult": 1, "strike": 24400, "type": "PE", "entryPx": 94.7, "exitPx": 55.5}], "capital": 28037, "maxCredit": 13170.0, "maxLoss": 9330.0, "entryIv": 18.5, "gross": 637.5, "charges": 285.6, "net": 351.9, "unitLegs": 300, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 18.5}, {"t": "09:30", "gross": -63.75, "iv": 18.54}, {"t": "09:45", "gross": 30.0, "iv": 18.11}, {"t": "10:00", "gross": 161.25, "iv": 17.57}, {"t": "10:15", "gross": 371.25, "iv": 17.3}, {"t": "10:30", "gross": 540.0, "iv": 17.02}, {"t": "10:45", "gross": 536.25, "iv": 17.12}, {"t": "11:01", "gross": 667.5, "iv": 16.85}, {"t": "11:15", "gross": 742.5, "iv": 16.72}, {"t": "11:30", "gross": 536.25, "iv": 16.98}, {"t": "11:45", "gross": 315.0, "iv": 17.23}, {"t": "12:00", "gross": 453.75, "iv": 17.1}, {"t": "12:15", "gross": 378.75, "iv": 17.22}, {"t": "12:30", "gross": 247.5, "iv": 17.53}, {"t": "12:45", "gross": 570.0, "iv": 17.17}, {"t": "13:00", "gross": 611.25, "iv": 17.21}, {"t": "13:15", "gross": 540.0, "iv": 17.12}, {"t": "13:30", "gross": 555.0, "iv": 17.09}, {"t": "13:45", "gross": 573.75, "iv": 16.92}, {"t": "14:00", "gross": 671.25, "iv": 16.85}, {"t": "14:15", "gross": 536.25, "iv": 16.85}, {"t": "14:30", "gross": 753.75, "iv": 16.8}, {"t": "14:45", "gross": 577.5, "iv": 17.0}, {"t": "15:00", "gross": 603.75, "iv": 16.89}, {"t": "15:15", "gross": 637.5, "iv": 16.87}]}, {"id": "FWD-20261109-NIF-S3", "date": "2026-11-09", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-17", "kind": "Weekly", "dte": 8, "strat": "S3", "trigReason": "ATM IV 18.50% >= 15.2% \u00b7 VRP30 +4.23 pp \u00b7 DTE 8d", "sig": "ATM IV 18.50% \u2192 16.87% \u00b7 DTE 8d", "legsText": "S 24900CE (285.1\u2192307.9) / S 24900PE (268.6\u2192196.5) / B 25250CE (149.8\u2192153.8) / B 24550PE (132.5\u219282.5)", "legs": [{"side": -1, "mult": 1, "strike": 24900, "type": "CE", "entryPx": 285.1, "exitPx": 307.9}, {"side": -1, "mult": 1, "strike": 24900, "type": "PE", "entryPx": 268.6, "exitPx": 196.5}, {"side": 1, "mult": 1, "strike": 25250, "type": "CE", "entryPx": 149.8, "exitPx": 153.8}, {"side": 1, "mult": 1, "strike": 24550, "type": "PE", "entryPx": 132.5, "exitPx": 82.5}], "capital": 28037, "maxCredit": 20355.0, "maxLoss": 5895.0, "entryIv": 18.5, "gross": 251.25, "charges": 329.17, "net": -77.92, "unitLegs": 300, "mtmPath": [{"t": "09:20", "gross": 0.0, "iv": 18.5}, {"t": "09:30", "gross": -45.0, "iv": 18.54}, {"t": "09:45", "gross": -82.5, "iv": 18.11}, {"t": "10:00", "gross": 153.75, "iv": 17.57}, {"t": "10:15", "gross": 225.0, "iv": 17.3}, {"t": "10:30", "gross": 281.25, "iv": 17.02}, {"t": "10:45", "gross": 217.5, "iv": 17.12}, {"t": "11:01", "gross": 303.75, "iv": 16.85}, {"t": "11:15", "gross": 521.25, "iv": 16.72}, {"t": "11:30", "gross": 292.5, "iv": 16.98}, {"t": "11:45", "gross": 195.0, "iv": 17.23}, {"t": "12:00", "gross": 405.0, "iv": 17.1}, {"t": "12:15", "gross": 195.0, "iv": 17.22}, {"t": "12:30", "gross": 33.75, "iv": 17.53}, {"t": "12:45", "gross": 232.5, "iv": 17.17}, {"t": "13:00", "gross": 348.75, "iv": 17.21}, {"t": "13:15", "gross": 266.25, "iv": 17.12}, {"t": "13:30", "gross": 356.25, "iv": 17.09}, {"t": "13:45", "gross": 386.25, "iv": 16.92}, {"t": "14:00", "gross": 210.0, "iv": 16.85}, {"t": "14:15", "gross": 176.25, "iv": 16.85}, {"t": "14:30", "gross": 258.75, "iv": 16.8}, {"t": "14:45", "gross": 247.5, "iv": 17.0}, {"t": "15:00", "gross": 281.25, "iv": 16.89}, {"t": "15:15", "gross": 251.25, "iv": 16.87}]}, {"id": "FWD-20261109-NIF-S5", "date": "2026-11-09", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-17", "kind": "Weekly", "dte": 8, "strat": "S5", "trigReason": "IV\u2212HV10 +3.85 pp >= +0.80 pp \u00b7 DTE 8d", "sig": "Straddle \u20b9553.8 \u2192 \u20b9499.4 \u00b7 IV\u2212HV10 +3.85 pp", "legsText": "S 24900CE (285.1\u2192307.9) / S 24900PE (268.6\u2192196.5) / B 25150CE (181.8\u2192190.4) / B 24650PE (161.2\u2192107.5)", "legs": [{"side": -1, "mult": 1, "strike": 24900, "type": "CE", "entryPx": 285.1, "exitPx": 307.9}, {"side": -1, "mult": 1, "strike": 24900, "type": "PE", "entryPx": 268.6, "exitPx": 196.5}, {"side": 1, "mult": 1, "strike": 25150, "type": "CE", "entryPx": 181.8, "exitPx": 190.4}, {"side": 1, "mult": 1, "strike": 24650, "type": "PE", "entryPx": 161.2, "exitPx": 107.5}], "capital": 28037, "maxCredit": 15802.5, "maxLoss": 2947.5, "entryIv": 18.5, "gross": 326.25, "charges": 340.1, "net": -13.85, "unitLegs": 300, "mtmPath": [{"t": "09:20", "gross": -3.75, "iv": 18.5}, {"t": "09:30", "gross": 86.25, "iv": 18.54}, {"t": "09:45", "gross": 86.25, "iv": 18.11}, {"t": "10:00", "gross": 240.0, "iv": 17.57}, {"t": "10:15", "gross": 213.75, "iv": 17.3}, {"t": "10:30", "gross": 303.75, "iv": 17.02}, {"t": "10:45", "gross": 303.75, "iv": 17.12}, {"t": "11:01", "gross": 322.5, "iv": 16.85}, {"t": "11:15", "gross": 465.0, "iv": 16.72}, {"t": "11:30", "gross": 300.0, "iv": 16.98}, {"t": "11:45", "gross": 217.5, "iv": 17.23}, {"t": "12:00", "gross": 390.0, "iv": 17.1}, {"t": "12:15", "gross": 97.5, "iv": 17.22}, {"t": "12:30", "gross": 150.0, "iv": 17.53}, {"t": "12:45", "gross": 78.75, "iv": 17.17}, {"t": "13:00", "gross": 273.75, "iv": 17.21}, {"t": "13:15", "gross": 288.75, "iv": 17.12}, {"t": "13:30", "gross": 393.75, "iv": 17.09}, {"t": "13:45", "gross": 397.5, "iv": 16.92}, {"t": "14:00", "gross": 127.5, "iv": 16.85}, {"t": "14:15", "gross": 270.0, "iv": 16.85}, {"t": "14:30", "gross": 281.25, "iv": 16.8}, {"t": "14:45", "gross": 270.0, "iv": 17.0}, {"t": "15:00", "gross": 341.25, "iv": 16.89}, {"t": "15:15", "gross": 322.5, "iv": 16.87}]}, {"id": "FWD-20261109-NIF-S6", "date": "2026-11-09", "entryTime": "09:20 IST", "exitTime": "15:15 IST", "sym": "NIFTY", "exp": "2026-11-17", "kind": "Weekly", "dte": 8, "strat": "S6", "trigReason": "Basis -22.8 pts \u00b7 BF25 +0.50 pp", "sig": "Basis -22.8 pts \u00b7 BF25 +0.50 pp", "legsText": "S2 25050CE (220.3\u2192233.7) / B2 25350CE (122.5\u2192123.7) / S 24650PE (161.2\u2192107.5) / B 24350PE (85.5\u219248.9)", "legs": [{"side": -1, "mult": 2, "strike": 25050, "type": "CE", "entryPx": 220.3, "exitPx": 233.7}, {"side": 1, "mult": 2, "strike": 25350, "type": "CE", "entryPx": 122.5, "exitPx": 123.7}, {"side": -1, "mult": 1, "strike": 24650, "type": "PE", "entryPx": 161.2, "exitPx": 107.5}, {"side": 1, "mult": 1, "strike": 24350, "type": "PE", "entryPx": 85.5, "exitPx": 48.9}], "capital": 56074, "maxCredit": 20347.5, "maxLoss": 9000, "entryIv": 18.5, "gross": -536.25, "charges": 348.75, "net": -885.0, "unitLegs": 450, "mtmPath": [{"t": "09:20", "gross": -7.5, "iv": 18.5}, {"t": "09:30", "gross": -30.0, "iv": 18.54}, {"t": "09:45", "gross": -330.0, "iv": 18.11}, {"t": "10:00", "gross": 427.5, "iv": 17.57}, {"t": "10:15", "gross": 311.25, "iv": 17.3}, {"t": "10:30", "gross": 603.75, "iv": 17.02}, {"t": "10:45", "gross": 1530.0, "iv": 17.12}, {"t": "11:01", "gross": 1428.75, "iv": 16.85}, {"t": "11:15", "gross": 1260.0, "iv": 16.72}, {"t": "11:30", "gross": 367.5, "iv": 16.98}, {"t": "11:45", "gross": -450.0, "iv": 17.23}, {"t": "12:00", "gross": 427.5, "iv": 17.1}, {"t": "12:15", "gross": 558.75, "iv": 17.22}, {"t": "12:30", "gross": 870.0, "iv": 17.53}, {"t": "12:45", "gross": 1170.0, "iv": 17.17}, {"t": "13:00", "gross": 551.25, "iv": 17.21}, {"t": "13:15", "gross": 1260.0, "iv": 17.12}, {"t": "13:30", "gross": 1395.0, "iv": 17.09}, {"t": "13:45", "gross": 776.25, "iv": 16.92}, {"t": "14:00", "gross": 15.0, "iv": 16.85}, {"t": "14:15", "gross": -326.25, "iv": 16.85}, {"t": "14:30", "gross": 150.0, "iv": 16.8}, {"t": "14:45", "gross": -513.75, "iv": 17.0}, {"t": "15:00", "gross": -371.25, "iv": 16.89}, {"t": "15:15", "gross": -543.75, "iv": 16.87}]}];
-      var forwardOpenPositions = JSON.parse(JSON.stringify(FORWARD_SEED_OPEN));
-      var forwardClosedTrades = JSON.parse(JSON.stringify(FORWARD_SEED_CLOSED));
+      const MIN_FORWARD_DATE = '2026-11-11';
+      const FWD_STORAGE_KEY = 'vl_forward_ledger_v19_clean';
+      const LEGACY_FWD_STORAGE_KEY = 'vl_forward_ledger_v19';
+      const ARMED_TOAST_MSG = 'Forward Test is armed for tomorrow (11 Nov 2026 09:20 IST) — waiting for live market open to place first trade.';
+      const ARMED_ROW_MSG = '0 trades placed yet · Forward Test Engine is ARMED for first trade tomorrow (11 Nov 2026 · 09:20 IST) when live Upstox option-chain captures begin.';
+
+      var FORWARD_CLEAN_LEDGER_TEMPLATE = {
+        schema: 1,
+        version: 'forward-test-v19.1-clean',
+        inception_date: '2026-11-11',
+        min_trigger_date: '2026-11-11',
+        updated_at: '2026-11-10T13:15:00+05:30',
+        status: 'ARMED_WAITING_FOR_NEXT_SESSION',
+        open_positions: [],
+        closed_trades: [],
+        intraday_mtm_series: []
+      };
+
+      var FORWARD_SEED_OPEN = [];
+      var FORWARD_SEED_CLOSED = [];
+      var forwardOpenPositions = [];
+      var forwardClosedTrades = [];
+      var forwardIntradayMtmSeries = [];
+      var forwardLedger = JSON.parse(JSON.stringify(FORWARD_CLEAN_LEDGER_TEMPLATE));
       var forwardAutoCaptureOn = true;
       var activeFwdChartMode = 'intraday';
       var fwdIntradayChart = null;
       var fwdStrategyBarChart = null;
+
+      var STRATEGY_NAMES_MAP = {
+        S1: 'S1 · VRP Harvest Iron Condor',
+        S2: 'S2 · Gamma Expansion Long Straddle',
+        S3: 'S3 · Post-Event Front-Week Crush Fly',
+        S4: 'S4 · Steep Put Skew Ratio (1x2)',
+        S5: 'S5 · Intraday Theta Iron Butterfly',
+        S6: 'S6 · Synthetic Basis Skewed Condor'
+      };
+
+      var FORWARD_SCORECARD_UNIT_CAP = {
+        S1: 28037,
+        S2: 56074,
+        S3: 28037,
+        S4: 56074,
+        S5: 28037,
+        S6: 56074
+      };
+
+      function isValidForwardRecord(item) {
+        if (!item || typeof item !== 'object') return false;
+        var sDate = String(item.session_date || item.date || '').trim().slice(0, 10);
+        if (!sDate || sDate < MIN_FORWARD_DATE) return false;
+        var trig = String(item.triggerTime || item.trigTime || item.entryTime || '').trim();
+        if (trig.indexOf('2026-11-0') === 0 || /^0[1-9]\s+Nov/i.test(trig)) return false;
+        return true;
+      }
+
+      function syncForwardLedgerGlobals() {
+        forwardOpenPositions = (forwardOpenPositions || []).filter(isValidForwardRecord);
+        forwardClosedTrades = (forwardClosedTrades || []).filter(isValidForwardRecord);
+        forwardIntradayMtmSeries = (forwardIntradayMtmSeries || []).filter(function(pt) {
+          return pt && String(pt.session_date || pt.date || MIN_FORWARD_DATE).slice(0, 10) >= MIN_FORWARD_DATE;
+        });
+        forwardLedger.schema = 1;
+        forwardLedger.version = 'forward-test-v19.1-clean';
+        forwardLedger.inception_date = MIN_FORWARD_DATE;
+        forwardLedger.min_trigger_date = MIN_FORWARD_DATE;
+        forwardLedger.open_positions = forwardOpenPositions;
+        forwardLedger.closed_trades = forwardClosedTrades;
+        forwardLedger.intraday_mtm_series = forwardIntradayMtmSeries;
+        forwardLedger.status = (forwardOpenPositions.length > 0)
+          ? 'ACTIVE_LIVE_SESSION'
+          : (forwardClosedTrades.length > 0 ? 'SESSION_COMPLETED_1515_IST' : 'ARMED_WAITING_FOR_NEXT_SESSION');
+        window.forwardOpenPositions = forwardOpenPositions;
+        window.forwardClosedTrades = forwardClosedTrades;
+        window.forwardIntradayMtmSeries = forwardIntradayMtmSeries;
+        window.forwardLedger = forwardLedger;
+      }
+
+      function saveForwardLedgerLocal() {
+        syncForwardLedgerGlobals();
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('vl_forward_ledger_v19');
+            localStorage.setItem(FWD_STORAGE_KEY, JSON.stringify(forwardLedger));
+          }
+        } catch (e) {}
+        return forwardLedger;
+      }
+
+      function loadForwardLedgerLocal() {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('vl_forward_ledger_v19');
+            var raw = localStorage.getItem(FWD_STORAGE_KEY);
+            if (raw) {
+              var parsed = JSON.parse(raw);
+              if (parsed && typeof parsed === 'object') {
+                forwardOpenPositions = Array.isArray(parsed.open_positions) ? parsed.open_positions.filter(isValidForwardRecord) : [];
+                forwardClosedTrades = Array.isArray(parsed.closed_trades) ? parsed.closed_trades.filter(isValidForwardRecord) : [];
+                forwardIntradayMtmSeries = Array.isArray(parsed.intraday_mtm_series) ? parsed.intraday_mtm_series : [];
+                if (parsed.updated_at) forwardLedger.updated_at = parsed.updated_at;
+                saveForwardLedgerLocal();
+                return forwardLedger;
+              }
+            }
+          }
+        } catch (e) {}
+        forwardOpenPositions = [];
+        forwardClosedTrades = [];
+        forwardIntradayMtmSeries = [];
+        forwardLedger = JSON.parse(JSON.stringify(FORWARD_CLEAN_LEDGER_TEMPLATE));
+        saveForwardLedgerLocal();
+        return forwardLedger;
+      }
+
+      function initForwardTest() {
+        loadForwardLedgerLocal();
+        renderForwardWorkspace();
+        return forwardLedger;
+      }
 
       function calcUpstoxOptionCharge(price, qty, isSell) {
         var turnover = Math.abs(Number(price || 0) * Number(qty || 0));
@@ -2458,7 +2580,36 @@
         }).join(' / ');
       }
 
+      function buildStrategyLegsForItem(item, sym, stratCode) {
+        var step = sym === 'NIFTY' ? 50 : 100;
+        var K = item.atm || (Math.round(item.spot / step) * step);
+        var chainMap = {};
+        (item.chain || []).forEach(function(n) { chainMap[n.k] = n; });
+        var wShort = sym === 'NIFTY' ? 200 : 400;
+        var wLong = sym === 'NIFTY' ? 500 : 1000;
+        var flyWing = sym === 'NIFTY' ? 350 : 700;
+        var tightWing = sym === 'NIFTY' ? 250 : 500;
+        var rShort = sym === 'NIFTY' ? 150 : 300;
+        var rLong = sym === 'NIFTY' ? 450 : 900;
+        var rawLegs = [];
+        if (stratCode === 'S1') rawLegs = [{side:-1,mult:1,strike:K+wShort,type:'CE'},{side:-1,mult:1,strike:K-wShort,type:'PE'},{side:1,mult:1,strike:K+wLong,type:'CE'},{side:1,mult:1,strike:K-wLong,type:'PE'}];
+        else if (stratCode === 'S2') rawLegs = [{side:1,mult:1,strike:K,type:'CE'},{side:1,mult:1,strike:K,type:'PE'}];
+        else if (stratCode === 'S3') rawLegs = [{side:-1,mult:1,strike:K,type:'CE'},{side:-1,mult:1,strike:K,type:'PE'},{side:1,mult:1,strike:K+flyWing,type:'CE'},{side:1,mult:1,strike:K-flyWing,type:'PE'}];
+        else if (stratCode === 'S4') rawLegs = [{side:-1,mult:2,strike:K-rShort,type:'PE'},{side:1,mult:2,strike:K-rLong,type:'PE'},{side:-1,mult:1,strike:K+tightWing,type:'CE'},{side:1,mult:1,strike:K+tightWing+(wLong-wShort),type:'CE'}];
+        else if (stratCode === 'S5') rawLegs = [{side:-1,mult:1,strike:K,type:'CE'},{side:-1,mult:1,strike:K,type:'PE'},{side:1,mult:1,strike:K+tightWing,type:'CE'},{side:1,mult:1,strike:K-tightWing,type:'PE'}];
+        else rawLegs = [{side:-1,mult:2,strike:K+rShort,type:'CE'},{side:1,mult:2,strike:K+rLong,type:'CE'},{side:-1,mult:1,strike:K-tightWing,type:'PE'},{side:1,mult:1,strike:K-tightWing-(wLong-wShort),type:'PE'}];
+
+        rawLegs.forEach(function(l) {
+          var node = chainMap[l.strike];
+          var px = node ? (l.type === 'CE' ? node.cLtp : node.pLtp) : (item.strad * 0.22);
+          l.entryPx = Number((px || 25.0).toFixed(2));
+          l.curPx = l.entryPx;
+        });
+        return rawLegs;
+      }
+
       function evaluateFwdSetupState() {
+        syncForwardLedgerGlobals();
         var idxFilter = (document.getElementById('fwdIndexFilter') && document.getElementById('fwdIndexFilter').value) || 'ALL';
         var expScope = (document.getElementById('fwdExpiryScope') && document.getElementById('fwdExpiryScope').value) || 'FRONT';
         var stratFilter = (document.getElementById('fwdStrategyFilter') && document.getElementById('fwdStrategyFilter').value) || 'ALL';
@@ -2559,8 +2710,7 @@
       }
 
       function renderForwardWorkspace() {
-        window.forwardOpenPositions = forwardOpenPositions;
-        window.forwardClosedTrades = forwardClosedTrades;
+        syncForwardLedgerGlobals();
         var state = evaluateFwdSetupState();
         var openList = state.open;
         var closedList = state.closed;
@@ -2585,29 +2735,33 @@
 
         var singleSetPeakCap = Math.max(56074 * lots, closedList.reduce(function(m, x) { return Math.max(m, x.simCapital); }, 0));
         var totalForwardNet = closedNet + openNet;
-        var portfolioRoc = singleSetPeakCap > 0 ? (totalForwardNet / singleSetPeakCap) * 100.0 : 0.0;
+        var portfolioRoc = (singleSetPeakCap > 0 && (openList.length > 0 || closedList.length > 0)) ? (totalForwardNet / singleSetPeakCap) * 100.0 : 0.0;
 
         // Update 6 KPI Cards
         var elOpenCnt = document.getElementById('fwdKpiOpenCount');
         if (elOpenCnt) elOpenCnt.textContent = openList.length + ' Open';
         var elOpenSub = document.getElementById('fwdKpiOpenSub');
-        if (elOpenSub) elOpenSub.textContent = openExpCount + ' Active Expiries (Carry-Forward)';
+        if (elOpenSub) {
+          elOpenSub.textContent = (openList.length === 0 && closedList.length === 0)
+            ? 'Armed · Starts 11 Nov 2026 09:20 IST'
+            : (openExpCount + ' Active Expiries (Live Forward)');
+        }
 
         var elOpenMtm = document.getElementById('fwdKpiOpenMtm');
         if (elOpenMtm) {
-          elOpenMtm.textContent = fmtInr(Math.round(openNet), true);
+          elOpenMtm.textContent = fmtInr(Math.round(openNet), openNet !== 0);
           elOpenMtm.className = 'text-lg mono font-extrabold mt-0.5 ' + (openNet >= 0 ? 'text-emerald-400' : 'text-rose-400');
         }
         var elOpenMtmSub = document.getElementById('fwdKpiOpenMtmSub');
-        if (elOpenMtmSub) elOpenMtmSub.textContent = 'Gross: ' + fmtInr(Math.round(openGross), true) + ' · Est Cost: ' + fmtInr(Math.round(openChg), false);
+        if (elOpenMtmSub) elOpenMtmSub.textContent = 'Gross: ' + fmtInr(Math.round(openGross), openGross !== 0) + ' · Est Cost: ' + fmtInr(Math.round(openChg), false);
 
         var elClosedNet = document.getElementById('fwdKpiClosedNet');
         if (elClosedNet) {
-          elClosedNet.textContent = fmtInr(Math.round(closedNet), true);
+          elClosedNet.textContent = fmtInr(Math.round(closedNet), closedNet !== 0);
           elClosedNet.className = 'text-lg mono font-extrabold mt-0.5 ' + (closedNet >= 0 ? 'text-emerald-400' : 'text-rose-400');
         }
         var elClosedSub = document.getElementById('fwdKpiClosedNetSub');
-        if (elClosedSub) elClosedSub.textContent = closedList.length + ' Auto-Triggered · Gross: ' + fmtInr(Math.round(closedGross), true);
+        if (elClosedSub) elClosedSub.textContent = closedList.length + ' Auto-Triggered · Gross: ' + fmtInr(Math.round(closedGross), closedGross !== 0);
 
         var elCap = document.getElementById('fwdKpiCapital');
         if (elCap) elCap.textContent = fmtInr(Math.round(openCap), false);
@@ -2616,11 +2770,11 @@
 
         var elRoc = document.getElementById('fwdKpiRoc');
         if (elRoc) {
-          elRoc.textContent = (portfolioRoc >= 0 ? '+' : '') + portfolioRoc.toFixed(2) + '%';
+          elRoc.textContent = (portfolioRoc > 0 ? '+' : '') + portfolioRoc.toFixed(2) + '%';
           elRoc.className = 'text-lg mono font-extrabold mt-0.5 ' + (portfolioRoc >= 0 ? 'text-emerald-300' : 'text-rose-400');
         }
         var elRocSub = document.getElementById('fwdKpiRocSub');
-        if (elRocSub) elRocSub.textContent = 'Total Net (' + fmtInr(Math.round(totalForwardNet), true) + ') / Unit Cap';
+        if (elRocSub) elRocSub.textContent = 'Total Net (' + fmtInr(Math.round(totalForwardNet), totalForwardNet !== 0) + ') / Unit Cap';
 
         var elWinPf = document.getElementById('fwdKpiWinPf');
         if (elWinPf) elWinPf.textContent = winRate.toFixed(1) + '% · PF ' + pf.toFixed(2);
@@ -2631,20 +2785,20 @@
         var openTbody = document.getElementById('fwdOpenPositionsBody');
         if (openTbody) {
           if (!openList.length) {
-            openTbody.innerHTML = '<tr><td colspan="12" class="py-6 text-center text-slate-400">No open paper positions match the selected filter. Click "Scan &amp; Trigger Qualified Setups Now" or "Reset Ledger".</td></tr>';
+            openTbody.innerHTML = '<tr><td colspan="12" class="py-6 px-4 text-center text-emerald-300 font-semibold mono">' + ARMED_ROW_MSG + '</td></tr>';
           } else {
             openTbody.innerHTML = openList.map(function(p) {
               return '<tr class="hover:bg-[#111c2d]">' +
-                '<td class="py-2.5 px-2.5 text-slate-200 whitespace-nowrap"><div>' + p.trigTime + '</div><div class="text-[10px] text-slate-400">Marked: ' + (p.markedAt || '15:30 IST') + '</div></td>' +
+                '<td class="py-2.5 px-2.5 text-slate-200 whitespace-nowrap"><div>' + p.trigTime + '</div><div class="text-[10px] text-slate-400">Marked: ' + (p.markedAt || '09:20 IST') + '</div></td>' +
                 '<td class="py-2.5 px-2.5 font-bold text-white whitespace-nowrap"><span class="px-1.5 py-0.5 mr-1 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 text-[10px]">' + p.sym + '</span>' + p.exp + ' <span class="text-slate-400 font-normal">(' + p.kind + ' · ' + p.dte + 'd)</span></td>' +
                 '<td class="py-2.5 px-2.5 font-bold text-sky-300 whitespace-nowrap">' + p.stratName + '</td>' +
                 '<td class="py-2.5 px-2.5 text-slate-200">' + p.metrics + '</td>' +
                 '<td class="py-2.5 px-2.5 text-slate-200">' + formatFwdLegs(p.legs, 'entry') + '</td>' +
                 '<td class="py-2.5 px-2.5 text-slate-200">' + formatFwdLegs(p.legs, 'current') + '</td>' +
                 '<td class="py-2.5 px-2.5 text-right font-bold text-amber-300 whitespace-nowrap">' + fmtInr(p.simCapital, false) + '</td>' +
-                '<td class="py-2.5 px-2.5 text-right font-bold ' + (p.simGrossMtm >= 0 ? 'text-sky-300' : 'text-rose-400') + ' whitespace-nowrap">' + fmtInr(Math.round(p.simGrossMtm), true) + '</td>' +
+                '<td class="py-2.5 px-2.5 text-right font-bold ' + (p.simGrossMtm >= 0 ? 'text-sky-300' : 'text-rose-400') + ' whitespace-nowrap">' + fmtInr(Math.round(p.simGrossMtm), p.simGrossMtm !== 0) + '</td>' +
                 '<td class="py-2.5 px-2.5 text-right text-amber-300 whitespace-nowrap">-' + fmtInr(Math.round(p.simCharges), false) + '</td>' +
-                '<td class="py-2.5 px-2.5 text-right whitespace-nowrap"><span class="font-extrabold ' + (p.simNetMtm >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(p.simNetMtm), true) + '</span> <span class="text-[10.5px] ' + (p.simRocPct >= 0 ? 'text-sky-300' : 'text-rose-300') + '">(' + (p.simRocPct >= 0 ? '+' : '') + p.simRocPct.toFixed(2) + '%)</span></td>' +
+                '<td class="py-2.5 px-2.5 text-right whitespace-nowrap"><span class="font-extrabold ' + (p.simNetMtm >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(p.simNetMtm), p.simNetMtm !== 0) + '</span> <span class="text-[10.5px] ' + (p.simRocPct >= 0 ? 'text-sky-300' : 'text-rose-300') + '">(' + (p.simRocPct >= 0 ? '+' : '') + p.simRocPct.toFixed(2) + '%)</span></td>' +
                 '<td class="py-2.5 px-2.5 text-center whitespace-nowrap">' + p.slTpStatus + '</td>' +
                 '<td class="py-2.5 px-2.5 text-center whitespace-nowrap">' +
                   '<button type="button" onclick="window.closeForwardPosition(\'' + p.id + '\')" class="px-2.5 py-1 rounded bg-rose-950/70 hover:bg-rose-600 text-rose-200 hover:text-white border border-rose-500/50 font-bold text-[10.5px] transition">' +
@@ -2675,25 +2829,29 @@
           var pSum = cSub.filter(function(x) { return x.simNet > 0; }).reduce(function(a, x) { return a + x.simNet; }, 0);
           var nSum = Math.abs(cSub.filter(function(x) { return x.simNet < 0; }).reduce(function(a, x) { return a + x.simNet; }, 0));
           var scPf = nSum > 0 ? (pSum / nSum) : (pSum > 0 ? 99.9 : 0.0);
-          var unitCap = (STRATEGY_CAPITAL_PER_LOT.NIFTY[sc] || 28037) * lots;
-          var scRoc = unitCap > 0 ? (totNet / unitCap) * 100.0 : 0.0;
+          var unitCap = (FORWARD_SCORECARD_UNIT_CAP[sc] || 28037) * lots;
+          var scRoc = (unitCap > 0 && (oSub.length > 0 || cSub.length > 0)) ? (totNet / unitCap) * 100.0 : 0.0;
 
           barNetData.push(Math.round(cNet));
           barOpenData.push(Math.round(oNet));
 
+          var statusBadgeHtml = (oSub.length === 0 && cSub.length === 0)
+            ? '<span class="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold text-[10px]">ARMED · 11 NOV 09:20 IST</span>'
+            : '<span class="px-2 py-0.5 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 font-bold text-[10px]">PF ' + scPf.toFixed(2) + ' · ACTIVE</span>';
+
           scHtml += '<tr onclick="document.getElementById(\'fwdStrategyFilter\').value=\'' + sc + '\'; renderForwardWorkspace();" class="cursor-pointer hover:bg-[#111c2d]">' +
             '<td class="py-2 px-3 font-bold text-sky-300">' + (STRATEGY_NAMES_MAP[sc] || sc) + '</td>' +
-            '<td class="py-2 px-3 text-right text-white font-semibold">' + oSub.length + '</td>' +
-            '<td class="py-2 px-3 text-right text-white font-semibold">' + cSub.length + '</td>' +
-            '<td class="py-2 px-3 text-right font-bold ' + (wPct >= 50 ? 'text-emerald-400' : 'text-amber-300') + '">' + wPct.toFixed(1) + '%</td>' +
-            '<td class="py-2 px-3 text-right ' + (oNet >= 0 ? 'text-emerald-300' : 'text-rose-400') + '">' + fmtInr(Math.round(oNet), true) + '</td>' +
-            '<td class="py-2 px-3 text-right ' + (cGross >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + fmtInr(Math.round(cGross), true) + '</td>' +
-            '<td class="py-2 px-3 text-right text-amber-300">-' + fmtInr(Math.round(cChg), false) + '</td>' +
-            '<td class="py-2 px-3 text-right font-extrabold ' + (cNet >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(cNet), true) + '</td>' +
-            '<td class="py-2 px-3 text-right font-extrabold ' + (totNet >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + fmtInr(Math.round(totNet), true) + '</td>' +
-            '<td class="py-2 px-3 text-right text-amber-300">' + fmtInr(unitCap, false) + '</td>' +
-            '<td class="py-2 px-3 text-right font-bold ' + (scRoc >= 0 ? 'text-emerald-300' : 'text-rose-400') + '">' + (scRoc >= 0 ? '+' : '') + scRoc.toFixed(2) + '%</td>' +
-            '<td class="py-2 px-3 text-right text-emerald-300">' + scPf.toFixed(2) + '</td>' +
+            '<td class="py-2 px-3 text-right text-white font-semibold">' + oSub.length + ' Open</td>' +
+            '<td class="py-2 px-3 text-right text-white font-semibold">' + cSub.length + ' Closed</td>' +
+            '<td class="py-2 px-3 text-right font-bold ' + (wPct >= 50 ? 'text-emerald-400' : 'text-slate-300') + '">' + wPct.toFixed(1) + '%</td>' +
+            '<td class="py-2 px-3 text-right ' + (oNet >= 0 ? 'text-emerald-300' : 'text-rose-400') + '">' + fmtInr(Math.round(oNet), oNet !== 0) + '</td>' +
+            '<td class="py-2 px-3 text-right ' + (cGross >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + fmtInr(Math.round(cGross), cGross !== 0) + '</td>' +
+            '<td class="py-2 px-3 text-right text-amber-300">' + (cChg > 0 ? '-' : '') + fmtInr(Math.round(cChg), false) + '</td>' +
+            '<td class="py-2 px-3 text-right font-extrabold ' + (cNet >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(cNet), cNet !== 0) + ' Net P&amp;L</td>' +
+            '<td class="py-2 px-3 text-right font-extrabold ' + (totNet >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + fmtInr(Math.round(totNet), totNet !== 0) + '</td>' +
+            '<td class="py-2 px-3 text-right text-amber-300">' + fmtInr(unitCap, false) + ' Unit Capital</td>' +
+            '<td class="py-2 px-3 text-right font-bold ' + (scRoc >= 0 ? 'text-emerald-300' : 'text-rose-400') + '">' + (scRoc > 0 ? '+' : '') + scRoc.toFixed(2) + '% ROC</td>' +
+            '<td class="py-2 px-3 text-right whitespace-nowrap">' + statusBadgeHtml + '</td>' +
           '</tr>';
         });
         var scBody = document.getElementById('fwdScorecardBody');
@@ -2702,42 +2860,45 @@
         // Render Panel 2: Closed Auto-Triggered Forward Trade Ledger
         var closedTbody = document.getElementById('fwdClosedLedgerBody');
         if (closedTbody) {
-          closedTbody.innerHTML = closedList.map(function(t) {
-            return '<tr class="hover:bg-[#111c2d]">' +
-              '<td class="py-2 px-2.5 text-white font-semibold whitespace-nowrap"><div>' + t.date + '</div><div class="text-[10px] text-slate-400">' + (t.entryTime || '09:20 IST') + ' → ' + t.simExitTime + '</div></td>' +
-              '<td class="py-2 px-2.5 font-bold text-white whitespace-nowrap"><span class="px-1.5 py-0.5 mr-1 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 text-[10px]">' + t.sym + '</span>' + t.exp + ' <span class="text-slate-400 font-normal">(' + t.dte + 'd)</span></td>' +
-              '<td class="py-2 px-2.5 font-bold text-amber-300 whitespace-nowrap">' + (STRATEGY_NAMES_MAP[t.strat] || t.strat) + '</td>' +
-              '<td class="py-2 px-2.5 text-slate-200">' + t.trigReason + '</td>' +
-              '<td class="py-2 px-2.5 text-slate-300">' + t.legsText + '</td>' +
-              '<td class="py-2 px-2.5 text-center whitespace-nowrap"><span class="px-2 py-0.5 rounded bg-[#16263d] border border-sky-500/30 text-sky-200 text-[10px] font-semibold">' + t.simExitReason + '</span></td>' +
-              '<td class="py-2 px-2.5 text-right font-bold text-amber-300 whitespace-nowrap">' + fmtInr(t.simCapital, false) + '</td>' +
-              '<td class="py-2 px-2.5 text-right ' + (t.simGross >= 0 ? 'text-sky-300' : 'text-rose-400') + ' whitespace-nowrap">' + fmtInr(Math.round(t.simGross), true) + '</td>' +
-              '<td class="py-2 px-2.5 text-right text-amber-300 whitespace-nowrap">-' + fmtInr(Math.round(t.simCharges), false) + '</td>' +
-              '<td class="py-2 px-2.5 text-right whitespace-nowrap"><span class="font-extrabold ' + (t.simNet >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(t.simNet), true) + '</span> <span class="text-[10.5px] ' + (t.simRocPct >= 0 ? 'text-sky-300' : 'text-rose-300') + '">(' + (t.simRocPct >= 0 ? '+' : '') + t.simRocPct.toFixed(2) + '%)</span></td>' +
-            '</tr>';
-          }).join('');
+          if (!closedList.length) {
+            closedTbody.innerHTML = '<tr><td colspan="10" class="py-6 px-4 text-center text-emerald-300 font-semibold mono">' + ARMED_ROW_MSG + '</td></tr>';
+          } else {
+            closedTbody.innerHTML = closedList.map(function(t) {
+              return '<tr class="hover:bg-[#111c2d]">' +
+                '<td class="py-2 px-2.5 text-white font-semibold whitespace-nowrap"><div>' + t.date + '</div><div class="text-[10px] text-slate-400">' + (t.entryTime || '09:20 IST') + ' → ' + t.simExitTime + '</div></td>' +
+                '<td class="py-2 px-2.5 font-bold text-white whitespace-nowrap"><span class="px-1.5 py-0.5 mr-1 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 text-[10px]">' + t.sym + '</span>' + t.exp + ' <span class="text-slate-400 font-normal">(' + t.dte + 'd)</span></td>' +
+                '<td class="py-2 px-2.5 font-bold text-amber-300 whitespace-nowrap">' + (STRATEGY_NAMES_MAP[t.strat] || t.strat) + '</td>' +
+                '<td class="py-2 px-2.5 text-slate-200">' + t.trigReason + '</td>' +
+                '<td class="py-2 px-2.5 text-slate-300">' + t.legsText + '</td>' +
+                '<td class="py-2 px-2.5 text-center whitespace-nowrap"><span class="px-2 py-0.5 rounded bg-[#16263d] border border-sky-500/30 text-sky-200 text-[10px] font-semibold">' + t.simExitReason + '</span></td>' +
+                '<td class="py-2 px-2.5 text-right font-bold text-amber-300 whitespace-nowrap">' + fmtInr(t.simCapital, false) + '</td>' +
+                '<td class="py-2 px-2.5 text-right ' + (t.simGross >= 0 ? 'text-sky-300' : 'text-rose-400') + ' whitespace-nowrap">' + fmtInr(Math.round(t.simGross), t.simGross !== 0) + '</td>' +
+                '<td class="py-2 px-2.5 text-right text-amber-300 whitespace-nowrap">-' + fmtInr(Math.round(t.simCharges), false) + '</td>' +
+                '<td class="py-2 px-2.5 text-right whitespace-nowrap"><span class="font-extrabold ' + (t.simNet >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(t.simNet), t.simNet !== 0) + '</span> <span class="text-[10.5px] ' + (t.simRocPct >= 0 ? 'text-sky-300' : 'text-rose-300') + '">(' + (t.simRocPct >= 0 ? '+' : '') + t.simRocPct.toFixed(2) + '%)</span></td>' +
+              '</tr>';
+            }).join('');
+          }
         }
 
-        // Render Chart 1: Intraday MTM Curve (25 snapshots on 2026-11-09) OR Cumulative Paper Equity (02-09 Nov)
+        // Render Chart 1: Live Intraday MTM Curve OR Cumulative Paper Equity
         var mCtx = document.getElementById('fwdIntradayMtmCanvas');
         if (mCtx) {
           if (activeFwdChartMode === 'intraday') {
-            var snaps09 = ['09:20', '09:30', '09:45', '10:00', '10:15', '10:30', '10:45', '11:01', '11:15', '11:30', '11:45', '12:00', '12:15', '12:30', '12:45', '13:00', '13:15', '13:30', '13:45', '14:00', '14:15', '14:30', '14:45', '15:00', '15:15'];
-            var t09List = closedList.filter(function(x) { return x.date === '2026-11-09' && x.mtmPath && x.mtmPath.length >= 10; });
-            var aggGross = snaps09.map(function(tm, idx) {
-              return Math.round(t09List.reduce(function(sum, tr) {
-                var pt = tr.mtmPath[idx] || tr.mtmPath[tr.mtmPath.length - 1] || { gross: 0 };
-                return sum + Number(pt.gross || 0) * lots;
-              }, 0));
-            });
-            var tot09Chg = t09List.reduce(function(s, tr) { return s + tr.simCharges; }, 0);
-            var aggNet = aggGross.map(function(g) { return Math.round(g - tot09Chg); });
+            var mLabels = forwardIntradayMtmSeries.length
+              ? forwardIntradayMtmSeries.map(function(pt) { return pt.time_ist || (pt.t + ' IST'); })
+              : ['09:20 IST (Armed — Waiting for 11 Nov 2026)'];
+            var mGross = forwardIntradayMtmSeries.length
+              ? forwardIntradayMtmSeries.map(function(pt) { return Math.round(Number(pt.gross_mtm || 0) * lots); })
+              : [0];
+            var mNet = forwardIntradayMtmSeries.length
+              ? forwardIntradayMtmSeries.map(function(pt) { return Math.round(Number(pt.net_mtm || 0) * lots); })
+              : [0];
             var mData = {
-              labels: snaps09.map(function(t) { return t + ' IST'; }),
+              labels: mLabels,
               datasets: [
                 {
-                  label: '09 Nov Combined Intraday Gross MTM (₹)',
-                  data: aggGross,
+                  label: 'Live Forward Intraday Gross MTM (₹)',
+                  data: mGross,
                   borderColor: '#38bdf8',
                   backgroundColor: 'rgba(56, 189, 248, 0.10)',
                   fill: true,
@@ -2745,13 +2906,13 @@
                   pointRadius: 2.5,
                   tension: 0.2,
                   showLabels: true,
-                  labelStep: 6,
+                  labelStep: Math.max(1, Math.floor(mLabels.length / 5)),
                   labelPrefix: '₹',
                   labelDecimals: 0
                 },
                 {
-                  label: '09 Nov Intraday Net MTM After Upstox Costs (₹)',
-                  data: aggNet,
+                  label: 'Live Forward Intraday Net MTM After Upstox Costs (₹)',
+                  data: mNet,
                   borderColor: '#10b981',
                   borderWidth: 2.2,
                   borderDash: [4, 3],
@@ -2766,13 +2927,18 @@
             var eqNet = [];
             var eqGross = [];
             var runN = 0, runG = 0;
-            closedList.forEach(function(t) {
+            closedList.slice().reverse().forEach(function(t) {
               runN += t.simNet;
               runG += t.simGross;
               eqLabels.push(t.date.slice(5) + ' ' + t.sym.slice(0, 3) + ' ' + t.strat);
               eqNet.push(Math.round(runN));
               eqGross.push(Math.round(runG));
             });
+            if (!eqLabels.length) {
+              eqLabels = ['11 Nov 09:20 IST (Armed)'];
+              eqNet = [0];
+              eqGross = [0];
+            }
             var eqData = {
               labels: eqLabels,
               datasets: [
@@ -2827,15 +2993,6 @@
         }
       }
 
-      var STRATEGY_NAMES_MAP = {
-        S1: 'S1 · VRP Harvest Iron Condor',
-        S2: 'S2 · Gamma Expansion Long Straddle',
-        S3: 'S3 · Post-Event Front-Week Crush Fly',
-        S4: 'S4 · Steep Put Skew Ratio (1x2)',
-        S5: 'S5 · Intraday Theta Iron Butterfly',
-        S6: 'S6 · Synthetic Basis Skewed Condor'
-      };
-
       window.closeForwardPosition = function(posId) {
         var idx = forwardOpenPositions.findIndex(function(p) { return p.id === posId; });
         if (idx === -1) return;
@@ -2843,11 +3000,14 @@
         (pos.legs || []).forEach(function(l) { l.exitPx = l.curPx !== undefined ? l.curPx : l.entryPx; });
         var chg = calcPositionUpstoxCharges(pos.legs, pos.sym, 1, true);
         var net = Number((pos.grossMtm - chg).toFixed(2));
+        var sDay = pos.session_date || pos.date || MIN_FORWARD_DATE;
         forwardClosedTrades.unshift({
           id: pos.id.replace('OPEN-', 'FWD-MANUAL-'),
-          date: pos.date || '2026-11-09',
-          entryTime: pos.trigTime || '15:15 IST',
-          exitTime: latestAsOfLabel || '15:30 IST',
+          date: sDay,
+          session_date: sDay,
+          triggerTime: pos.triggerTime || (sDay + 'T09:20:00+05:30'),
+          entryTime: pos.trigTime || '09:20 IST',
+          exitTime: latestAsOfLabel || '15:15 IST',
           sym: pos.sym,
           exp: pos.exp,
           kind: pos.kind || 'Weekly',
@@ -2865,17 +3025,32 @@
           charges: chg,
           net: net,
           exitReason: 'Manual Paper Close',
-          mtmPath: [
+          mtmPath: pos.mtmPath || [
             { t: 'Entry', gross: 0, iv: pos.entryIv || 16.0 },
             { t: 'Exit', gross: pos.grossMtm, iv: pos.curIv || 16.0 }
           ]
         });
+        saveForwardLedgerLocal();
         renderForwardWorkspace();
         toast('Closed paper position ' + pos.sym + ' ' + pos.exp + ' ' + pos.strat + ' at live Upstox LTP');
       };
 
       window.autoForwardTrackSetup = function(stratCode, symName, expiryDate) {
         var sym = symName || activeSymbol || 'NIFTY';
+        if (document.getElementById('fwdIndexFilter')) document.getElementById('fwdIndexFilter').value = sym;
+        if (document.getElementById('fwdExpiryScope')) document.getElementById('fwdExpiryScope').value = 'ALL';
+        if (document.getElementById('fwdStrategyFilter')) document.getElementById('fwdStrategyFilter').value = stratCode;
+        var wsFwd = document.getElementById('wsForwardBtn');
+        if (wsFwd) wsFwd.click();
+
+        var mkt = getNseMarketStatusIST();
+        var snapDay = (latestSnapshotDay && latestSnapshotDay >= MIN_FORWARD_DATE) ? latestSnapshotDay : mkt.isoDay;
+        if (snapDay < MIN_FORWARD_DATE || !mkt.open) {
+          renderForwardWorkspace();
+          toast(ARMED_TOAST_MSG);
+          return false;
+        }
+
         var list = marketCatalog[sym] || [];
         var item = list.find(function(x) { return x.expiry === expiryDate; }) || list[0];
         if (item) {
@@ -2886,41 +3061,20 @@
             var setups = evaluateStrategiesForExpiry(item, sym, 1);
             var targetSetup = setups.find(function(s) { return s.code === stratCode; }) || setups[0];
             if (targetSetup) {
-              var step = sym === 'NIFTY' ? 50 : 100;
-              var K = item.atm || (Math.round(item.spot / step) * step);
-              var chainMap = {};
-              (item.chain || []).forEach(function(n) { chainMap[n.k] = n; });
-              var wShort = sym === 'NIFTY' ? 200 : 400;
-              var wLong = sym === 'NIFTY' ? 500 : 1000;
-              var flyWing = sym === 'NIFTY' ? 350 : 700;
-              var tightWing = sym === 'NIFTY' ? 250 : 500;
-              var rShort = sym === 'NIFTY' ? 150 : 300;
-              var rLong = sym === 'NIFTY' ? 450 : 900;
-              var rawLegs = [];
-              if (stratCode === 'S1') rawLegs = [{side:-1,mult:1,strike:K+wShort,type:'CE'},{side:-1,mult:1,strike:K-wShort,type:'PE'},{side:1,mult:1,strike:K+wLong,type:'CE'},{side:1,mult:1,strike:K-wLong,type:'PE'}];
-              else if (stratCode === 'S2') rawLegs = [{side:1,mult:1,strike:K,type:'CE'},{side:1,mult:1,strike:K,type:'PE'}];
-              else if (stratCode === 'S3') rawLegs = [{side:-1,mult:1,strike:K,type:'CE'},{side:-1,mult:1,strike:K,type:'PE'},{side:1,mult:1,strike:K+flyWing,type:'CE'},{side:1,mult:1,strike:K-flyWing,type:'PE'}];
-              else if (stratCode === 'S4') rawLegs = [{side:-1,mult:2,strike:K-rShort,type:'PE'},{side:1,mult:2,strike:K-rLong,type:'PE'},{side:-1,mult:1,strike:K+tightWing,type:'CE'},{side:1,mult:1,strike:K+tightWing+(wLong-wShort),type:'CE'}];
-              else if (stratCode === 'S5') rawLegs = [{side:-1,mult:1,strike:K,type:'CE'},{side:-1,mult:1,strike:K,type:'PE'},{side:1,mult:1,strike:K+tightWing,type:'CE'},{side:1,mult:1,strike:K-tightWing,type:'PE'}];
-              else rawLegs = [{side:-1,mult:2,strike:K+rShort,type:'CE'},{side:1,mult:2,strike:K+rLong,type:'CE'},{side:-1,mult:1,strike:K-tightWing,type:'PE'},{side:1,mult:1,strike:K-tightWing-(wLong-wShort),type:'PE'}];
-
-              rawLegs.forEach(function(l) {
-                var node = chainMap[l.strike];
-                var px = node ? (l.type === 'CE' ? node.cLtp : node.pLtp) : (item.strad * 0.22);
-                l.entryPx = Number((px || 25.0).toFixed(2));
-                l.curPx = l.entryPx;
-              });
+              var rawLegs = buildStrategyLegsForItem(item, sym, stratCode);
               var chg = calcPositionUpstoxCharges(rawLegs, sym, 1, true);
               forwardOpenPositions.unshift({
-                id: 'OPEN-LIVE-' + sym.slice(0, 3) + '-' + item.expiry.replace(/-/g, '').slice(4) + '-' + stratCode,
-                date: '2026-11-09',
-                trigTime: latestAsOfLabel || '09 Nov 15:30 IST',
-                markedAt: latestAsOfLabel || '09 Nov 15:30 IST',
+                id: 'OPEN-' + snapDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + item.expiry.replace(/-/g, '').slice(4) + '-' + stratCode,
+                date: snapDay,
+                session_date: snapDay,
+                triggerTime: snapDay + 'T' + mkt.hmStr + ':00+05:30',
+                trigTime: mkt.clockStr,
+                markedAt: mkt.clockStr,
                 sym: sym,
                 exp: item.expiry,
                 kind: item.kind,
                 dte: item.dte,
-                frontScope: true,
+                frontScope: (sym === 'NIFTY' && (item.expiry === '2026-11-17' || item.expiry === '2026-11-23')) || (sym === 'BANKNIFTY' && item.expiry === '2026-11-23'),
                 strat: stratCode,
                 stratName: targetSetup.name,
                 metrics: targetSetup.metrics,
@@ -2932,53 +3086,163 @@
                 curIv: item.iv,
                 grossMtm: 0.0,
                 estCharges: chg,
-                netMtm: Number((-chg).toFixed(2))
+                netMtm: Number((-chg).toFixed(2)),
+                mtmPath: [{ t: mkt.hmStr, gross: 0.0, iv: item.iv }]
               });
+              saveForwardLedgerLocal();
             }
           }
         }
-        if (document.getElementById('fwdIndexFilter')) document.getElementById('fwdIndexFilter').value = sym;
-        if (document.getElementById('fwdExpiryScope')) document.getElementById('fwdExpiryScope').value = 'ALL';
-        if (document.getElementById('fwdStrategyFilter')) document.getElementById('fwdStrategyFilter').value = stratCode;
-        var wsFwd = document.getElementById('wsForwardBtn');
-        if (wsFwd) wsFwd.click();
+        renderForwardWorkspace();
         toast('Tracking ' + stratCode + ' (' + sym + ' ' + (expiryDate || '') + ') in Forward Test (Auto Paper)');
+        return true;
       };
 
       window.markForwardPositionsFromPayload = function(payload) {
+        syncForwardLedgerGlobals();
         if (!payload || !Array.isArray(payload.records)) return 0;
+
+        var rawTs = payload.timestamp || payload.as_of || payload.retrieved_at || payload.day || null;
+        var mkt = getNseMarketStatusIST(rawTs ? new Date(rawTs) : undefined);
+        var snapshotDay = String(payload.day || payload.session_date || mkt.isoDay || '').slice(0, 10);
+        if (snapshotDay) latestSnapshotDay = snapshotDay;
+
+        // STRICT FORWARD-ONLY TRIGGER GATE:
+        // Never auto-trigger or place a forward trade on 2026-11-09 or any snapshotDay < '2026-11-11',
+        // and never auto-trigger when the market is closed (!getNseMarketStatusIST().open).
+        if (!snapshotDay || snapshotDay < MIN_FORWARD_DATE || !mkt.open) {
+          saveForwardLedgerLocal();
+          renderForwardWorkspace();
+          return 0;
+        }
+
+        latestAsOfLabel = mkt.clockStr;
         var updatedCount = 0;
 
-        // If cloud Code.gs attached forward_test_ledger, merge any new cloud positions
+        // If cloud Code.gs attached forward_test_ledger with valid >= 2026-11-11 positions, merge them
         if (payload.forward_test_ledger && Array.isArray(payload.forward_test_ledger.open_positions)) {
           var localIds = new Set(forwardOpenPositions.map(function(p) { return p.id; }));
           payload.forward_test_ledger.open_positions.forEach(function(cp) {
-            if (cp && cp.id && !localIds.has(cp.id)) {
+            if (cp && cp.id && isValidForwardRecord(cp) && !localIds.has(cp.id)) {
               forwardOpenPositions.push(cp);
               localIds.add(cp.id);
             }
           });
         }
 
+        // Build strike lookup and refresh marketCatalog chain strikes from live payload.records
         var chainLookup = {};
+        var qRec = payload.records.find(function(x) { return x.label === 'quotes'; });
+        var qData = (qRec && qRec.data) ? qRec.data : {};
+        var liveSpotN = qData['NSE_INDEX:Nifty 50'] ? Number(qData['NSE_INDEX:Nifty 50'].last_price) : null;
+        var liveSpotB = qData['NSE_INDEX:Nifty Bank'] ? Number(qData['NSE_INDEX:Nifty Bank'].last_price) : null;
+
         payload.records.forEach(function(rec) {
-          if (!rec.label || rec.label.indexOf('|') === -1 || !Array.isArray(rec.data)) return;
+          if (!rec.label || rec.label.indexOf('|') === -1 || !Array.isArray(rec.data) || !rec.data.length) return;
           var sMap = {};
+          var parts = rec.label.split('|');
+          var sym = parts[0], exp = parts[1];
+          var spot = (sym === 'NIFTY' ? liveSpotN : liveSpotB) || Number(rec.data[0].underlying_spot_price || 0);
+          var newChainArr = [];
+
           rec.data.forEach(function(row) {
-            var k = Math.round(Number(row.strike_price || 0));
+            var k = Math.round(Number(row.strike_price || row.strike || row.k || 0));
             var cm = (row.call_options && row.call_options.market_data) || {};
             var pm = (row.put_options && row.put_options.market_data) || {};
-            sMap[k] = {
-              cLtp: Number(cm.ltp || cm.close_price || 0),
-              pLtp: Number(pm.ltp || pm.close_price || 0)
-            };
+            var cg = (row.call_options && row.call_options.option_greeks) || {};
+            var pg = (row.put_options && row.put_options.option_greeks) || {};
+            var cLtp = Number(cm.ltp || cm.close_price || row.cLtp || 0);
+            var pLtp = Number(pm.ltp || pm.close_price || row.pLtp || 0);
+            var cIv = Number(cg.iv || row.cIv || 0);
+            var pIv = Number(pg.iv || row.pIv || 0);
+            sMap[k] = { cLtp: cLtp, pLtp: pLtp, cIv: cIv, pIv: pIv };
+            newChainArr.push({ k: k, cLtp: cLtp, pLtp: pLtp, cIv: cIv, pIv: pIv });
           });
           chainLookup[rec.label] = sMap;
+
+          var catList = marketCatalog[sym] || [];
+          var catItem = catList.find(function(x) { return x.expiry === exp; });
+          if (catItem && newChainArr.length) {
+            var step = sym === 'NIFTY' ? 50 : 100;
+            var atmK = Math.round((spot || catItem.spot) / step) * step;
+            var atmNode = sMap[atmK] || newChainArr[0];
+            if (spot > 0) catItem.spot = spot;
+            catItem.atm = atmK;
+            if (atmNode && atmNode.cIv > 0 && atmNode.pIv > 0) {
+              catItem.cIv = Number(atmNode.cIv.toFixed(2));
+              catItem.pIv = Number(atmNode.pIv.toFixed(2));
+              catItem.iv = Number((0.5 * (atmNode.cIv + atmNode.pIv)).toFixed(2));
+            }
+            if (atmNode && (atmNode.cLtp > 0 || atmNode.pLtp > 0)) {
+              catItem.strad = Number((atmNode.cLtp + atmNode.pLtp).toFixed(2));
+              catItem.syn = Number((atmK + atmNode.cLtp - atmNode.pLtp).toFixed(2));
+            }
+            catItem.chain = newChainArr;
+          }
         });
 
+        // Step A: Auto-trigger qualified setups on live snapshots (>= 09:20 IST and < 15:15 IST)
+        if (forwardAutoCaptureOn && mkt.mins >= 560 && mkt.mins < 915) {
+          var existingKeys = {};
+          forwardOpenPositions.forEach(function(p) {
+            existingKeys[p.sym + '|' + p.exp + '|' + p.strat] = true;
+          });
+          forwardClosedTrades.forEach(function(t) {
+            if (String(t.session_date || t.date || '').slice(0, 10) === snapshotDay) {
+              existingKeys[t.sym + '|' + t.exp + '|' + t.strat] = true;
+            }
+          });
+
+          ['NIFTY', 'BANKNIFTY'].forEach(function(sym) {
+            (marketCatalog[sym] || []).forEach(function(item) {
+              if (!chainLookup[sym + '|' + item.expiry]) return;
+              var isFront = (sym === 'NIFTY' && (item.expiry === '2026-11-17' || item.expiry === '2026-11-23')) ||
+                            (sym === 'BANKNIFTY' && item.expiry === '2026-11-23');
+              var setups = evaluateStrategiesForExpiry(item, sym, 1);
+              setups.forEach(function(s) {
+                if (!s.triggered) return;
+                var key = sym + '|' + item.expiry + '|' + s.code;
+                if (existingKeys[key]) return;
+                var legs = buildStrategyLegsForItem(item, sym, s.code);
+                var chg = calcPositionUpstoxCharges(legs, sym, 1, true);
+                forwardOpenPositions.push({
+                  id: 'OPEN-' + snapshotDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + item.expiry.replace(/-/g, '').slice(4) + '-' + s.code,
+                  date: snapshotDay,
+                  session_date: snapshotDay,
+                  triggerTime: String(rawTs || (snapshotDay + 'T' + mkt.hmStr + ':00+05:30')),
+                  trigTime: mkt.clockStr,
+                  markedAt: mkt.clockStr,
+                  sym: sym,
+                  exp: item.expiry,
+                  kind: item.kind,
+                  dte: item.dte,
+                  frontScope: isFront,
+                  strat: s.code,
+                  stratName: s.name,
+                  metrics: s.metrics,
+                  legs: legs,
+                  capital: (FORWARD_SCORECARD_UNIT_CAP[s.code] || s.capital || 28037),
+                  maxCredit: s.maxProf,
+                  maxLoss: s.maxLoss,
+                  entryIv: item.iv,
+                  curIv: item.iv,
+                  grossMtm: 0.0,
+                  estCharges: chg,
+                  netMtm: Number((-chg).toFixed(2)),
+                  mtmPath: [{ t: mkt.hmStr, gross: 0.0, iv: item.iv }]
+                });
+                existingKeys[key] = true;
+                updatedCount++;
+              });
+            });
+          });
+        }
+
+        // Step B: Mark all open positions to market & auto-close on SL/TP or at 15:15 IST (mins >= 915)
         var slRule = (document.getElementById('fwdStopLossRule') && document.getElementById('fwdStopLossRule').value) || 'NONE';
         var tpRule = (document.getElementById('fwdProfitTargetRule') && document.getElementById('fwdProfitTargetRule').value) || 'NONE';
         var remaining = [];
+        var newlyClosedThisSnap = [];
 
         forwardOpenPositions.forEach(function(pos) {
           var sMap = chainLookup[pos.sym + '|' + pos.exp];
@@ -2999,7 +3263,9 @@
             pos.grossMtm = Number(gross.toFixed(2));
             pos.estCharges = calcPositionUpstoxCharges(pos.legs, pos.sym, 1, true);
             pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
-            pos.markedAt = latestAsOfLabel || pos.markedAt;
+            pos.markedAt = mkt.clockStr;
+            if (!Array.isArray(pos.mtmPath)) pos.mtmPath = [];
+            pos.mtmPath.push({ t: mkt.hmStr, gross: pos.grossMtm, iv: pos.curIv || pos.entryIv || 16.0 });
             updatedCount++;
           }
 
@@ -3007,14 +3273,20 @@
           var maxLoss = Number(pos.maxLoss || pos.capital * 0.35);
           var slThresh = slRule === 'SL_25_CAP' ? -0.25 * pos.capital : (slRule === 'SL_50_MAXLOSS' ? -0.50 * maxLoss : (slRule === 'SL_30_IV' ? -0.35 * maxLoss : null));
           var tpThresh = tpRule === 'TP_50_30' ? (pos.strat === 'S2' ? 0.30 * maxLoss : 0.50 * maxCr) : (tpRule === 'TP_75' ? (pos.strat === 'S2' ? 0.50 * maxLoss : 0.75 * maxCr) : null);
+          var is1515AutoClose = mkt.mins >= 915;
 
-          if (forwardAutoCaptureOn && ((slThresh !== null && pos.grossMtm <= slThresh) || (tpThresh !== null && pos.grossMtm >= tpThresh))) {
-            (pos.legs || []).forEach(function(l) { l.exitPx = l.curPx; });
-            forwardClosedTrades.unshift({
-              id: pos.id.replace('OPEN-', 'FWD-AUTO-'),
-              date: pos.date || '2026-11-09',
+          if (forwardAutoCaptureOn && ((slThresh !== null && pos.grossMtm <= slThresh) || (tpThresh !== null && pos.grossMtm >= tpThresh) || is1515AutoClose)) {
+            (pos.legs || []).forEach(function(l) { l.exitPx = l.curPx !== undefined ? l.curPx : l.entryPx; });
+            var exitRsn = (slThresh !== null && pos.grossMtm <= slThresh)
+              ? 'Auto SL Hit'
+              : ((tpThresh !== null && pos.grossMtm >= tpThresh) ? 'Auto Target Hit' : '15:15 IST Auto-Close');
+            var closedObj = {
+              id: pos.id.replace('OPEN-', 'FWD-'),
+              date: pos.date || snapshotDay,
+              session_date: pos.session_date || pos.date || snapshotDay,
+              triggerTime: pos.triggerTime || (snapshotDay + 'T09:20:00+05:30'),
               entryTime: pos.trigTime || '09:20 IST',
-              exitTime: latestAsOfLabel || '15:15 IST',
+              exitTime: mkt.hmStr + ' IST',
               sym: pos.sym,
               exp: pos.exp,
               kind: pos.kind || 'Weekly',
@@ -3031,23 +3303,37 @@
               gross: pos.grossMtm,
               charges: pos.estCharges,
               net: pos.netMtm,
-              exitReason: (slThresh !== null && pos.grossMtm <= slThresh) ? 'Auto SL Hit' : 'Auto Target Hit',
-              mtmPath: [
-                { t: 'Entry', gross: 0, iv: pos.entryIv || 16.0 },
-                { t: latestAsOfLabel || '15:15', gross: pos.grossMtm, iv: pos.curIv || 16.0 }
+              exitReason: exitRsn,
+              mtmPath: pos.mtmPath || [
+                { t: '09:20', gross: 0, iv: pos.entryIv || 16.0 },
+                { t: mkt.hmStr, gross: pos.grossMtm, iv: pos.curIv || 16.0 }
               ]
-            });
+            };
+            forwardClosedTrades.unshift(closedObj);
+            newlyClosedThisSnap.push(closedObj);
           } else {
             remaining.push(pos);
           }
         });
 
         forwardOpenPositions = remaining;
-        window.forwardOpenPositions = forwardOpenPositions;
-        window.forwardClosedTrades = forwardClosedTrades;
+        var snapGross = remaining.reduce(function(a, p) { return a + Number(p.grossMtm || 0); }, 0) +
+                        newlyClosedThisSnap.reduce(function(a, t) { return a + Number(t.gross || 0); }, 0);
+        var snapNet = remaining.reduce(function(a, p) { return a + Number(p.netMtm || 0); }, 0) +
+                      newlyClosedThisSnap.reduce(function(a, t) { return a + Number(t.net || 0); }, 0);
+        forwardIntradayMtmSeries.push({
+          session_date: snapshotDay,
+          t: mkt.hmStr,
+          time_ist: mkt.hmStr + ' IST',
+          gross_mtm: Number(snapGross.toFixed(2)),
+          net_mtm: Number(snapNet.toFixed(2))
+        });
+        forwardLedger.updated_at = String(rawTs || (snapshotDay + 'T' + mkt.hmStr + ':00+05:30'));
+        saveForwardLedgerLocal();
+
         var badgeEl = document.getElementById('fwdLastMarkedBadge');
-        if (badgeEl && latestAsOfLabel) {
-          badgeEl.innerHTML = 'Last Marked: <strong class="text-emerald-300">' + latestAsOfLabel + ' (Live Upstox Snapshot)</strong>';
+        if (badgeEl) {
+          badgeEl.innerHTML = 'Last Marked: <strong class="text-emerald-300">' + mkt.clockStr + ' (Live Upstox Snapshot · ' + snapshotDay + ')</strong>';
         }
         renderForwardWorkspace();
         return updatedCount;
@@ -3114,8 +3400,8 @@
           if (forwardAutoCaptureOn) {
             fwdAutoBtn.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-bold text-xs mono transition';
             if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
-            if (lbl) lbl.textContent = 'AUTO-CAPTURE ON (09:20 IST & Live Triggers)';
-            toast('Auto-Trigger Mode: ON (09:20 IST & Live Option-Chain Triggers)');
+            if (lbl) lbl.textContent = 'ARMED · AUTO-CAPTURE ON (Starts 11 Nov 2026 09:20 IST)';
+            toast('Auto-Trigger Mode: ON (Armed for 11 Nov 2026 09:20 IST onwards)');
           } else {
             fwdAutoBtn.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-950/80 border border-amber-500/60 text-amber-300 font-bold text-xs mono transition';
             if (dot) dot.className = 'w-2 h-2 rounded-full bg-amber-400';
@@ -3128,9 +3414,18 @@
       var fwdScanBtn = document.getElementById('fwdScanNowBtn');
       if (fwdScanBtn) {
         fwdScanBtn.addEventListener('click', function() {
+          var mkt = getNseMarketStatusIST();
+          var snapDay = (latestSnapshotDay && latestSnapshotDay >= MIN_FORWARD_DATE) ? latestSnapshotDay : mkt.isoDay;
+          if (!mkt.open || snapDay < MIN_FORWARD_DATE) {
+            renderForwardWorkspace();
+            toast(ARMED_TOAST_MSG);
+            return;
+          }
           var added = 0;
           ['NIFTY', 'BANKNIFTY'].forEach(function(sym) {
             (marketCatalog[sym] || []).forEach(function(item) {
+              var isFront = (sym === 'NIFTY' && (item.expiry === '2026-11-17' || item.expiry === '2026-11-23')) ||
+                            (sym === 'BANKNIFTY' && item.expiry === '2026-11-23');
               var setups = evaluateStrategiesForExpiry(item, sym, 1);
               setups.forEach(function(s) {
                 if (!s.triggered) return;
@@ -3138,11 +3433,40 @@
                   return p.sym === sym && p.exp === item.expiry && p.strat === s.code;
                 });
                 if (!exists) {
+                  var legs = buildStrategyLegsForItem(item, sym, s.code);
+                  var chg = calcPositionUpstoxCharges(legs, sym, 1, true);
+                  forwardOpenPositions.push({
+                    id: 'OPEN-' + snapDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + item.expiry.replace(/-/g, '').slice(4) + '-' + s.code,
+                    date: snapDay,
+                    session_date: snapDay,
+                    triggerTime: snapDay + 'T' + mkt.hmStr + ':00+05:30',
+                    trigTime: mkt.clockStr,
+                    markedAt: mkt.clockStr,
+                    sym: sym,
+                    exp: item.expiry,
+                    kind: item.kind,
+                    dte: item.dte,
+                    frontScope: isFront,
+                    strat: s.code,
+                    stratName: s.name,
+                    metrics: s.metrics,
+                    legs: legs,
+                    capital: (FORWARD_SCORECARD_UNIT_CAP[s.code] || s.capital || 28037),
+                    maxCredit: s.maxProf,
+                    maxLoss: s.maxLoss,
+                    entryIv: item.iv,
+                    curIv: item.iv,
+                    grossMtm: 0.0,
+                    estCharges: chg,
+                    netMtm: Number((-chg).toFixed(2)),
+                    mtmPath: [{ t: mkt.hmStr, gross: 0.0, iv: item.iv }]
+                  });
                   added++;
                 }
               });
             });
           });
+          saveForwardLedgerLocal();
           renderForwardWorkspace();
           toast('Scanned all 9 active Upstox option chains: ' + forwardOpenPositions.length + ' qualified setups active (' + added + ' newly added)');
         });
@@ -3151,10 +3475,17 @@
       var fwdResetBtn = document.getElementById('fwdResetSeedBtn');
       if (fwdResetBtn) {
         fwdResetBtn.addEventListener('click', function() {
-          forwardOpenPositions = JSON.parse(JSON.stringify(FORWARD_SEED_OPEN));
-          forwardClosedTrades = JSON.parse(JSON.stringify(FORWARD_SEED_CLOSED));
+          forwardOpenPositions = [];
+          forwardClosedTrades = [];
+          forwardIntradayMtmSeries = [];
+          forwardLedger = JSON.parse(JSON.stringify(FORWARD_CLEAN_LEDGER_TEMPLATE));
+          saveForwardLedgerLocal();
+          var badgeEl = document.getElementById('fwdLastMarkedBadge');
+          if (badgeEl) {
+            badgeEl.innerHTML = 'Status: <strong class="text-emerald-300">ARMED_WAITING_FOR_NEXT_SESSION · Inception 2026-11-11 (09:20 IST)</strong>';
+          }
           renderForwardWorkspace();
-          toast('Restored 100% real-data Forward Test ledger');
+          toast('Cleared Forward Test ledger — armed for tomorrow (11 Nov 2026 09:20 IST).');
         });
       }
 
@@ -3321,6 +3652,11 @@
       }
 
       window.getMarketSessionState = getMarketSessionState;
+      window.getNseMarketStatusIST = getNseMarketStatusIST;
+      window.MIN_FORWARD_DATE = MIN_FORWARD_DATE;
+      window.loadForwardLedgerLocal = loadForwardLedgerLocal;
+      window.saveForwardLedgerLocal = saveForwardLedgerLocal;
+      window.initForwardTest = initForwardTest;
       window.updateMarketClock = updateMarketClock;
       window.REAL_HISTORICAL_1Y = REAL_HISTORICAL_1Y;
       window.marketCatalog = marketCatalog;
@@ -3351,6 +3687,7 @@
         }
         populateExpiryDropdown();
         updateMarketClock();
+        initForwardTest();
         renderActiveOptionsTab();
         renderBacktestWorkspace();
         renderForwardWorkspace();
