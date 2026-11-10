@@ -88,7 +88,7 @@ def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065, q=0.012):
     }
 
 
-def _compute_straddle_series_vectorized(prices: np.ndarray, strikes: np.ndarray, dtes: np.ndarray, ivs: np.ndarray, rate: float = 0.065):
+def _compute_straddle_series_vectorized(prices: np.ndarray, strikes: np.ndarray, dtes: np.ndarray, ivs: np.ndarray, rate: float = 0.065, q: float = 0.012):
     """Vectorized BSM ATM Straddle Price and Net Delta across an entire intraday session array."""
     valid = np.isfinite(prices) & (prices > 0) & np.isfinite(strikes) & (strikes > 0) & np.isfinite(ivs) & (ivs > 0)
     straddle_out = np.full(len(prices), np.nan, dtype=float)
@@ -101,15 +101,16 @@ def _compute_straddle_series_vectorized(prices: np.ndarray, strikes: np.ndarray,
     t = np.maximum(0.2, dtes[valid]) / 365.0
     sigma = np.maximum(0.01, ivs[valid] / 100.0)
     sqrt_t = np.sqrt(t)
-    d1 = (np.log(s / k) + (rate + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t)
+    d1 = (np.log(s / k) + (rate - q + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t)
     d2 = d1 - sigma * sqrt_t
     nd1 = ndtr(d1)
     nd2 = ndtr(d2)
     df_r = np.exp(-rate * t)
-    call_p = s * nd1 - k * df_r * nd2
-    put_p = k * df_r * (1.0 - nd2) - s * (1.0 - nd1)
+    df_q = np.exp(-q * t)
+    call_p = s * df_q * nd1 - k * df_r * nd2
+    put_p = k * df_r * (1.0 - nd2) - s * df_q * (1.0 - nd1)
     straddle_out[valid] = call_p + put_p
-    delta_out[valid] = 2.0 * nd1 - 1.0
+    delta_out[valid] = 2.0 * df_q * nd1 - df_q
     return straddle_out, delta_out
 
 
