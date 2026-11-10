@@ -1447,5 +1447,168 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
             self.assertEqual(chain_table['pricing_model'], 'Black-76 (Forward Anchored)')
 
 
+
+
+class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
+    """Verify v20 Black-76 options engine, pricing parity, Code.gs quota optimizations and website enrichment."""
+
+    def test_43_v20_black76_pricing_and_iv_parity(self):
+        """Verify Black-76 pricing, Greeks, BSM carry parity, ATM call/put symmetry, and IV round-trip."""
+        import importlib.util
+        def _load_vl_mod(name):
+            try:
+                return __import__(name)
+            except ModuleNotFoundError:
+                p = PATCH_DIR / f"{name}.py"
+                spec = importlib.util.spec_from_file_location(name, p)
+                m = importlib.util.module_from_spec(spec)
+                sys.modules[name] = m
+                spec.loader.exec_module(m)
+                return m
+        synthetic_future = _load_vl_mod("synthetic_future")
+        market_table = _load_vl_mod("market_table")
+
+        # 1. Parity with BSM when F = S * exp((r - q) * T)
+        spot = 25044.65
+        strike = 25200.0
+        years = 8.0 / 365.0
+        rate = 0.0585407108
+        div_yield = 0.0142
+        vol = 0.1695
+
+        fwd = option_math.forward_from_spot(spot, years, rate, div_yield=div_yield)
+        self.assertAlmostEqual(fwd, spot * np.exp((rate - div_yield) * years), places=8)
+
+        for kind in ("CE", "PE"):
+            bsm = option_math.bsm_greeks(spot, strike, years, rate, vol, kind, dividend=div_yield)
+            b76 = option_math.black76_greeks(fwd, strike, years, rate, vol, kind)
+            self.assertAlmostEqual(b76["price"], bsm["price"], places=8)
+            self.assertAlmostEqual(b76["vega"], bsm["vega"], places=8)
+            # Spot delta = exp((r - q) * T) * discounted_futures_delta = (F / S) * delta_B76
+            self.assertAlmostEqual(b76["delta"] * (fwd / spot), bsm["delta"], places=8)
+            # Spot gamma = (F / S)^2 * gamma_B76
+            self.assertAlmostEqual(b76["gamma"] * ((fwd / spot) ** 2), bsm["gamma"], places=8)
+
+            # Price + delta fast helper
+            p_fast, d_fast = option_math.black76_price_delta(fwd, strike, years, rate, vol, kind)
+            self.assertAlmostEqual(p_fast, b76["price"], places=8)
+            self.assertAlmostEqual(d_fast, b76["delta"], places=8)
+
+        # 2. Call-Put symmetry at ATM (F == K) and Put-Call parity across strikes
+        f_atm = 25012.90
+        c_atm = option_math.black76_greeks(f_atm, f_atm, years, rate, vol, "CE")
+        p_atm = option_math.black76_greeks(f_atm, f_atm, years, rate, vol, "PE")
+        self.assertAlmostEqual(c_atm["price"], p_atm["price"], places=10)
+        self.assertAlmostEqual(c_atm["gamma"], p_atm["gamma"], places=10)
+        self.assertAlmostEqual(c_atm["vega"], p_atm["vega"], places=10)
+        self.assertAlmostEqual(c_atm["delta"] - p_atm["delta"], np.exp(-rate * years), places=10)
+        self.assertAlmostEqual(c_atm["forward_delta"] - p_atm["forward_delta"], 1.0, places=10)
+
+        # Put-Call Parity: C - P = exp(-r*T) * (F - K) and parity_implied_forward(K, C, P, T, r) == F
+        for k_test in (24500.0, 25000.0, 25050.0, 25500.0):
+            c_g = option_math.black76_greeks(f_atm, k_test, years, rate, vol, "CE")
+            p_g = option_math.black76_greeks(f_atm, k_test, years, rate, vol, "PE")
+            lhs = c_g["price"] - p_g["price"]
+            rhs = np.exp(-rate * years) * (f_atm - k_test)
+            self.assertAlmostEqual(lhs, rhs, places=8)
+            f_recovered = option_math.parity_implied_forward(k_test, c_g["price"], p_g["price"], years, rate)
+            self.assertAlmostEqual(f_recovered, f_atm, places=8)
+
+        # 3. Scalar & Vectorized IV round-trip across ITM / ATM / OTM Calls & Puts
+        strikes_arr = np.array([24400.0, 24800.0, 25012.90, 25250.0, 25600.0])
+        vols_arr = np.array([0.192, 0.176, 0.1695, 0.164, 0.168])
+        for is_call_flag, kind in ((True, "CE"), (False, "PE")):
+            vec_g = option_math.black76_greeks_vec(f_atm, strikes_arr, years, rate, vols_arr, is_call=is_call_flag)
+            iv_vec = option_math.solve_black76_iv_vec(vec_g["price"], f_atm, strikes_arr, years, rate, is_call=is_call_flag)
+            np.testing.assert_allclose(iv_vec, vols_arr, rtol=1e-5, atol=1e-6)
+            for k_i, v_i, px_i in zip(strikes_arr, vols_arr, vec_g["price"]):
+                iv_scalar = option_math.solve_black76_iv(float(px_i), f_atm, float(k_i), years, rate, kind)
+                self.assertAlmostEqual(iv_scalar, float(v_i), places=5)
+
+        # 4. Real NIFTY 2026-11-17 ATM 25050 Call/Put IV unification under Black-76
+        f_real = option_math.parity_implied_forward(25050.0, 232.15, 269.20, years, rate)
+        iv_ce_real = option_math.solve_black76_iv(232.15, f_real, 25050.0, years, rate, "CE")
+        iv_pe_real = option_math.solve_black76_iv(269.20, f_real, 25050.0, years, rate, "PE")
+        self.assertAlmostEqual(iv_ce_real, iv_pe_real, places=6)
+        self.assertAlmostEqual(iv_ce_real * 100.0, 16.95, places=1)
+
+        # Verify synthetic_future and market_table helpers
+        chain_df = pd.DataFrame([
+            {"strike": 25050.0, "option_type": "CE", "ltp": 232.15, "iv": 16.01},
+            {"strike": 25050.0, "option_type": "PE", "ltp": 269.20, "iv": 17.90},
+        ])
+        syn_res = synthetic_future.calculate(chain_df, spot=25044.65, rate=rate, years=years)
+        self.assertIn("Black-76", syn_res["Pricing model"])
+        self.assertAlmostEqual(syn_res["Synthetic future"], f_real, places=2)
+        self.assertAlmostEqual(syn_res["Black-76 ATM IV"], 16.95, places=1)
+        c_iv_pct, p_iv_pct, atm_iv_pct = market_table.atm_values(chain_df, [25050.0], spot=25044.65, forward=f_real, years=years, rate=rate)
+        self.assertAlmostEqual(c_iv_pct, p_iv_pct, places=4)
+        self.assertAlmostEqual(atm_iv_pct, 16.95, places=1)
+
+    def test_44_v20_black76_invalid_inputs_and_expiry_edge_cases(self):
+        """Verify Black-76 safe validation for invalid inputs and T <= 0 / near-zero expiry edge cases."""
+        # 1. Invalid scalar inputs return NaN cleanly
+        for bad_kwargs in (
+            dict(forward=-100.0, strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
+            dict(forward=0.0, strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
+            dict(forward=25000.0, strike=-25000.0, years=0.05, rate=0.0585, vol=0.17, kind="PE"),
+            dict(forward=25000.0, strike=25000.0, years=0.05, rate=0.0585, vol=0.0, kind="CE"),
+            dict(forward=25000.0, strike=25000.0, years=0.05, rate=0.0585, vol=-0.15, kind="PE"),
+            dict(forward=float("nan"), strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
+            dict(forward=float("inf"), strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
+        ):
+            res = option_math.black76_greeks(**bad_kwargs)
+            for k in ("price", "delta", "gamma", "vega", "theta"):
+                self.assertTrue(np.isnan(res[k]), f"Expected NaN for {k} with {bad_kwargs}")
+
+        # 2. Out-of-bounds IV solver inputs return NaN cleanly
+        self.assertTrue(np.isnan(option_math.solve_black76_iv(-5.0, 25000.0, 25000.0, 0.05, 0.0585, "CE")))
+        self.assertTrue(np.isnan(option_math.solve_black76_iv(10.0, 25500.0, 25000.0, 0.05, 0.0585, "CE")))  # below intrinsic
+        self.assertTrue(np.isnan(option_math.solve_black76_iv(30000.0, 25000.0, 25000.0, 0.05, 0.0585, "CE")))  # above forward
+        self.assertTrue(np.isnan(option_math.solve_black76_iv(200.0, 25000.0, 25000.0, 0.0, 0.0585, "CE")))  # T <= 0
+
+        # 3. T <= 0 and near-zero expiry (T = 1e-10) handling
+        for t_val in (0.0, -0.01):
+            itm_ce = option_math.black76_greeks(25200.0, 25000.0, t_val, 0.0585, 0.18, "CE")
+            self.assertAlmostEqual(itm_ce["price"], 200.0, places=6)
+            self.assertAlmostEqual(itm_ce["delta"], 1.0, places=6)
+            self.assertEqual(itm_ce["gamma"], 0.0)
+            self.assertEqual(itm_ce["vega"], 0.0)
+            self.assertEqual(itm_ce["theta"], 0.0)
+
+            otm_pe = option_math.black76_greeks(25200.0, 25000.0, t_val, 0.0585, 0.18, "PE")
+            self.assertAlmostEqual(otm_pe["price"], 0.0, places=6)
+            self.assertAlmostEqual(otm_pe["delta"], 0.0, places=6)
+
+        near_zero = option_math.black76_greeks(25200.0, 25000.0, 1e-10, 0.0585, 0.18, "CE")
+        self.assertTrue(np.isfinite(near_zero["price"]) and near_zero["price"] > 199.9)
+        self.assertTrue(np.isfinite(near_zero["delta"]))
+
+    def test_45_v20_code_gs_quota_optimizations_and_website_black76(self):
+        """Verify Code.gs free-tier quota optimizations and website Black-76 option chain enrichment."""
+        code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
+        self.assertIn("regularStartMins: 555", code_gs)
+        self.assertIn("regularEndMins: 931", code_gs)
+        self.assertIn("CacheService.getScriptCache()", code_gs)
+        self.assertIn("pruneOldMinuteSnapshots_(7)", code_gs)
+        self.assertIn("capCompletedEodDays_(", code_gs)
+        self.assertIn("MAX_COMPLETED_EOD_DAYS = 30", code_gs)
+
+        repo_root = HERE_DIR
+        for rel in ("docs/index.html", "index.html"):
+            p = repo_root / rel
+            if not p.exists():
+                continue
+            html = p.read_text(encoding="utf-8")
+            self.assertIn("window.black76Price", html)
+            self.assertIn("window.black76Greeks", html)
+            self.assertIn("window.black76Iv", html)
+            self.assertIn("window.computeBlack76ParityForward", html)
+            self.assertIn("Black-76 Forward Model", html)
+            self.assertIn('"b76CallIv":16.95,"b76PutIv":16.95', html)
+
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -1,13 +1,17 @@
-"""Fast cached pricing inputs; official-source checks never block rendering."""
+"""Fast cached pricing inputs; official-source checks never block rendering (Black-76 Forward Model Edition)."""
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-import json, threading, time
+import json, math, threading, time
 try:
     from market_data import IST
 except ImportError:
     from zoneinfo import ZoneInfo
     IST = ZoneInfo('Asia/Kolkata')
+
+PRICING_MODEL = 'Black-76'
+PRICING_MODEL_LABEL = 'Black-76 Forward Model · F = K + e^{rT}(C − P)'
+DEFAULT_RISK_FREE_RATE = 0.066
 
 _ROOT = Path(__file__).resolve().parent / 'data'
 _pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='pricing-inputs')
@@ -47,7 +51,11 @@ def _read(name):
 
 def get_rate():
     ensure_refresh()
-    return _read('risk_free_rate.json')
+    saved = _read('risk_free_rate.json')
+    if saved:
+        saved.setdefault('pricing_model', PRICING_MODEL)
+        saved.setdefault('pricing_model_label', PRICING_MODEL_LABEL)
+    return saved
 
 
 def get_yields():
@@ -71,3 +79,22 @@ def get_yields():
         else:
             item['stale'] = False
     return saved
+
+
+def compute_parity_forward(strike: float, call_price: float, put_price: float, years: float, rate: float | None = None) -> float:
+    """Compute Black-76 Put-Call Parity Implied Forward F = K + exp(r * T) * (C - P)."""
+    r = float(rate) if (rate is not None and math.isfinite(float(rate))) else float(get_rate().get('model_rate') or DEFAULT_RISK_FREE_RATE)
+    t = max(0.0, float(years))
+    return float(strike) + math.exp(r * t) * (float(call_price) - float(put_price))
+
+
+def get_pricing_model_config() -> dict:
+    """Return active Black-76 options pricing configuration metadata."""
+    rate_info = get_rate()
+    return {
+        'model': PRICING_MODEL,
+        'label': PRICING_MODEL_LABEL,
+        'rate': float(rate_info.get('model_rate') or DEFAULT_RISK_FREE_RATE),
+        'as_of': rate_info.get('as_of'),
+        'source': rate_info.get('source', 'FBIL / RBI 91-Day Treasury Bill Benchmark'),
+    }

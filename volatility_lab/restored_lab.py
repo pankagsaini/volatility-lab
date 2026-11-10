@@ -1,4 +1,4 @@
-"""Recovered research views; no data fabrication or trading operations (Vectorized & Cached)."""
+"""Recovered research views; no data fabrication or trading operations (Vectorized & Cached Black-76 Edition)."""
 import json
 import math
 import sqlite3
@@ -15,6 +15,7 @@ except ImportError:
     from zoneinfo import ZoneInfo
     IST = ZoneInfo('Asia/Kolkata')
 from trade_review_ui import table
+import option_math
 
 _INV_SQRT_2PI = 0.3989422804014327
 
@@ -48,12 +49,14 @@ def _cached_intraday_snapshots(db_path_str: str, symbol: str, expiry: str, confi
     return load(Path(db_path_str), symbol, expiry, "default")
 
 
-def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065):
+def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065, forward=None):
+    """Compute ATM Straddle price, Net Delta, Gamma, 2-leg Vega, and 2-leg Daily Theta under Fischer Black (1976) off Forward F."""
     try:
         spot = float(spot)
         strike = float(strike)
         dte = float(dte)
         vol_pct = float(vol_pct)
+        fwd = float(forward) if (forward is not None and np.isfinite(float(forward)) and float(forward) > 0) else spot
     except (TypeError, ValueError):
         return None
     if not (np.isfinite(spot) and spot > 0 and np.isfinite(strike) and strike > 0 and np.isfinite(vol_pct) and vol_pct > 0):
@@ -61,65 +64,69 @@ def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065):
     T = max(0.2, dte) / 365.0
     sigma = max(0.01, vol_pct / 100.0)
     try:
-        sqrt_t = math.sqrt(T)
-        d1 = (math.log(spot / strike) + (rate + 0.5 * sigma * sigma) * T) / (sigma * sqrt_t)
-        d2 = d1 - sigma * sqrt_t
-        nd1 = float(ndtr(d1))
-        nd2 = float(ndtr(d2))
-        pdf_d1 = _INV_SQRT_2PI * math.exp(-0.5 * d1 * d1)
-        df_r = math.exp(-rate * T)
-        call_p = spot * nd1 - strike * df_r * nd2
-        put_p = strike * df_r * (1.0 - nd2) - spot * (1.0 - nd1)
+        ce = option_math.black76_greeks(fwd, strike, T, rate, sigma, 'CE')
+        pe = option_math.black76_greeks(fwd, strike, T, rate, sigma, 'PE')
+        if not (np.isfinite(ce['price']) and np.isfinite(pe['price'])):
+            return None
+        call_p = float(ce['price'])
+        put_p = float(pe['price'])
         straddle_p = call_p + put_p
-        call_d = nd1
-        put_d = call_d - 1.0
-        gamma = pdf_d1 / (spot * sigma * sqrt_t)
-        call_vega = spot * pdf_d1 * sqrt_t / 100.0
-        straddle_vega = call_vega * 2.0
-        theta_day = -(spot * pdf_d1 * sigma / (2.0 * sqrt_t)) / 365.0
-        straddle_theta = theta_day * 2.0
+        call_d = float(ce['delta'])
+        put_d = float(pe['delta'])
+        gamma = float(ce['gamma'])
+        straddle_vega = float(ce['vega']) + float(pe['vega'])
+        straddle_theta = float(ce['theta_daily']) + float(pe['theta_daily'])
     except (ValueError, ZeroDivisionError, OverflowError):
         return None
     return {
+        'model': 'Black-76',
+        'forward': fwd,
         'strike': strike,
         'straddle': straddle_p,
         'straddle_pct': (straddle_p / spot) * 100.0,
         'call_delta': call_d,
         'put_delta': put_d,
         'net_delta': call_d + put_d,
+        'fwd_net_delta': float(ce['fwd_delta']) + float(pe['fwd_delta']),
         'gamma': gamma,
         'vega': straddle_vega,
-        'theta_day': straddle_theta
+        'theta_day': straddle_theta,
     }
 
 
-def _compute_straddle_series_vectorized(prices: np.ndarray, strikes: np.ndarray, dtes: np.ndarray, ivs: np.ndarray, rate: float = 0.065):
-    """Vectorized BSM ATM Straddle Price and Net Delta across an entire intraday session array."""
-    valid = np.isfinite(prices) & (prices > 0) & np.isfinite(strikes) & (strikes > 0) & np.isfinite(ivs) & (ivs > 0)
-    straddle_out = np.full(len(prices), np.nan, dtype=float)
-    delta_out = np.full(len(prices), np.nan, dtype=float)
+def _compute_straddle_series_vectorized(prices: np.ndarray, strikes: np.ndarray, dtes: np.ndarray, ivs: np.ndarray, rate: float = 0.065, forwards: np.ndarray | None = None):
+    """Vectorized Black-76 ATM Straddle Price and Discounted Net Delta across an entire intraday session array."""
+    prices_arr = np.asarray(prices, dtype=float)
+    strikes_arr = np.asarray(strikes, dtype=float)
+    dtes_arr = np.asarray(dtes, dtype=float)
+    ivs_arr = np.asarray(ivs, dtype=float)
+    fwds_arr = np.asarray(forwards, dtype=float) if forwards is not None else prices_arr
+
+    valid = (
+        np.isfinite(prices_arr) & (prices_arr > 0)
+        & np.isfinite(fwds_arr) & (fwds_arr > 0)
+        & np.isfinite(strikes_arr) & (strikes_arr > 0)
+        & np.isfinite(ivs_arr) & (ivs_arr > 0)
+    )
+    straddle_out = np.full(len(prices_arr), np.nan, dtype=float)
+    delta_out = np.full(len(prices_arr), np.nan, dtype=float)
     if not np.any(valid):
         return straddle_out, delta_out
 
-    s = prices[valid]
-    k = strikes[valid]
-    t = np.maximum(0.2, dtes[valid]) / 365.0
-    sigma = np.maximum(0.01, ivs[valid] / 100.0)
-    sqrt_t = np.sqrt(t)
-    d1 = (np.log(s / k) + (rate + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t)
-    d2 = d1 - sigma * sqrt_t
-    nd1 = ndtr(d1)
-    nd2 = ndtr(d2)
-    df_r = np.exp(-rate * t)
-    call_p = s * nd1 - k * df_r * nd2
-    put_p = k * df_r * (1.0 - nd2) - s * (1.0 - nd1)
-    straddle_out[valid] = call_p + put_p
-    delta_out[valid] = 2.0 * nd1 - 1.0
+    f = fwds_arr[valid]
+    k = strikes_arr[valid]
+    t = np.maximum(0.2, dtes_arr[valid]) / 365.0
+    sigma = np.maximum(0.01, ivs_arr[valid] / 100.0)
+    ce_vec = option_math.black76_greeks_vec(f, k, t, vol=sigma, rate=rate, kind='CE')
+    pe_vec = option_math.black76_greeks_vec(f, k, t, vol=sigma, rate=rate, kind='PE')
+    straddle_out[valid] = ce_vec['price'] + pe_vec['price']
+    delta_out[valid] = ce_vec['delta'] + pe_vec['delta']
     return straddle_out, delta_out
 
 
 def render_archived_intraday(data, symbol, selected, config):
     spot = _clean_float(selected.get('Price'))
+    syn_fwd = _clean_float(selected.get('Synthetic future'))
     iv = _clean_float(selected.get('IV'))
     step = 50 if symbol == 'NIFTY' else 100
     atm_k = _clean_float(selected.get('ATM strike'))
@@ -157,18 +164,20 @@ def render_archived_intraday(data, symbol, selected, config):
         if iv <= 0 and not valid_ivs.empty:
             iv = float(valid_ivs.iloc[-1])
 
-    # 2. Top KPI Metric Cards for Live ATM Straddle & Greeks
-    greeks = compute_straddle_greeks(spot, strike, dte, iv)
+    forward_ref = syn_fwd if syn_fwd > 0 else spot
+
+    # 2. Top KPI Metric Cards for Live ATM Straddle & Black-76 Greeks
+    greeks = compute_straddle_greeks(spot, strike, dte, iv, forward=forward_ref)
     if greeks:
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric("ATM Strike", f"{int(round(greeks['strike'])):,}")
-        c2.metric("Straddle Price", f"₹{greeks['straddle']:.2f}")
+        c2.metric("Black-76 Straddle", f"₹{greeks['straddle']:.2f}")
         c3.metric("Breakeven ±%", f"±{greeks['straddle_pct']:.2f}%")
-        c4.metric("Net Delta", f"{greeks['net_delta']:+.3f}")
+        c4.metric("Net Delta (Δ_B76)", f"{greeks['net_delta']:+.3f}")
         c5.metric("Theta Decay", f"₹{greeks['theta_day']:.2f} ₹/d")
         c6.metric("Straddle Vega", f"{greeks['vega']:.2f} ₹/pt")
     else:
-        st.info("ATM Straddle pricing & Greeks will update when valid spot and IV quotes are captured.")
+        st.info("ATM Straddle pricing & Black-76 Greeks will update when valid spot and IV quotes are captured.")
 
     if saved.empty:
         st.info(f"Collecting intraday snapshots for {symbol} {selected.get('Expiry')}... Live calculations above update continuously with 1-minute Google Cloud captures.")
@@ -200,9 +209,14 @@ def render_archived_intraday(data, symbol, selected, config):
         st.info(f"Captured {len(session_data)} snapshot for {chosen_day:%d %b %Y}. Intraday progression chart activates after multiple 1-minute captures.")
         return
 
-    # Vectorized calculation of Straddle Price and Net Delta across all session snapshots
+    # Vectorized Black-76 calculation of Straddle Price and Net Delta across all session snapshots
     s_prices = pd.to_numeric(session_data['Price'], errors='coerce').fillna(spot).to_numpy(dtype=float)
     s_ivs = pd.to_numeric(session_data['IV'], errors='coerce').fillna(iv).to_numpy(dtype=float)
+    if 'Synthetic future' in session_data:
+        raw_f = pd.to_numeric(session_data['Synthetic future'], errors='coerce').to_numpy(dtype=float)
+        s_fwds = np.where(np.isfinite(raw_f) & (raw_f > 0), raw_f, s_prices)
+    else:
+        s_fwds = s_prices
     if 'ATM strike' in session_data:
         raw_k = pd.to_numeric(session_data['ATM strike'], errors='coerce').to_numpy(dtype=float)
     else:
@@ -217,7 +231,7 @@ def render_archived_intraday(data, symbol, selected, config):
     except Exception:
         s_dtes = np.full(len(session_data), dte, dtype=float)
 
-    straddle_pts, deltas = _compute_straddle_series_vectorized(s_prices, s_strikes, s_dtes, s_ivs)
+    straddle_pts, deltas = _compute_straddle_series_vectorized(s_prices, s_strikes, s_dtes, s_ivs, forwards=s_fwds)
     session_data['Straddle Price'] = straddle_pts
     session_data['Net Delta'] = deltas
 
@@ -237,7 +251,7 @@ def render_archived_intraday(data, symbol, selected, config):
         fig.add_trace(go.Scatter(
             x=time_series,
             y=session_data['Straddle Price'],
-            name="ATM Straddle Price",
+            name="ATM Straddle Price (Black-76)",
             mode="lines+markers",
             connectgaps=False,
             line=dict(color="#10b981", width=2.4),
@@ -261,14 +275,14 @@ def render_archived_intraday(data, symbol, selected, config):
         fig.add_trace(go.Scatter(
             x=time_series,
             y=session_data['Net Delta'],
-            name="Straddle Net Delta",
+            name="Straddle Net Delta (Δ_B76)",
             mode="lines+markers",
             connectgaps=False,
             line=dict(color="#d4af37", width=2.4),
             marker=dict(color="#fbbf24", size=5),
             hovertemplate="%{x|%H:%M IST}<br>Delta: %{y:+.3f}<extra></extra>"
         ))
-        y_title = "Net Straddle Delta"
+        y_title = "Net Straddle Delta (Δ_B76)"
     else:
         fig.add_trace(go.Scatter(
             x=time_series,
@@ -294,7 +308,7 @@ def render_archived_intraday(data, symbol, selected, config):
         hovermode="x unified"
     )
     st.plotly_chart(fig, key=f"intraday_straddle_chart_{symbol}", width="stretch", config={'displaylogo': False})
-    st.caption(f"{len(session_data)} intraday snapshots for {chosen_day.strftime('%d %b %Y')} · 1-minute Google Cloud capture sync")
+    st.caption(f"{len(session_data)} intraday snapshots for {chosen_day.strftime('%d %b %Y')} · Black-76 Forward Model · 1-minute Google Cloud capture sync")
 
     with st.expander("Intraday session data table & CSV export"):
         export_df = session_data[['As of', 'Price', 'IV', 'Straddle Price', 'Net Delta', 'Source']].copy()
@@ -307,9 +321,11 @@ def render_archived_intraday(data, symbol, selected, config):
             mime="text/csv"
         )
 
+
 def render_research_tools(data, symbol, selected, result, config):
     from monitor_ui import render_relative_value
     render_relative_value(symbol, selected, config)
+
 
 def render_trade_tools(data, symbol, selected, rate, dividend, spread):
     from trade_review_ui import render_review
@@ -331,7 +347,7 @@ def render_trade_tools(data, symbol, selected, rate, dividend, spread):
         expiry = path.stem.replace(symbol.lower() + '_option_quotes_', '')
         context = option_book(payload, expiry, settings['rate'], for_symbol(settings['dividend'], symbol), min(3.0, settings['max_spread']))
         st.caption('Book captured ' + str(context['stamp']) + ' · ' + freshness(context, datetime.now(IST), payload.get('spot_quote')))
-        st.caption('Current IV/Greeks: Upstox · scenario P&L: lab model · bid/ask liquidity checks remain active')
+        st.caption('Current IV/Greeks: Black-76 / Upstox · scenario P&L: lab model · bid/ask liquidity checks remain active')
         protected = st.toggle('Add protective wings', value=True, key='stress_wings')
         put = call = None
         if protected:

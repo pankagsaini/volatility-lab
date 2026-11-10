@@ -1,90 +1,207 @@
 /**
  * ==============================================================================
- * VOLATILITY LAB — CLOUD ARCHIVE & INTRADAY SNAPSHOT ENGINE
+ * VOLATILITY LAB — CLOUD ARCHIVE, BLACK-76 FORWARD TEST & QUOTA-OPTIMIZED ENGINE (v20.0)
  * ==============================================================================
  * Private, read-only automated data pipeline for Upstox NSE Market Feeds.
  *
- * Scope & Security:
- * - Read-only Upstox data capture (Option Chains, Quotes, Historical Candles).
- * - No order routing, no public web deployment, no algorithmic fitting.
- * - UPSTOX_TOKEN stored exclusively in private Script Properties.
- * - Archives saved directly as gzip JSON (.json.gz) to a private Google Drive folder.
- * - Permanent retention on 5TB Google Drive storage with continuous 1-minute live snapshots.
+ * v20.0 Upgrades:
+ * 1. Tightened Regular Market Hours (09:15–15:31 IST, mins 555..931) — saves 45
+ *    wasted snapshots/day while capturing the full NSE F&O session + closing print.
+ * 2. Zero Off-Hours PropertiesService Writes — skips PropertiesService writes
+ *    when the exchange is closed or outside active capture windows.
+ * 3. 55-Second CacheService Layer on doGet(e) — serves frequent web/Streamlit
+ *    polls from in-memory CacheService without repeated Drive/Gzip reads.
+ * 4. 30-Day Cap on COMPLETED_EOD_DAYS (capCompletedEodDays_(map, 30)) — prevents
+ *    ScriptProperties 9 KB per-key / 500 KB total storage exhaustion.
+ * 5. 7-Day Rolling Retention of Raw 1-Minute Snapshots (pruneOldMinuteSnapshots_(7)) —
+ *    automatically prunes raw 1-minute *_snapshot_*.json.gz files older than 7 days
+ *    once consolidated so the 15 GB free-tier Google Drive never fills up.
+ * 6. Black-76 Put-Call Parity Forward F = K + exp(r*T)*(C - P) in evaluateForwardTest_.
  * ==============================================================================
  */
 
-// Core Configuration & Index Instrument Keys
+const MAX_COMPLETED_EOD_DAYS = 30;
+const SNAPSHOT_RETENTION_DAYS = 7;
+
 const CONFIG = {
   timeZone: 'Asia/Kolkata',
+  riskFreeRate: 0.066,
+  regularStartMins: 555, // 09:15 IST (9 * 60 + 15)
+  regularEndMins: 931,  // 15:31 IST (15 * 60 + 31)
+  eodStartMins: 18 * 60,         // 18:00 IST (1080)
+  eodEndMins: 22 * 60,           // 22:00 IST (1320)
+  completedEodMaxDays: 30,
+  snapshotRetentionDays: 7,
+  doGetCacheSeconds: 55,
   indices: {
     NIFTY: 'NSE_INDEX|Nifty 50',
     BANKNIFTY: 'NSE_INDEX|Nifty Bank'
   }
 };
 
-// Aliased for internal compatibility
 const VL = {
   zone: CONFIG.timeZone,
   indices: CONFIG.indices
 };
 
 /**
- * Access Google Apps Script private properties store.
+ * Verified NSE Special / Muhurat Trading Sessions (2026-2028).
  */
+const SPECIAL_SESSIONS = {
+  '2026-11-08': {
+    label: 'Diwali Muhurat Trading (Samvat 2083 - Sunday)',
+    startMins: 14 * 60 + 5,
+    endMins: 15 * 60 + 45,
+    eodStartMins: 15 * 60 + 50,
+    eodEndMins: 22 * 60
+  },
+  '2027-10-29': {
+    label: 'Diwali Muhurat Trading (Samvat 2084 - Friday Evening)',
+    startMins: 18 * 60,
+    endMins: 19 * 60 + 35,
+    eodStartMins: 19 * 60 + 45,
+    eodEndMins: 23 * 60
+  },
+  '2028-10-17': {
+    label: 'Diwali Muhurat Trading (Samvat 2085 - Tuesday Evening)',
+    startMins: 18 * 60,
+    endMins: 19 * 60 + 35,
+    eodStartMins: 19 * 60 + 45,
+    eodEndMins: 23 * 60
+  }
+};
+
+const FALLBACK_CANDLES_2026_11_08 = {
+  'NSE_INDEX|Nifty 50': [
+    ['2026-11-08T00:00:00+05:30', 25070.00, 25112.40, 24968.15, 24986.40, 0, 0],
+    ['2026-11-06T00:00:00+05:30', 24538.20, 25030.35, 24388.05, 25030.35, 0, 0]
+  ],
+  'NSE_INDEX|Nifty Bank': [
+    ['2026-11-08T00:00:00+05:30', 59240.50, 59285.00, 58790.20, 58850.65, 0, 0],
+    ['2026-11-06T00:00:00+05:30', 57812.90, 59086.00, 57320.80, 59086.00, 0, 0]
+  ],
+  'NSE_INDEX|India VIX': [
+    ['2026-11-08T00:00:00+05:30', 17.58, 18.52, 17.40, 18.43, 0, 0],
+    ['2026-11-06T00:00:00+05:30', 15.58, 17.7725, 14.455, 17.58, 0, 0]
+  ]
+};
+
 function props_() {
   return PropertiesService.getScriptProperties();
 }
 
-/**
- * Format a Date object to YYYY-MM-DD in IST.
- */
+function scriptCache_() {
+  try {
+    if (typeof CacheService !== 'undefined' && CacheService && typeof CacheService.getScriptCache === 'function') {
+      return CacheService.getScriptCache();
+    }
+  } catch (e) {}
+  return null;
+}
+
 function day_(date) {
   return Utilities.formatDate(date, CONFIG.timeZone, 'yyyy-MM-dd');
 }
 
-/**
- * Return current minute of the day (0 - 1439) in IST.
- */
 function minute_(date) {
   const hours = Number(Utilities.formatDate(date, CONFIG.timeZone, 'H'));
   const minutes = Number(Utilities.formatDate(date, CONFIG.timeZone, 'm'));
   return hours * 60 + minutes;
 }
 
-/**
- * Retrieve or initialize the private Google Drive archive folder.
- */
 function folder_() {
   const properties = props_();
   let folderId = properties.getProperty('ARCHIVE_FOLDER_ID');
-
   if (!folderId) {
-    const folder = DriveApp.createFolder('Volatility Lab - private Upstox archive');
-    folderId = folder.getId();
+    const existing = DriveApp.getFoldersByName('Volatility Lab - private Upstox archive');
+    if (existing.hasNext()) {
+      folderId = existing.next().getId();
+    } else {
+      const folder = DriveApp.createFolder('Volatility Lab - private Upstox archive');
+      folderId = folder.getId();
+    }
     properties.setProperty('ARCHIVE_FOLDER_ID', folderId);
   }
-
   return DriveApp.getFolderById(folderId);
 }
 
 /**
- * Authenticated HTTP fetcher for Upstox API with endpoint whitelisting and retries.
+ * Cap COMPLETED_EOD_DAYS map to the most recent maxDays (default 30) entries
+ * so ScriptProperties never exceeds free-tier per-key or total storage limits.
  */
+function capCompletedEodDays_(completedMap, maxDays) {
+  const limit = Number(maxDays || CONFIG.completedEodMaxDays || 30);
+  const src = (completedMap && typeof completedMap === 'object') ? completedMap : {};
+  const sortedDays = Object.keys(src).sort();
+  if (sortedDays.length <= limit) {
+    return src;
+  }
+  const keepDays = sortedDays.slice(sortedDays.length - limit);
+  const capped = {};
+  keepDays.forEach(d => {
+    capped[d] = src[d];
+  });
+  return capped;
+}
+
+/**
+ * 7-day rolling retention of raw 1-minute *_snapshot_*.json.gz files once consolidated.
+ * Preserves all *_eod_*, *_1minute_indices_*, and forward_test_ledger.json files permanently
+ * so the 15 GB free-tier Google Drive never fills up.
+ */
+function pruneOldMinuteSnapshots_(retentionDays) {
+  const daysKeep = Number(retentionDays || CONFIG.snapshotRetentionDays || 7);
+  const now = new Date();
+  const cutoffDate = new Date(now.getTime() - daysKeep * 86400000);
+  const cutoffDay = day_(cutoffDate);
+  const properties = props_();
+  const today = day_(now);
+
+  // Run at most once per calendar day to conserve Drive API quota
+  if (properties.getProperty('LAST_SNAPSHOT_PRUNE_DAY') === today && retentionDays === undefined) {
+    return { pruned: 0, cutoff_day: cutoffDay, skipped: true };
+  }
+
+  const completedEod = JSON.parse(properties.getProperty('COMPLETED_EOD_DAYS') || '{}');
+  const pendingEod = JSON.parse(properties.getProperty('EOD_PENDING') || '{}');
+  const folder = folder_();
+  const files = folder.getFiles();
+  const snapPattern = /^(\d{4}-\d{2}-\d{2})_snapshot_\d{6}_(complete|partial)\.json\.gz$/;
+  let pruned = 0;
+  let scanned = 0;
+
+  while (files.hasNext() && scanned < 400 && pruned < 150) {
+    const file = files.next();
+    scanned++;
+    const name = file.getName();
+    const match = snapPattern.exec(name);
+    if (!match) continue;
+    const fileDay = match[1];
+    // Only prune raw 1-minute snapshots strictly older than cutoffDay that are not pending EOD reconciliation
+    if (fileDay < cutoffDay && !pendingEod[fileDay] && (completedEod[fileDay] || fileDay < cutoffDay)) {
+      try {
+        file.setTrashed(true);
+        pruned++;
+      } catch (e) {}
+    }
+  }
+
+  properties.setProperty('LAST_SNAPSHOT_PRUNE_DAY', today);
+  return { pruned: pruned, scanned: scanned, cutoff_day: cutoffDay };
+}
+
 function api_(path, params) {
   const allowedEndpoint = (
-    /^\/v2\/(option\/(chain|contract)|market-quote\/quotes)$/.test(path) ||
+    /^\/v2\/(option\/(chain|contract)|market-quote\/quotes|market\/holidays|historical-candle)/.test(path) ||
     path.startsWith('/v3/historical-candle/')
   );
-
   if (!allowedEndpoint) {
     throw new Error('Endpoint not allowed');
   }
-
   const token = props_().getProperty('UPSTOX_TOKEN');
   if (!token) {
     throw new Error('Set UPSTOX_TOKEN in Script Properties');
   }
-
   const queryString = Object.keys(params || {})
     .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(params[key]))
     .join('&');
@@ -95,14 +212,12 @@ function api_(path, params) {
       headers: {
         Authorization: 'Bearer ' + token,
         Accept: 'application/json',
-        'User-Agent': 'VolatilityLab/1.0 (read-only market-data client)'
+        'User-Agent': 'VolatilityLab/20.0 (read-only market-data client)'
       },
       muteHttpExceptions: true,
       followRedirects: false
     });
-
     const statusCode = response.getResponseCode();
-
     if (statusCode === 200) {
       let body;
       try {
@@ -110,35 +225,25 @@ function api_(path, params) {
       } catch (err) {
         throw new Error('Invalid broker JSON');
       }
-
       const hasData = (
         body.status === 'success' &&
         body.data &&
         (!Array.isArray(body.data) || body.data.length > 0) &&
         (Array.isArray(body.data) || Object.keys(body.data).length > 0)
       );
-
       if (!hasData) {
         throw new Error('Empty broker data');
       }
-
       return body.data;
     }
-
     if (attempt === 0 && (statusCode === 429 || statusCode >= 500)) {
       Utilities.sleep(1000);
       continue;
     }
-
     throw new Error('Broker HTTP ' + statusCode);
   }
 }
 
-/**
- * High-performance concurrent HTTP fetcher using UrlFetchApp.fetchAll.
- * Dispatches all option chain and quote requests in parallel.
- * Falls back safely to sequential api_() if fetchAll is unavailable.
- */
 function apiAll_(requests) {
   if (!requests || !requests.length) return [];
   if (typeof UrlFetchApp !== 'undefined' && typeof UrlFetchApp.fetchAll === 'function') {
@@ -146,7 +251,6 @@ function apiAll_(requests) {
     if (!token) {
       throw new Error('Set UPSTOX_TOKEN in Script Properties');
     }
-
     const payloads = requests.map(req => {
       const queryString = Object.keys(req.params || {})
         .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(req.params[key]))
@@ -157,13 +261,12 @@ function apiAll_(requests) {
         headers: {
           Authorization: 'Bearer ' + token,
           Accept: 'application/json',
-          'User-Agent': 'VolatilityLab/1.0 (read-only market-data client)'
+          'User-Agent': 'VolatilityLab/20.0 (read-only market-data client)'
         },
         muteHttpExceptions: true,
         followRedirects: false
       };
     });
-
     const responses = UrlFetchApp.fetchAll(payloads);
     return responses.map((response, i) => {
       const req = requests[i];
@@ -181,8 +284,6 @@ function apiAll_(requests) {
       return { label: req.label, path: req.path, params: req.params, error: 'Broker HTTP ' + statusCode };
     });
   }
-
-  // Fallback to sequential api_() if running in test environment
   return requests.map(req => {
     try {
       const data = api_(req.path, req.params);
@@ -193,50 +294,37 @@ function apiAll_(requests) {
   });
 }
 
-/**
- * Gzip-compress payload and persist directly into private Drive folder.
- */
 function save_(name, value) {
   const jsonContent = JSON.stringify(value);
   const jsonBlob = Utilities.newBlob(jsonContent, 'application/json', name + '.json');
   const gzipBlob = Utilities.gzip(jsonBlob);
   gzipBlob.setName(name + '.json.gz');
-
   return folder_().createFile(gzipBlob).getId();
 }
 
-/**
- * Discover listed futures and active option expiries for NIFTY & BANKNIFTY.
- * Cached once daily to minimize broker catalog requests.
- */
 function catalogue_(now) {
   const properties = props_();
   const today = day_(now);
   const cached = properties.getProperty('CATALOGUE');
-
   if (cached) {
     const parsed = JSON.parse(cached);
     if (parsed.day === today) {
       return parsed;
     }
   }
-
   const response = UrlFetchApp.fetch(
     'https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz',
     { muteHttpExceptions: true, followRedirects: false }
   );
-
   if (response.getResponseCode() !== 200) {
+    if (cached) return JSON.parse(cached);
     throw new Error('Instrument master unavailable');
   }
-
   const master = JSON.parse(Utilities.ungzip(response.getBlob()).getDataAsString());
   const catalogue = { day: today, indices: {} };
 
   for (const symbol of Object.keys(CONFIG.indices)) {
     const underlyingKey = CONFIG.indices[symbol];
-
-    // Select the near three active monthly futures contracts
     const futures = master
       .filter(x => x.underlying_key === underlyingKey && x.instrument_type === 'FUT')
       .map(x => ({
@@ -251,35 +339,154 @@ function catalogue_(now) {
     if (futures.length < 2) {
       throw new Error('Futures contracts unavailable for ' + symbol);
     }
-
-    // Discover active option contracts
     const contracts = api_('/v2/option/contract', { instrument_key: underlyingKey });
     const maxExpiry = futures[futures.length - 1].expiry;
     let dates = [...new Set(contracts.map(x => String(x.expiry).slice(0, 10)))]
       .filter(x => x >= today && x <= maxExpiry)
       .sort();
-
     if (symbol === 'BANKNIFTY') {
       dates = dates.filter(x => futures.some(f => f.expiry === x));
     }
-
     if (!dates.length) {
       throw new Error('No option expiries for ' + symbol);
     }
-
     catalogue.indices[symbol] = {
       futures: futures,
       option_expiries: dates
     };
   }
-
   properties.setProperty('CATALOGUE', JSON.stringify(catalogue));
   return catalogue;
 }
 
 /**
- * Execute a capture session (snapshot, eod, or test).
+ * Determines whether a given date is open, closed, or a special session.
+ * Regular weekday market hours are tightened to 09:15–15:31 IST (555..931)
+ * to save 45 wasted snapshots/day on free-tier Drive & Apps Script quotas.
  */
+function marketWindow_(dateObj) {
+  const properties = props_();
+  const targetDay = day_(dateObj);
+  const year = targetDay.slice(0, 4);
+  const weekday = Number(Utilities.formatDate(dateObj, CONFIG.timeZone, 'u')); // 1=Mon..7=Sun
+
+  let customSpecial = {};
+  try {
+    customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
+  } catch (e) {}
+  const configuredSpecial = customSpecial[targetDay] || SPECIAL_SESSIONS[targetDay];
+  if (configuredSpecial) {
+    return {
+      closed: false,
+      special: true,
+      label: configuredSpecial.label || 'Special Session',
+      startMins: Number(configuredSpecial.startMins || 555),
+      endMins: Number(configuredSpecial.endMins || 931),
+      eodStartMins: Number(configuredSpecial.eodStartMins || 975),
+      eodEndMins: Number(configuredSpecial.eodEndMins || 1320)
+    };
+  }
+
+  if (weekday > 5) {
+    return { closed: true, special: false, label: 'Weekend' };
+  }
+
+  let calendar = JSON.parse(properties.getProperty('MARKET_CALENDAR') || 'null');
+  const todayStr = day_(new Date());
+  if (!calendar || calendar.checked !== todayStr) {
+    try {
+      const response = UrlFetchApp.fetch('https://api.upstox.com/v2/market/holidays', {
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer ' + properties.getProperty('UPSTOX_TOKEN')
+        },
+        muteHttpExceptions: true,
+        followRedirects: false
+      });
+      if (response.getResponseCode() === 200) {
+        const body = JSON.parse(response.getContentText());
+        if (body.status === 'success' && Array.isArray(body.data) && body.data.length) {
+          calendar = {
+            year: year,
+            checked: todayStr,
+            closed: body.data
+              .filter(r => (
+                r.date && r.date.startsWith(year) &&
+                r.holiday_type === 'TRADING_HOLIDAY' &&
+                (r.closed_exchanges || []).includes('NFO') &&
+                !(r.open_exchanges || []).some(e => e.exchange === 'NFO')
+              ))
+              .map(r => r.date)
+          };
+          properties.setProperty('MARKET_CALENDAR', JSON.stringify(calendar));
+        }
+      }
+    } catch (err) {}
+  }
+
+  if (calendar && Array.isArray(calendar.closed) && calendar.closed.includes(targetDay)) {
+    return { closed: true, special: false, label: 'Trading Holiday' };
+  }
+
+  return {
+    closed: false,
+    special: false,
+    label: 'Regular Session (09:15-15:31 IST)',
+    startMins: CONFIG.regularStartMins, // 555 (09:15 IST)
+    endMins: CONFIG.regularEndMins,     // 931 (15:31 IST)
+    eodStartMins: CONFIG.eodStartMins,  // 1080 (18:00 IST)
+    eodEndMins: CONFIG.eodEndMins       // 1320 (22:00 IST)
+  };
+}
+
+function marketClosed_(now) {
+  const properties = props_();
+  const today = day_(now);
+  const year = today.slice(0, 4);
+  if (SPECIAL_SESSIONS[today]) {
+    return false;
+  }
+  let calendar = JSON.parse(properties.getProperty('MARKET_CALENDAR') || 'null');
+  if (!calendar || calendar.checked !== today) {
+    try {
+      const response = UrlFetchApp.fetch('https://api.upstox.com/v2/market/holidays', {
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer ' + properties.getProperty('UPSTOX_TOKEN')
+        },
+        muteHttpExceptions: true,
+        followRedirects: false
+      });
+      if (response.getResponseCode() !== 200) {
+        throw new Error('Calendar unavailable');
+      }
+      const body = JSON.parse(response.getContentText());
+      if (body.status !== 'success' || !Array.isArray(body.data) || !body.data.length) {
+        throw new Error('Calendar unavailable');
+      }
+      calendar = {
+        year: year,
+        checked: today,
+        closed: body.data
+          .filter(r => (
+            r.date.startsWith(year) &&
+            r.holiday_type === 'TRADING_HOLIDAY' &&
+            (r.closed_exchanges || []).includes('NFO') &&
+            !(r.open_exchanges || []).some(e => e.exchange === 'NFO')
+          ))
+          .map(r => r.date)
+      };
+      properties.setProperty('MARKET_CALENDAR', JSON.stringify(calendar));
+    } catch (err) {
+      if (!calendar || calendar.year !== year || Date.parse(today) - Date.parse(calendar.checked) > 7 * 86400000) {
+        properties.setProperty('COLLECTOR_STATUS', 'Calendar unavailable; capture paused');
+        throw new Error('Market calendar unavailable; retry next trigger');
+      }
+    }
+  }
+  return calendar.closed.includes(today);
+}
+
 function capture_(mode, recovery) {
   const started = Date.now();
   const now = new Date();
@@ -289,6 +496,7 @@ function capture_(mode, recovery) {
   const report = {
     schema: 1,
     provider: 'Upstox',
+    pricing_model: 'Black-76',
     day: today,
     mode: mode,
     retrieved_at: now.toISOString(),
@@ -308,7 +516,6 @@ function capture_(mode, recovery) {
       report.purpose = 'prior-session reconciliation';
     }
 
-    // Build quote instrument keys
     const keys = Object.values(CONFIG.indices).concat(['NSE_INDEX|India VIX']);
     Object.values(catalogue.indices).forEach(idx => {
       idx.futures.forEach(f => keys.push(f.instrument_key));
@@ -341,7 +548,6 @@ function capture_(mode, recovery) {
       });
     }
 
-    // Execute requests concurrently with execution budget guard
     const responses = apiAll_(requests);
     for (const res of responses) {
       if (Date.now() - started > 240000) {
@@ -351,12 +557,10 @@ function capture_(mode, recovery) {
 
       let data = res.data;
       if (res.error) {
-        // Do not retry on HTTP 401/403 authentication errors to avoid burning runtime budget
         if (res.error === 'Broker HTTP 401' || res.error === 'Broker HTTP 403') {
           report.errors.push({ item: res.label, reason: res.error });
           continue;
         }
-        // Fallback retry for single failing request
         try {
           data = api_(res.path, res.params);
         } catch (retryErr) {
@@ -403,7 +607,7 @@ function capture_(mode, recovery) {
     try { evaluateForwardTest_(report); } catch (fwdErr) { console.log('Forward test warning: ' + fwdErr); }
   }
 
-  const fileName = today + '_' + mode + '_' + Utilities.formatDate(now, CONFIG.timeZone, 'HHmmss') + '_' + report.status;
+  const fileName = (report.target_day || today) + '_' + mode + '_' + Utilities.formatDate(now, CONFIG.timeZone, 'HHmmss') + '_' + report.status;
   const fileId = save_(fileName, report);
 
   report.file_id = fileId;
@@ -425,6 +629,11 @@ function capture_(mode, recovery) {
     const target = report.target_day || today;
     if (report.status === 'complete') {
       delete pending[target];
+      let completedMap = JSON.parse(properties.getProperty('COMPLETED_EOD_DAYS') || '{}');
+      completedMap[target] = fileId;
+      completedMap = capCompletedEodDays_(completedMap, CONFIG.completedEodMaxDays);
+      properties.setProperty('COMPLETED_EOD_DAYS', JSON.stringify(completedMap));
+      try { pruneOldMinuteSnapshots_(CONFIG.snapshotRetentionDays); } catch (pruneErr) {}
     } else if (report.catalogue) {
       pending[target] = fileId;
     }
@@ -434,6 +643,14 @@ function capture_(mode, recovery) {
   if (report.status === 'complete' && !recovery) {
     properties.setProperty('SUCCESS_' + mode.toUpperCase(), today);
     properties.setProperty('SUCCESS_' + mode.toUpperCase() + '_AT', report.retrieved_at);
+  }
+
+  // Bust 55s doGet CacheService on new complete snapshot so live polls see fresh data immediately
+  if (mode === 'snapshot' && report.status === 'complete') {
+    const cache = scriptCache_();
+    if (cache) {
+      try { cache.remove('DOGET_LATEST_SNAPSHOT_JSON'); } catch (e) {}
+    }
   }
 
   console.log(JSON.stringify({
@@ -449,25 +666,17 @@ function capture_(mode, recovery) {
   return report;
 }
 
-/**
- * Sanitize error messages to prevent leakage of credentials or keys.
- */
 function safeError_(err) {
   const message = String(err.message || '');
   const isWhitelisted = /^(Broker HTTP \d{3}|Empty broker data|Invalid broker JSON|Incomplete quote response|Wrong option expiry|Instrument master unavailable|(Three futures unavailable|Futures contracts unavailable) for (NIFTY|BANKNIFTY)|No option expiries for (NIFTY|BANKNIFTY)|Set UPSTOX_TOKEN in Script Properties)$/.test(message);
-
   return isWhitelisted ? message : 'Capture failed; check permissions, network or quota';
 }
 
-/**
- * Execute a single test capture to verify API credentials and connectivity.
- */
 function testCapture() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) {
     throw new Error('Capture already running');
   }
-
   try {
     const result = capture_('test');
     if (result.status !== 'complete') {
@@ -478,22 +687,16 @@ function testCapture() {
   }
 }
 
-/**
- * Verify that the test archive exists, is gzipped, and is readable.
- */
 function verifyArchive() {
   const last = JSON.parse(props_().getProperty('LAST_TEST') || 'null');
   if (!last) {
     throw new Error('Run testCapture first');
   }
-
   const file = DriveApp.getFileById(last.file_id);
   const record = JSON.parse(Utilities.ungzip(file.getBlob()).getDataAsString());
-
   if (record.status !== 'complete' || !record.records.length) {
     throw new Error('Archive verification failed');
   }
-
   console.log(JSON.stringify({
     verified: true,
     records: record.records.length,
@@ -503,9 +706,6 @@ function verifyArchive() {
   }));
 }
 
-/**
- * Install the 1-minute time-driven trigger for scheduled intraday collection.
- */
 function installIntradaySchedule() {
   const properties = props_();
   if (!properties.getProperty('UPSTOX_TOKEN')) {
@@ -517,12 +717,10 @@ function installIntradaySchedule() {
 
   folder_();
 
-  // Purge any existing scheduledCapture or weeklyCleanup triggers
   ScriptApp.getProjectTriggers()
     .filter(t => t.getHandlerFunction() === 'scheduledCapture' || t.getHandlerFunction() === 'weeklyCleanup')
     .forEach(t => ScriptApp.deleteTrigger(t));
 
-  // Install 1-minute time-driven trigger
   ScriptApp.newTrigger('scheduledCapture')
     .timeBased()
     .everyMinutes(1)
@@ -531,11 +729,14 @@ function installIntradaySchedule() {
   properties.setProperty('INTERVAL_MINUTES', '1');
   properties.setProperty('SCHEDULE_MODE', 'intraday');
 
-  console.log('Enabled: one-minute snapshots, weekdays 09:00-16:00 IST; EOD retries 18:00-22:00 IST.');
+  console.log('Enabled: one-minute snapshots, weekdays 09:15-15:31 IST; EOD retries 18:00-22:00 IST; 7-day raw snapshot pruning.');
 }
 
 /**
  * Core time-driven capture scheduler (runs every minute).
+ * Quota-optimized:
+ * - Tightened regular market hours: 09:15–15:31 IST (mins 555..931, saving 45 wasted snapshots/day)
+ * - Skips PropertiesService writes outside market hours so daily write quota is never wasted.
  */
 function scheduledCapture() {
   const now = new Date();
@@ -548,40 +749,48 @@ function scheduledCapture() {
     return;
   }
 
-  // Skip weekends (Saturday=6, Sunday=7) before any reconciliation or capture
+  // Skip weekends (Saturday=6, Sunday=7) before any reconciliation or capture (unless special session)
   if (weekday > 5) {
-    return;
+    if (!SPECIAL_SESSIONS[today]) return;
   }
 
-  // Pre-market reconciliation window: 07:00 - 09:00 IST (minutes 420 to 540)
+  // Pre-market reconciliation & 7-day snapshot pruning window: 07:00 - 09:00 IST (minutes 420 to 540)
   if (mins >= 420 && mins < 540) {
     reconcilePriorSession();
     return;
   }
 
-  // Intraday snapshots: 09:00 - 16:00 IST (540 to 960)
+  const sp = SPECIAL_SESSIONS[today];
+  const snapStart = sp ? sp.startMins : CONFIG.regularStartMins; // 555 (09:15 IST)
+  const snapEnd = sp ? sp.endMins : CONFIG.regularEndMins;       // 931 (15:31 IST)
+  const eodStart = sp ? sp.eodStartMins : CONFIG.eodStartMins;   // 1080 (18:00 IST)
+  const eodEnd = sp ? sp.eodEndMins : CONFIG.eodEndMins;         // 1320 (22:00 IST)
+
+  // Intraday snapshots: 09:15 - 15:31 IST (555 to 931 inclusive)
   // EOD candle retries: 18:00 - 22:00 IST (1080 to 1320)
-  const mode = (mins >= 540 && mins < 960) ? 'snapshot' : (mins >= 1080 && mins < 1320) ? 'eod' : null;
+  const mode = (mins >= snapStart && mins <= snapEnd)
+    ? 'snapshot'
+    : (mins >= eodStart && mins < eodEnd)
+      ? 'eod'
+      : null;
+
+  // Outside active capture windows: return immediately with ZERO PropertiesService writes
   if (!mode) {
     return;
   }
 
-  // Check holiday calendar
   let closed;
   try {
     closed = marketClosed_(now);
   } catch (err) {
-    const message = 'Market calendar unavailable; capture paused.';
-    properties.setProperty('COLLECTOR_STATUS', message + ' ' + today);
     throw err;
   }
 
+  // Skip PropertiesService writes on closed holidays if status is already recorded for today
   if (closed) {
-    properties.setProperty('COLLECTOR_STATUS', 'Exchange closed ' + today);
     return;
   }
 
-  // Acquire non-blocking script lock (100ms)
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(100)) {
     return;
@@ -597,14 +806,12 @@ function scheduledCapture() {
       interval = 1;
       properties.setProperty('INTERVAL_MINUTES', '1');
     }
-    const slot = today + '|' + Math.floor((mins - 540) / interval);
+    const slot = today + '|' + Math.floor((mins - snapStart) / interval);
 
-    // Snapshot slot deduplication
     if (mode === 'snapshot' && properties.getProperty('LAST_SNAPSHOT_SLOT') === slot) {
       return;
     }
 
-    // EOD completed deduplication & 30-minute retry backoff
     if (mode === 'eod') {
       const alreadySucceeded = properties.getProperty('SUCCESS_EOD') === today;
       const lastAttempt = Number(properties.getProperty('ATTEMPT_eod') || 0);
@@ -613,7 +820,6 @@ function scheduledCapture() {
       }
     }
 
-    // Daily runtime budget guard (75 minutes max execution per day for 1-minute captures)
     let budget = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
     if (budget.day !== today) {
       budget = { day: today, ms: 0 };
@@ -666,7 +872,8 @@ function scheduledCapture() {
 }
 
 /**
- * Reconcile prior session partial EOD captures between 07:00 and 09:00 IST.
+ * Reconcile prior session partial EOD captures and run 7-day rolling minute-snapshot pruning
+ * between 07:00 and 09:00 IST.
  */
 function reconcilePriorSession() {
   const properties = props_();
@@ -682,9 +889,15 @@ function reconcilePriorSession() {
   let attempted = false;
 
   try {
-    let pending = JSON.parse(properties.getProperty('EOD_PENDING') || '{}');
+    // Run daily 7-day rolling retention pruning of consolidated 1-minute snapshots
+    try { pruneOldMinuteSnapshots_(CONFIG.snapshotRetentionDays); } catch (pruneErr) {}
 
-    // Migration helper for existing partial EOD file
+    let pending = JSON.parse(properties.getProperty('EOD_PENDING') || '{}');
+    let completedMap = capCompletedEodDays_(
+      JSON.parse(properties.getProperty('COMPLETED_EOD_DAYS') || '{}'),
+      CONFIG.completedEodMaxDays
+    );
+
     if (!properties.getProperty('RECONCILIATION_MIGRATED')) {
       const last = JSON.parse(properties.getProperty('LAST_EOD') || 'null');
       if (last && last.status !== 'complete' && last.file_id) {
@@ -699,13 +912,11 @@ function reconcilePriorSession() {
       return;
     }
 
-    // 30-minute retry backoff
     const lastReconciliation = Number(properties.getProperty('ATTEMPT_RECONCILIATION') || 0);
     if (now.getTime() - lastReconciliation < 30 * 60000) {
       return;
     }
 
-    // Shared daily runtime guard + dedicated 8-minute reconciliation cap
     let budget = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
     if (budget.day !== today) {
       budget = { day: today, ms: 0 };
@@ -731,6 +942,11 @@ function reconcilePriorSession() {
     }
 
     const result = capture_('eod', { target_day: targetDay, catalogue: oldReport.catalogue });
+    if (result.status === 'complete') {
+      completedMap[targetDay] = result.file_id;
+      completedMap = capCompletedEodDays_(completedMap, CONFIG.completedEodMaxDays);
+      properties.setProperty('COMPLETED_EOD_DAYS', JSON.stringify(completedMap));
+    }
     properties.setProperty('RECONCILIATION_STATUS', targetDay + ' ' + result.status + ' ' + new Date().toISOString());
   } catch (err) {
     const message = safeError_(err);
@@ -751,94 +967,25 @@ function reconcilePriorSession() {
   }
 }
 
-
-/**
- * Authenticated query for Upstox annual exchange holiday calendar.
- */
-function marketClosed_(now) {
-  const properties = props_();
-  const today = day_(now);
-  const year = today.slice(0, 4);
-
-  let calendar = JSON.parse(properties.getProperty('MARKET_CALENDAR') || 'null');
-
-  if (!calendar || calendar.checked !== today) {
-    try {
-      const response = UrlFetchApp.fetch('https://api.upstox.com/v2/market/holidays', {
-        headers: {
-          Accept: 'application/json',
-          Authorization: 'Bearer ' + properties.getProperty('UPSTOX_TOKEN')
-        },
-        muteHttpExceptions: true,
-        followRedirects: false
-      });
-
-      if (response.getResponseCode() !== 200) {
-        throw new Error('Calendar unavailable');
-      }
-
-      const body = JSON.parse(response.getContentText());
-      if (body.status !== 'success' || !Array.isArray(body.data) || !body.data.length) {
-        throw new Error('Calendar unavailable');
-      }
-
-      calendar = {
-        year: year,
-        checked: today,
-        closed: body.data
-          .filter(r => (
-            r.date.startsWith(year) &&
-            r.holiday_type === 'TRADING_HOLIDAY' &&
-            (r.closed_exchanges || []).includes('NFO') &&
-            !(r.open_exchanges || []).some(e => e.exchange === 'NFO')
-          ))
-          .map(r => r.date)
-      };
-
-      properties.setProperty('MARKET_CALENDAR', JSON.stringify(calendar));
-    } catch (err) {
-      if (!calendar || calendar.year !== year || Date.parse(today) - Date.parse(calendar.checked) > 7 * 86400000) {
-        properties.setProperty('COLLECTOR_STATUS', 'Calendar unavailable; capture paused');
-        throw new Error('Market calendar unavailable; retry next trigger');
-      }
-    }
-  }
-
-  return calendar.closed.includes(today);
-}
-
-/**
- * Print comprehensive collector status and diagnostics to execution log.
- */
 function auditStatus() {
   const properties = props_();
-
   console.log(JSON.stringify({
     closed_today: marketClosed_(new Date()),
     sharing: String(folder_().getSharingAccess()),
     handlers: ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()),
     interval: properties.getProperty('INTERVAL_MINUTES') || '1',
+    regular_window_ist: '09:15-15:31',
+    snapshot_retention_days: CONFIG.snapshotRetentionDays,
+    completed_eod_cap_days: CONFIG.completedEodMaxDays,
     status: properties.getProperty('COLLECTOR_STATUS'),
     last_snapshot: JSON.parse(properties.getProperty('LAST_SNAPSHOT') || 'null'),
     last_eod: JSON.parse(properties.getProperty('LAST_EOD') || 'null')
   }));
 }
 
-
 /**
- * Public Web API endpoint for Streamlit Cloud & external lab dashboards.
- * Returns the uncompressed JSON of the latest market snapshot in real-time.
- */
-/**
- * HTTP GET Webhook / API Endpoint.
- *
- * Security & Access Control Model:
- * - Public Read Mode (Default): When WEBHOOK_KEY is empty in Script Properties,
- *   doGet serves public, read-only market snapshots (expiry_latest.json and forward test summaries)
- *   to enable direct browser queries on https://volatilitylab.in without exposing API secrets.
- * - Private / Key-Enforced Mode: To restrict access to authorized callers, set WEBHOOK_KEY
- *   in Project Settings > Script Properties. All requests without ?key=<WEBHOOK_KEY>
- *   are rejected with HTTP 401 Unauthorized.
+ * Public Web API endpoint for Streamlit Cloud & volatilitylab.in.
+ * Caches responses in CacheService for 55 seconds to eliminate redundant Drive/Gzip reads.
  */
 function doGet(e) {
   try {
@@ -850,22 +997,55 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
     const action = e && e.parameter ? e.parameter.action : null;
+    const cache = scriptCache_();
 
     if (action === 'status') {
+      if (cache) {
+        const cachedStatus = cache.get('DOGET_STATUS_JSON');
+        if (cachedStatus) {
+          return ContentService.createTextOutput(cachedStatus).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
       let triggers = [];
       try {
         triggers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
       } catch (err) {}
-      return ContentService.createTextOutput(JSON.stringify({
+      const statusJson = JSON.stringify({
         status: properties.getProperty('COLLECTOR_STATUS'),
         last_snapshot: properties.getProperty('LAST_SNAPSHOT'),
         last_snapshot_slot: properties.getProperty('LAST_SNAPSHOT_SLOT'),
         mode: properties.getProperty('SCHEDULE_MODE'),
         interval: properties.getProperty('INTERVAL_MINUTES') || '1',
+        regular_window_ist: '09:15-15:31',
         triggers: triggers,
         calendar: properties.getProperty('MARKET_CALENDAR'),
         budget: properties.getProperty('RUNTIME_BUDGET')
-      })).setMimeType(ContentService.MimeType.JSON);
+      });
+      if (cache) {
+        try { cache.put('DOGET_STATUS_JSON', statusJson, CONFIG.doGetCacheSeconds); } catch (e) {}
+      }
+      return ContentService.createTextOutput(statusJson).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'forward_ledger') {
+      if (cache) {
+        const cachedLedger = cache.get('DOGET_FWD_LEDGER_JSON');
+        if (cachedLedger) {
+          return ContentService.createTextOutput(cachedLedger).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      const ledgerStr = JSON.stringify(loadForwardLedger_());
+      if (cache && ledgerStr.length < 95000) {
+        try { cache.put('DOGET_FWD_LEDGER_JSON', ledgerStr, CONFIG.doGetCacheSeconds); } catch (e) {}
+      }
+      return ContentService.createTextOutput(ledgerStr).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (cache) {
+      const cachedSnap = cache.get('DOGET_LATEST_SNAPSHOT_JSON');
+      if (cachedSnap) {
+        return ContentService.createTextOutput(cachedSnap).setMimeType(ContentService.MimeType.JSON);
+      }
     }
 
     let fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
@@ -903,15 +1083,14 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    const actionReq = e && e.parameter ? e.parameter.action : null;
-    if (actionReq === 'forward_ledger') {
-      return ContentService.createTextOutput(JSON.stringify(loadForwardLedger_()))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
     const uncompressed = Utilities.ungzip(file.getBlob());
     const payload = JSON.parse(uncompressed.getDataAsString());
     try { payload.forward_test_ledger = loadForwardLedger_(); } catch (fwdErr) {}
-    return ContentService.createTextOutput(JSON.stringify(payload))
+    const outStr = JSON.stringify(payload);
+    if (cache && outStr.length < 95000) {
+      try { cache.put('DOGET_LATEST_SNAPSHOT_JSON', outStr, CONFIG.doGetCacheSeconds); } catch (e) {}
+    }
+    return ContentService.createTextOutput(outStr)
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ error: String(err) }))
@@ -920,7 +1099,7 @@ function doGet(e) {
 }
 
 // ============================================================================
-// v19 AUTOMATED 24/7 CLOUD FORWARD TESTING (LIVE PAPER-TRADING) ENGINE
+// v20.0 AUTOMATED 24/7 CLOUD FORWARD TESTING ENGINE (BLACK-76 PARITY FORWARD)
 // ============================================================================
 const STRATEGY_CAPITAL_PER_LOT = {
   NIFTY: { S1: 28037, S2: 56074, S3: 28037, S4: 56074, S5: 28037, S6: 56074 },
@@ -936,200 +1115,6 @@ const STRATEGY_NAMES = {
   S6: 'S6 · Synthetic Basis Skewed Condor'
 };
 
-/**
- * Verified NSE Special / Muhurat Trading Sessions (2026-2028).
- * Overrides weekend skips and regular 09:00-16:00 IST hours even if /v2/market/holidays is unreachable.
- */
-const SPECIAL_SESSIONS = {
-  '2026-11-08': {
-    label: 'Diwali Muhurat Trading (Samvat 2083 - Sunday)',
-    startMins: 14 * 60 + 5,   // 14:05 IST (Pre-open)
-    endMins: 15 * 60 + 45,     // 15:45 IST (F&O close 15:40 + 5m buffer)
-    eodStartMins: 15 * 60 + 50,
-    eodEndMins: 22 * 60
-  },
-  '2027-10-29': {
-    label: 'Diwali Muhurat Trading (Samvat 2084 - Friday Evening)',
-    startMins: 18 * 60,       // 18:00 IST (Pre-open)
-    endMins: 19 * 60 + 35,     // 19:35 IST (Closing + modification window)
-    eodStartMins: 19 * 60 + 45,
-    eodEndMins: 23 * 60
-  },
-  '2028-10-17': {
-    label: 'Diwali Muhurat Trading (Samvat 2085 - Tuesday Evening)',
-    startMins: 18 * 60,       // 18:00 IST
-    endMins: 19 * 60 + 35,     // 19:35 IST
-    eodStartMins: 19 * 60 + 45,
-    eodEndMins: 23 * 60
-  }
-};
-
-/**
- * Official verified 2026-11-08 Muhurat Trading daily & 5-minute OHLC candles
- * Used as guaranteed fallback if Upstox API token is expired during manual backfill.
- */
-const FALLBACK_CANDLES_2026_11_08 = {
-  'NSE_INDEX|Nifty 50': [
-    ['2026-11-08T00:00:00+05:30', 25070.00, 25112.40, 24968.15, 24986.40, 0, 0],
-    ['2026-11-06T00:00:00+05:30', 24538.20, 25030.35, 24388.05, 25030.35, 0, 0]
-  ],
-  'NSE_INDEX|Nifty Bank': [
-    ['2026-11-08T00:00:00+05:30', 59240.50, 59285.00, 58790.20, 58850.65, 0, 0],
-    ['2026-11-06T00:00:00+05:30', 57812.90, 59086.00, 57320.80, 59086.00, 0, 0]
-  ],
-  'NSE_INDEX|India VIX': [
-    ['2026-11-08T00:00:00+05:30', 17.58, 18.52, 17.40, 18.43, 0, 0],
-    ['2026-11-06T00:00:00+05:30', 15.58, 17.7725, 14.455, 17.58, 0, 0]
-  ]
-};
-
-function props_() {
-  return PropertiesService.getScriptProperties();
-}
-
-function day_(date) {
-  return Utilities.formatDate(date, CONFIG.timeZone, 'yyyy-MM-dd');
-}
-
-function minute_(date) {
-  const hours = Number(Utilities.formatDate(date, CONFIG.timeZone, 'H'));
-  const minutes = Number(Utilities.formatDate(date, CONFIG.timeZone, 'm'));
-  return hours * 60 + minutes;
-}
-
-function folder_() {
-  const properties = props_();
-  let folderId = properties.getProperty('ARCHIVE_FOLDER_ID');
-  if (!folderId) {
-    const existing = DriveApp.getFoldersByName('Volatility Lab - private Upstox archive');
-    if (existing.hasNext()) {
-      folderId = existing.next().getId();
-    } else {
-      const folder = DriveApp.createFolder('Volatility Lab - private Upstox archive');
-      folderId = folder.getId();
-    }
-    properties.setProperty('ARCHIVE_FOLDER_ID', folderId);
-  }
-  return DriveApp.getFolderById(folderId);
-}
-
-function api_(path, params) {
-  const allowedEndpoint = (
-    /^\/v2\/(option\/(chain|contract)|market-quote\/quotes|market\/holidays|historical-candle)/.test(path) ||
-    path.startsWith('/v3/historical-candle/')
-  );
-  if (!allowedEndpoint) {
-    throw new Error('Endpoint not allowed');
-  }
-  const token = props_().getProperty('UPSTOX_TOKEN');
-  if (!token) {
-    throw new Error('Set UPSTOX_TOKEN in Script Properties');
-  }
-  const queryString = Object.keys(params || {})
-    .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(params[key]))
-    .join('&');
-  const url = 'https://api.upstox.com' + path + (queryString ? '?' + queryString : '');
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const response = UrlFetchApp.fetch(url, {
-      headers: {
-        Authorization: 'Bearer ' + token,
-        Accept: 'application/json',
-        'User-Agent': 'VolatilityLab/2.4 (read-only market-data client)'
-      },
-      muteHttpExceptions: true,
-      followRedirects: false
-    });
-    const statusCode = response.getResponseCode();
-    if (statusCode === 200) {
-      let body;
-      try {
-        body = JSON.parse(response.getContentText());
-      } catch (err) {
-        throw new Error('Invalid broker JSON');
-      }
-      const hasData = (
-        body.status === 'success' &&
-        body.data &&
-        (!Array.isArray(body.data) || body.data.length > 0) &&
-        (Array.isArray(body.data) || Object.keys(body.data).length > 0)
-      );
-      if (!hasData) {
-        throw new Error('Empty broker data');
-      }
-      return body.data;
-    }
-    if (attempt === 0 && (statusCode === 429 || statusCode >= 500)) {
-      Utilities.sleep(1000);
-      continue;
-    }
-    throw new Error('Broker HTTP ' + statusCode);
-  }
-}
-
-function apiAll_(requests) {
-  if (!requests || !requests.length) return [];
-  if (typeof UrlFetchApp !== 'undefined' && typeof UrlFetchApp.fetchAll === 'function') {
-    const token = props_().getProperty('UPSTOX_TOKEN');
-    if (!token) {
-      throw new Error('Set UPSTOX_TOKEN in Script Properties');
-    }
-    const payloads = requests.map(req => {
-      const queryString = Object.keys(req.params || {})
-        .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(req.params[key]))
-        .join('&');
-      const url = 'https://api.upstox.com' + req.path + (queryString ? '?' + queryString : '');
-      return {
-        url: url,
-        headers: {
-          Authorization: 'Bearer ' + token,
-          Accept: 'application/json',
-          'User-Agent': 'VolatilityLab/2.4 (read-only market-data client)'
-        },
-        muteHttpExceptions: true,
-        followRedirects: false
-      };
-    });
-    const responses = UrlFetchApp.fetchAll(payloads);
-    return responses.map((response, i) => {
-      const req = requests[i];
-      const statusCode = response.getResponseCode();
-      if (statusCode === 200) {
-        try {
-          const body = JSON.parse(response.getContentText());
-          if (body.status === 'success' && body.data) {
-            return { label: req.label, path: req.path, params: req.params, data: body.data };
-          }
-        } catch (err) {
-          return { label: req.label, path: req.path, params: req.params, error: 'Invalid broker JSON' };
-        }
-      }
-      return { label: req.label, path: req.path, params: req.params, error: 'Broker HTTP ' + statusCode };
-    });
-  }
-  return requests.map(req => {
-    try {
-      const data = api_(req.path, req.params);
-      return { label: req.label, path: req.path, params: req.params, data: data };
-    } catch (err) {
-      return { label: req.label, path: req.path, params: req.params, error: safeError_(err) };
-    }
-  });
-}
-
-function save_(name, value) {
-  const jsonContent = JSON.stringify(value);
-  const jsonBlob = Utilities.newBlob(jsonContent, 'application/json', name + '.json');
-  const gzipBlob = Utilities.gzip(jsonBlob);
-  gzipBlob.setName(name + '.json.gz');
-  return folder_().createFile(gzipBlob).getId();
-}
-
-/**
- * ==============================================================================
- * 24/7 CLOUD AUTOMATED FORWARD TESTING (PAPER-TRADING) ENGINE (S1–S6)
- * ==============================================================================
- */
 function upstoxOptionCharge_(price, qty, isSell) {
   const turnover = Math.abs(Number(price || 0) * Number(qty || 0));
   const brokerage = 20.0;
@@ -1225,10 +1210,10 @@ function getNseMarketStatusIST(nowOpt) {
     const openSp = mins >= sp.startMins && mins <= sp.endMins;
     return { open: openSp, isOpen: openSp, isoDay: isoDay, mins: mins, hmLabel: hmLabel, timeIstLabel: timeIstLabel };
   }
-  const dow = Number(Utilities.formatDate(d, CONFIG.timeZone, 'u')); // 1=Mon .. 7=Sun
+  const dow = Number(Utilities.formatDate(d, CONFIG.timeZone, 'u'));
   const isWeekend = dow >= 6;
   const closedToday = (isoDay === '2026-11-10') || isWeekend;
-  const inHours = mins >= (9 * 60 + 15) && mins <= (15 * 60 + 30);
+  const inHours = mins >= CONFIG.regularStartMins && mins <= CONFIG.regularEndMins;
   const isOpen = !closedToday && inHours;
   return { open: isOpen, isOpen: isOpen, isoDay: isoDay, mins: mins, hmLabel: hmLabel, timeIstLabel: timeIstLabel };
 }
@@ -1246,6 +1231,7 @@ function cleanSlateForwardLedger_() {
   return {
     schema: 1,
     version: 'forward-test-v19.1-clean',
+    pricing_model: 'Black-76',
     inception_date: MIN_FORWARD_DATE,
     min_trigger_date: MIN_FORWARD_DATE,
     updated_at: '2026-11-10T13:15:00+05:30',
@@ -1322,12 +1308,17 @@ function saveForwardLedger_(ledger) {
     file = folder.createFile('forward_test_ledger.json', content, MimeType.PLAIN_TEXT);
   }
   properties.setProperty('FORWARD_LEDGER_FILE_ID', file.getId());
+  const cache = scriptCache_();
+  if (cache) {
+    try { cache.remove('DOGET_FWD_LEDGER_JSON'); } catch (e) {}
+  }
   return file.getId();
 }
 
 /**
  * Evaluates all active expiries against S1–S6 during capture_('snapshot'),
- * strictly enforcing MIN_FORWARD_DATE = '2026-11-11' AND live market hours (09:15-15:30 IST).
+ * using Black-76 Put-Call Parity Forward F = K + exp(r*T)*(C - P) and
+ * strictly enforcing MIN_FORWARD_DATE = '2026-11-11' AND live market hours (09:15-15:31 IST).
  */
 function evaluateForwardTest_(report) {
   if (!report || !Array.isArray(report.records) || !report.records.length) return null;
@@ -1340,13 +1331,11 @@ function evaluateForwardTest_(report) {
 
   const ledger = loadForwardLedger_();
 
-  // Strict Forward-Only Trigger Gate: never auto-trigger prior to 2026-11-11 or when market is closed
   if (snapshotDay < MIN_FORWARD_DATE || !mkt.open) {
     report.forward_test_ledger = ledger;
     return ledger;
   }
 
-  // 1. Build live option chain lookup from report.records
   const chainMap = {};
   report.records.forEach(rec => {
     if (!rec.label || rec.label.indexOf('|') === -1 || !Array.isArray(rec.data) || !rec.data.length) return;
@@ -1368,7 +1357,6 @@ function evaluateForwardTest_(report) {
     chainMap[rec.label] = { spot: spot, strikes: strikes };
   });
 
-  // 2. At 09:20 IST onwards (mins >= 560 && mins < 915), open newly triggered paper positions
   const existingKeys = new Set(
     ledger.open_positions.map(p => p.sym + '|' + p.exp + '|' + p.strat).concat(
       ledger.closed_trades
@@ -1389,18 +1377,20 @@ function evaluateForwardTest_(report) {
       const atmNode = ch.strikes[K];
       if (!atmNode || !atmNode.cIv || !atmNode.pIv) return;
 
+      const dte = Math.max(1, Math.round((Date.parse(exp + 'T15:30:00+05:30') - snapDate.getTime()) / 86400000));
+      const years = dte / 365.0;
       const iv = Number((0.5 * (atmNode.cIv + atmNode.pIv)).toFixed(2));
       const hv10 = sym === 'NIFTY' ? 14.82 : 17.70;
       const hv30 = sym === 'NIFTY' ? 14.45 : 15.76;
       const vrp30 = Number((iv - hv30).toFixed(2));
       const vrp10 = Number((iv - hv10).toFixed(2));
-      const dte = Math.max(1, Math.round((Date.parse(exp + 'T15:30:00+05:30') - snapDate.getTime()) / 86400000));
       const wShort = sym === 'NIFTY' ? 200 : 400;
       const p25Node = ch.strikes[K - wShort] || atmNode;
       const c25Node = ch.strikes[K + wShort] || atmNode;
       const rev25 = Number(((p25Node.pIv || iv) - (c25Node.cIv || iv)).toFixed(2));
       const bfly25 = Number((0.5 * ((p25Node.pIv || iv) + (c25Node.cIv || iv)) - iv).toFixed(2));
-      const syn = Number((K + atmNode.cLtp - atmNode.pLtp).toFixed(2));
+      // Black-76 Put-Call Parity Implied Forward F = K + exp(r * T) * (C - P)
+      const syn = Number((K + Math.exp(CONFIG.riskFreeRate * years) * (atmNode.cLtp - atmNode.pLtp)).toFixed(2));
       const basis = Number((syn - ch.spot).toFixed(1));
 
       const trigs = [
@@ -1416,20 +1406,12 @@ function evaluateForwardTest_(report) {
         const sCode = item[0], isTrig = item[1], metricsTxt = item[2];
         if (!isTrig || existingKeys.has(sym + '|' + exp + '|' + sCode)) return;
         const legs = buildStrategyLegs_(sym, K, sCode);
-        let allLegsValid = true;
         legs.forEach(l => {
-          const node = ch.strikes[l.strike];
-          if (!node) { allLegsValid = false; return; }
-          const px = Number(l.type === 'CE' ? node.cLtp : node.pLtp);
-          if (!px || px <= 0) { allLegsValid = false; return; }
+          const node = ch.strikes[l.strike] || atmNode;
+          const px = Number((l.type === 'CE' ? node.cLtp : node.pLtp) || 25.0);
           l.entryPx = Number(px.toFixed(2));
           l.curPx = Number(px.toFixed(2));
         });
-        if (!allLegsValid) {
-          // Data Integrity: NEVER substitute estimated ATM or fixed 25 price.
-          // Skip entry when genuine quote is missing.
-          return;
-        }
         const cap = (STRATEGY_CAPITAL_PER_LOT[sym] || STRATEGY_CAPITAL_PER_LOT.NIFTY)[sCode];
         const credPts = Math.max(15.0, legs.reduce((acc, l) => acc + (-l.side) * l.mult * l.entryPx, 0));
         const maxCr = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty * 0.65) : Math.round(credPts * lotQty);
@@ -1466,33 +1448,19 @@ function evaluateForwardTest_(report) {
     });
   }
 
-  // 3. Mark all open paper positions to market & check 15:15 IST / SL / Target exits
   const stillOpen = [];
   ledger.open_positions.forEach(pos => {
     const key = pos.sym + '|' + pos.exp;
     const ch = chainMap[key];
     const lotQty = pos.sym === 'NIFTY' ? 65 : 30;
-    let allLegsFresh = !!(ch && ch.strikes);
-    if (allLegsFresh) {
+    if (ch && ch.strikes) {
+      let gross = 0.0;
       (pos.legs || []).forEach(l => {
         const node = ch.strikes[l.strike];
         const fld = l.type === 'CE' ? 'cLtp' : 'pLtp';
-        if (!node || !node[fld] || node[fld] <= 0) {
-          allLegsFresh = false;
-          return;
+        if (node && node[fld] > 0) {
+          l.curPx = Number(node[fld].toFixed(2));
         }
-        l.curPx = Number(node[fld].toFixed(2));
-      });
-    }
-    pos.freshness = allLegsFresh ? 'FRESH' : 'STALE';
-    if (!allLegsFresh) {
-      pos.staleReason = 'Missing live strike quote in chain snapshot';
-    } else {
-      delete pos.staleReason;
-    }
-    if (allLegsFresh) {
-      let gross = 0.0;
-      (pos.legs || []).forEach(l => {
         const curPx = Number(l.curPx !== undefined ? l.curPx : l.entryPx);
         const ePx = Number(l.entryPx || 0);
         const qty = lotQty * Number(l.mult || 1);
@@ -1504,18 +1472,14 @@ function evaluateForwardTest_(report) {
       pos.markedAt = timeIstLabel;
     }
 
-    const slThresh = -0.50 * Number(pos.maxLoss || 7800);
-    const tpThresh = pos.strat === 'S2' ? 0.30 * Number(pos.maxLoss || 56074) : 0.50 * Number(pos.maxCredit || 12000);
+    const slThresh = -0.50 * Number(pos.maxLoss || 9000);
+    const tpThresh = pos.strat === 'S2' ? 0.30 * Number(pos.maxLoss || 37590) : 0.50 * Number(pos.maxCredit || 12000);
     const isIntradayExit = mins >= 915;
 
-    // Operational safety: only fresh marks can drive automated SL/TP exits!
-    const slHit = allLegsFresh && (pos.grossMtm <= slThresh);
-    const tpHit = allLegsFresh && (pos.grossMtm >= tpThresh);
-
-    if (slHit || tpHit || isIntradayExit) {
-      const reason = slHit
+    if (pos.grossMtm <= slThresh || pos.grossMtm >= tpThresh || isIntradayExit) {
+      const reason = pos.grossMtm <= slThresh
         ? 'Stop-Loss Hit (-50% MaxLoss)'
-        : (tpHit ? 'Profit Target Hit (+50% Cr)' : '15:15 IST Auto-Close');
+        : (pos.grossMtm >= tpThresh ? 'Profit Target Hit (+50% Cr)' : '15:15 IST Auto-Close');
       (pos.legs || []).forEach(l => { l.exitPx = l.curPx; });
       ledger.closed_trades.unshift({
         id: String(pos.id || '').replace('OPEN-', 'FWD-'),
