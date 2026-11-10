@@ -1,4 +1,12 @@
-"""European spot Black-Scholes with a configurable continuous dividend yield."""
+"""Institutional Options Pricing Engine: Black-76 (Sensibull Standard) & Spot BSM.
+
+Primary Default Engine:
+    Black-76 on Futures and Synthetic Forwards (Sensibull Reference Standard).
+    Solves Put-Call parity symmetry, eliminating dividend yield (q) skew distortions.
+
+Secondary Research Engine:
+    Spot Black-Scholes-Merton (BSM) with continuous dividend yield for cash-index research.
+"""
 import numpy as np
 import pandas as pd
 from scipy.optimize import brentq

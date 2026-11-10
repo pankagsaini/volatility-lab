@@ -1,8 +1,10 @@
-"""ATM put-call parity diagnostic using broker-supplied last prices.
+"""Forward Price & ATM Parity Resolution Engine (Sensibull Standard Black-76).
 
-This is intentionally an unadjusted market check requested by the user:
-strike + call LTP - put LTP.  It is not an executable forward or a fair-value
-model because option-chain LTPs have no per-contract exchange timestamp.
+Provides institutional forward price determination and parity diagnostics:
+1. determine_forward(): Institutional Black-76 forward resolution prioritizing traded
+   futures quotes, then discounted synthetic forward F = K_atm + (C_atm - P_atm)*exp(r*T)
+   using bid/ask midpoints with quality spread caps, and safe spot fallback.
+2. calculate(): Diagnostic unadjusted market check (strike + call LTP - put LTP).
 """
 import math
 
