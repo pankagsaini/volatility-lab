@@ -10,41 +10,51 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.ruff_cache/
+*.egg-info/
+*.egg
+build/
+dist/
 
 # Windows Batch & Untracked Shell Scripts
 *.cmd
 *.ps1
 
 # Embedded Python Runtime & MinGit Binary Tools
-Volatility Lab/.runtime/
-Volatility Lab/.dependencies/
+volatility_lab/.runtime/
+volatility_lab/.dependencies/
 
-# Encrypted Auth Credentials & Token Storage
-Volatility Lab/.auth/
+# Encrypted Auth Credentials, Secrets & Token Storage
+volatility_lab/.auth/
 .streamlit/secrets.toml
-Volatility Lab/.streamlit/secrets.toml
+volatility_lab/.streamlit/secrets.toml
 *.bin
 *.lock
 *.tmp
 .clasprc.json
+.env
+.env.*
+!.env.example
 
 # System Diagnostic Logs
-Volatility Lab/logs/
+volatility_lab/logs/
 *.log
 
 # Large Market Data Files & Binary Databases
 *.sqlite*
-Volatility Lab/*.sqlite*
-Volatility Lab/data/backtest_1minute/*.json.gz
-Volatility Lab/data/backtest_1minute/*.sqlite*
-Volatility Lab/data/backtest_futures/*.json.gz
-Volatility Lab/data/google_archive/*.json.gz
-Volatility Lab/data/quote_archive/
-Volatility Lab/data/quote_quality/
-Volatility Lab/data/underlying_history/
-Volatility Lab/data/dividend_sources/*.pdf
-Volatility Lab/data/*.sqlite*
-Volatility Lab/data/**/*.sqlite*
+**/*.sqlite*
+volatility_lab/data/backtest_1minute/*.json.gz
+volatility_lab/data/backtest_1minute/*.sqlite*
+volatility_lab/data/backtest_futures/*.json.gz
+volatility_lab/data/google_archive/*.json.gz
+data/google_archive/*.json.gz
+data/google_archive/
+volatility_lab/data/quote_archive/
+volatility_lab/data/quote_quality/
+volatility_lab/data/underlying_history/
+volatility_lab/data/dividend_sources/*.pdf
+volatility_lab/data/*.sqlite*
+volatility_lab/data/**/*.sqlite*
 
 # Node / Frontend Dependencies (Legacy)
 node_modules/
@@ -53,50 +63,43 @@ node_modules/
 
 # Data subdirectories to ignore
 archive_to_verify_before_delete/
-Volatility Lab/data/upstox/chains/
-Volatility Lab/data/upstox/catalogues/
-Volatility Lab/data/experiments/
-Volatility Lab/data/validation/
-Volatility Lab/data/input_history/
-Volatility Lab/data/exports/
-Volatility Lab/data/futures/
-Volatility Lab/data/research_inputs/
-Volatility Lab/data/backtest_1minute/
-!Volatility Lab/data/backtest_1minute/status.json
-!Volatility Lab/data/backtest_1minute/scope.json
-Volatility Lab/data/backtest_futures/
-!Volatility Lab/data/backtest_futures/*status.json
-!Volatility Lab/data/backtest_futures/scope.json
-Volatility Lab/data/google_archive/
-!Volatility Lab/data/google_archive/*.json
+volatility_lab/data/upstox/chains/
+volatility_lab/data/upstox/catalogues/
+volatility_lab/data/experiments/
+volatility_lab/data/validation/
+volatility_lab/data/input_history/
+volatility_lab/data/exports/
+volatility_lab/data/futures/
+volatility_lab/data/research_inputs/
+volatility_lab/data/backtest_1minute/
+!volatility_lab/data/backtest_1minute/status.json
+!volatility_lab/data/backtest_1minute/scope.json
+volatility_lab/data/backtest_futures/
+!volatility_lab/data/backtest_futures/*status.json
+!volatility_lab/data/backtest_futures/scope.json
+volatility_lab/data/google_archive/
+!volatility_lab/data/google_archive/*.json
 
 # Explicitly Keep Tracking Metadatas, Baseline Quotes, and Historical Prices
-!Volatility Lab/data/*.json
-!Volatility Lab/data/*.csv
-!Volatility Lab/data/dividend_sources/*.txt
+!volatility_lab/data/*.json
+!volatility_lab/data/*.csv
+!volatility_lab/data/dividend_sources/*.txt
 
 # Charges: Track active Upstox fee schedules only; ignore dated daily scrapes and legacy brokers
-Volatility Lab/data/charges/*
-!Volatility Lab/data/charges/upstox/
-Volatility Lab/data/charges/upstox/*
-!Volatility Lab/data/charges/upstox/current.json
-!Volatility Lab/data/charges/upstox/check_status.json
+volatility_lab/data/charges/*
+!volatility_lab/data/charges/upstox/
+volatility_lab/data/charges/upstox/*
+!volatility_lab/data/charges/upstox/current.json
+!volatility_lab/data/charges/upstox/check_status.json
 
 # Upstox: Track contract lists & master catalogue; ignore transient event feeds and diagnostics
-Volatility Lab/data/upstox/*
-!Volatility Lab/data/upstox/master.json
-!Volatility Lab/data/upstox/NIFTY_expiries.json
-!Volatility Lab/data/upstox/BANKNIFTY_expiries.json
+volatility_lab/data/upstox/*
+!volatility_lab/data/upstox/master.json
+!volatility_lab/data/upstox/NIFTY_expiries.json
+!volatility_lab/data/upstox/BANKNIFTY_expiries.json
 
 # Ignore ephemeral backtest runs and daily collector logs
-Volatility Lab/data/backtest_runs/
-Volatility Lab/data/daily_collector/
-
-# Exclude all databases, large audit archives, and temp files regardless of directory
-*.sqlite*
-**/*.sqlite*
-!Volatility Lab/data/monitor.sqlite
-*.lock
-*.tmp
-Volatility Lab/data/audit/
-Volatility Lab/data/audit/**
+volatility_lab/data/backtest_runs/
+volatility_lab/data/daily_collector/
+volatility_lab/data/audit/
+volatility_lab/data/audit/**

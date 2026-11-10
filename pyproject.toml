@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "volatility-lab"
+version = "18.0.0"
+description = "Institutional-grade options volatility analytics and 6-strategy backtest engine"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Pankaj Saini", email = "pankajsaini2148@gmail.com"}
+]
+keywords = ["options", "volatility", "bsm", "greeks", "backtesting", "finance", "nse"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+    "streamlit>=1.38.0",
+    "pandas>=2.1.0",
+    "numpy>=1.26.0",
+    "scipy>=1.11.0",
+    "plotly>=5.18.0",
+    "requests>=2.31.0",
+    "pypdf>=4.0.0",
+    "arch>=6.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.8.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "setuptools>=68.0",
+    "wheel",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["volatility_lab*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [
+    ".git",
+    "docs",
+    "scratch",
+    "patches",
+    "*.egg-info",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+select = [
+    "E9",   # Runtime syntax errors
+    "F63",  # Invalid type comparisons
+    "F7",   # Structural errors
+    "F82",  # Undefined loop variables
+    "F",    # Pyflakes
+]
+ignore = [
+    "E501", # Line too long
+    "E701", # Multiple statements on one line (colon)
+    "E702", # Multiple statements on one line (semicolon)
+    "F401", # Imported but unused (common in __init__ and test mocks)
+    "F841", # Local variable assigned but never used
+    "F811", # Redefinition of unused name
+    "F541", # f-string without placeholders
+    "F821", # Temporary ignore for forward references/ast dynamic mocks until phase 4
+]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = ["test_*.py"]

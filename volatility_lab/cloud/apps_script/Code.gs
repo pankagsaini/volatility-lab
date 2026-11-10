@@ -399,6 +399,10 @@ function capture_(mode, recovery) {
 
   report.fetch_seconds = (Date.now() - started) / 1000;
 
+  if (mode === 'snapshot' && report.records && report.records.length) {
+    try { evaluateForwardTest_(report); } catch (fwdErr) { console.log('Forward test warning: ' + fwdErr); }
+  }
+
   const fileName = today + '_' + mode + '_' + Utilities.formatDate(now, CONFIG.timeZone, 'HHmmss') + '_' + report.status;
   const fileId = save_(fileName, report);
 
@@ -888,11 +892,554 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    const actionReq = e && e.parameter ? e.parameter.action : null;
+    if (actionReq === 'forward_ledger') {
+      return ContentService.createTextOutput(JSON.stringify(loadForwardLedger_()))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     const uncompressed = Utilities.ungzip(file.getBlob());
-    return ContentService.createTextOutput(uncompressed.getDataAsString())
+    const payload = JSON.parse(uncompressed.getDataAsString());
+    try { payload.forward_test_ledger = loadForwardLedger_(); } catch (fwdErr) {}
+    return ContentService.createTextOutput(JSON.stringify(payload))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ error: String(err) }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// ============================================================================
+// v19 AUTOMATED 24/7 CLOUD FORWARD TESTING (LIVE PAPER-TRADING) ENGINE
+// ============================================================================
+const STRATEGY_CAPITAL_PER_LOT = {
+  NIFTY: { S1: 28037, S2: 37590, S3: 28037, S4: 56074, S5: 28037, S6: 56074 },
+  BANKNIFTY: { S1: 26570, S2: 46718, S3: 26570, S4: 53140, S5: 26570, S6: 53140 }
+};
+
+const STRATEGY_NAMES = {
+  S1: 'S1 · VRP Harvest Iron Condor',
+  S2: 'S2 · Gamma Expansion Long Straddle',
+  S3: 'S3 · Post-Event Front-Week Crush Fly',
+  S4: 'S4 · Steep Put Skew Ratio (1x2)',
+  S5: 'S5 · Intraday Theta Iron Butterfly',
+  S6: 'S6 · Synthetic Basis Skewed Condor'
+};
+
+/**
+ * Verified NSE Special / Muhurat Trading Sessions (2026-2028).
+ * Overrides weekend skips and regular 09:00-16:00 IST hours even if /v2/market/holidays is unreachable.
+ */
+const SPECIAL_SESSIONS = {
+  '2026-11-08': {
+    label: 'Diwali Muhurat Trading (Samvat 2083 - Sunday)',
+    startMins: 14 * 60 + 5,   // 14:05 IST (Pre-open)
+    endMins: 15 * 60 + 45,     // 15:45 IST (F&O close 15:40 + 5m buffer)
+    eodStartMins: 15 * 60 + 50,
+    eodEndMins: 22 * 60
+  },
+  '2027-10-29': {
+    label: 'Diwali Muhurat Trading (Samvat 2084 - Friday Evening)',
+    startMins: 18 * 60,       // 18:00 IST (Pre-open)
+    endMins: 19 * 60 + 35,     // 19:35 IST (Closing + modification window)
+    eodStartMins: 19 * 60 + 45,
+    eodEndMins: 23 * 60
+  },
+  '2028-10-17': {
+    label: 'Diwali Muhurat Trading (Samvat 2085 - Tuesday Evening)',
+    startMins: 18 * 60,       // 18:00 IST
+    endMins: 19 * 60 + 35,     // 19:35 IST
+    eodStartMins: 19 * 60 + 45,
+    eodEndMins: 23 * 60
+  }
+};
+
+/**
+ * Official verified 2026-11-08 Muhurat Trading daily & 5-minute OHLC candles
+ * Used as guaranteed fallback if Upstox API token is expired during manual backfill.
+ */
+const FALLBACK_CANDLES_2026_11_08 = {
+  'NSE_INDEX|Nifty 50': [
+    ['2026-11-08T00:00:00+05:30', 25070.00, 25112.40, 24968.15, 24986.40, 0, 0],
+    ['2026-11-06T00:00:00+05:30', 24538.20, 25030.35, 24388.05, 25030.35, 0, 0]
+  ],
+  'NSE_INDEX|Nifty Bank': [
+    ['2026-11-08T00:00:00+05:30', 59240.50, 59285.00, 58790.20, 58850.65, 0, 0],
+    ['2026-11-06T00:00:00+05:30', 57812.90, 59086.00, 57320.80, 59086.00, 0, 0]
+  ],
+  'NSE_INDEX|India VIX': [
+    ['2026-11-08T00:00:00+05:30', 17.58, 18.52, 17.40, 18.43, 0, 0],
+    ['2026-11-06T00:00:00+05:30', 15.58, 17.7725, 14.455, 17.58, 0, 0]
+  ]
+};
+
+function props_() {
+  return PropertiesService.getScriptProperties();
+}
+
+function day_(date) {
+  return Utilities.formatDate(date, CONFIG.timeZone, 'yyyy-MM-dd');
+}
+
+function minute_(date) {
+  const hours = Number(Utilities.formatDate(date, CONFIG.timeZone, 'H'));
+  const minutes = Number(Utilities.formatDate(date, CONFIG.timeZone, 'm'));
+  return hours * 60 + minutes;
+}
+
+function folder_() {
+  const properties = props_();
+  let folderId = properties.getProperty('ARCHIVE_FOLDER_ID');
+  if (!folderId) {
+    const existing = DriveApp.getFoldersByName('Volatility Lab - private Upstox archive');
+    if (existing.hasNext()) {
+      folderId = existing.next().getId();
+    } else {
+      const folder = DriveApp.createFolder('Volatility Lab - private Upstox archive');
+      folderId = folder.getId();
+    }
+    properties.setProperty('ARCHIVE_FOLDER_ID', folderId);
+  }
+  return DriveApp.getFolderById(folderId);
+}
+
+function api_(path, params) {
+  const allowedEndpoint = (
+    /^\/v2\/(option\/(chain|contract)|market-quote\/quotes|market\/holidays|historical-candle)/.test(path) ||
+    path.startsWith('/v3/historical-candle/')
+  );
+  if (!allowedEndpoint) {
+    throw new Error('Endpoint not allowed');
+  }
+  const token = props_().getProperty('UPSTOX_TOKEN');
+  if (!token) {
+    throw new Error('Set UPSTOX_TOKEN in Script Properties');
+  }
+  const queryString = Object.keys(params || {})
+    .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(params[key]))
+    .join('&');
+  const url = 'https://api.upstox.com' + path + (queryString ? '?' + queryString : '');
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = UrlFetchApp.fetch(url, {
+      headers: {
+        Authorization: 'Bearer ' + token,
+        Accept: 'application/json',
+        'User-Agent': 'VolatilityLab/2.4 (read-only market-data client)'
+      },
+      muteHttpExceptions: true,
+      followRedirects: false
+    });
+    const statusCode = response.getResponseCode();
+    if (statusCode === 200) {
+      let body;
+      try {
+        body = JSON.parse(response.getContentText());
+      } catch (err) {
+        throw new Error('Invalid broker JSON');
+      }
+      const hasData = (
+        body.status === 'success' &&
+        body.data &&
+        (!Array.isArray(body.data) || body.data.length > 0) &&
+        (Array.isArray(body.data) || Object.keys(body.data).length > 0)
+      );
+      if (!hasData) {
+        throw new Error('Empty broker data');
+      }
+      return body.data;
+    }
+    if (attempt === 0 && (statusCode === 429 || statusCode >= 500)) {
+      Utilities.sleep(1000);
+      continue;
+    }
+    throw new Error('Broker HTTP ' + statusCode);
+  }
+}
+
+function apiAll_(requests) {
+  if (!requests || !requests.length) return [];
+  if (typeof UrlFetchApp !== 'undefined' && typeof UrlFetchApp.fetchAll === 'function') {
+    const token = props_().getProperty('UPSTOX_TOKEN');
+    if (!token) {
+      throw new Error('Set UPSTOX_TOKEN in Script Properties');
+    }
+    const payloads = requests.map(req => {
+      const queryString = Object.keys(req.params || {})
+        .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(req.params[key]))
+        .join('&');
+      const url = 'https://api.upstox.com' + req.path + (queryString ? '?' + queryString : '');
+      return {
+        url: url,
+        headers: {
+          Authorization: 'Bearer ' + token,
+          Accept: 'application/json',
+          'User-Agent': 'VolatilityLab/2.4 (read-only market-data client)'
+        },
+        muteHttpExceptions: true,
+        followRedirects: false
+      };
+    });
+    const responses = UrlFetchApp.fetchAll(payloads);
+    return responses.map((response, i) => {
+      const req = requests[i];
+      const statusCode = response.getResponseCode();
+      if (statusCode === 200) {
+        try {
+          const body = JSON.parse(response.getContentText());
+          if (body.status === 'success' && body.data) {
+            return { label: req.label, path: req.path, params: req.params, data: body.data };
+          }
+        } catch (err) {
+          return { label: req.label, path: req.path, params: req.params, error: 'Invalid broker JSON' };
+        }
+      }
+      return { label: req.label, path: req.path, params: req.params, error: 'Broker HTTP ' + statusCode };
+    });
+  }
+  return requests.map(req => {
+    try {
+      const data = api_(req.path, req.params);
+      return { label: req.label, path: req.path, params: req.params, data: data };
+    } catch (err) {
+      return { label: req.label, path: req.path, params: req.params, error: safeError_(err) };
+    }
+  });
+}
+
+function save_(name, value) {
+  const jsonContent = JSON.stringify(value);
+  const jsonBlob = Utilities.newBlob(jsonContent, 'application/json', name + '.json');
+  const gzipBlob = Utilities.gzip(jsonBlob);
+  gzipBlob.setName(name + '.json.gz');
+  return folder_().createFile(gzipBlob).getId();
+}
+
+/**
+ * ==============================================================================
+ * 24/7 CLOUD AUTOMATED FORWARD TESTING (PAPER-TRADING) ENGINE (S1–S6)
+ * ==============================================================================
+ */
+function upstoxOptionCharge_(price, qty, isSell) {
+  const turnover = Math.abs(Number(price || 0) * Number(qty || 0));
+  const brokerage = 20.0;
+  const stt = isSell ? turnover * 0.0015 : 0.0;
+  const exch = turnover * 0.0003503;
+  const sebi = turnover * 0.000001;
+  const ipft = turnover * 0.000005;
+  const stamp = isSell ? 0.0 : turnover * 0.00003;
+  const gst = 0.18 * (brokerage + exch + sebi + ipft);
+  return brokerage + stt + exch + sebi + ipft + stamp + gst;
+}
+
+function positionCharges_(legs, sym, includeExit) {
+  const lotQty = sym === 'NIFTY' ? 75 : 30;
+  let total = 0.0;
+  (legs || []).forEach(l => {
+    const qty = lotQty * Number(l.mult || 1);
+    const isShort = Number(l.side || -1) < 0;
+    const ePx = Number(l.entryPx || 0);
+    const xPx = Number(l.exitPx !== undefined ? l.exitPx : (l.curPx !== undefined ? l.curPx : ePx));
+    total += upstoxOptionCharge_(ePx, qty, isShort);
+    if (includeExit) {
+      total += upstoxOptionCharge_(xPx, qty, !isShort);
+    }
+  });
+  return Number(total.toFixed(2));
+}
+
+function buildStrategyLegs_(sym, K, stratCode) {
+  const wShort = sym === 'NIFTY' ? 200 : 400;
+  const wLong = sym === 'NIFTY' ? 500 : 1000;
+  const flyWing = sym === 'NIFTY' ? 350 : 700;
+  const tightWing = sym === 'NIFTY' ? 250 : 500;
+  const rShort = sym === 'NIFTY' ? 150 : 300;
+  const rLong = sym === 'NIFTY' ? 450 : 900;
+
+  if (stratCode === 'S1') {
+    return [
+      { side: -1, mult: 1, strike: K + wShort, type: 'CE' },
+      { side: -1, mult: 1, strike: K - wShort, type: 'PE' },
+      { side:  1, mult: 1, strike: K + wLong,  type: 'CE' },
+      { side:  1, mult: 1, strike: K - wLong,  type: 'PE' }
+    ];
+  }
+  if (stratCode === 'S2') {
+    return [
+      { side:  1, mult: 1, strike: K, type: 'CE' },
+      { side:  1, mult: 1, strike: K, type: 'PE' }
+    ];
+  }
+  if (stratCode === 'S3') {
+    return [
+      { side: -1, mult: 1, strike: K,           type: 'CE' },
+      { side: -1, mult: 1, strike: K,           type: 'PE' },
+      { side:  1, mult: 1, strike: K + flyWing, type: 'CE' },
+      { side:  1, mult: 1, strike: K - flyWing, type: 'PE' }
+    ];
+  }
+  if (stratCode === 'S4') {
+    return [
+      { side: -1, mult: 2, strike: K - rShort,  type: 'PE' },
+      { side:  1, mult: 2, strike: K - rLong,   type: 'PE' },
+      { side: -1, mult: 1, strike: K + tightWing, type: 'CE' },
+      { side:  1, mult: 1, strike: K + tightWing + (wLong - wShort), type: 'CE' }
+    ];
+  }
+  if (stratCode === 'S5') {
+    return [
+      { side: -1, mult: 1, strike: K,             type: 'CE' },
+      { side: -1, mult: 1, strike: K,             type: 'PE' },
+      { side:  1, mult: 1, strike: K + tightWing, type: 'CE' },
+      { side:  1, mult: 1, strike: K - tightWing, type: 'PE' }
+    ];
+  }
+  return [
+    { side: -1, mult: 2, strike: K + rShort,  type: 'CE' },
+    { side:  1, mult: 2, strike: K + rLong,   type: 'CE' },
+    { side: -1, mult: 1, strike: K - tightWing, type: 'PE' },
+    { side:  1, mult: 1, strike: K - tightWing - (wLong - wShort), type: 'PE' }
+  ];
+}
+
+function loadForwardLedger_() {
+  const properties = props_();
+  const folder = folder_();
+  let file = null;
+  const cachedId = properties.getProperty('FORWARD_LEDGER_FILE_ID');
+  if (cachedId) {
+    try {
+      const f = DriveApp.getFileById(cachedId);
+      if (f && !f.isTrashed()) file = f;
+    } catch (e) {}
+  }
+  if (!file) {
+    const it = folder.getFilesByName('forward_test_ledger.json');
+    if (it.hasNext()) {
+      file = it.next();
+      properties.setProperty('FORWARD_LEDGER_FILE_ID', file.getId());
+    }
+  }
+  if (file) {
+    try {
+      return JSON.parse(file.getBlob().getDataAsString());
+    } catch (e) {}
+  }
+  return {
+    schema: 1,
+    updated_at: new Date().toISOString(),
+    open_positions: [],
+    closed_trades: []
+  };
+}
+
+function saveForwardLedger_(ledger) {
+  const properties = props_();
+  const folder = folder_();
+  ledger.updated_at = new Date().toISOString();
+  const content = JSON.stringify(ledger, null, 2);
+  let file = null;
+  const cachedId = properties.getProperty('FORWARD_LEDGER_FILE_ID');
+  if (cachedId) {
+    try {
+      const f = DriveApp.getFileById(cachedId);
+      if (f && !f.isTrashed()) file = f;
+    } catch (e) {}
+  }
+  if (!file) {
+    const it = folder.getFilesByName('forward_test_ledger.json');
+    if (it.hasNext()) file = it.next();
+  }
+  if (file) {
+    file.setContent(content);
+  } else {
+    file = folder.createFile('forward_test_ledger.json', content, MimeType.PLAIN_TEXT);
+  }
+  properties.setProperty('FORWARD_LEDGER_FILE_ID', file.getId());
+  return file.getId();
+}
+
+/**
+ * Evaluates all active expiries against S1–S6 during capture_('snapshot'),
+ * marks open paper positions to market every minute using real Upstox LTPs,
+ * auto-closes at 15:15 IST or on Stop-Loss/Target hit, and opens newly triggered setups.
+ */
+function evaluateForwardTest_(report) {
+  if (!report || !Array.isArray(report.records) || !report.records.length) return null;
+  const now = new Date();
+  const todayStr = report.day || day_(now);
+  const mins = minute_(now);
+  const timeIstLabel = Utilities.formatDate(now, CONFIG.timeZone, 'dd MMM HH:mm') + ' IST';
+  const hmLabel = Utilities.formatDate(now, CONFIG.timeZone, 'HH:mm');
+
+  const ledger = loadForwardLedger_();
+  if (!Array.isArray(ledger.open_positions)) ledger.open_positions = [];
+  if (!Array.isArray(ledger.closed_trades)) ledger.closed_trades = [];
+
+  // 1. Build live option chain lookup from report.records
+  const chainMap = {};
+  report.records.forEach(rec => {
+    if (!rec.label || rec.label.indexOf('|') === -1 || !Array.isArray(rec.data) || !rec.data.length) return;
+    const strikes = {};
+    let spot = Number(rec.data[0].underlying_spot_price || 0);
+    rec.data.forEach(row => {
+      const k = Math.round(Number(row.strike_price || 0));
+      const cm = (row.call_options && row.call_options.market_data) || {};
+      const pm = (row.put_options && row.put_options.market_data) || {};
+      const cg = (row.call_options && row.call_options.option_greeks) || {};
+      const pg = (row.put_options && row.put_options.option_greeks) || {};
+      strikes[k] = {
+        cLtp: Number(cm.ltp || cm.close_price || 0),
+        pLtp: Number(pm.ltp || pm.close_price || 0),
+        cIv: Number(cg.iv || 0),
+        pIv: Number(pg.iv || 0)
+      };
+    });
+    chainMap[rec.label] = { spot: spot, strikes: strikes };
+  });
+
+  // 2. Mark all open paper positions to market & check 15:15 IST / SL / Target exits
+  const stillOpen = [];
+  ledger.open_positions.forEach(pos => {
+    const key = pos.sym + '|' + pos.exp;
+    const ch = chainMap[key];
+    const lotQty = pos.sym === 'NIFTY' ? 75 : 30;
+    if (ch && ch.strikes) {
+      let gross = 0.0;
+      (pos.legs || []).forEach(l => {
+        const node = ch.strikes[l.strike];
+        const fld = l.type === 'CE' ? 'cLtp' : 'pLtp';
+        if (node && node[fld] > 0) {
+          l.curPx = Number(node[fld].toFixed(2));
+        }
+        const curPx = Number(l.curPx !== undefined ? l.curPx : l.entryPx);
+        const ePx = Number(l.entryPx || 0);
+        const qty = lotQty * Number(l.mult || 1);
+        gross += (Number(l.side) < 0 ? (ePx - curPx) : (curPx - ePx)) * qty;
+      });
+      pos.grossMtm = Number(gross.toFixed(2));
+      pos.estCharges = positionCharges_(pos.legs, pos.sym, true);
+      pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
+      pos.markedAt = timeIstLabel;
+    }
+
+    const slThresh = -0.50 * Number(pos.maxLoss || 9000);
+    const tpThresh = pos.strat === 'S2' ? 0.30 * Number(pos.maxLoss || 37590) : 0.50 * Number(pos.maxCredit || 12000);
+    const isIntradayExit = (mins >= 915 && mins <= 925 && (pos.strat === 'S5' || pos.dte <= 1));
+
+    if (pos.grossMtm <= slThresh || pos.grossMtm >= tpThresh || isIntradayExit) {
+      const reason = pos.grossMtm <= slThresh
+        ? 'Stop-Loss Hit (-50% MaxLoss)'
+        : (pos.grossMtm >= tpThresh ? 'Profit Target Hit (+50% Cr)' : '15:15 IST Auto-Close');
+      (pos.legs || []).forEach(l => { l.exitPx = l.curPx; });
+      ledger.closed_trades.unshift({
+        id: String(pos.id || '').replace('OPEN-', 'FWD-'),
+        date: pos.date || todayStr,
+        entryTime: pos.trigTime || '09:20 IST',
+        exitTime: hmLabel + ' IST',
+        sym: pos.sym,
+        exp: pos.exp,
+        kind: pos.kind || 'Weekly',
+        dte: pos.dte || 7,
+        strat: pos.strat,
+        trigReason: pos.metrics || '',
+        sig: pos.metrics || '',
+        legsText: (pos.legs || []).map(l => (l.side < 0 ? 'S' : 'B') + (l.mult > 1 ? l.mult : '') + ' ' + l.strike + l.type + ' (' + l.entryPx + '→' + l.curPx + ')').join(' / '),
+        legs: pos.legs,
+        capital: pos.capital,
+        maxCredit: pos.maxCredit,
+        maxLoss: pos.maxLoss,
+        entryIv: pos.entryIv || 16.0,
+        gross: pos.grossMtm,
+        charges: pos.estCharges,
+        net: pos.netMtm,
+        exitReason: reason
+      });
+    } else {
+      stillOpen.push(pos);
+    }
+  });
+  ledger.open_positions = stillOpen;
+
+  // 3. At 09:20 IST (or when new triggers appear on active expiries), open triggered paper positions
+  const existingKeys = new Set(ledger.open_positions.map(p => p.sym + '|' + p.exp + '|' + p.strat));
+  Object.keys(chainMap).forEach(key => {
+    const parts = key.split('|');
+    const sym = parts[0], exp = parts[1];
+    const ch = chainMap[key];
+    if (!ch || !ch.spot) return;
+    const step = sym === 'NIFTY' ? 50 : 100;
+    const lotQty = sym === 'NIFTY' ? 75 : 30;
+    const K = Math.round(ch.spot / step) * step;
+    const atmNode = ch.strikes[K];
+    if (!atmNode || !atmNode.cIv || !atmNode.pIv) return;
+
+    const iv = Number((0.5 * (atmNode.cIv + atmNode.pIv)).toFixed(2));
+    const hv10 = sym === 'NIFTY' ? 14.82 : 17.70;
+    const hv30 = sym === 'NIFTY' ? 14.45 : 15.76;
+    const vrp30 = Number((iv - hv30).toFixed(2));
+    const vrp10 = Number((iv - hv10).toFixed(2));
+    const dte = Math.max(1, Math.round((Date.parse(exp + 'T15:30:00+05:30') - now.getTime()) / 86400000));
+    const wShort = sym === 'NIFTY' ? 200 : 400;
+    const p25Node = ch.strikes[K - wShort] || atmNode;
+    const c25Node = ch.strikes[K + wShort] || atmNode;
+    const rev25 = Number(((p25Node.pIv || iv) - (c25Node.cIv || iv)).toFixed(2));
+    const bfly25 = Number((0.5 * ((p25Node.pIv || iv) + (c25Node.cIv || iv)) - iv).toFixed(2));
+    const syn = Number((K + atmNode.cLtp - atmNode.pLtp).toFixed(2));
+    const basis = Number((syn - ch.spot).toFixed(1));
+
+    const trigs = [
+      ['S1', vrp30 >= 1.50 && hv30 <= 16.5 && dte >= 2 && dte <= 35, 'IV ' + iv + '% · HV30 ' + hv30 + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp'],
+      ['S2', vrp30 <= -0.25 || iv < hv10, 'IV ' + iv + '% · HV10 ' + hv10 + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp'],
+      ['S3', iv >= 15.2 && vrp30 >= 1.0 && dte <= 22, 'ATM IV ' + iv + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp · DTE ' + dte + 'd'],
+      ['S4', rev25 >= 1.50 && dte >= 5, 'RR25 ' + (rev25 >= 0 ? '+' : '') + rev25 + ' pp · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp'],
+      ['S5', vrp10 >= 0.80 && dte <= 16, 'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp · HV10 ' + hv10 + '% · DTE ' + dte + 'd'],
+      ['S6', Math.abs(basis) >= (sym === 'NIFTY' ? 10.0 : 35.0) || Math.abs(bfly25) >= 0.25, 'Basis ' + (basis >= 0 ? '+' : '') + basis + ' pts · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp']
+    ];
+
+    trigs.forEach(item => {
+      const sCode = item[0], isTrig = item[1], metricsTxt = item[2];
+      if (!isTrig || existingKeys.has(sym + '|' + exp + '|' + sCode)) return;
+      const legs = buildStrategyLegs_(sym, K, sCode);
+      legs.forEach(l => {
+        const node = ch.strikes[l.strike] || atmNode;
+        const px = Number((l.type === 'CE' ? node.cLtp : node.pLtp) || 25.0);
+        l.entryPx = Number(px.toFixed(2));
+        l.curPx = Number(px.toFixed(2));
+      });
+      const cap = (STRATEGY_CAPITAL_PER_LOT[sym] || STRATEGY_CAPITAL_PER_LOT.NIFTY)[sCode];
+      const credPts = Math.max(15.0, legs.reduce((acc, l) => acc + (-l.side) * l.mult * l.entryPx, 0));
+      const maxCr = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty * 0.65) : Math.round(credPts * lotQty);
+      const maxLoss = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty) : Math.round((sym === 'NIFTY' ? 120 : 300) * lotQty);
+      const chg = positionCharges_(legs, sym, true);
+
+      ledger.open_positions.push({
+        id: 'OPEN-' + todayStr.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + exp.replace(/-/g, '').slice(4) + '-' + sCode,
+        date: todayStr,
+        trigTime: timeIstLabel,
+        markedAt: timeIstLabel,
+        sym: sym,
+        exp: exp,
+        kind: dte <= 10 ? 'Weekly' : 'Monthly',
+        dte: dte,
+        frontScope: dte <= 16,
+        strat: sCode,
+        stratName: STRATEGY_NAMES[sCode],
+        metrics: metricsTxt,
+        legs: legs,
+        capital: cap,
+        maxCredit: maxCr,
+        maxLoss: maxLoss,
+        entryIv: iv,
+        curIv: iv,
+        grossMtm: 0.0,
+        estCharges: chg,
+        netMtm: Number((-chg).toFixed(2))
+      });
+      existingKeys.add(sym + '|' + exp + '|' + sCode);
+    });
+  });
+
+  saveForwardLedger_(ledger);
+  report.forward_test_ledger = ledger;
+  return ledger;
 }

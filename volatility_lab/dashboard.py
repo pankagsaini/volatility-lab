@@ -87,7 +87,7 @@ MODULES=(
     'research_extensions','har_research','experimental_models','forecast_validation',
     'history_policy','option_context','dividend_yield','expiry_forecast','term_structure','corporate_event_calendar','smile','trade_review','snapshot_history',
     'market_table','relative_value','synthetic_future','expiry_data','model_view','research_ui',
-    'trade_review_ui','research_health','restored_lab','options_context_cache','vol_surface_3d','monitor_ui','futures_data','futures_rolling','futures_sync','futures_view_cache','futures_ui','broker_charges','backtest_index','backtest_engine','backtest_signals','strategy_backtest','backtest_report','futures_backtest','backtest_jobs','futures_backtest_ui','backtest_ui'
+    'trade_review_ui','research_health','restored_lab','options_context_cache','vol_surface_3d','monitor_ui','futures_data','futures_rolling','futures_sync','futures_view_cache','futures_ui','broker_charges','backtest_index','backtest_engine','backtest_signals','strategy_backtest','backtest_report','futures_backtest','backtest_jobs','futures_backtest_ui','backtest_ui','forward_test'
 )
 
 import monitor_ui
@@ -141,9 +141,9 @@ st.session_state.pop('wide_atm_fallback',None)
 
 import google_archive_sync
 
-workspace_labels={'Options':'Options','Backtest':'Backtest'}
+workspace_labels={'Options':'Options','Backtest':'Backtest','Forward Test':'Forward Test (Auto Paper)'}
 label_to_mode={v:k for k,v in workspace_labels.items()}
-raw_markets=['Options','Backtest']
+raw_markets=['Options','Backtest','Forward Test']
 markets=[workspace_labels[m] for m in raw_markets]
 
 saved_ws=st.session_state.get('market_workspace')
@@ -242,6 +242,9 @@ if dividend_ready:
 if workspace=='Backtest':
     import backtest_ui
     backtest_ui.render()
+elif workspace=='Forward Test':
+    import forward_test
+    forward_test.render_forward_test_ui(ROOT/'data')
 else:
     if not dividend_ready:st.info('Dividend inputs unavailable; broker data remains available, model scenarios are withheld.')
     monitor_ui.render_monitor(rate,dividend,spread)

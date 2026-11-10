@@ -14,7 +14,7 @@ os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("MALLOC_TRIM_THRESHOLD_", "65536")
 
 ROOT = Path(__file__).resolve().parent.parent
-LAB_DIR = ROOT / "Volatility Lab"
+LAB_DIR = (ROOT / "volatility_lab") if (ROOT / "volatility_lab").exists() else (ROOT / "Volatility Lab")
 if str(LAB_DIR) in sys.path:
     sys.path.remove(str(LAB_DIR))
 sys.path.insert(0, str(LAB_DIR))
@@ -49,5 +49,5 @@ def run() -> None:
     exec(code, scope)
 
 
-if __name__ == "__main__" or "streamlit" in sys.modules:
+if __name__ == "__main__":
     run()

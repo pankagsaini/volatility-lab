@@ -1,0 +1,4577 @@
+{
+  "schema": 1,
+  "updated_at": "2026-11-09T15:30:42+05:30",
+  "intraday_timestamps_2026_11_09": [
+    "09:15",
+    "09:20",
+    "09:30",
+    "09:45",
+    "10:00",
+    "10:15",
+    "10:30",
+    "10:45",
+    "11:01",
+    "11:15",
+    "11:30",
+    "11:45",
+    "12:00",
+    "12:15",
+    "12:30",
+    "12:45",
+    "13:00",
+    "13:15",
+    "13:30",
+    "13:45",
+    "14:00",
+    "14:15",
+    "14:30",
+    "14:45",
+    "15:00",
+    "15:15",
+    "15:30"
+  ],
+  "open_positions": [
+    {
+      "id": "OPEN-20261109-NIF-1117-S1",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 13:30 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 8,
+      "frontScope": true,
+      "strat": "S1",
+      "stratName": "S1 \u00b7 VRP Harvest Iron Condor",
+      "metrics": "IV 16.95% \u00b7 HV30 14.45% \u00b7 VRP +2.50 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25250,
+          "type": "CE",
+          "entryPx": 114.95,
+          "curPx": 153.15
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24850,
+          "type": "PE",
+          "entryPx": 240.35,
+          "curPx": 175.15
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25550,
+          "type": "CE",
+          "entryPx": 57.6,
+          "curPx": 75.75
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24550,
+          "type": "PE",
+          "entryPx": 121.5,
+          "curPx": 81.85
+        }
+      ],
+      "capital": 28037,
+      "maxCredit": 13215.0,
+      "maxLoss": 9285.0,
+      "entryIv": 16.95,
+      "curIv": 16.95,
+      "grossMtm": 412.5,
+      "estCharges": 279.82,
+      "netMtm": 132.68,
+      "unitLegs": 300
+    },
+    {
+      "id": "OPEN-20261109-NIF-1117-S3",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 13:30 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 8,
+      "frontScope": true,
+      "strat": "S3",
+      "stratName": "S3 \u00b7 Post-Event Front-Week Crush Fly",
+      "metrics": "ATM IV 16.95% \u00b7 VRP +2.50 pp \u00b7 DTE 8d",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "CE",
+          "entryPx": 177.25,
+          "curPx": 232.15
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "PE",
+          "entryPx": 353.95,
+          "curPx": 269.2
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25400,
+          "type": "CE",
+          "entryPx": 81.55,
+          "curPx": 108.65
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24700,
+          "type": "PE",
+          "entryPx": 172.7,
+          "curPx": 121.7
+        }
+      ],
+      "capital": 28037,
+      "maxCredit": 20771.25,
+      "maxLoss": 2250.0,
+      "entryIv": 16.95,
+      "curIv": 16.95,
+      "grossMtm": 446.25,
+      "estCharges": 324.01,
+      "netMtm": 122.24,
+      "unitLegs": 300
+    },
+    {
+      "id": "OPEN-20261109-NIF-1117-S5",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 13:30 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 8,
+      "frontScope": true,
+      "strat": "S5",
+      "stratName": "S5 \u00b7 Intraday Theta Iron Butterfly",
+      "metrics": "IV\u2212HV10 +2.13 pp \u00b7 HV10 14.82% \u00b7 DTE 8d",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "CE",
+          "entryPx": 177.25,
+          "curPx": 232.15
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "PE",
+          "entryPx": 353.95,
+          "curPx": 269.2
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25300,
+          "type": "CE",
+          "entryPx": 102.5,
+          "curPx": 137.15
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24800,
+          "type": "PE",
+          "entryPx": 215.6,
+          "curPx": 154.85
+        }
+      ],
+      "capital": 28037,
+      "maxCredit": 15982.5,
+      "maxLoss": 6517.5,
+      "entryIv": 16.95,
+      "curIv": 16.95,
+      "grossMtm": 281.25,
+      "estCharges": 335.05,
+      "netMtm": -53.8,
+      "unitLegs": 300
+    },
+    {
+      "id": "OPEN-20261109-NIF-1117-S6",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 8,
+      "frontScope": true,
+      "strat": "S6",
+      "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor",
+      "metrics": "Basis -17.0 pts \u00b7 BF25 +0.21 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 25200,
+          "type": "CE",
+          "entryPx": 171.5,
+          "curPx": 170.9
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 25500,
+          "type": "CE",
+          "entryPx": 88.0,
+          "curPx": 85.8
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24800,
+          "type": "PE",
+          "entryPx": 155.35,
+          "curPx": 154.85
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24500,
+          "type": "PE",
+          "entryPx": 72.3,
+          "curPx": 71.65
+        }
+      ],
+      "capital": 56074,
+      "maxCredit": 18753.75,
+      "maxLoss": 9000,
+      "entryIv": 16.95,
+      "curIv": 16.95,
+      "grossMtm": -251.25,
+      "estCharges": 320.78,
+      "netMtm": -572.03,
+      "unitLegs": 450
+    },
+    {
+      "id": "OPEN-20261109-NIF-1123-S1",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 12:30 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "frontScope": true,
+      "strat": "S1",
+      "stratName": "S1 \u00b7 VRP Harvest Iron Condor",
+      "metrics": "IV 16.11% \u00b7 HV30 14.45% \u00b7 VRP +1.66 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25250,
+          "type": "CE",
+          "entryPx": 178.05,
+          "curPx": 215.9
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24850,
+          "type": "PE",
+          "entryPx": 296.75,
+          "curPx": 237.9
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25550,
+          "type": "CE",
+          "entryPx": 100.0,
+          "curPx": 121.1
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24550,
+          "type": "PE",
+          "entryPx": 179.05,
+          "curPx": 141.8
+        }
+      ],
+      "capital": 28037,
+      "maxCredit": 14681.25,
+      "maxLoss": 7818.75,
+      "entryIv": 16.11,
+      "curIv": 16.11,
+      "grossMtm": 363.75,
+      "estCharges": 319.81,
+      "netMtm": 43.94,
+      "unitLegs": 300
+    },
+    {
+      "id": "OPEN-20261109-NIF-1123-S3",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "frontScope": true,
+      "strat": "S3",
+      "stratName": "S3 \u00b7 Post-Event Front-Week Crush Fly",
+      "metrics": "ATM IV 16.11% \u00b7 VRP +1.66 pp \u00b7 DTE 14d",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "CE",
+          "entryPx": 307.25,
+          "curPx": 303.45
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "PE",
+          "entryPx": 330.5,
+          "curPx": 327.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25400,
+          "type": "CE",
+          "entryPx": 165.0,
+          "curPx": 163.4
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24700,
+          "type": "PE",
+          "entryPx": 188.25,
+          "curPx": 185.0
+        }
+      ],
+      "capital": 28037,
+      "maxCredit": 21337.5,
+      "maxLoss": 2250.0,
+      "entryIv": 16.11,
+      "curIv": 16.11,
+      "grossMtm": 183.75,
+      "estCharges": 364.07,
+      "netMtm": -180.32,
+      "unitLegs": 300
+    },
+    {
+      "id": "OPEN-20261109-NIF-1123-S5",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "frontScope": true,
+      "strat": "S5",
+      "stratName": "S5 \u00b7 Intraday Theta Iron Butterfly",
+      "metrics": "IV\u2212HV10 +1.29 pp \u00b7 HV10 14.82% \u00b7 DTE 14d",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "CE",
+          "entryPx": 307.25,
+          "curPx": 303.45
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "PE",
+          "entryPx": 330.5,
+          "curPx": 327.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25300,
+          "type": "CE",
+          "entryPx": 199.6,
+          "curPx": 197.5
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24800,
+          "type": "PE",
+          "entryPx": 222.3,
+          "curPx": 218.85
+        }
+      ],
+      "capital": 28037,
+      "maxCredit": 16188.75,
+      "maxLoss": 6311.25,
+      "entryIv": 16.11,
+      "curIv": 16.11,
+      "grossMtm": 131.25,
+      "estCharges": 376.18,
+      "netMtm": -244.93,
+      "unitLegs": 300
+    },
+    {
+      "id": "OPEN-20261109-NIF-1123-S6",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "frontScope": true,
+      "strat": "S6",
+      "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor",
+      "metrics": "Basis -3.5 pts \u00b7 BF25 +0.37 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 25200,
+          "type": "CE",
+          "entryPx": 240.0,
+          "curPx": 236.7
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 25500,
+          "type": "CE",
+          "entryPx": 135.45,
+          "curPx": 134.1
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24800,
+          "type": "PE",
+          "entryPx": 222.3,
+          "curPx": 218.85
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24500,
+          "type": "PE",
+          "entryPx": 132.1,
+          "curPx": 129.2
+        }
+      ],
+      "capital": 56074,
+      "maxCredit": 22447.5,
+      "maxLoss": 9000,
+      "entryIv": 16.11,
+      "curIv": 16.11,
+      "grossMtm": 333.75,
+      "estCharges": 384.19,
+      "netMtm": -50.44,
+      "unitLegs": 450
+    },
+    {
+      "id": "OPEN-20261109-NIF-1201-S4",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-12-01",
+      "kind": "Weekly",
+      "dte": 22,
+      "frontScope": false,
+      "strat": "S4",
+      "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)",
+      "metrics": "RR25 +2.69 pp \u00b7 BF25 +0.42 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 24900,
+          "type": "PE",
+          "entryPx": 310.45,
+          "curPx": 303.65
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 24600,
+          "type": "PE",
+          "entryPx": 206.2,
+          "curPx": 203.85
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25300,
+          "type": "CE",
+          "entryPx": 265.15,
+          "curPx": 258.7
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25600,
+          "type": "CE",
+          "entryPx": 161.25,
+          "curPx": 162.3
+        }
+      ],
+      "capital": 56074,
+      "maxCredit": 23430.0,
+      "maxLoss": 9000,
+      "entryIv": 15.28,
+      "curIv": 15.28,
+      "grossMtm": 1230.0,
+      "estCharges": 447.15,
+      "netMtm": 782.85,
+      "unitLegs": 450
+    },
+    {
+      "id": "OPEN-20261109-NIF-1201-S6",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-12-01",
+      "kind": "Weekly",
+      "dte": 22,
+      "frontScope": false,
+      "strat": "S6",
+      "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor",
+      "metrics": "Basis -128.9 pts \u00b7 BF25 +0.42 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 25200,
+          "type": "CE",
+          "entryPx": 307.35,
+          "curPx": 306.0
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 25500,
+          "type": "CE",
+          "entryPx": 192.35,
+          "curPx": 193.3
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24800,
+          "type": "PE",
+          "entryPx": 270.45,
+          "curPx": 266.2
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24500,
+          "type": "PE",
+          "entryPx": 179.65,
+          "curPx": 176.4
+        }
+      ],
+      "capital": 56074,
+      "maxCredit": 24060.0,
+      "maxLoss": 9000,
+      "entryIv": 15.28,
+      "curIv": 15.28,
+      "grossMtm": 420.0,
+      "estCharges": 446.11,
+      "netMtm": -26.11,
+      "unitLegs": 450
+    },
+    {
+      "id": "OPEN-20261109-NIF-1208-S4",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-12-08",
+      "kind": "Weekly",
+      "dte": 29,
+      "frontScope": false,
+      "strat": "S4",
+      "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)",
+      "metrics": "RR25 +2.54 pp \u00b7 BF25 +0.20 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 24900,
+          "type": "PE",
+          "entryPx": 341.25,
+          "curPx": 338.05
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 24600,
+          "type": "PE",
+          "entryPx": 238.0,
+          "curPx": 238.0
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25300,
+          "type": "CE",
+          "entryPx": 319.0,
+          "curPx": 317.9
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25600,
+          "type": "CE",
+          "entryPx": 207.0,
+          "curPx": 206.65
+        }
+      ],
+      "capital": 56074,
+      "maxCredit": 23887.5,
+      "maxLoss": 9000,
+      "entryIv": 15.09,
+      "curIv": 15.09,
+      "grossMtm": 536.25,
+      "estCharges": 488.03,
+      "netMtm": 48.22,
+      "unitLegs": 450
+    },
+    {
+      "id": "OPEN-20261109-NIF-1208-S6",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-12-08",
+      "kind": "Weekly",
+      "dte": 29,
+      "frontScope": false,
+      "strat": "S6",
+      "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor",
+      "metrics": "Basis -86.1 pts \u00b7 BF25 +0.20 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 25200,
+          "type": "CE",
+          "entryPx": 362.9,
+          "curPx": 364.5
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 25500,
+          "type": "CE",
+          "entryPx": 237.3,
+          "curPx": 240.8
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24800,
+          "type": "PE",
+          "entryPx": 301.55,
+          "curPx": 302.25
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24500,
+          "type": "PE",
+          "entryPx": 211.3,
+          "curPx": 212.55
+        }
+      ],
+      "capital": 56074,
+      "maxCredit": 25608.75,
+      "maxLoss": 9000,
+      "entryIv": 15.09,
+      "curIv": 15.09,
+      "grossMtm": 326.25,
+      "estCharges": 494.76,
+      "netMtm": -168.51,
+      "unitLegs": 450
+    },
+    {
+      "id": "OPEN-20261109-NIF-1229-S2",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-12-29",
+      "kind": "Monthly",
+      "dte": 50,
+      "frontScope": false,
+      "strat": "S2",
+      "stratName": "S2 \u00b7 Gamma Expansion Long Straddle",
+      "metrics": "IV 14.16% \u00b7 HV10 14.82% \u00b7 IV\u2212HV10 -0.66 pp",
+      "legs": [
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "CE",
+          "entryPx": 583.2,
+          "curPx": 592.35
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "PE",
+          "entryPx": 462.5,
+          "curPx": 462.75
+        }
+      ],
+      "capital": 78427,
+      "maxCredit": 50977.88,
+      "maxLoss": 78427.5,
+      "entryIv": 14.16,
+      "curIv": 14.16,
+      "grossMtm": 705.0,
+      "estCharges": 281.7,
+      "netMtm": 423.3,
+      "unitLegs": 150
+    },
+    {
+      "id": "OPEN-20261109-NIF-1229-S4",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-12-29",
+      "kind": "Monthly",
+      "dte": 50,
+      "frontScope": false,
+      "strat": "S4",
+      "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)",
+      "metrics": "RR25 +2.15 pp \u00b7 BF25 +0.26 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 24900,
+          "type": "PE",
+          "entryPx": 399.2,
+          "curPx": 399.5
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 24600,
+          "type": "PE",
+          "entryPx": 303.55,
+          "curPx": 303.65
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25300,
+          "type": "CE",
+          "entryPx": 455.7,
+          "curPx": 458.95
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25600,
+          "type": "CE",
+          "entryPx": 325.55,
+          "curPx": 331.2
+        }
+      ],
+      "capital": 56074,
+      "maxCredit": 24108.75,
+      "maxLoss": 9000,
+      "entryIv": 14.16,
+      "curIv": 14.16,
+      "grossMtm": 150.0,
+      "estCharges": 578.61,
+      "netMtm": -428.61,
+      "unitLegs": 450
+    },
+    {
+      "id": "OPEN-20261109-NIF-1229-S6",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2026-12-29",
+      "kind": "Monthly",
+      "dte": 50,
+      "frontScope": false,
+      "strat": "S6",
+      "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor",
+      "metrics": "Basis -6.8 pts \u00b7 BF25 +0.26 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 25200,
+          "type": "CE",
+          "entryPx": 506.5,
+          "curPx": 508.15
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 25500,
+          "type": "CE",
+          "entryPx": 366.55,
+          "curPx": 369.6
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24800,
+          "type": "PE",
+          "entryPx": 365.0,
+          "curPx": 363.7
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24500,
+          "type": "PE",
+          "entryPx": 274.55,
+          "curPx": 273.85
+        }
+      ],
+      "capital": 56074,
+      "maxCredit": 27776.25,
+      "maxLoss": 9000,
+      "entryIv": 14.16,
+      "curIv": 14.16,
+      "grossMtm": 255.0,
+      "estCharges": 613.85,
+      "netMtm": -358.85,
+      "unitLegs": 450
+    },
+    {
+      "id": "OPEN-20261109-NIF-0125-S2",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2027-01-25",
+      "kind": "Monthly",
+      "dte": 77,
+      "frontScope": false,
+      "strat": "S2",
+      "stratName": "S2 \u00b7 Gamma Expansion Long Straddle",
+      "metrics": "IV 13.31% \u00b7 HV10 14.82% \u00b7 IV\u2212HV10 -1.51 pp",
+      "legs": [
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "CE",
+          "entryPx": 743.75,
+          "curPx": 743.75
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25050,
+          "type": "PE",
+          "entryPx": 506.1,
+          "curPx": 502.2
+        }
+      ],
+      "capital": 93738,
+      "maxCredit": 60930.19,
+      "maxLoss": 93738.75,
+      "entryIv": 13.31,
+      "curIv": 13.31,
+      "grossMtm": -292.5,
+      "estCharges": 316.08,
+      "netMtm": -608.58,
+      "unitLegs": 150
+    },
+    {
+      "id": "OPEN-20261109-NIF-0125-S4",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2027-01-25",
+      "kind": "Monthly",
+      "dte": 77,
+      "frontScope": false,
+      "strat": "S4",
+      "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)",
+      "metrics": "RR25 +2.27 pp \u00b7 BF25 +0.38 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 24900,
+          "type": "PE",
+          "entryPx": 446.15,
+          "curPx": 450.0
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 24600,
+          "type": "PE",
+          "entryPx": 358.7,
+          "curPx": 356.0
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25300,
+          "type": "CE",
+          "entryPx": 620.0,
+          "curPx": 612.3
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25600,
+          "type": "CE",
+          "entryPx": 460.6,
+          "curPx": 471.15
+        }
+      ],
+      "capital": 56074,
+      "maxCredit": 25072.5,
+      "maxLoss": 9000,
+      "entryIv": 13.31,
+      "curIv": 13.31,
+      "grossMtm": 386.25,
+      "estCharges": 667.92,
+      "netMtm": -281.67,
+      "unitLegs": 450
+    },
+    {
+      "id": "OPEN-20261109-NIF-0125-S6",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "NIFTY",
+      "exp": "2027-01-25",
+      "kind": "Monthly",
+      "dte": 77,
+      "frontScope": false,
+      "strat": "S6",
+      "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor",
+      "metrics": "Basis -18.5 pts \u00b7 BF25 +0.38 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 25200,
+          "type": "CE",
+          "entryPx": 668.0,
+          "curPx": 672.35
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 25500,
+          "type": "CE",
+          "entryPx": 510.55,
+          "curPx": 512.0
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24800,
+          "type": "PE",
+          "entryPx": 414.7,
+          "curPx": 416.3
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24500,
+          "type": "PE",
+          "entryPx": 324.1,
+          "curPx": 324.9
+        }
+      ],
+      "capital": 56074,
+      "maxCredit": 30412.5,
+      "maxLoss": 9000,
+      "entryIv": 13.31,
+      "curIv": 13.31,
+      "grossMtm": -495.0,
+      "estCharges": 740.18,
+      "netMtm": -1235.18,
+      "unitLegs": 450
+    },
+    {
+      "id": "OPEN-20261109-BAN-1123-S2",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 13:30 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "frontScope": true,
+      "strat": "S2",
+      "stratName": "S2 \u00b7 Gamma Expansion Long Straddle",
+      "metrics": "IV 16.70% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -1.00 pp",
+      "legs": [
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59100,
+          "type": "CE",
+          "entryPx": 767.6,
+          "curPx": 1048.3
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59100,
+          "type": "PE",
+          "entryPx": 830.0,
+          "curPx": 576.0
+        }
+      ],
+      "capital": 47928,
+      "maxCredit": 31153.2,
+      "maxLoss": 47928.0,
+      "entryIv": 16.7,
+      "curIv": 16.7,
+      "grossMtm": 801.0,
+      "estCharges": 209.57,
+      "netMtm": 591.43,
+      "unitLegs": 60
+    },
+    {
+      "id": "OPEN-20261109-BAN-1123-S4",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 13:30 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "frontScope": true,
+      "strat": "S4",
+      "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)",
+      "metrics": "RR25 +2.22 pp \u00b7 BF25 +0.60 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 59400,
+          "type": "PE",
+          "entryPx": 989.25,
+          "curPx": 695.15
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 58800,
+          "type": "PE",
+          "entryPx": 690.25,
+          "curPx": 472.45
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 60200,
+          "type": "CE",
+          "entryPx": 348.8,
+          "curPx": 502.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 60800,
+          "type": "CE",
+          "entryPx": 216.4,
+          "curPx": 312.0
+        }
+      ],
+      "capital": 53140,
+      "maxCredit": 21912.0,
+      "maxLoss": 9000,
+      "entryIv": 16.7,
+      "curIv": 16.7,
+      "grossMtm": 2850.0,
+      "estCharges": 442.45,
+      "netMtm": 2407.55,
+      "unitLegs": 180
+    },
+    {
+      "id": "OPEN-20261109-BAN-1123-S6",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "frontScope": true,
+      "strat": "S6",
+      "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor",
+      "metrics": "Basis -46.4 pts \u00b7 BF25 +0.60 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 60000,
+          "type": "CE",
+          "entryPx": 568.0,
+          "curPx": 583.25
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 60600,
+          "type": "CE",
+          "entryPx": 358.05,
+          "curPx": 366.1
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 59200,
+          "type": "PE",
+          "entryPx": 640.7,
+          "curPx": 612.05
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 58600,
+          "type": "PE",
+          "entryPx": 436.5,
+          "curPx": 414.7
+        }
+      ],
+      "capital": 53140,
+      "maxCredit": 18723.0,
+      "maxLoss": 9000,
+      "entryIv": 16.7,
+      "curIv": 16.7,
+      "grossMtm": -226.5,
+      "estCharges": 396.85,
+      "netMtm": -623.35,
+      "unitLegs": 180
+    },
+    {
+      "id": "OPEN-20261109-BAN-1229-S2",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-12-29",
+      "kind": "Monthly",
+      "dte": 50,
+      "frontScope": false,
+      "strat": "S2",
+      "stratName": "S2 \u00b7 Gamma Expansion Long Straddle",
+      "metrics": "IV 14.48% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -3.22 pp",
+      "legs": [
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59700,
+          "type": "CE",
+          "entryPx": 1425.95,
+          "curPx": 1423.8
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59700,
+          "type": "PE",
+          "entryPx": 1175.0,
+          "curPx": 1147.95
+        }
+      ],
+      "capital": 78028,
+      "maxCredit": 50718.53,
+      "maxLoss": 78028.5,
+      "entryIv": 14.48,
+      "curIv": 14.48,
+      "grossMtm": -876.0,
+      "estCharges": 277.71,
+      "netMtm": -1153.71,
+      "unitLegs": 60
+    },
+    {
+      "id": "OPEN-20261109-BAN-1229-S4",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-12-29",
+      "kind": "Monthly",
+      "dte": 50,
+      "frontScope": false,
+      "strat": "S4",
+      "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)",
+      "metrics": "RR25 +1.76 pp \u00b7 BF25 +0.35 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 59400,
+          "type": "PE",
+          "entryPx": 1045.05,
+          "curPx": 1045.05
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 58800,
+          "type": "PE",
+          "entryPx": 825.1,
+          "curPx": 808.1
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 60200,
+          "type": "CE",
+          "entryPx": 1160.0,
+          "curPx": 1147.05
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 60800,
+          "type": "CE",
+          "entryPx": 885.75,
+          "curPx": 885.75
+        }
+      ],
+      "capital": 53140,
+      "maxCredit": 21424.5,
+      "maxLoss": 9000,
+      "entryIv": 14.48,
+      "curIv": 14.48,
+      "grossMtm": -631.5,
+      "estCharges": 598.2,
+      "netMtm": -1229.7,
+      "unitLegs": 180
+    },
+    {
+      "id": "OPEN-20261109-BAN-1229-S6",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-12-29",
+      "kind": "Monthly",
+      "dte": 50,
+      "frontScope": false,
+      "strat": "S6",
+      "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor",
+      "metrics": "Basis +5.8 pts \u00b7 BF25 +0.35 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 60000,
+          "type": "CE",
+          "entryPx": 1259.65,
+          "curPx": 1266.0
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 60600,
+          "type": "CE",
+          "entryPx": 978.0,
+          "curPx": 966.15
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 59200,
+          "type": "PE",
+          "entryPx": 974.85,
+          "curPx": 944.75
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 58600,
+          "type": "PE",
+          "entryPx": 760.0,
+          "curPx": 745.85
+        }
+      ],
+      "capital": 53140,
+      "maxCredit": 23344.5,
+      "maxLoss": 9000,
+      "entryIv": 14.48,
+      "curIv": 14.48,
+      "grossMtm": -613.5,
+      "estCharges": 628.09,
+      "netMtm": -1241.59,
+      "unitLegs": 180
+    },
+    {
+      "id": "OPEN-20261109-BAN-0125-S2",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2027-01-25",
+      "kind": "Monthly",
+      "dte": 77,
+      "frontScope": false,
+      "strat": "S2",
+      "stratName": "S2 \u00b7 Gamma Expansion Long Straddle",
+      "metrics": "IV 14.12% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -3.58 pp",
+      "legs": [
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59500,
+          "type": "CE",
+          "entryPx": 1908.0,
+          "curPx": 1963.45
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59500,
+          "type": "PE",
+          "entryPx": 1200.0,
+          "curPx": 1200.0
+        }
+      ],
+      "capital": 93240,
+      "maxCredit": 60606.0,
+      "maxLoss": 93240.0,
+      "entryIv": 14.12,
+      "curIv": 14.12,
+      "grossMtm": 1663.5,
+      "estCharges": 318.65,
+      "netMtm": 1344.85,
+      "unitLegs": 60
+    },
+    {
+      "id": "OPEN-20261109-BAN-0125-S4",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2027-01-25",
+      "kind": "Monthly",
+      "dte": 77,
+      "frontScope": false,
+      "strat": "S4",
+      "stratName": "S4 \u00b7 Steep Put Skew Ratio (1x2)",
+      "metrics": "RR25 +13.65 pp \u00b7 BF25 +6.04 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 59200,
+          "type": "PE",
+          "entryPx": 1444.4,
+          "curPx": 1444.4
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 58600,
+          "type": "PE",
+          "entryPx": 1020.0,
+          "curPx": 1020.0
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 60000,
+          "type": "CE",
+          "entryPx": 1610.0,
+          "curPx": 1619.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 60600,
+          "type": "CE",
+          "entryPx": 417.1,
+          "curPx": 417.1
+        }
+      ],
+      "capital": 53140,
+      "maxCredit": 61251.0,
+      "maxLoss": 9000,
+      "entryIv": 14.12,
+      "curIv": 14.12,
+      "grossMtm": -270.0,
+      "estCharges": 683.67,
+      "netMtm": -953.67,
+      "unitLegs": 180
+    },
+    {
+      "id": "OPEN-20261109-BAN-0125-S6",
+      "date": "2026-11-09",
+      "trigTime": "09 Nov 15:15 IST",
+      "markedAt": "09 Nov 15:30 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2027-01-25",
+      "kind": "Monthly",
+      "dte": 77,
+      "frontScope": false,
+      "strat": "S6",
+      "stratName": "S6 \u00b7 Synthetic Basis Skewed Condor",
+      "metrics": "Basis +13.4 pts \u00b7 BF25 +6.04 pp",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 59800,
+          "type": "CE",
+          "entryPx": 537.8,
+          "curPx": 537.8
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 60400,
+          "type": "CE",
+          "entryPx": 1268.35,
+          "curPx": 1268.35
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 59000,
+          "type": "PE",
+          "entryPx": 1004.0,
+          "curPx": 990.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 58400,
+          "type": "PE",
+          "entryPx": 1189.4,
+          "curPx": 1189.4
+        }
+      ],
+      "capital": 53140,
+      "maxCredit": 450.0,
+      "maxLoss": 9000,
+      "entryIv": 14.12,
+      "curIv": 14.12,
+      "grossMtm": 420.0,
+      "estCharges": 601.55,
+      "netMtm": -181.55,
+      "unitLegs": 180
+    }
+  ],
+  "closed_trades": [
+    {
+      "id": "FWD-20261102-BAN-S4",
+      "date": "2026-11-02",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 21,
+      "strat": "S4",
+      "trigReason": "Put Skew RR25 +2.77 pp >= +1.50 pp \u00b7 DTE 21d",
+      "sig": "RR25 +2.77 pp \u00b7 VRP +1.05 pp",
+      "legsText": "S2 54700PE (581.1\u2192600.2) / B2 54100PE (400.6\u2192410.6) / S 55500CE (619.5\u2192563.1) / B 56100CE (376.6\u2192335.1)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 54700,
+          "type": "PE",
+          "entryPx": 581.1,
+          "exitPx": 600.2
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 54100,
+          "type": "PE",
+          "entryPx": 400.6,
+          "exitPx": 410.6
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 55500,
+          "type": "CE",
+          "entryPx": 619.5,
+          "exitPx": 563.1
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 56100,
+          "type": "CE",
+          "entryPx": 376.6,
+          "exitPx": 335.1
+        }
+      ],
+      "capital": 49463,
+      "maxCredit": 18117.0,
+      "maxLoss": 9000,
+      "entryIv": 14.84,
+      "gross": -93.0,
+      "charges": 397.83,
+      "net": -490.83,
+      "unitLegs": 180,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 14.84
+        },
+        {
+          "t": "11:15",
+          "gross": 398.85,
+          "iv": 14.54
+        },
+        {
+          "t": "13:30",
+          "gross": -429.05,
+          "iv": 14.25
+        },
+        {
+          "t": "15:15",
+          "gross": -93.0,
+          "iv": 14.84
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261102-NIF-S1",
+      "date": "2026-11-02",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 7,
+      "strat": "S1",
+      "trigReason": "VRP30 +2.51 pp >= +1.50 \u00b7 HV30 12.69% <= 16.5%",
+      "sig": "IV 15.20% \u00b7 HV30 12.69% \u00b7 VRP +2.51 pp",
+      "legsText": "S 23450CE (117.3\u2192133.0) / S 23050PE (111.7\u219289.3) / B 23750CE (37.0\u219244.9) / B 22750PE (52.5\u219239.2)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23450,
+          "type": "CE",
+          "entryPx": 117.3,
+          "exitPx": 133.0
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23050,
+          "type": "PE",
+          "entryPx": 111.7,
+          "exitPx": 89.3
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 23750,
+          "type": "CE",
+          "entryPx": 37.0,
+          "exitPx": 44.9
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 22750,
+          "type": "PE",
+          "entryPx": 52.5,
+          "exitPx": 39.2
+        }
+      ],
+      "capital": 26174,
+      "maxCredit": 10462.5,
+      "maxLoss": 12037.5,
+      "entryIv": 15.2,
+      "gross": 90.0,
+      "charges": 244.43,
+      "net": -154.43,
+      "unitLegs": 300,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 15.2
+        },
+        {
+          "t": "11:15",
+          "gross": 399.5,
+          "iv": 14.9
+        },
+        {
+          "t": "13:30",
+          "gross": 326.5,
+          "iv": 14.59
+        },
+        {
+          "t": "15:15",
+          "gross": 90.0,
+          "iv": 15.2
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261102-NIF-S3",
+      "date": "2026-11-02",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 7,
+      "strat": "S3",
+      "trigReason": "ATM IV 15.20% >= 15.2% \u00b7 VRP30 +2.51 pp \u00b7 DTE 7d",
+      "sig": "ATM IV 15.20% \u2192 14.64% \u00b7 DTE 7d",
+      "legsText": "S 23250CE (215.8\u2192234.7) / S 23250PE (184.6\u2192153.6) / B 23600CE (67.8\u219279.4) / B 22900PE (77.1\u219258.6)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23250,
+          "type": "CE",
+          "entryPx": 215.8,
+          "exitPx": 234.7
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23250,
+          "type": "PE",
+          "entryPx": 184.6,
+          "exitPx": 153.6
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 23600,
+          "type": "CE",
+          "entryPx": 67.8,
+          "exitPx": 79.4
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 22900,
+          "type": "PE",
+          "entryPx": 77.1,
+          "exitPx": 58.6
+        }
+      ],
+      "capital": 26174,
+      "maxCredit": 19162.5,
+      "maxLoss": 7087.5,
+      "entryIv": 15.2,
+      "gross": 390.0,
+      "charges": 284.35,
+      "net": 105.65,
+      "unitLegs": 300,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 15.2
+        },
+        {
+          "t": "11:15",
+          "gross": 564.5,
+          "iv": 14.9
+        },
+        {
+          "t": "13:30",
+          "gross": 581.5,
+          "iv": 14.59
+        },
+        {
+          "t": "15:15",
+          "gross": 390.0,
+          "iv": 15.2
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261102-NIF-S4",
+      "date": "2026-11-02",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 7,
+      "strat": "S4",
+      "trigReason": "Put Skew RR25 +2.90 pp >= +1.50 pp \u00b7 DTE 7d",
+      "sig": "RR25 +2.90 pp \u00b7 VRP +2.51 pp",
+      "legsText": "S2 23100PE (127.8\u2192102.4) / B2 22800PE (60.2\u219245.2) / S 23500CE (99.3\u2192112.8) / B 23800CE (29.8\u219237.1)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 23100,
+          "type": "PE",
+          "entryPx": 127.8,
+          "exitPx": 102.4
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 22800,
+          "type": "PE",
+          "entryPx": 60.2,
+          "exitPx": 45.2
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23500,
+          "type": "CE",
+          "entryPx": 99.3,
+          "exitPx": 112.8
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 23800,
+          "type": "CE",
+          "entryPx": 29.8,
+          "exitPx": 37.1
+        }
+      ],
+      "capital": 52347,
+      "maxCredit": 15352.5,
+      "maxLoss": 9000,
+      "entryIv": 15.2,
+      "gross": 1095.0,
+      "charges": 274.09,
+      "net": 820.91,
+      "unitLegs": 450,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 15.2
+        },
+        {
+          "t": "11:15",
+          "gross": 952.25,
+          "iv": 14.9
+        },
+        {
+          "t": "13:30",
+          "gross": 1180.75,
+          "iv": 14.59
+        },
+        {
+          "t": "15:15",
+          "gross": 1095.0,
+          "iv": 15.2
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261103-BAN-S4",
+      "date": "2026-11-03",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 20,
+      "strat": "S4",
+      "trigReason": "Put Skew RR25 +2.83 pp >= +1.50 pp \u00b7 DTE 20d",
+      "sig": "RR25 +2.83 pp \u00b7 VRP +0.67 pp",
+      "legsText": "S2 55000PE (559.5\u2192537.4) / B2 54400PE (373.1\u2192361.2) / S 55800CE (567.5\u2192610.9) / B 56400CE (332.3\u2192365.9)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 55000,
+          "type": "PE",
+          "entryPx": 559.5,
+          "exitPx": 537.4
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 54400,
+          "type": "PE",
+          "entryPx": 373.1,
+          "exitPx": 361.2
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 55800,
+          "type": "CE",
+          "entryPx": 567.5,
+          "exitPx": 610.9
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 56400,
+          "type": "CE",
+          "entryPx": 332.3,
+          "exitPx": 365.9
+        }
+      ],
+      "capital": 49765,
+      "maxCredit": 18240.0,
+      "maxLoss": 9000,
+      "entryIv": 14.39,
+      "gross": 325.5,
+      "charges": 386.02,
+      "net": -60.52,
+      "unitLegs": 180,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 14.39
+        },
+        {
+          "t": "11:15",
+          "gross": 529.02,
+          "iv": 14.1
+        },
+        {
+          "t": "13:30",
+          "gross": 526.67,
+          "iv": 13.81
+        },
+        {
+          "t": "15:15",
+          "gross": 325.5,
+          "iv": 14.39
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261103-NIF-S1",
+      "date": "2026-11-03",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 6,
+      "strat": "S1",
+      "trigReason": "VRP30 +2.04 pp >= +1.50 \u00b7 HV30 12.85% <= 16.5%",
+      "sig": "IV 14.89% \u00b7 HV30 12.85% \u00b7 VRP +2.04 pp",
+      "legsText": "S 23800CE (87.5\u2192142.8) / S 23400PE (116.3\u219279.7) / B 24100CE (27.2\u219254.6) / B 23100PE (51.3\u219237.3)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23800,
+          "type": "CE",
+          "entryPx": 87.5,
+          "exitPx": 142.8
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23400,
+          "type": "PE",
+          "entryPx": 116.3,
+          "exitPx": 79.7
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24100,
+          "type": "CE",
+          "entryPx": 27.2,
+          "exitPx": 54.6
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 23100,
+          "type": "PE",
+          "entryPx": 51.3,
+          "exitPx": 37.3
+        }
+      ],
+      "capital": 26533,
+      "maxCredit": 9397.5,
+      "maxLoss": 13102.5,
+      "entryIv": 14.89,
+      "gross": -397.5,
+      "charges": 241.56,
+      "net": -639.06,
+      "unitLegs": 300,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 14.89
+        },
+        {
+          "t": "11:15",
+          "gross": 231.37,
+          "iv": 14.59
+        },
+        {
+          "t": "13:30",
+          "gross": -687.88,
+          "iv": 14.29
+        },
+        {
+          "t": "15:15",
+          "gross": -397.5,
+          "iv": 14.89
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261103-NIF-S4",
+      "date": "2026-11-03",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 6,
+      "strat": "S4",
+      "trigReason": "Put Skew RR25 +3.11 pp >= +1.50 pp \u00b7 DTE 6d",
+      "sig": "RR25 +3.11 pp \u00b7 VRP +2.04 pp",
+      "legsText": "S2 23450PE (133.8\u219291.5) / B2 23150PE (59.1\u219242.3) / S 23850CE (72.5\u2192123.0) / B 24150CE (22.6\u219246.5)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 23450,
+          "type": "PE",
+          "entryPx": 133.8,
+          "exitPx": 91.5
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 23150,
+          "type": "PE",
+          "entryPx": 59.1,
+          "exitPx": 42.3
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23850,
+          "type": "CE",
+          "entryPx": 72.5,
+          "exitPx": 123.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24150,
+          "type": "CE",
+          "entryPx": 22.6,
+          "exitPx": 46.5
+        }
+      ],
+      "capital": 53065,
+      "maxCredit": 14947.5,
+      "maxLoss": 9000,
+      "entryIv": 14.89,
+      "gross": 1830.0,
+      "charges": 271.77,
+      "net": 1558.23,
+      "unitLegs": 450,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 14.89
+        },
+        {
+          "t": "11:15",
+          "gross": 1356.5,
+          "iv": 14.59
+        },
+        {
+          "t": "13:30",
+          "gross": 1805.5,
+          "iv": 14.29
+        },
+        {
+          "t": "15:15",
+          "gross": 1830.0,
+          "iv": 14.89
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261104-BAN-S4",
+      "date": "2026-11-04",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 19,
+      "strat": "S4",
+      "trigReason": "Put Skew RR25 +3.25 pp >= +1.50 pp \u00b7 DTE 19d",
+      "sig": "RR25 +3.25 pp \u00b7 VRP +0.89 pp",
+      "legsText": "S2 55500PE (626.7\u2192534.0) / B2 54900PE (429.9\u2192354.6) / S 56300CE (522.0\u2192525.2) / B 56900CE (298.9\u2192296.6)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 55500,
+          "type": "PE",
+          "entryPx": 626.7,
+          "exitPx": 534.0
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 54900,
+          "type": "PE",
+          "entryPx": 429.9,
+          "exitPx": 354.6
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 56300,
+          "type": "CE",
+          "entryPx": 522.0,
+          "exitPx": 525.2
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 56900,
+          "type": "CE",
+          "entryPx": 298.9,
+          "exitPx": 296.6
+        }
+      ],
+      "capital": 50180,
+      "maxCredit": 18501.0,
+      "maxLoss": 9000,
+      "entryIv": 14.86,
+      "gross": 883.5,
+      "charges": 386.22,
+      "net": 497.28,
+      "unitLegs": 180,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 14.86
+        },
+        {
+          "t": "11:15",
+          "gross": 835.92,
+          "iv": 14.56
+        },
+        {
+          "t": "13:30",
+          "gross": 1000.98,
+          "iv": 14.27
+        },
+        {
+          "t": "15:15",
+          "gross": 883.5,
+          "iv": 14.86
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261104-NIF-S1",
+      "date": "2026-11-04",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 5,
+      "strat": "S1",
+      "trigReason": "VRP30 +3.83 pp >= +1.50 \u00b7 HV30 13.11% <= 16.5%",
+      "sig": "IV 16.94% \u00b7 HV30 13.11% \u00b7 VRP +3.83 pp",
+      "legsText": "S 24100CE (102.2\u219293.5) / S 23700PE (121.7\u219272.8) / B 24400CE (38.7\u219230.8) / B 23400PE (51.5\u219224.9)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24100,
+          "type": "CE",
+          "entryPx": 102.2,
+          "exitPx": 93.5
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23700,
+          "type": "PE",
+          "entryPx": 121.7,
+          "exitPx": 72.8
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24400,
+          "type": "CE",
+          "entryPx": 38.7,
+          "exitPx": 30.8
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 23400,
+          "type": "PE",
+          "entryPx": 51.5,
+          "exitPx": 24.9
+        }
+      ],
+      "capital": 26884,
+      "maxCredit": 10027.5,
+      "maxLoss": 12472.5,
+      "entryIv": 16.94,
+      "gross": 1728.75,
+      "charges": 237.71,
+      "net": 1491.04,
+      "unitLegs": 300,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 16.94
+        },
+        {
+          "t": "11:15",
+          "gross": 1300.81,
+          "iv": 16.6
+        },
+        {
+          "t": "13:30",
+          "gross": 1719.44,
+          "iv": 16.26
+        },
+        {
+          "t": "15:15",
+          "gross": 1728.75,
+          "iv": 16.94
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261104-NIF-S3",
+      "date": "2026-11-04",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 5,
+      "strat": "S3",
+      "trigReason": "ATM IV 16.94% >= 15.2% \u00b7 VRP30 +3.83 pp \u00b7 DTE 5d",
+      "sig": "ATM IV 16.94% \u2192 14.47% \u00b7 DTE 5d",
+      "legsText": "S 23900CE (182.3\u2192178.9) / S 23900PE (206.4\u2192145.6) / B 24250CE (63.4\u219254.2) / B 23550PE (79.1\u219241.9)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23900,
+          "type": "CE",
+          "entryPx": 182.3,
+          "exitPx": 178.9
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23900,
+          "type": "PE",
+          "entryPx": 206.4,
+          "exitPx": 145.6
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24250,
+          "type": "CE",
+          "entryPx": 63.4,
+          "exitPx": 54.2
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 23550,
+          "type": "PE",
+          "entryPx": 79.1,
+          "exitPx": 41.9
+        }
+      ],
+      "capital": 26884,
+      "maxCredit": 18465.0,
+      "maxLoss": 7785.0,
+      "entryIv": 16.94,
+      "gross": 1338.75,
+      "charges": 274.41,
+      "net": 1064.34,
+      "unitLegs": 300,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 16.94
+        },
+        {
+          "t": "11:15",
+          "gross": 1086.31,
+          "iv": 16.6
+        },
+        {
+          "t": "13:30",
+          "gross": 1387.94,
+          "iv": 16.26
+        },
+        {
+          "t": "15:15",
+          "gross": 1338.75,
+          "iv": 16.94
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261104-NIF-S4",
+      "date": "2026-11-04",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 5,
+      "strat": "S4",
+      "trigReason": "Put Skew RR25 +2.44 pp >= +1.50 pp \u00b7 DTE 5d",
+      "sig": "RR25 +2.44 pp \u00b7 VRP +3.83 pp",
+      "legsText": "S2 23750PE (139.2\u219287.2) / B2 23450PE (59.2\u219229.4) / S 24150CE (87.7\u219278.2) / B 24450CE (32.8\u219225.6)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 23750,
+          "type": "PE",
+          "entryPx": 139.2,
+          "exitPx": 87.2
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 23450,
+          "type": "PE",
+          "entryPx": 59.2,
+          "exitPx": 29.4
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24150,
+          "type": "CE",
+          "entryPx": 87.7,
+          "exitPx": 78.2
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24450,
+          "type": "CE",
+          "entryPx": 32.8,
+          "exitPx": 25.6
+        }
+      ],
+      "capital": 53769,
+      "maxCredit": 16117.5,
+      "maxLoss": 9000,
+      "entryIv": 16.94,
+      "gross": 3517.5,
+      "charges": 267.32,
+      "net": 3250.18,
+      "unitLegs": 450,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 16.94
+        },
+        {
+          "t": "11:15",
+          "gross": 2284.62,
+          "iv": 16.6
+        },
+        {
+          "t": "13:30",
+          "gross": 3239.88,
+          "iv": 16.26
+        },
+        {
+          "t": "15:15",
+          "gross": 3517.5,
+          "iv": 16.94
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261104-NIF-S5",
+      "date": "2026-11-04",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 5,
+      "strat": "S5",
+      "trigReason": "IV\u2212HV10 +1.92 pp >= +0.80 pp \u00b7 DTE 5d",
+      "sig": "Straddle \u20b9388.8 \u2192 \u20b9324.5 \u00b7 IV\u2212HV10 +1.92 pp",
+      "legsText": "S 23900CE (182.3\u2192178.9) / S 23900PE (206.4\u2192145.6) / B 24150CE (87.7\u219278.2) / B 23650PE (105.7\u219260.6)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23900,
+          "type": "CE",
+          "entryPx": 182.3,
+          "exitPx": 178.9
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23900,
+          "type": "PE",
+          "entryPx": 206.4,
+          "exitPx": 145.6
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24150,
+          "type": "CE",
+          "entryPx": 87.7,
+          "exitPx": 78.2
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 23650,
+          "type": "PE",
+          "entryPx": 105.7,
+          "exitPx": 60.6
+        }
+      ],
+      "capital": 26884,
+      "maxCredit": 14647.5,
+      "maxLoss": 4102.5,
+      "entryIv": 16.94,
+      "gross": 720.0,
+      "charges": 282.27,
+      "net": 437.73,
+      "unitLegs": 300,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 16.94
+        },
+        {
+          "t": "11:15",
+          "gross": 746.0,
+          "iv": 16.6
+        },
+        {
+          "t": "13:30",
+          "gross": 862.0,
+          "iv": 16.26
+        },
+        {
+          "t": "15:15",
+          "gross": 720.0,
+          "iv": 16.94
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261104-NIF-S6",
+      "date": "2026-11-04",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 5,
+      "strat": "S6",
+      "trigReason": "Basis -46.1 pts \u00b7 BF25 +0.44 pp",
+      "sig": "Basis -46.1 pts \u00b7 BF25 +0.44 pp",
+      "legsText": "S2 24050CE (118.8\u2192111.5) / B2 24350CE (45.6\u219237.2) / S 23650PE (105.7\u219260.6) / B 23350PE (44.5\u219221.4)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 24050,
+          "type": "CE",
+          "entryPx": 118.8,
+          "exitPx": 111.5
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 24350,
+          "type": "CE",
+          "entryPx": 45.6,
+          "exitPx": 37.2
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 23650,
+          "type": "PE",
+          "entryPx": 105.7,
+          "exitPx": 60.6
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 23350,
+          "type": "PE",
+          "entryPx": 44.5,
+          "exitPx": 21.4
+        }
+      ],
+      "capital": 53769,
+      "maxCredit": 15570.0,
+      "maxLoss": 9000,
+      "entryIv": 16.94,
+      "gross": 1500.0,
+      "charges": 266.23,
+      "net": 1233.77,
+      "unitLegs": 450,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 16.94
+        },
+        {
+          "t": "11:15",
+          "gross": 1175.0,
+          "iv": 16.6
+        },
+        {
+          "t": "13:30",
+          "gross": 1525.0,
+          "iv": 16.26
+        },
+        {
+          "t": "15:15",
+          "gross": 1500.0,
+          "iv": 16.94
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261105-BAN-S2",
+      "date": "2026-11-05",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 18,
+      "strat": "S2",
+      "trigReason": "IV 13.31% < HV10 13.65% (IV\u2212HV10 -0.34 pp)",
+      "sig": "IV 13.31% \u00b7 HV10 13.65% \u00b7 IV\u2212HV10 -0.34 pp",
+      "legsText": "B 56900CE (679.2\u21921330.9) / B 56900PE (672.0\u2192359.4)",
+      "legs": [
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 56900,
+          "type": "CE",
+          "entryPx": 679.2,
+          "exitPx": 1330.9
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 56900,
+          "type": "PE",
+          "entryPx": 672.0,
+          "exitPx": 359.4
+        }
+      ],
+      "capital": 40538,
+      "maxCredit": 26348.4,
+      "maxLoss": 40536.0,
+      "entryIv": 13.31,
+      "gross": 10173.0,
+      "charges": 210.05,
+      "net": 9962.95,
+      "unitLegs": 60,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 13.31
+        },
+        {
+          "t": "11:15",
+          "gross": 5945.15,
+          "iv": 13.04
+        },
+        {
+          "t": "13:30",
+          "gross": 8897.05,
+          "iv": 12.78
+        },
+        {
+          "t": "15:15",
+          "gross": 10173.0,
+          "iv": 13.31
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261105-BAN-S4",
+      "date": "2026-11-05",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 18,
+      "strat": "S4",
+      "trigReason": "Put Skew RR25 +2.48 pp >= +1.50 pp \u00b7 DTE 18d",
+      "sig": "RR25 +2.48 pp \u00b7 VRP -0.73 pp",
+      "legsText": "S2 56600PE (542.0\u2192293.2) / B2 56000PE (350.2\u2192200.4) / S 57400CE (441.4\u2192986.1) / B 58000CE (233.9\u2192650.0)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 56600,
+          "type": "PE",
+          "entryPx": 542.0,
+          "exitPx": 293.2
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 56000,
+          "type": "PE",
+          "entryPx": 350.2,
+          "exitPx": 200.4
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 57400,
+          "type": "CE",
+          "entryPx": 441.4,
+          "exitPx": 986.1
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 58000,
+          "type": "CE",
+          "entryPx": 233.9,
+          "exitPx": 650.0
+        }
+      ],
+      "capital": 51187,
+      "maxCredit": 17733.0,
+      "maxLoss": 9000,
+      "entryIv": 13.31,
+      "gross": 2077.5,
+      "charges": 371.09,
+      "net": 1706.41,
+      "unitLegs": 180,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 13.31
+        },
+        {
+          "t": "11:15",
+          "gross": 1492.62,
+          "iv": 13.04
+        },
+        {
+          "t": "13:30",
+          "gross": 2015.88,
+          "iv": 12.78
+        },
+        {
+          "t": "15:15",
+          "gross": 2077.5,
+          "iv": 13.31
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261105-NIF-S1",
+      "date": "2026-11-05",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 4,
+      "strat": "S1",
+      "trigReason": "VRP30 +1.61 pp >= +1.50 \u00b7 HV30 13.18% <= 16.5%",
+      "sig": "IV 14.79% \u00b7 HV30 13.18% \u00b7 VRP +1.61 pp",
+      "legsText": "S 24550CE (74.0\u2192157.5) / S 24150PE (80.0\u219233.8) / B 24850CE (26.2\u219259.0) / B 23850PE (27.2\u219213.2)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24550,
+          "type": "CE",
+          "entryPx": 74.0,
+          "exitPx": 157.5
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24150,
+          "type": "PE",
+          "entryPx": 80.0,
+          "exitPx": 33.8
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24850,
+          "type": "CE",
+          "entryPx": 26.2,
+          "exitPx": 59.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 23850,
+          "type": "PE",
+          "entryPx": 27.2,
+          "exitPx": 13.2
+        }
+      ],
+      "capital": 27386,
+      "maxCredit": 7545.0,
+      "maxLoss": 14955.0,
+      "entryIv": 14.79,
+      "gross": -1380.0,
+      "charges": 229.65,
+      "net": -1609.65,
+      "unitLegs": 300,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 14.79
+        },
+        {
+          "t": "11:15",
+          "gross": -309.0,
+          "iv": 15.97
+        },
+        {
+          "t": "13:30",
+          "gross": -1523.0,
+          "iv": 14.2
+        },
+        {
+          "t": "15:15",
+          "gross": -1380.0,
+          "iv": 14.79
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261105-NIF-S5",
+      "date": "2026-11-05",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-09",
+      "kind": "Weekly",
+      "dte": 4,
+      "strat": "S5",
+      "trigReason": "IV\u2212HV10 +1.24 pp >= +0.80 pp \u00b7 DTE 4d",
+      "sig": "Straddle \u20b9309.9 \u2192 \u20b9311.9 \u00b7 IV\u2212HV10 +1.24 pp",
+      "legsText": "S 24350CE (147.6\u2192275.1) / S 24350PE (162.2\u219273.5) / B 24600CE (61.6\u2192135.0) / B 24100PE (66.6\u219228.0)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24350,
+          "type": "CE",
+          "entryPx": 147.6,
+          "exitPx": 275.1
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24350,
+          "type": "PE",
+          "entryPx": 162.2,
+          "exitPx": 73.5
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24600,
+          "type": "CE",
+          "entryPx": 61.6,
+          "exitPx": 135.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24100,
+          "type": "PE",
+          "entryPx": 66.6,
+          "exitPx": 28.0
+        }
+      ],
+      "capital": 27386,
+      "maxCredit": 13620.0,
+      "maxLoss": 5130.0,
+      "entryIv": 14.79,
+      "gross": -300.0,
+      "charges": 273.02,
+      "net": -573.02,
+      "unitLegs": 300,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 14.79
+        },
+        {
+          "t": "11:15",
+          "gross": 285.0,
+          "iv": 14.49
+        },
+        {
+          "t": "13:30",
+          "gross": -605.0,
+          "iv": 14.2
+        },
+        {
+          "t": "15:15",
+          "gross": -300.0,
+          "iv": 14.79
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261106-BAN-S2",
+      "date": "2026-11-06",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 17,
+      "strat": "S2",
+      "trigReason": "IV 15.66% < HV10 17.34% (IV\u2212HV10 -1.68 pp)",
+      "sig": "IV 15.66% \u00b7 HV10 17.34% \u00b7 IV\u2212HV10 -1.68 pp",
+      "legsText": "B 57600CE (732.0\u21921680.8) / B 57600PE (831.1\u2192373.2)",
+      "legs": [
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 57600,
+          "type": "CE",
+          "entryPx": 732.0,
+          "exitPx": 1680.8
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 57600,
+          "type": "PE",
+          "entryPx": 831.1,
+          "exitPx": 373.2
+        }
+      ],
+      "capital": 46893,
+      "maxCredit": 30480.45,
+      "maxLoss": 46893.0,
+      "entryIv": 15.66,
+      "gross": 14728.5,
+      "charges": 233.86,
+      "net": 14494.64,
+      "unitLegs": 60,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 15.66
+        },
+        {
+          "t": "11:15",
+          "gross": 8450.68,
+          "iv": 15.35
+        },
+        {
+          "t": "13:30",
+          "gross": 12769.23,
+          "iv": 15.03
+        },
+        {
+          "t": "15:15",
+          "gross": 14728.5,
+          "iv": 15.66
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261106-BAN-S4",
+      "date": "2026-11-06",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 17,
+      "strat": "S4",
+      "trigReason": "Put Skew RR25 +2.85 pp >= +1.50 pp \u00b7 DTE 17d",
+      "sig": "RR25 +2.85 pp \u00b7 VRP +0.09 pp",
+      "legsText": "S2 57300PE (696.2\u2192313.8) / B2 56700PE (486.1\u2192225.2) / S 58100CE (506.4\u21921308.9) / B 58700CE (309.2\u2192936.0)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 57300,
+          "type": "PE",
+          "entryPx": 696.2,
+          "exitPx": 313.8
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 56700,
+          "type": "PE",
+          "entryPx": 486.1,
+          "exitPx": 225.2
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 58100,
+          "type": "CE",
+          "entryPx": 506.4,
+          "exitPx": 1308.9
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 58700,
+          "type": "CE",
+          "entryPx": 309.2,
+          "exitPx": 936.0
+        }
+      ],
+      "capital": 51801,
+      "maxCredit": 18522.0,
+      "maxLoss": 9000,
+      "entryIv": 15.66,
+      "gross": 2022.0,
+      "charges": 421.56,
+      "net": 1600.44,
+      "unitLegs": 180,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 15.66
+        },
+        {
+          "t": "11:15",
+          "gross": 1462.1,
+          "iv": 15.35
+        },
+        {
+          "t": "13:30",
+          "gross": 1968.7,
+          "iv": 15.03
+        },
+        {
+          "t": "15:15",
+          "gross": 2022.0,
+          "iv": 15.66
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261109-BAN-S1",
+      "date": "2026-11-09",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "strat": "S1",
+      "trigReason": "VRP30 +1.99 pp >= +1.50 \u00b7 HV30 15.55% <= 16.5%",
+      "sig": "IV 17.54% \u00b7 HV30 15.55% \u00b7 VRP +1.99 pp",
+      "legsText": "S 59400CE (620.8\u2192861.0) / S 58600PE (649.0\u2192436.5) / B 60000CE (407.0\u2192568.0) / B 58000PE (441.1\u2192297.1)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 59400,
+          "type": "CE",
+          "entryPx": 620.8,
+          "exitPx": 861.0
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 58600,
+          "type": "PE",
+          "entryPx": 649.0,
+          "exitPx": 436.5
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 60000,
+          "type": "CE",
+          "entryPx": 407.0,
+          "exitPx": 568.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 58000,
+          "type": "PE",
+          "entryPx": 441.1,
+          "exitPx": 297.1
+        }
+      ],
+      "capital": 26570,
+      "maxCredit": 12651.0,
+      "maxLoss": 5349.0,
+      "entryIv": 17.54,
+      "gross": -324.0,
+      "charges": 340.79,
+      "net": -664.79,
+      "unitLegs": 120,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 1.5,
+          "iv": 17.54
+        },
+        {
+          "t": "09:30",
+          "gross": -153.0,
+          "iv": 17.66
+        },
+        {
+          "t": "09:45",
+          "gross": -111.0,
+          "iv": 17.27
+        },
+        {
+          "t": "10:00",
+          "gross": -163.5,
+          "iv": 17.09
+        },
+        {
+          "t": "10:15",
+          "gross": 265.5,
+          "iv": 16.97
+        },
+        {
+          "t": "10:30",
+          "gross": -75.0,
+          "iv": 16.8
+        },
+        {
+          "t": "10:45",
+          "gross": 235.5,
+          "iv": 16.67
+        },
+        {
+          "t": "11:01",
+          "gross": 117.0,
+          "iv": 16.74
+        },
+        {
+          "t": "11:15",
+          "gross": 58.5,
+          "iv": 16.71
+        },
+        {
+          "t": "11:30",
+          "gross": 90.0,
+          "iv": 16.79
+        },
+        {
+          "t": "11:45",
+          "gross": -42.0,
+          "iv": 17.1
+        },
+        {
+          "t": "12:00",
+          "gross": -18.0,
+          "iv": 17.06
+        },
+        {
+          "t": "12:15",
+          "gross": 40.5,
+          "iv": 17.24
+        },
+        {
+          "t": "12:30",
+          "gross": -54.0,
+          "iv": 17.41
+        },
+        {
+          "t": "12:45",
+          "gross": -1.5,
+          "iv": 17.41
+        },
+        {
+          "t": "13:00",
+          "gross": -67.5,
+          "iv": 17.37
+        },
+        {
+          "t": "13:15",
+          "gross": 180.0,
+          "iv": 17.24
+        },
+        {
+          "t": "13:30",
+          "gross": -51.0,
+          "iv": 17.26
+        },
+        {
+          "t": "13:45",
+          "gross": -16.5,
+          "iv": 17.12
+        },
+        {
+          "t": "14:00",
+          "gross": -43.5,
+          "iv": 17.05
+        },
+        {
+          "t": "14:15",
+          "gross": -216.0,
+          "iv": 17.02
+        },
+        {
+          "t": "14:30",
+          "gross": -166.5,
+          "iv": 17.05
+        },
+        {
+          "t": "14:45",
+          "gross": -256.5,
+          "iv": 17.07
+        },
+        {
+          "t": "15:00",
+          "gross": -189.0,
+          "iv": 16.86
+        },
+        {
+          "t": "15:15",
+          "gross": -322.5,
+          "iv": 16.97
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261109-BAN-S2",
+      "date": "2026-11-09",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "strat": "S2",
+      "trigReason": "IV 17.54% < HV10 17.70% (IV\u2212HV10 -0.16 pp)",
+      "sig": "IV 17.54% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -0.16 pp",
+      "legsText": "B 59000CE (802.0\u21921091.9) / B 59000PE (830.0\u2192565.5)",
+      "legs": [
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59000,
+          "type": "CE",
+          "entryPx": 802.0,
+          "exitPx": 1091.9
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59000,
+          "type": "PE",
+          "entryPx": 830.0,
+          "exitPx": 565.5
+        }
+      ],
+      "capital": 48960,
+      "maxCredit": 31824.0,
+      "maxLoss": 48960.0,
+      "entryIv": 17.54,
+      "gross": 760.5,
+      "charges": 211.94,
+      "net": 548.56,
+      "unitLegs": 60,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 17.54
+        },
+        {
+          "t": "09:30",
+          "gross": 178.5,
+          "iv": 17.66
+        },
+        {
+          "t": "09:45",
+          "gross": -576.0,
+          "iv": 17.27
+        },
+        {
+          "t": "10:00",
+          "gross": -1125.0,
+          "iv": 17.09
+        },
+        {
+          "t": "10:15",
+          "gross": -1398.0,
+          "iv": 16.97
+        },
+        {
+          "t": "10:30",
+          "gross": -1923.0,
+          "iv": 16.8
+        },
+        {
+          "t": "10:45",
+          "gross": -2589.0,
+          "iv": 16.67
+        },
+        {
+          "t": "11:01",
+          "gross": -2274.0,
+          "iv": 16.74
+        },
+        {
+          "t": "11:15",
+          "gross": -1902.0,
+          "iv": 16.71
+        },
+        {
+          "t": "11:30",
+          "gross": -1303.5,
+          "iv": 16.79
+        },
+        {
+          "t": "11:45",
+          "gross": 250.5,
+          "iv": 17.1
+        },
+        {
+          "t": "12:00",
+          "gross": -795.0,
+          "iv": 17.06
+        },
+        {
+          "t": "12:15",
+          "gross": -415.5,
+          "iv": 17.24
+        },
+        {
+          "t": "12:30",
+          "gross": -120.0,
+          "iv": 17.41
+        },
+        {
+          "t": "12:45",
+          "gross": -159.0,
+          "iv": 17.41
+        },
+        {
+          "t": "13:00",
+          "gross": -199.5,
+          "iv": 17.37
+        },
+        {
+          "t": "13:15",
+          "gross": -496.5,
+          "iv": 17.24
+        },
+        {
+          "t": "13:30",
+          "gross": -1006.5,
+          "iv": 17.26
+        },
+        {
+          "t": "13:45",
+          "gross": -1023.0,
+          "iv": 17.12
+        },
+        {
+          "t": "14:00",
+          "gross": -730.5,
+          "iv": 17.05
+        },
+        {
+          "t": "14:15",
+          "gross": 52.5,
+          "iv": 17.02
+        },
+        {
+          "t": "14:30",
+          "gross": 52.5,
+          "iv": 17.05
+        },
+        {
+          "t": "14:45",
+          "gross": 1041.0,
+          "iv": 17.07
+        },
+        {
+          "t": "15:00",
+          "gross": 862.5,
+          "iv": 16.86
+        },
+        {
+          "t": "15:15",
+          "gross": 760.5,
+          "iv": 16.97
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261109-BAN-S3",
+      "date": "2026-11-09",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "strat": "S3",
+      "trigReason": "ATM IV 17.54% >= 15.2% \u00b7 VRP30 +1.99 pp \u00b7 DTE 14d",
+      "sig": "ATM IV 17.54% \u2192 16.97% \u00b7 DTE 14d",
+      "legsText": "S 59000CE (802.0\u21921091.9) / S 59000PE (830.0\u2192565.5) / B 59700CE (504.2\u2192711.0) / B 58300PE (540.0\u2192359.7)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 59000,
+          "type": "CE",
+          "entryPx": 802.0,
+          "exitPx": 1091.9
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 59000,
+          "type": "PE",
+          "entryPx": 830.0,
+          "exitPx": 565.5
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59700,
+          "type": "CE",
+          "entryPx": 504.2,
+          "exitPx": 711.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 58300,
+          "type": "PE",
+          "entryPx": 540.0,
+          "exitPx": 359.7
+        }
+      ],
+      "capital": 26570,
+      "maxCredit": 17634.0,
+      "maxLoss": 3366.0,
+      "entryIv": 17.54,
+      "gross": 37.5,
+      "charges": 381.02,
+      "net": -343.52,
+      "unitLegs": 120,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": -1.5,
+          "iv": 17.54
+        },
+        {
+          "t": "09:30",
+          "gross": -63.0,
+          "iv": 17.66
+        },
+        {
+          "t": "09:45",
+          "gross": -193.5,
+          "iv": 17.27
+        },
+        {
+          "t": "10:00",
+          "gross": -105.0,
+          "iv": 17.09
+        },
+        {
+          "t": "10:15",
+          "gross": -157.5,
+          "iv": 16.97
+        },
+        {
+          "t": "10:30",
+          "gross": -249.0,
+          "iv": 16.8
+        },
+        {
+          "t": "10:45",
+          "gross": -85.5,
+          "iv": 16.67
+        },
+        {
+          "t": "11:01",
+          "gross": -186.0,
+          "iv": 16.74
+        },
+        {
+          "t": "11:15",
+          "gross": -64.5,
+          "iv": 16.71
+        },
+        {
+          "t": "11:30",
+          "gross": -220.5,
+          "iv": 16.79
+        },
+        {
+          "t": "11:45",
+          "gross": -412.5,
+          "iv": 17.1
+        },
+        {
+          "t": "12:00",
+          "gross": 66.0,
+          "iv": 17.06
+        },
+        {
+          "t": "12:15",
+          "gross": -387.0,
+          "iv": 17.24
+        },
+        {
+          "t": "12:30",
+          "gross": -181.5,
+          "iv": 17.41
+        },
+        {
+          "t": "12:45",
+          "gross": -282.0,
+          "iv": 17.41
+        },
+        {
+          "t": "13:00",
+          "gross": -189.0,
+          "iv": 17.37
+        },
+        {
+          "t": "13:15",
+          "gross": -195.0,
+          "iv": 17.24
+        },
+        {
+          "t": "13:30",
+          "gross": -124.5,
+          "iv": 17.26
+        },
+        {
+          "t": "13:45",
+          "gross": 40.5,
+          "iv": 17.12
+        },
+        {
+          "t": "14:00",
+          "gross": -130.5,
+          "iv": 17.05
+        },
+        {
+          "t": "14:15",
+          "gross": -303.0,
+          "iv": 17.02
+        },
+        {
+          "t": "14:30",
+          "gross": -90.0,
+          "iv": 17.05
+        },
+        {
+          "t": "14:45",
+          "gross": -75.0,
+          "iv": 17.07
+        },
+        {
+          "t": "15:00",
+          "gross": -78.0,
+          "iv": 16.86
+        },
+        {
+          "t": "15:15",
+          "gross": 36.0,
+          "iv": 16.97
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261109-BAN-S4",
+      "date": "2026-11-09",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "strat": "S4",
+      "trigReason": "Put Skew RR25 +1.91 pp >= +1.50 pp \u00b7 DTE 14d",
+      "sig": "RR25 +1.91 pp \u00b7 VRP +1.99 pp",
+      "legsText": "S2 58700PE (694.5\u2192465.0) / B2 58100PE (477.1\u2192316.1) / S 59500CE (580.1\u2192804.5) / B 60100CE (375.7\u2192526.9)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 58700,
+          "type": "PE",
+          "entryPx": 694.5,
+          "exitPx": 465.0
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 58100,
+          "type": "PE",
+          "entryPx": 477.1,
+          "exitPx": 316.1
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 59500,
+          "type": "CE",
+          "entryPx": 580.1,
+          "exitPx": 804.5
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 60100,
+          "type": "CE",
+          "entryPx": 375.7,
+          "exitPx": 526.9
+        }
+      ],
+      "capital": 53140,
+      "maxCredit": 19176.0,
+      "maxLoss": 9000,
+      "entryIv": 17.54,
+      "gross": 1912.5,
+      "charges": 410.44,
+      "net": 1502.06,
+      "unitLegs": 180,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 17.54
+        },
+        {
+          "t": "09:30",
+          "gross": -66.0,
+          "iv": 17.66
+        },
+        {
+          "t": "09:45",
+          "gross": 420.0,
+          "iv": 17.27
+        },
+        {
+          "t": "10:00",
+          "gross": 673.5,
+          "iv": 17.09
+        },
+        {
+          "t": "10:15",
+          "gross": 628.5,
+          "iv": 16.97
+        },
+        {
+          "t": "10:30",
+          "gross": 472.5,
+          "iv": 16.8
+        },
+        {
+          "t": "10:45",
+          "gross": -445.5,
+          "iv": 16.67
+        },
+        {
+          "t": "11:01",
+          "gross": 520.5,
+          "iv": 16.74
+        },
+        {
+          "t": "11:15",
+          "gross": 1272.0,
+          "iv": 16.71
+        },
+        {
+          "t": "11:30",
+          "gross": 1287.0,
+          "iv": 16.79
+        },
+        {
+          "t": "11:45",
+          "gross": 1660.5,
+          "iv": 17.1
+        },
+        {
+          "t": "12:00",
+          "gross": 897.0,
+          "iv": 17.06
+        },
+        {
+          "t": "12:15",
+          "gross": 880.5,
+          "iv": 17.24
+        },
+        {
+          "t": "12:30",
+          "gross": 820.5,
+          "iv": 17.41
+        },
+        {
+          "t": "12:45",
+          "gross": 693.0,
+          "iv": 17.41
+        },
+        {
+          "t": "13:00",
+          "gross": 624.0,
+          "iv": 17.37
+        },
+        {
+          "t": "13:15",
+          "gross": 634.5,
+          "iv": 17.24
+        },
+        {
+          "t": "13:30",
+          "gross": 352.5,
+          "iv": 17.26
+        },
+        {
+          "t": "13:45",
+          "gross": 445.5,
+          "iv": 17.12
+        },
+        {
+          "t": "14:00",
+          "gross": 1312.5,
+          "iv": 17.05
+        },
+        {
+          "t": "14:15",
+          "gross": 1447.5,
+          "iv": 17.02
+        },
+        {
+          "t": "14:30",
+          "gross": 1489.5,
+          "iv": 17.05
+        },
+        {
+          "t": "14:45",
+          "gross": 1851.0,
+          "iv": 17.07
+        },
+        {
+          "t": "15:00",
+          "gross": 1813.5,
+          "iv": 16.86
+        },
+        {
+          "t": "15:15",
+          "gross": 1912.5,
+          "iv": 16.97
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261109-BAN-S6",
+      "date": "2026-11-09",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 14,
+      "strat": "S6",
+      "trigReason": "Basis +14.2 pts \u00b7 BF25 +0.55 pp",
+      "sig": "Basis +14.2 pts \u00b7 BF25 +0.55 pp",
+      "legsText": "S2 59300CE (663.0\u2192917.0) / B2 59900CE (436.2\u2192613.5) / S 58500PE (611.8\u2192410.9) / B 57900PE (426.9\u2192278.4)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 59300,
+          "type": "CE",
+          "entryPx": 663.0,
+          "exitPx": 917.0
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 59900,
+          "type": "CE",
+          "entryPx": 436.2,
+          "exitPx": 613.5
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 58500,
+          "type": "PE",
+          "entryPx": 611.8,
+          "exitPx": 410.9
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 57900,
+          "type": "PE",
+          "entryPx": 426.9,
+          "exitPx": 278.4
+        }
+      ],
+      "capital": 53140,
+      "maxCredit": 19155.0,
+      "maxLoss": 9000,
+      "entryIv": 17.54,
+      "gross": -3034.5,
+      "charges": 435.06,
+      "net": -3469.56,
+      "unitLegs": 180,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 6.0,
+          "iv": 17.54
+        },
+        {
+          "t": "09:30",
+          "gross": -151.5,
+          "iv": 17.66
+        },
+        {
+          "t": "09:45",
+          "gross": -592.5,
+          "iv": 17.27
+        },
+        {
+          "t": "10:00",
+          "gross": -639.0,
+          "iv": 17.09
+        },
+        {
+          "t": "10:15",
+          "gross": -361.5,
+          "iv": 16.97
+        },
+        {
+          "t": "10:30",
+          "gross": -391.5,
+          "iv": 16.8
+        },
+        {
+          "t": "10:45",
+          "gross": 537.0,
+          "iv": 16.67
+        },
+        {
+          "t": "11:01",
+          "gross": -9.0,
+          "iv": 16.74
+        },
+        {
+          "t": "11:15",
+          "gross": -1063.5,
+          "iv": 16.71
+        },
+        {
+          "t": "11:30",
+          "gross": -1272.0,
+          "iv": 16.79
+        },
+        {
+          "t": "11:45",
+          "gross": -2184.0,
+          "iv": 17.1
+        },
+        {
+          "t": "12:00",
+          "gross": -1578.0,
+          "iv": 17.06
+        },
+        {
+          "t": "12:15",
+          "gross": -1320.0,
+          "iv": 17.24
+        },
+        {
+          "t": "12:30",
+          "gross": -1078.5,
+          "iv": 17.41
+        },
+        {
+          "t": "12:45",
+          "gross": -1284.0,
+          "iv": 17.41
+        },
+        {
+          "t": "13:00",
+          "gross": -1597.5,
+          "iv": 17.37
+        },
+        {
+          "t": "13:15",
+          "gross": -1171.5,
+          "iv": 17.24
+        },
+        {
+          "t": "13:30",
+          "gross": -555.0,
+          "iv": 17.26
+        },
+        {
+          "t": "13:45",
+          "gross": -811.5,
+          "iv": 17.12
+        },
+        {
+          "t": "14:00",
+          "gross": -1491.0,
+          "iv": 17.05
+        },
+        {
+          "t": "14:15",
+          "gross": -2176.5,
+          "iv": 17.02
+        },
+        {
+          "t": "14:30",
+          "gross": -2163.0,
+          "iv": 17.05
+        },
+        {
+          "t": "14:45",
+          "gross": -2539.5,
+          "iv": 17.07
+        },
+        {
+          "t": "15:00",
+          "gross": -2826.0,
+          "iv": 16.86
+        },
+        {
+          "t": "15:15",
+          "gross": -3028.5,
+          "iv": 16.97
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261109-NIF-S1",
+      "date": "2026-11-09",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 8,
+      "strat": "S1",
+      "trigReason": "VRP30 +4.23 pp >= +1.50 \u00b7 HV30 14.27% <= 16.5%",
+      "sig": "IV 18.50% \u00b7 HV30 14.27% \u00b7 VRP +4.23 pp",
+      "legsText": "S 25100CE (200.0\u2192211.0) / S 24700PE (180.3\u2192121.8) / B 25400CE (110.0\u2192110.2) / B 24400PE (94.7\u219255.5)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25100,
+          "type": "CE",
+          "entryPx": 200.0,
+          "exitPx": 211.0
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24700,
+          "type": "PE",
+          "entryPx": 180.3,
+          "exitPx": 121.8
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25400,
+          "type": "CE",
+          "entryPx": 110.0,
+          "exitPx": 110.2
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24400,
+          "type": "PE",
+          "entryPx": 94.7,
+          "exitPx": 55.5
+        }
+      ],
+      "capital": 28037,
+      "maxCredit": 13170.0,
+      "maxLoss": 9330.0,
+      "entryIv": 18.5,
+      "gross": 637.5,
+      "charges": 285.6,
+      "net": 351.9,
+      "unitLegs": 300,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 18.5
+        },
+        {
+          "t": "09:30",
+          "gross": -63.75,
+          "iv": 18.54
+        },
+        {
+          "t": "09:45",
+          "gross": 30.0,
+          "iv": 18.11
+        },
+        {
+          "t": "10:00",
+          "gross": 161.25,
+          "iv": 17.57
+        },
+        {
+          "t": "10:15",
+          "gross": 371.25,
+          "iv": 17.3
+        },
+        {
+          "t": "10:30",
+          "gross": 540.0,
+          "iv": 17.02
+        },
+        {
+          "t": "10:45",
+          "gross": 536.25,
+          "iv": 17.12
+        },
+        {
+          "t": "11:01",
+          "gross": 667.5,
+          "iv": 16.85
+        },
+        {
+          "t": "11:15",
+          "gross": 742.5,
+          "iv": 16.72
+        },
+        {
+          "t": "11:30",
+          "gross": 536.25,
+          "iv": 16.98
+        },
+        {
+          "t": "11:45",
+          "gross": 315.0,
+          "iv": 17.23
+        },
+        {
+          "t": "12:00",
+          "gross": 453.75,
+          "iv": 17.1
+        },
+        {
+          "t": "12:15",
+          "gross": 378.75,
+          "iv": 17.22
+        },
+        {
+          "t": "12:30",
+          "gross": 247.5,
+          "iv": 17.53
+        },
+        {
+          "t": "12:45",
+          "gross": 570.0,
+          "iv": 17.17
+        },
+        {
+          "t": "13:00",
+          "gross": 611.25,
+          "iv": 17.21
+        },
+        {
+          "t": "13:15",
+          "gross": 540.0,
+          "iv": 17.12
+        },
+        {
+          "t": "13:30",
+          "gross": 555.0,
+          "iv": 17.09
+        },
+        {
+          "t": "13:45",
+          "gross": 573.75,
+          "iv": 16.92
+        },
+        {
+          "t": "14:00",
+          "gross": 671.25,
+          "iv": 16.85
+        },
+        {
+          "t": "14:15",
+          "gross": 536.25,
+          "iv": 16.85
+        },
+        {
+          "t": "14:30",
+          "gross": 753.75,
+          "iv": 16.8
+        },
+        {
+          "t": "14:45",
+          "gross": 577.5,
+          "iv": 17.0
+        },
+        {
+          "t": "15:00",
+          "gross": 603.75,
+          "iv": 16.89
+        },
+        {
+          "t": "15:15",
+          "gross": 637.5,
+          "iv": 16.87
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261109-NIF-S3",
+      "date": "2026-11-09",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 8,
+      "strat": "S3",
+      "trigReason": "ATM IV 18.50% >= 15.2% \u00b7 VRP30 +4.23 pp \u00b7 DTE 8d",
+      "sig": "ATM IV 18.50% \u2192 16.87% \u00b7 DTE 8d",
+      "legsText": "S 24900CE (285.1\u2192307.9) / S 24900PE (268.6\u2192196.5) / B 25250CE (149.8\u2192153.8) / B 24550PE (132.5\u219282.5)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24900,
+          "type": "CE",
+          "entryPx": 285.1,
+          "exitPx": 307.9
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24900,
+          "type": "PE",
+          "entryPx": 268.6,
+          "exitPx": 196.5
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25250,
+          "type": "CE",
+          "entryPx": 149.8,
+          "exitPx": 153.8
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24550,
+          "type": "PE",
+          "entryPx": 132.5,
+          "exitPx": 82.5
+        }
+      ],
+      "capital": 28037,
+      "maxCredit": 20355.0,
+      "maxLoss": 5895.0,
+      "entryIv": 18.5,
+      "gross": 251.25,
+      "charges": 329.17,
+      "net": -77.92,
+      "unitLegs": 300,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 18.5
+        },
+        {
+          "t": "09:30",
+          "gross": -45.0,
+          "iv": 18.54
+        },
+        {
+          "t": "09:45",
+          "gross": -82.5,
+          "iv": 18.11
+        },
+        {
+          "t": "10:00",
+          "gross": 153.75,
+          "iv": 17.57
+        },
+        {
+          "t": "10:15",
+          "gross": 225.0,
+          "iv": 17.3
+        },
+        {
+          "t": "10:30",
+          "gross": 281.25,
+          "iv": 17.02
+        },
+        {
+          "t": "10:45",
+          "gross": 217.5,
+          "iv": 17.12
+        },
+        {
+          "t": "11:01",
+          "gross": 303.75,
+          "iv": 16.85
+        },
+        {
+          "t": "11:15",
+          "gross": 521.25,
+          "iv": 16.72
+        },
+        {
+          "t": "11:30",
+          "gross": 292.5,
+          "iv": 16.98
+        },
+        {
+          "t": "11:45",
+          "gross": 195.0,
+          "iv": 17.23
+        },
+        {
+          "t": "12:00",
+          "gross": 405.0,
+          "iv": 17.1
+        },
+        {
+          "t": "12:15",
+          "gross": 195.0,
+          "iv": 17.22
+        },
+        {
+          "t": "12:30",
+          "gross": 33.75,
+          "iv": 17.53
+        },
+        {
+          "t": "12:45",
+          "gross": 232.5,
+          "iv": 17.17
+        },
+        {
+          "t": "13:00",
+          "gross": 348.75,
+          "iv": 17.21
+        },
+        {
+          "t": "13:15",
+          "gross": 266.25,
+          "iv": 17.12
+        },
+        {
+          "t": "13:30",
+          "gross": 356.25,
+          "iv": 17.09
+        },
+        {
+          "t": "13:45",
+          "gross": 386.25,
+          "iv": 16.92
+        },
+        {
+          "t": "14:00",
+          "gross": 210.0,
+          "iv": 16.85
+        },
+        {
+          "t": "14:15",
+          "gross": 176.25,
+          "iv": 16.85
+        },
+        {
+          "t": "14:30",
+          "gross": 258.75,
+          "iv": 16.8
+        },
+        {
+          "t": "14:45",
+          "gross": 247.5,
+          "iv": 17.0
+        },
+        {
+          "t": "15:00",
+          "gross": 281.25,
+          "iv": 16.89
+        },
+        {
+          "t": "15:15",
+          "gross": 251.25,
+          "iv": 16.87
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261109-NIF-S5",
+      "date": "2026-11-09",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 8,
+      "strat": "S5",
+      "trigReason": "IV\u2212HV10 +3.85 pp >= +0.80 pp \u00b7 DTE 8d",
+      "sig": "Straddle \u20b9553.8 \u2192 \u20b9499.4 \u00b7 IV\u2212HV10 +3.85 pp",
+      "legsText": "S 24900CE (285.1\u2192307.9) / S 24900PE (268.6\u2192196.5) / B 25150CE (181.8\u2192190.4) / B 24650PE (161.2\u2192107.5)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24900,
+          "type": "CE",
+          "entryPx": 285.1,
+          "exitPx": 307.9
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24900,
+          "type": "PE",
+          "entryPx": 268.6,
+          "exitPx": 196.5
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25150,
+          "type": "CE",
+          "entryPx": 181.8,
+          "exitPx": 190.4
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24650,
+          "type": "PE",
+          "entryPx": 161.2,
+          "exitPx": 107.5
+        }
+      ],
+      "capital": 28037,
+      "maxCredit": 15802.5,
+      "maxLoss": 2947.5,
+      "entryIv": 18.5,
+      "gross": 326.25,
+      "charges": 340.1,
+      "net": -13.85,
+      "unitLegs": 300,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": -3.75,
+          "iv": 18.5
+        },
+        {
+          "t": "09:30",
+          "gross": 86.25,
+          "iv": 18.54
+        },
+        {
+          "t": "09:45",
+          "gross": 86.25,
+          "iv": 18.11
+        },
+        {
+          "t": "10:00",
+          "gross": 240.0,
+          "iv": 17.57
+        },
+        {
+          "t": "10:15",
+          "gross": 213.75,
+          "iv": 17.3
+        },
+        {
+          "t": "10:30",
+          "gross": 303.75,
+          "iv": 17.02
+        },
+        {
+          "t": "10:45",
+          "gross": 303.75,
+          "iv": 17.12
+        },
+        {
+          "t": "11:01",
+          "gross": 322.5,
+          "iv": 16.85
+        },
+        {
+          "t": "11:15",
+          "gross": 465.0,
+          "iv": 16.72
+        },
+        {
+          "t": "11:30",
+          "gross": 300.0,
+          "iv": 16.98
+        },
+        {
+          "t": "11:45",
+          "gross": 217.5,
+          "iv": 17.23
+        },
+        {
+          "t": "12:00",
+          "gross": 390.0,
+          "iv": 17.1
+        },
+        {
+          "t": "12:15",
+          "gross": 97.5,
+          "iv": 17.22
+        },
+        {
+          "t": "12:30",
+          "gross": 150.0,
+          "iv": 17.53
+        },
+        {
+          "t": "12:45",
+          "gross": 78.75,
+          "iv": 17.17
+        },
+        {
+          "t": "13:00",
+          "gross": 273.75,
+          "iv": 17.21
+        },
+        {
+          "t": "13:15",
+          "gross": 288.75,
+          "iv": 17.12
+        },
+        {
+          "t": "13:30",
+          "gross": 393.75,
+          "iv": 17.09
+        },
+        {
+          "t": "13:45",
+          "gross": 397.5,
+          "iv": 16.92
+        },
+        {
+          "t": "14:00",
+          "gross": 127.5,
+          "iv": 16.85
+        },
+        {
+          "t": "14:15",
+          "gross": 270.0,
+          "iv": 16.85
+        },
+        {
+          "t": "14:30",
+          "gross": 281.25,
+          "iv": 16.8
+        },
+        {
+          "t": "14:45",
+          "gross": 270.0,
+          "iv": 17.0
+        },
+        {
+          "t": "15:00",
+          "gross": 341.25,
+          "iv": 16.89
+        },
+        {
+          "t": "15:15",
+          "gross": 322.5,
+          "iv": 16.87
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261109-NIF-S6",
+      "date": "2026-11-09",
+      "entryTime": "09:20 IST",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 8,
+      "strat": "S6",
+      "trigReason": "Basis -22.8 pts \u00b7 BF25 +0.50 pp",
+      "sig": "Basis -22.8 pts \u00b7 BF25 +0.50 pp",
+      "legsText": "S2 25050CE (220.3\u2192233.7) / B2 25350CE (122.5\u2192123.7) / S 24650PE (161.2\u2192107.5) / B 24350PE (85.5\u219248.9)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 25050,
+          "type": "CE",
+          "entryPx": 220.3,
+          "exitPx": 233.7
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 25350,
+          "type": "CE",
+          "entryPx": 122.5,
+          "exitPx": 123.7
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 24650,
+          "type": "PE",
+          "entryPx": 161.2,
+          "exitPx": 107.5
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24350,
+          "type": "PE",
+          "entryPx": 85.5,
+          "exitPx": 48.9
+        }
+      ],
+      "capital": 56074,
+      "maxCredit": 20347.5,
+      "maxLoss": 9000,
+      "entryIv": 18.5,
+      "gross": -536.25,
+      "charges": 348.75,
+      "net": -885.0,
+      "unitLegs": 450,
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": -7.5,
+          "iv": 18.5
+        },
+        {
+          "t": "09:30",
+          "gross": -30.0,
+          "iv": 18.54
+        },
+        {
+          "t": "09:45",
+          "gross": -330.0,
+          "iv": 18.11
+        },
+        {
+          "t": "10:00",
+          "gross": 427.5,
+          "iv": 17.57
+        },
+        {
+          "t": "10:15",
+          "gross": 311.25,
+          "iv": 17.3
+        },
+        {
+          "t": "10:30",
+          "gross": 603.75,
+          "iv": 17.02
+        },
+        {
+          "t": "10:45",
+          "gross": 1530.0,
+          "iv": 17.12
+        },
+        {
+          "t": "11:01",
+          "gross": 1428.75,
+          "iv": 16.85
+        },
+        {
+          "t": "11:15",
+          "gross": 1260.0,
+          "iv": 16.72
+        },
+        {
+          "t": "11:30",
+          "gross": 367.5,
+          "iv": 16.98
+        },
+        {
+          "t": "11:45",
+          "gross": -450.0,
+          "iv": 17.23
+        },
+        {
+          "t": "12:00",
+          "gross": 427.5,
+          "iv": 17.1
+        },
+        {
+          "t": "12:15",
+          "gross": 558.75,
+          "iv": 17.22
+        },
+        {
+          "t": "12:30",
+          "gross": 870.0,
+          "iv": 17.53
+        },
+        {
+          "t": "12:45",
+          "gross": 1170.0,
+          "iv": 17.17
+        },
+        {
+          "t": "13:00",
+          "gross": 551.25,
+          "iv": 17.21
+        },
+        {
+          "t": "13:15",
+          "gross": 1260.0,
+          "iv": 17.12
+        },
+        {
+          "t": "13:30",
+          "gross": 1395.0,
+          "iv": 17.09
+        },
+        {
+          "t": "13:45",
+          "gross": 776.25,
+          "iv": 16.92
+        },
+        {
+          "t": "14:00",
+          "gross": 15.0,
+          "iv": 16.85
+        },
+        {
+          "t": "14:15",
+          "gross": -326.25,
+          "iv": 16.85
+        },
+        {
+          "t": "14:30",
+          "gross": 150.0,
+          "iv": 16.8
+        },
+        {
+          "t": "14:45",
+          "gross": -513.75,
+          "iv": 17.0
+        },
+        {
+          "t": "15:00",
+          "gross": -371.25,
+          "iv": 16.89
+        },
+        {
+          "t": "15:15",
+          "gross": -543.75,
+          "iv": 16.87
+        }
+      ]
+    }
+  ]
+}

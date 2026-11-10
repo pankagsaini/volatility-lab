@@ -36,9 +36,9 @@ if "msvcrt" not in sys.modules:
 # Add patched directory to sys.path when running in sandbox or local repo
 HERE_DIR = Path(__file__).resolve().parent
 PATCH_DIR = (
-    (HERE_DIR / "Volatility Lab")
-    if (HERE_DIR / "Volatility Lab").exists()
-    else (HERE_DIR.parent / "intermediate" / "patched" if (HERE_DIR.parent / "intermediate" / "patched").exists() else HERE_DIR)
+    (HERE_DIR / "volatility_lab")
+    if (HERE_DIR / "volatility_lab").exists()
+    else ((HERE_DIR / "Volatility Lab") if (HERE_DIR / "Volatility Lab").exists() else HERE_DIR)
 )
 for candidate in (HERE_DIR, PATCH_DIR):
     if candidate.exists():
@@ -370,7 +370,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         import importlib.util
         ui_p = Path(__file__).resolve().parent / "ui_theme.py"
         if not ui_p.exists():
-            ui_p = Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py"
+            ui_p = (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py")
         spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
         ui_theme = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ui_theme)
@@ -472,7 +472,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         import importlib.util
         ui_p = Path(__file__).resolve().parent / "ui_theme.py"
         if not ui_p.exists():
-            ui_p = Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py"
+            ui_p = (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py")
         spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
         ui_theme = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ui_theme)
@@ -971,7 +971,7 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
     def test_v18_clean_repository_structure_and_entrypoints(self):
         """Verify v18 clean repository structure, zero duplicate module pollution, updated 2026-11-09 expiry_latest.json, and 100% real-data docs/index.html."""
         repo_root = Path(__file__).resolve().parent
-        vl_dir = repo_root / "Volatility Lab"
+        vl_dir = (repo_root / "volatility_lab") if (repo_root / "volatility_lab").exists() else (repo_root / "Volatility Lab")
         desk_dir = repo_root / "streamlit_desk"
         if not vl_dir.is_dir():
             return
@@ -1019,6 +1019,73 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
                 if "var tradeArchive =" in line:
                     t_arr = json.loads(line.split("var tradeArchive =", 1)[1].strip().rstrip(";"))
                     self.assertEqual(len(t_arr), 72)
+
+
+class TestV19AutomatedForwardTesting(unittest.TestCase):
+    """Verify v19 Automated Forward Testing (Live Paper-Trading) Engine across Web, Cloud Code.gs & Python."""
+
+    def test_32_website_forward_test_workspace_and_controls(self):
+        for rel in ("docs/index.html", "index.html"):
+            p = HERE_DIR / rel
+            html = p.read_text(encoding="utf-8")
+            self.assertIn('id="wsForwardBtn"', html)
+            self.assertIn('Forward Test (Auto Paper)', html)
+            self.assertIn('id="workspaceForwardTest"', html)
+            for ctrl_id in (
+                "fwdAutoModeToggle",
+                "fwdIndexFilter",
+                "fwdExpiryScope",
+                "fwdStrategyFilter",
+                "fwdLotsInput",
+                "fwdStopLossRule",
+                "fwdProfitTargetRule",
+                "fwdScanNowBtn",
+                "fwdExportCsvBtn",
+                "fwdKpiOpenCount",
+                "fwdKpiOpenMtm",
+                "fwdKpiClosedNet",
+                "fwdKpiCapital",
+                "fwdKpiRoc",
+                "fwdKpiWinPf",
+                "fwdOpenPositionsBody",
+                "fwdClosedLedgerBody",
+                "fwdScorecardBody",
+                "fwdIntradayMtmCanvas",
+                "fwdStrategyBarCanvas",
+            ):
+                self.assertIn(f'id="{ctrl_id}"', html, f"Missing {ctrl_id} in {rel}")
+            self.assertIn("window.markForwardPositionsFromPayload", html)
+            self.assertIn("window.closeForwardPosition", html)
+            self.assertIn("window.autoForwardTrackSetup", html)
+            self.assertIn("Auto-Forward Track →", html)
+            self.assertIn("animation: false", html)
+
+    def test_33_python_forward_test_engine_and_real_ledger(self):
+        from forward_test import (
+            load_forward_test_ledger,
+            evaluate_forward_test_scorecard,
+            mark_open_positions_from_snapshot,
+        )
+        ledger = load_forward_test_ledger()
+        self.assertEqual(len(ledger.get("open_positions", [])), 27)
+        front_open = [p for p in ledger["open_positions"] if p.get("frontScope")]
+        self.assertEqual(len(front_open), 11)
+        self.assertEqual(len(ledger.get("closed_trades", [])), 28)
+
+        summary = evaluate_forward_test_scorecard(ledger, index_filter="ALL", expiry_scope="FRONT", lots=1)
+        self.assertEqual(summary["open_count"], 11)
+        self.assertEqual(summary["closed_count"], 28)
+        self.assertAlmostEqual(summary["closed_gross_pnl"], 40280.25, places=1)
+        self.assertAlmostEqual(summary["closed_net_pnl"], 31643.94, delta=1.0)
+        self.assertEqual(len(summary["scorecard"]), 6)
+
+    def test_34_cloud_code_gs_forward_test_24x7_hooks(self):
+        code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
+        self.assertIn("function evaluateForwardTest_(report)", code_gs)
+        self.assertIn("function loadForwardLedger_()", code_gs)
+        self.assertIn("function saveForwardLedger_(ledger)", code_gs)
+        self.assertIn("forward_test_ledger.json", code_gs)
+        self.assertIn("payload.forward_test_ledger", code_gs)
 
 
 if __name__ == "__main__":

@@ -1058,7 +1058,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
 
         expiry=chosen.get(symbol)
 
-        views=['Vol Regime & History','Term Structure & Calendars','Smile & Skew','Intraday Straddle & Greeks']
+        views=['Vol Regime & History','Term Structure & Calendars','Smile & Skew','Intraday Straddle & Greeks','Forward Test (Auto Paper)']
         view_aliases={
             'Volatility history':'Vol Regime & History',
             'IV-RV Spread':'Vol Regime & History',
@@ -1094,6 +1094,9 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
         elif chart=='Intraday Straddle & Greeks':
             from restored_lab import render_archived_intraday
             render_archived_intraday(DATA,symbol,chart_selected,config)
+        elif chart=='Forward Test (Auto Paper)':
+            from forward_test import render_forward_test_ui
+            render_forward_test_ui(DATA)
         elif chart=='Vol Regime & History':
             frame=None;hv=None
             try:frame,hv=chart_prices(symbol)
