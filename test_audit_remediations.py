@@ -1108,7 +1108,9 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
             self.assertEqual(row["status"], "ARMED · 11 NOV 09:20 IST")
 
         # 2. Verify polling the 2026-11-09 snapshot does NOT trigger any trades
-        snap_gz = PATCH_DIR / "data" / "google_archive" / "2026-11-09_snapshot_154842_complete.json.gz"
+        snap_gz = HERE_DIR / "data" / "google_archive" / "2026-11-09_snapshot_154842_complete.json.gz"
+        if not snap_gz.exists():
+            snap_gz = PATCH_DIR / "data" / "google_archive" / "2026-11-09_snapshot_154842_complete.json.gz"
         snap_payload_09 = json.loads(gzip.decompress(snap_gz.read_bytes()).decode("utf-8"))
         after_09 = process_live_upstox_snapshot(snap_payload_09, ledger=ledger, now_ist="2026-11-10T13:15:00+05:30")
         self.assertEqual(after_09["open_positions"], [])
