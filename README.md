@@ -3,7 +3,7 @@
 [![Status](https://img.shields.io/badge/Status-Production%20Live-10B981?style=flat-square)](https://volatilitylab.in)
 [![Domain](https://img.shields.io/badge/Domain-volatilitylab.in-38BDF8?style=flat-square)](https://volatilitylab.in)
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-D4AF37?style=flat-square)](https://github.com/pankagsaini/volatility-lab)
-[![Audit](https://img.shields.io/badge/Tests-31%2F31%20Passed-10B981?style=flat-square)](test_audit_remediations.py)
+[![Audit](https://img.shields.io/badge/Tests-34%2F34%20Passed-10B981?style=flat-square)](test_audit_remediations.py)
 [![Trading Rules](https://img.shields.io/badge/Backtest%20Rules-9%2F9%20Passed-10B981?style=flat-square)](volatility_lab/test_backtest_rules.py)
 [![CI](https://github.com/pankagsaini/volatility-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/pankagsaini/volatility-lab/actions/workflows/ci.yml)
 

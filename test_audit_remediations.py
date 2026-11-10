@@ -1021,5 +1021,72 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
                     self.assertEqual(len(t_arr), 72)
 
 
+class TestV19AutomatedForwardTesting(unittest.TestCase):
+    """Verify v19 Automated Forward Testing (Live Paper-Trading) Engine across Web, Cloud Code.gs & Python."""
+
+    def test_32_website_forward_test_workspace_and_controls(self):
+        for rel in ("docs/index.html", "index.html"):
+            p = HERE_DIR / rel
+            html = p.read_text(encoding="utf-8")
+            self.assertIn('id="wsForwardBtn"', html)
+            self.assertIn('Forward Test (Auto Paper)', html)
+            self.assertIn('id="workspaceForwardTest"', html)
+            for ctrl_id in (
+                "fwdAutoModeToggle",
+                "fwdIndexFilter",
+                "fwdExpiryScope",
+                "fwdStrategyFilter",
+                "fwdLotsInput",
+                "fwdStopLossRule",
+                "fwdProfitTargetRule",
+                "fwdScanNowBtn",
+                "fwdExportCsvBtn",
+                "fwdKpiOpenCount",
+                "fwdKpiOpenMtm",
+                "fwdKpiClosedNet",
+                "fwdKpiCapital",
+                "fwdKpiRoc",
+                "fwdKpiWinPf",
+                "fwdOpenPositionsBody",
+                "fwdClosedLedgerBody",
+                "fwdScorecardBody",
+                "fwdIntradayMtmCanvas",
+                "fwdStrategyBarCanvas",
+            ):
+                self.assertIn(f'id="{ctrl_id}"', html, f"Missing {ctrl_id} in {rel}")
+            self.assertIn("window.markForwardPositionsFromPayload", html)
+            self.assertIn("window.closeForwardPosition", html)
+            self.assertIn("window.autoForwardTrackSetup", html)
+            self.assertIn("Auto-Forward Track →", html)
+            self.assertIn("animation: false", html)
+
+    def test_33_python_forward_test_engine_and_real_ledger(self):
+        from forward_test import (
+            load_forward_test_ledger,
+            evaluate_forward_test_scorecard,
+            mark_open_positions_from_snapshot,
+        )
+        ledger = load_forward_test_ledger()
+        self.assertEqual(len(ledger.get("open_positions", [])), 27)
+        front_open = [p for p in ledger["open_positions"] if p.get("frontScope")]
+        self.assertEqual(len(front_open), 11)
+        self.assertEqual(len(ledger.get("closed_trades", [])), 28)
+
+        summary = evaluate_forward_test_scorecard(ledger, index_filter="ALL", expiry_scope="FRONT", lots=1)
+        self.assertEqual(summary["open_count"], 11)
+        self.assertEqual(summary["closed_count"], 28)
+        self.assertAlmostEqual(summary["closed_gross_pnl"], 40280.25, places=1)
+        self.assertAlmostEqual(summary["closed_net_pnl"], 31643.94, delta=1.0)
+        self.assertEqual(len(summary["scorecard"]), 6)
+
+    def test_34_cloud_code_gs_forward_test_24x7_hooks(self):
+        code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
+        self.assertIn("function evaluateForwardTest_(report)", code_gs)
+        self.assertIn("function loadForwardLedger_()", code_gs)
+        self.assertIn("function saveForwardLedger_(ledger)", code_gs)
+        self.assertIn("forward_test_ledger.json", code_gs)
+        self.assertIn("payload.forward_test_ledger", code_gs)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
