@@ -12,11 +12,11 @@ def render():
   a,b,c=st.columns(3);entry=a.number_input('Enter carry at or below (%)',value=6.,step=.01);target=b.number_input('Exit carry at or above (%)',value=6.66,step=.01);sizing_mode=c.selectbox('Sizing mode',['Strategy lots (historical contract lot sizes)','Fixed units per leg'])
   a,b,c,d=st.columns(4)
   if sizing_mode.startswith('Strategy lots'):
-   lots=a.number_input('Strategy lots',min_value=1,value=1,step=1,help='Automatically scales by dated contract lot size (e.g. NIFTY 25 or 75 units/lot).')
-   quantity_units=75
+   lots=a.number_input('Strategy lots',min_value=1,value=1,step=1,help='Automatically scales by dated contract lot size (e.g. NIFTY 65 units/lot).')
+   quantity_units=65
   else:
    lots=None
-   quantity_units=a.number_input('Quantity per leg · units',min_value=1,value=75,step=1)
+   quantity_units=a.number_input('Quantity per leg · units',min_value=1,value=65,step=1)
   slip=b.number_input('Slippage bps per fill',0.,100.,1.);hold=c.number_input('Maximum calendar days held',1,180,30);brokerage=d.number_input('Brokerage per order · INR',min_value=0,value=20,step=1,help='Upstox standard is ₹20 per order; enter the fee for your plan.')
   st.caption('Rising carry widens sell-near/buy-far. P&L is calculated from the two leg prices.')
   go=st.form_submit_button('Run futures test',disabled=jobs.pending(st.session_state))

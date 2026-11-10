@@ -530,7 +530,7 @@
           <div>
             <label for="btSymbolSelect" class="block text-xs font-bold text-slate-200 mb-1">Index</label>
             <select id="btSymbolSelect" class="desk-select mono w-full">
-              <option value="NIFTY" selected>NIFTY (Lot 75)</option>
+              <option value="NIFTY" selected>NIFTY (Lot 65)</option>
               <option value="BANKNIFTY">BANKNIFTY (Lot 30)</option>
             </select>
           </div>
@@ -716,7 +716,7 @@
             <label for="fwdIndexFilter" class="block text-xs font-bold text-slate-200 mb-1">Index Filter</label>
             <select id="fwdIndexFilter" class="desk-select mono w-full">
               <option value="ALL" selected>ALL (NIFTY + BANKNIFTY)</option>
-              <option value="NIFTY">NIFTY 50 (Lot 75)</option>
+              <option value="NIFTY">NIFTY 50 (Lot 65)</option>
               <option value="BANKNIFTY">BANKNIFTY (Lot 30)</option>
             </select>
           </div>
@@ -1666,7 +1666,7 @@
         if (!r) return;
         var struct = document.getElementById('stressStructureSelect').value || 'IRON_CONDOR';
         var lots = Math.max(1, parseInt(document.getElementById('stressLotsInput').value || '1', 10));
-        var lotUnits = (activeSymbol === 'NIFTY' ? 75 : 30) * lots;
+        var lotUnits = (activeSymbol === 'NIFTY' ? 65 : 30) * lots;
         var step = activeSymbol === 'NIFTY' ? 50 : 100;
         var K = r.atm || (Math.round(r.spot / step) * step);
 
@@ -1834,7 +1834,7 @@
 
       function evaluateStrategiesForExpiry(item, sym, lots) {
         var step = sym === 'NIFTY' ? 50 : 100;
-        var lotSize = (sym === 'NIFTY' ? 75 : 30) * lots;
+        var lotSize = (sym === 'NIFTY' ? 65 : 30) * lots;
         var K = item.atm || (Math.round(item.spot / step) * step);
         var vrp30 = item.iv - item.hv30;
         var vrp10 = item.iv - item.hv10;
@@ -2430,7 +2430,7 @@
       }
 
       function calcPositionUpstoxCharges(legs, sym, lots, includeExit) {
-        var lotQty = (sym === 'NIFTY' ? 75 : 30) * Math.max(1, lots || 1);
+        var lotQty = (sym === 'NIFTY' ? 65 : 30) * Math.max(1, lots || 1);
         var total = 0.0;
         (legs || []).forEach(function(l) {
           var qty = lotQty * Number(l.mult || 1);
@@ -2473,7 +2473,7 @@
           return true;
         }).map(function(pos) {
           var p = JSON.parse(JSON.stringify(pos));
-          var lotQty = (p.sym === 'NIFTY' ? 75 : 30) * lots;
+          var lotQty = (p.sym === 'NIFTY' ? 65 : 30) * lots;
           var gross = 0.0;
           (p.legs || []).forEach(function(l) {
             var ePx = Number(l.entryPx || 0);
@@ -2982,7 +2982,7 @@
 
         forwardOpenPositions.forEach(function(pos) {
           var sMap = chainLookup[pos.sym + '|' + pos.exp];
-          var lotQty = pos.sym === 'NIFTY' ? 75 : 30;
+          var lotQty = pos.sym === 'NIFTY' ? 65 : 30;
           if (sMap) {
             var gross = 0.0;
             (pos.legs || []).forEach(function(l) {

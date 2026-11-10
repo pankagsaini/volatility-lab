@@ -61,7 +61,7 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
     series = {}
     spot_key = 'NSE_INDEX|Nifty 50' if symbol == 'NIFTY' else 'NSE_INDEX|Nifty Bank'
     step = 50 if symbol == 'NIFTY' else 100
-    lot_size = 75 if symbol == 'NIFTY' else 30
+    lot_size = 65 if symbol == 'NIFTY' else 30
     start_s = str(start)[:10]
     end_s = str(end)[:10]
 

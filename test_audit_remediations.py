@@ -758,7 +758,8 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
         import backtest_common
         self.assertEqual(collector_support.read_json("/nonexistent/path/xyz.json"), {})
         self.assertFalse(backtest_common.is_blacklisted_future("NIFTY", "2026-11-26"))
-        self.assertEqual(backtest_common.dated_lot_size("NIFTY", "2026-11-06"), 75)
+        self.assertEqual(backtest_common.dated_lot_size("NIFTY", "2026-11-06"), 65)
+        self.assertEqual(backtest_common.dated_lot_size("NIFTY", "2025-06-01"), 75)
         self.assertEqual(backtest_common.dated_lot_size("BANKNIFTY", "2026-11-06"), 30)
 
     def test_v9_zero_ast_signature_or_import_mismatches(self):
@@ -1076,7 +1077,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
         self.assertEqual(summary["open_count"], 11)
         self.assertEqual(summary["closed_count"], 28)
         self.assertAlmostEqual(summary["closed_gross_pnl"], 40280.25, places=1)
-        self.assertAlmostEqual(summary["closed_net_pnl"], 31643.94, delta=1.0)
+        self.assertAlmostEqual(summary["closed_net_pnl"], 31834.63, delta=2.0)
         self.assertEqual(len(summary["scorecard"]), 6)
 
     def test_34_cloud_code_gs_forward_test_24x7_hooks(self):

@@ -50,7 +50,7 @@ STRATEGY_NAMES: dict[str, str] = {
 
 def compute_position_charges(day: str, symbol: str, legs: list[dict[str, Any]], lots: int = 1, include_exit: bool = True) -> float:
     """Compute exact Upstox statutory + brokerage charges for a multi-leg option position."""
-    lot_qty = (75 if str(symbol).upper() == "NIFTY" else 30) * max(1, int(lots))
+    lot_qty = (65 if str(symbol).upper() == "NIFTY" else 30) * max(1, int(lots))
     total = 0.0
     for leg in legs:
         mult = int(leg.get("mult", 1))
@@ -189,7 +189,7 @@ def evaluate_strategies_for_chain(
     """Evaluate all 6 quantitative strategies (S1-S6) on a real Upstox option chain."""
     sym = str(symbol).upper()
     step = 50 if sym == "NIFTY" else 100
-    lot_qty = (75 if sym == "NIFTY" else 30) * max(1, int(lots))
+    lot_qty = (65 if sym == "NIFTY" else 30) * max(1, int(lots))
     K = int(round(float(spot) / step) * step)
 
     strike_map: dict[int, dict[str, float]] = {}
@@ -308,7 +308,7 @@ def mark_open_positions_to_market(
     for pos in copy.deepcopy(open_positions):
         sym = pos["sym"]
         exp = pos["exp"]
-        lot_qty = 75 if sym == "NIFTY" else 30
+        lot_qty = 65 if sym == "NIFTY" else 30
         key = f"{sym}|{exp}"
         chain_rows = live_chains.get(key) or live_chains.get((sym, exp)) or []  # type: ignore
         strike_map: dict[int, dict[str, float]] = {}

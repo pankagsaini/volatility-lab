@@ -65,7 +65,7 @@ def load(symbol: str, start: str, end: str) -> pd.DataFrame:
     return df.loc[mask].reset_index(drop=True)
 
 
-def broker_lot_size(contract: dict[str, Any] | int | None, default: int = 75) -> int:
+def broker_lot_size(contract: dict[str, Any] | int | None, default: int = 65) -> int:
     if isinstance(contract, int) and contract > 0:
         return contract
     if isinstance(contract, dict) and int(contract.get("lot_size", 0)) > 0:
@@ -85,7 +85,7 @@ def roll_schedule(
     start: str,
     end: str,
     pair: tuple[int, int] = (0, 1),
-    lot_size: int = 75,
+    lot_size: int = 65,
 ) -> pd.DataFrame:
     try:
         from futures_rolling import roll_calendar
