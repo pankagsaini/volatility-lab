@@ -1304,5 +1304,51 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
         self.assertIn("expires in", warn)
 
 
+
+    def test_40_sensibull_standard_black76_and_greeks_parity(self):
+        """Verify Sensibull standard Black-76 pricing engine, Greeks parity, and default reference."""
+        import option_math
+        from pricing import (
+            DEFAULT_PRICING_MODEL,
+            black76_greeks,
+            solve_black76_iv,
+            sensibull_greeks,
+            sensibull_iv,
+            calculate_greeks,
+            calculate_iv,
+        )
+        self.assertEqual(DEFAULT_PRICING_MODEL, "sensibull")
+        self.assertEqual(option_math.DEFAULT_PRICING_MODEL, "sensibull")
+
+        # 1. Black-76 roundtrip
+        F, K, T, r, true_vol = 25018.6, 25050.0, 8.0 / 365.0, 0.0585, 0.1665
+        for kind in ("CE", "PE"):
+            g = black76_greeks(F, K, T, r, true_vol, kind)
+            self.assertTrue(g["price"] > 0)
+            self.assertTrue(g["vega"] > 0)
+            self.assertTrue(g["gamma"] > 0)
+            rec_iv = solve_black76_iv(g["price"], F, K, T, r, kind)
+            self.assertAlmostEqual(rec_iv, true_vol, places=6)
+
+        # 2. Put-Call Parity at ATM strike produces symmetric IV
+        c_ltp, p_ltp = 230.5, 261.9
+        f_syn = K + c_ltp - p_ltp  # 25018.6
+        c_iv = solve_black76_iv(c_ltp, f_syn, K, T, r, "CE")
+        p_iv = solve_black76_iv(p_ltp, f_syn, K, T, r, "PE")
+        self.assertAlmostEqual(c_iv, p_iv, places=4)
+        self.assertAlmostEqual(c_iv * 100, 16.65, delta=0.05)
+
+        # 3. Default calculate_greeks uses Sensibull Black-76
+        calc_g = calculate_greeks(f_syn, K, T, r, c_iv, "CE")
+        sb_g = sensibull_greeks(f_syn, K, T, r, c_iv, "CE")
+        self.assertAlmostEqual(calc_g["delta"], sb_g["delta"], places=6)
+        self.assertAlmostEqual(calc_g["gamma"], sb_g["gamma"], places=6)
+
+        # 4. Vectorized parity
+        vec_g = option_math.black76_greeks_vec([f_syn, f_syn], [K, K], [T, T], iv=[c_iv, p_iv], rate=r, kind=["CE", "PE"])
+        self.assertAlmostEqual(vec_g["delta"][0], sb_g["delta"], places=6)
+        self.assertTrue(vec_g["delta"][1] < 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

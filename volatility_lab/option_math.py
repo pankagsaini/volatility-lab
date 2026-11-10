@@ -173,3 +173,135 @@ def bsm_greeks_vec(spot, strike, years, vol=None, rate=0.0, dividend=0.0, kind='
     theta_p = (-(S * df_q * pdf_d1 * sigma) / (2.0 * sqrt_T) + r * K * df_r * ndtr(-d2) - q * S * df_q * ndtr(-d1)) / 365.0
     theta = np.where(is_call, theta_c, theta_p)
     return {'price': price, 'delta': delta, 'gamma': gamma, 'vega': vega, 'theta': theta}
+
+
+# ==============================================================================
+# SENSIBULL PRICING STANDARDS (BLACK-76 ON SYNTHETIC / LISTED FUTURES)
+# Default reference standard for Volatility Lab derived prices & Greeks
+# ==============================================================================
+
+DEFAULT_PRICING_MODEL = "sensibull"
+
+
+def sensibull_dte_years(expiry_date, as_of=None) -> float:
+    """Calculate precise Sensibull ACT/365 time to expiry down to 15:30:00 IST."""
+    from datetime import datetime, date, time
+    from zoneinfo import ZoneInfo
+    ist = ZoneInfo("Asia/Kolkata")
+    if as_of is None:
+        as_of = datetime.now(ist)
+    elif isinstance(as_of, str):
+        as_of = datetime.fromisoformat(as_of)
+    if getattr(as_of, "tzinfo", None) is None:
+        as_of = as_of.replace(tzinfo=ist)
+    else:
+        as_of = as_of.astimezone(ist)
+
+    if isinstance(expiry_date, str):
+        exp_d = date.fromisoformat(expiry_date)
+    elif isinstance(expiry_date, datetime):
+        exp_d = expiry_date.date()
+    else:
+        exp_d = expiry_date
+
+    cutoff = datetime.combine(exp_d, time(15, 30, 0), tzinfo=ist)
+    diff_sec = (cutoff - as_of).total_seconds()
+    if diff_sec <= 0:
+        return 1e-6
+    return diff_sec / (365.0 * 86400.0)
+
+
+def black76_greeks(forward, strike, years, rate, vol, kind):
+    """Sensibull standard: Black-76 price, delta, gamma, vega, and daily theta."""
+    if kind not in ("CE", "PE"):
+        raise ValueError("Invalid option inputs.")
+    fwd_a, strike_a, years_a, vol_a = map(np.asarray, (forward, strike, years, vol))
+    if np.any(fwd_a <= 0) or np.any(strike_a <= 0) or np.any(years_a <= 0) or np.any(vol_a <= 0):
+        raise ValueError("Invalid option inputs.")
+    sqrt_t = np.sqrt(years_a)
+    vol_sqrt_t = vol_a * sqrt_t
+    d1 = (np.log(fwd_a / strike_a) + 0.5 * np.square(vol_a) * years_a) / vol_sqrt_t
+    d2 = d1 - vol_sqrt_t
+    df_r = np.exp(-rate * years_a)
+    pdf_d1 = _norm_pdf(d1)
+    if kind == "CE":
+        nd1, nd2 = ndtr(d1), ndtr(d2)
+        price = df_r * (fwd_a * nd1 - strike_a * nd2)
+        delta = df_r * nd1
+        theta_ann = -(fwd_a * df_r * pdf_d1 * vol_a) / (2.0 * sqrt_t) - rate * price
+    else:
+        nd1_neg, nd2_neg = ndtr(-d1), ndtr(-d2)
+        price = df_r * (strike_a * nd2_neg - fwd_a * nd1_neg)
+        delta = -df_r * nd1_neg
+        theta_ann = -(fwd_a * df_r * pdf_d1 * vol_a) / (2.0 * sqrt_t) - rate * price
+    gamma = (df_r * pdf_d1) / (fwd_a * vol_sqrt_t)
+    vega = fwd_a * df_r * pdf_d1 * sqrt_t * 0.01
+    return {
+        "price": price,
+        "delta": delta,
+        "fwd_delta": delta / df_r if np.all(df_r > 0) else delta,
+        "gamma": gamma,
+        "vega": vega,
+        "theta_daily": theta_ann / 365.0,
+    }
+
+
+def black76_greeks_vec(forward, strike, years, vol=None, rate=0.0, kind="CE", iv=None):
+    """Vectorized Sensibull-standard Black-76 Greeks supporting arrays and mixed call/put."""
+    sigma = np.maximum(np.asarray(iv if vol is None else vol, dtype=float), 1e-6)
+    r = float(rate)
+    F = np.maximum(np.asarray(forward, dtype=float), 1e-6)
+    K = np.maximum(np.asarray(strike, dtype=float), 1e-6)
+    T = np.maximum(np.asarray(years, dtype=float), 1e-9)
+    sqrt_T = np.sqrt(T)
+    vol_sqrt_T = sigma * sqrt_T
+    d1 = (np.log(F / K) + 0.5 * np.square(sigma) * T) / vol_sqrt_T
+    d2 = d1 - vol_sqrt_T
+    df_r = np.exp(-r * T)
+    pdf_d1 = _norm_pdf(d1)
+    is_call = np.isin(np.char.upper(np.asarray(kind, dtype=str)), ["CE", "CALL", "C"])
+    price = np.where(is_call, df_r * (F * ndtr(d1) - K * ndtr(d2)), df_r * (K * ndtr(-d2) - F * ndtr(-d1)))
+    delta = np.where(is_call, df_r * ndtr(d1), -df_r * ndtr(-d1))
+    gamma = (df_r * pdf_d1) / (F * vol_sqrt_T)
+    vega = F * df_r * pdf_d1 * sqrt_T / 100.0
+    theta_ann = -(F * df_r * pdf_d1 * sigma) / (2.0 * sqrt_T) - r * price
+    theta = theta_ann / 365.0
+    return {"price": price, "delta": delta, "gamma": gamma, "vega": vega, "theta": theta}
+
+
+def solve_black76_iv(price, forward, strike, years, rate, kind, bounds=(1e-4, 5.0), tol=1e-8):
+    """Sensibull-standard Arbitrage-bounded Brentq solver for Black-76 IV."""
+    if kind not in ("CE", "PE") or min(price, forward, strike, years) <= 0:
+        return np.nan
+    df_r = np.exp(-rate * years)
+    intrinsic = max(0.0, df_r * (forward - strike) if kind == "CE" else df_r * (strike - forward))
+    upper = df_r * forward if kind == "CE" else df_r * strike
+    if not (intrinsic < price < upper):
+        return np.nan
+    try:
+        return float(brentq(
+            lambda sigma: float(black76_greeks(forward, strike, years, rate, sigma, kind)["price"]) - price,
+            bounds[0], bounds[1], xtol=tol, rtol=tol, maxiter=100
+        ))
+    except (ValueError, RuntimeError):
+        return np.nan
+
+
+# Sensibull standard direct aliases
+sensibull_greeks = black76_greeks
+sensibull_greeks_vec = black76_greeks_vec
+sensibull_iv = solve_black76_iv
+
+
+def calculate_greeks(underlying, strike, years, rate, vol, kind, model="sensibull", dividend=0.0):
+    """Calculate Greeks using Sensibull standard (Black-76) by default, or Spot BSM."""
+    if str(model).lower() == "bsm":
+        return bsm_greeks(underlying, strike, years, rate, vol, kind, dividend=dividend)
+    return black76_greeks(underlying, strike, years, rate, vol, kind)
+
+
+def calculate_iv(price, underlying, strike, years, rate, kind, model="sensibull", dividend=0.0, bounds=(1e-4, 5.0), tol=1e-8):
+    """Calculate IV using Sensibull standard (Black-76) by default, or Spot BSM."""
+    if str(model).lower() == "bsm":
+        return solve_iv(price, underlying, strike, years, rate, kind, dividend=dividend, bounds=bounds, tol=tol)
+    return solve_black76_iv(price, underlying, strike, years, rate, kind, bounds=bounds, tol=tol)
