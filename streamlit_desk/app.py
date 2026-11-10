@@ -1,6 +1,6 @@
-"""Streamlit Quant Desk — Primary Entrypoint (Memory-Bounded v12).
+"""Streamlit Quant Desk – Primary Entrypoint (Memory-Bounded v18).
 
-Encapsulated Streamlit entrypoint for local quantitative research and future cloud deployment.
+Encapsulated Streamlit entrypoint for local quantitative research and cloud deployment.
 Delegates to Volatility Lab's core options and backtest dashboard.
 """
 import gc
@@ -8,7 +8,6 @@ import os
 import sys
 from pathlib import Path
 
-# Thread & memory bounds for local or cloud containers
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
@@ -16,8 +15,9 @@ os.environ.setdefault("MALLOC_TRIM_THRESHOLD_", "65536")
 
 ROOT = Path(__file__).resolve().parent.parent
 LAB_DIR = ROOT / "Volatility Lab"
-if str(LAB_DIR) not in sys.path:
-    sys.path.insert(0, str(LAB_DIR))
+if str(LAB_DIR) in sys.path:
+    sys.path.remove(str(LAB_DIR))
+sys.path.insert(0, str(LAB_DIR))
 
 DASHBOARD_FILE = LAB_DIR / "dashboard.py"
 _CACHE_KEY = "_vol_lab_dashboard_bytecode"

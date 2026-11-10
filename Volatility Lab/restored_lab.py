@@ -9,7 +9,11 @@ import numpy as np
 from scipy.special import ndtr
 import plotly.graph_objects as go
 import streamlit as st
-from market_data import IST
+try:
+    from market_data import IST
+except ImportError:
+    from zoneinfo import ZoneInfo
+    IST = ZoneInfo('Asia/Kolkata')
 from trade_review_ui import table
 
 _INV_SQRT_2PI = 0.3989422804014327
@@ -38,10 +42,13 @@ def _sqlite_rev(db_path: Path):
 @st.cache_data(show_spinner=False, max_entries=4, ttl=300)
 def _cached_intraday_snapshots(db_path_str: str, symbol: str, expiry: str, config: str, db_rev: tuple):
     from snapshot_history import load
-    return load(Path(db_path_str), symbol, expiry, config)
+    df = load(Path(db_path_str), symbol, expiry, config)
+    if df is not None and not df.empty:
+        return df
+    return load(Path(db_path_str), symbol, expiry, "default")
 
 
-def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065, q=0.012):
+def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065):
     try:
         spot = float(spot)
         strike = float(strike)
@@ -55,24 +62,22 @@ def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065, q=0.012):
     sigma = max(0.01, vol_pct / 100.0)
     try:
         sqrt_t = math.sqrt(T)
-        d1 = (math.log(spot / strike) + (rate - q + 0.5 * sigma * sigma) * T) / (sigma * sqrt_t)
+        d1 = (math.log(spot / strike) + (rate + 0.5 * sigma * sigma) * T) / (sigma * sqrt_t)
         d2 = d1 - sigma * sqrt_t
         nd1 = float(ndtr(d1))
         nd2 = float(ndtr(d2))
         pdf_d1 = _INV_SQRT_2PI * math.exp(-0.5 * d1 * d1)
         df_r = math.exp(-rate * T)
-        df_q = math.exp(-q * T)
-        call_p = spot * df_q * nd1 - strike * df_r * nd2
-        put_p = strike * df_r * (1.0 - nd2) - spot * df_q * (1.0 - nd1)
+        call_p = spot * nd1 - strike * df_r * nd2
+        put_p = strike * df_r * (1.0 - nd2) - spot * (1.0 - nd1)
         straddle_p = call_p + put_p
-        call_d = df_q * nd1
-        put_d = call_d - df_q
-        gamma = 2.0 * (df_q * pdf_d1 / (spot * sigma * sqrt_t))
-        call_vega = spot * df_q * pdf_d1 * sqrt_t / 100.0
+        call_d = nd1
+        put_d = call_d - 1.0
+        gamma = pdf_d1 / (spot * sigma * sqrt_t)
+        call_vega = spot * pdf_d1 * sqrt_t / 100.0
         straddle_vega = call_vega * 2.0
-        call_theta = -(spot * df_q * pdf_d1 * sigma / (2.0 * sqrt_t)) + q * spot * df_q * nd1 - rate * strike * df_r * nd2
-        put_theta = -(spot * df_q * pdf_d1 * sigma / (2.0 * sqrt_t)) - q * spot * df_q * (1.0 - nd1) + rate * strike * df_r * (1.0 - nd2)
-        straddle_theta = (call_theta + put_theta) / 365.0
+        theta_day = -(spot * pdf_d1 * sigma / (2.0 * sqrt_t)) / 365.0
+        straddle_theta = theta_day * 2.0
     except (ValueError, ZeroDivisionError, OverflowError):
         return None
     return {
@@ -88,7 +93,7 @@ def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065, q=0.012):
     }
 
 
-def _compute_straddle_series_vectorized(prices: np.ndarray, strikes: np.ndarray, dtes: np.ndarray, ivs: np.ndarray, rate: float = 0.065, q: float = 0.012):
+def _compute_straddle_series_vectorized(prices: np.ndarray, strikes: np.ndarray, dtes: np.ndarray, ivs: np.ndarray, rate: float = 0.065):
     """Vectorized BSM ATM Straddle Price and Net Delta across an entire intraday session array."""
     valid = np.isfinite(prices) & (prices > 0) & np.isfinite(strikes) & (strikes > 0) & np.isfinite(ivs) & (ivs > 0)
     straddle_out = np.full(len(prices), np.nan, dtype=float)
@@ -101,16 +106,15 @@ def _compute_straddle_series_vectorized(prices: np.ndarray, strikes: np.ndarray,
     t = np.maximum(0.2, dtes[valid]) / 365.0
     sigma = np.maximum(0.01, ivs[valid] / 100.0)
     sqrt_t = np.sqrt(t)
-    d1 = (np.log(s / k) + (rate - q + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t)
+    d1 = (np.log(s / k) + (rate + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t)
     d2 = d1 - sigma * sqrt_t
     nd1 = ndtr(d1)
     nd2 = ndtr(d2)
     df_r = np.exp(-rate * t)
-    df_q = np.exp(-q * t)
-    call_p = s * df_q * nd1 - k * df_r * nd2
-    put_p = k * df_r * (1.0 - nd2) - s * df_q * (1.0 - nd1)
+    call_p = s * nd1 - k * df_r * nd2
+    put_p = k * df_r * (1.0 - nd2) - s * (1.0 - nd1)
     straddle_out[valid] = call_p + put_p
-    delta_out[valid] = 2.0 * df_q * nd1 - df_q
+    delta_out[valid] = 2.0 * nd1 - 1.0
     return straddle_out, delta_out
 
 

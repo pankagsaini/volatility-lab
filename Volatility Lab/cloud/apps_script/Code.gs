@@ -28,22 +28,6 @@ const VL = {
   indices: CONFIG.indices
 };
 
-// Recognized NSE special trading sessions (e.g. Diwali Muhurat Trading).
-// snap: 18:00 - 19:30 IST (minutes 1080 to 1170)
-// eod: 19:30 - 22:00 IST (minutes 1170 to 1320)
-const SPECIAL_SESSIONS = {
-  '2024-11-01': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2024' },
-  '2025-10-21': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2025' },
-  '2026-11-08': { snap_start: 840, snap_end: 960, eod_start: 960, eod_end: 1320, name: 'Diwali Muhurat 2026 (14:00-16:00 IST)' },
-  '2027-10-29': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2027' },
-  '2028-10-17': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2028' }
-};
-
-function isSpecialTradingSession_(dateStr) {
-  return Boolean(SPECIAL_SESSIONS[dateStr]);
-}
-
-
 /**
  * Access Google Apps Script private properties store.
  */
@@ -89,8 +73,7 @@ function folder_() {
 function api_(path, params) {
   const allowedEndpoint = (
     /^\/v2\/(option\/(chain|contract)|market-quote\/quotes)$/.test(path) ||
-    path.startsWith('/v3/historical-candle/') ||
-    path.startsWith('/v2/historical-candle/')
+    path.startsWith('/v3/historical-candle/')
   );
 
   if (!allowedEndpoint) {
@@ -338,10 +321,9 @@ function capture_(mode, recovery) {
     if (mode === 'eod') {
       const fromDay = day_(new Date(Date.parse(targetDay + 'T12:00:00+05:30') - 10 * 86400000));
       keys.forEach(key => {
-        // Primary Upstox v2 daily endpoint with v3 fallback
         requests.push({
           label: key,
-          path: '/v2/historical-candle/' + encodeURIComponent(key) + '/day/' + targetDay + '/' + fromDay
+          path: '/v3/historical-candle/' + encodeURIComponent(key) + '/days/1/' + targetDay + '/' + fromDay
         });
       });
     } else {
@@ -562,11 +544,9 @@ function scheduledCapture() {
     return;
   }
 
-  // Skip weekends (Saturday=6, Sunday=7) unless today is a recognized special trading session (e.g. Diwali Muhurat)
+  // Skip weekends (Saturday=6, Sunday=7) before any reconciliation or capture
   if (weekday > 5) {
-    if (!isSpecialTradingSession_(today)) {
-      return;
-    }
+    return;
   }
 
   // Pre-market reconciliation window: 07:00 - 09:00 IST (minutes 420 to 540)
@@ -575,37 +555,21 @@ function scheduledCapture() {
     return;
   }
 
-  const special = SPECIAL_SESSIONS[today];
-  let mode = null;
-
-  if (special) {
-    // Special session schedule (e.g. Diwali Muhurat: snapshots 18:00-19:30, EOD 19:30-22:00 IST)
-    if (mins >= special.snap_start && mins < special.snap_end) {
-      mode = 'snapshot';
-    } else if (mins >= special.eod_start && mins < special.eod_end) {
-      mode = 'eod';
-    }
-  } else {
-    // Regular session schedule:
-    // Intraday snapshots: 09:00 - 16:00 IST (540 to 960)
-    // EOD candle retries: 18:00 - 22:00 IST (1080 to 1320)
-    mode = (mins >= 540 && mins < 960) ? 'snapshot' : (mins >= 1080 && mins < 1320) ? 'eod' : null;
-  }
-
+  // Intraday snapshots: 09:00 - 16:00 IST (540 to 960)
+  // EOD candle retries: 18:00 - 22:00 IST (1080 to 1320)
+  const mode = (mins >= 540 && mins < 960) ? 'snapshot' : (mins >= 1080 && mins < 1320) ? 'eod' : null;
   if (!mode) {
     return;
   }
 
-  // Check holiday calendar (bypassed if today is an active special session)
-  let closed = false;
-  if (!special) {
-    try {
-      closed = marketClosed_(now);
-    } catch (err) {
-      const message = 'Market calendar unavailable; capture paused.';
-      properties.setProperty('COLLECTOR_STATUS', message + ' ' + today);
-      throw err;
-    }
+  // Check holiday calendar
+  let closed;
+  try {
+    closed = marketClosed_(now);
+  } catch (err) {
+    const message = 'Market calendar unavailable; capture paused.';
+    properties.setProperty('COLLECTOR_STATUS', message + ' ' + today);
+    throw err;
   }
 
   if (closed) {
@@ -629,9 +593,7 @@ function scheduledCapture() {
       interval = 1;
       properties.setProperty('INTERVAL_MINUTES', '1');
     }
-    const snapBase = special ? special.snap_start : 540;
-
-    const slot = today + '|' + Math.floor((mins - snapBase) / interval);
+    const slot = today + '|' + Math.floor((mins - 540) / interval);
 
     // Snapshot slot deduplication
     if (mode === 'snapshot' && properties.getProperty('LAST_SNAPSHOT_SLOT') === slot) {
@@ -792,9 +754,6 @@ function reconcilePriorSession() {
 function marketClosed_(now) {
   const properties = props_();
   const today = day_(now);
-  if (isSpecialTradingSession_(today)) {
-    return false;
-  }
   const year = today.slice(0, 4);
 
   let calendar = JSON.parse(properties.getProperty('MARKET_CALENDAR') || 'null');
@@ -866,176 +825,16 @@ function auditStatus() {
  * Public Web API endpoint for Streamlit Cloud & external lab dashboards.
  * Returns the uncompressed JSON of the latest market snapshot in real-time.
  */
-
-/**
- * Manual downloader to capture or backfill historical 1-minute data and snapshots.
- * Discovers 1-minute candles from Upstox API and persists them as gzip snapshot archives.
- */
-function manualDownloadSession(targetDay) {
-  const day = targetDay || '2026-11-08';
-  console.log('Starting manual 1-minute download for session: ' + day);
-
-  const keys = [
-    CONFIG.indices.NIFTY,
-    CONFIG.indices.BANKNIFTY,
-    'NSE_INDEX|India VIX'
-  ];
-
-  let catalogue = null;
-  try {
-    catalogue = catalogue_(new Date(Date.parse(day + 'T12:00:00+05:30')));
-    Object.values(catalogue.indices).forEach(idx => {
-      idx.futures.forEach(f => keys.push(f.instrument_key));
-    });
-  } catch (err) {
-    console.warn('Catalogue discovery fallback: ' + safeError_(err));
-  }
-
-  const results = {};
-  const errors = [];
-
-  keys.forEach(key => {
-    try {
-      const path = '/v3/historical-candle/' + encodeURIComponent(key) + '/minutes/1/' + day + '/' + day;
-      const data = api_(path);
-      results[key] = data.candles || [];
-    } catch (err) {
-      errors.push({ instrument: key, error: safeError_(err) });
-    }
-  });
-
-  const minutesSet = new Set();
-  Object.values(results).forEach(candles => {
-    candles.forEach(c => {
-      if (c && c[0]) {
-        minutesSet.add(String(c[0]));
-      }
-    });
-  });
-
-  const timestamps = [...minutesSet].sort();
-  console.log('Discovered ' + timestamps.length + ' 1-minute bars for ' + day);
-
-  if (!timestamps.length) {
-    console.log('No minute bars found; running EOD reconciliation for ' + day);
-    return capture_('eod', { target_day: day, catalogue: catalogue });
-  }
-
-  let savedCount = 0;
-  timestamps.forEach(stamp => {
-    const timePart = stamp.slice(11, 19).replace(/:/g, '');
-    const quotes = {};
-
-    Object.keys(results).forEach(key => {
-      const match = results[key].find(c => c[0] === stamp);
-      if (match) {
-        quotes[key] = {
-          instrument_token: key,
-          timestamp: stamp,
-          last_trade_time: stamp,
-          last_price: match[4],
-          ohlc: { open: match[1], high: match[2], low: match[3], close: match[4] },
-          volume: match[5]
-        };
-      }
-    });
-
-    const snapshot = {
-      schema: 1,
-      provider: 'Upstox',
-      day: day,
-      mode: 'snapshot',
-      retrieved_at: stamp,
-      status: 'complete',
-      records: [
-        { label: 'quotes', retrieved_at: stamp, data: quotes }
-      ],
-      errors: [],
-      pending: [],
-      catalogue: catalogue,
-      fetch_seconds: 0.05,
-      source: 'manual_historical_download'
-    };
-
-    save_(day + '_snapshot_' + timePart + '_complete', snapshot);
-    savedCount++;
-  });
-
-  const consolidated = {
-    schema: 1,
-    provider: 'Upstox',
-    day: day,
-    type: '1minute_historical_session',
-    downloaded_at: new Date().toISOString(),
-    instruments: results,
-    minutes_count: timestamps.length,
-    errors: errors
-  };
-  const consolidatedId = save_(day + '_1minute_consolidated_complete', consolidated);
-
-  return {
-    day: day,
-    saved_snapshots: savedCount,
-    consolidated_file_id: consolidatedId,
-    minutes: timestamps.length,
-    errors: errors
-  };
-}
-
-
-
-/**
- * Backfill missing EOD archives for Nov 4 to Nov 8.
- */
-function backfillAllMissingEod_2026_11_04_to_08() {
-  const missingDays = ['2026-11-04', '2026-11-05', '2026-11-06', '2026-11-08'];
-  const results = {};
-  missingDays.forEach(day => {
-    try {
-      console.log('Backfilling EOD for ' + day);
-      results[day] = capture_('eod', { target_day: day });
-    } catch (err) {
-      results[day] = { error: safeError_(err) };
-    }
-  });
-  return results;
-}
-
 function doGet(e) {
   try {
     const properties = props_();
     const requiredKey = properties.getProperty('WEBHOOK_KEY');
     const providedKey = e && e.parameter ? e.parameter.key : null;
-    const action = e && e.parameter ? e.parameter.action : null;
-    const isMutation = (action === 'manual_download' || action === 'download_muhurat' || action === 'backfill_eod');
-    if (requiredKey && providedKey !== requiredKey && isMutation) {
+    if (requiredKey && providedKey !== requiredKey) {
       return ContentService.createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
         .setMimeType(ContentService.MimeType.JSON);
     }
-
-    if (action === 'backfill_eod') {
-      const result = backfillAllMissingEod_2026_11_04_to_08();
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (action === 'manual_download' || action === 'download_muhurat') {
-      const targetDay = (e && e.parameter && e.parameter.day) ? e.parameter.day : '2026-11-08';
-      const result = manualDownloadSession(targetDay);
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (action === 'candles') {
-      const instrument = (e && e.parameter && e.parameter.instrument) ? e.parameter.instrument : 'NSE_INDEX|Nifty 50';
-      const interval = (e && e.parameter && e.parameter.interval) ? e.parameter.interval : 'minutes/1';
-      const toDate = (e && e.parameter && e.parameter.to_date) ? e.parameter.to_date : '2026-11-08';
-      const fromDate = (e && e.parameter && e.parameter.from_date) ? e.parameter.from_date : toDate;
-      const path = '/v3/historical-candle/' + encodeURIComponent(instrument) + '/' + interval + '/' + toDate + '/' + fromDate;
-      const data = api_(path);
-      return ContentService.createTextOutput(JSON.stringify(data))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
+    const action = e && e.parameter ? e.parameter.action : null;
 
     if (action === 'status') {
       let triggers = [];
@@ -1054,39 +853,27 @@ function doGet(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    if (action === 'list_days') {
-      const folder = folder_();
-      const files = folder.getFiles();
-      const days = new Set();
-      let count = 0;
-      while (files.hasNext() && count < 200) {
-        const f = files.next();
-        count++;
-        const name = f.getName();
-        if ((name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
-          const match = name.match(/^(\d{4}-\d{2}-\d{2})/);
-          if (match) days.add(match[1]);
-        }
-      }
-      return ContentService.createTextOutput(JSON.stringify({
-        days: Array.from(days).sort().reverse()
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-
     let fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
     let file = null;
 
-    const requestedDay = e && e.parameter && e.parameter.day ? e.parameter.day : null;
-    if (requestedDay) {
+    if (fileId) {
+      try {
+        file = DriveApp.getFileById(fileId);
+      } catch (err) {
+        file = null;
+      }
+    }
+
+    if (!file) {
       const folder = folder_();
       const files = folder.getFiles();
       let latestTime = 0;
       let count = 0;
-      while (files.hasNext() && count < 150) {
+      while (files.hasNext() && count < 60) {
         const f = files.next();
         count++;
         const name = f.getName();
-        if (name.startsWith(requestedDay) && (name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
+        if (name.endsWith('_complete.json.gz')) {
           const time = f.getLastUpdated().getTime();
           if (time > latestTime) {
             latestTime = time;
@@ -1094,37 +881,10 @@ function doGet(e) {
           }
         }
       }
-    } else {
-      if (fileId) {
-        try {
-          file = DriveApp.getFileById(fileId);
-        } catch (err) {
-          file = null;
-        }
-      }
-
-      if (!file) {
-        const folder = folder_();
-        const files = folder.getFiles();
-        let latestTime = 0;
-        let count = 0;
-        while (files.hasNext() && count < 60) {
-          const f = files.next();
-          count++;
-          const name = f.getName();
-          if (name.endsWith('_complete.json.gz')) {
-            const time = f.getLastUpdated().getTime();
-            if (time > latestTime) {
-              latestTime = time;
-              file = f;
-            }
-          }
-        }
-      }
     }
 
     if (!file) {
-      return ContentService.createTextOutput(JSON.stringify({ error: 'No snapshot files found' + (requestedDay ? ' for ' + requestedDay : '') }))
+      return ContentService.createTextOutput(JSON.stringify({ error: 'No snapshot files found' }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 

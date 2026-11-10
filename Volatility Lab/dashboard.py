@@ -10,7 +10,12 @@ import time
 import urllib.parse
 from datetime import datetime, timezone
 import streamlit as st
-from market_data import MarketDataError, IST
+try:
+    from market_data import MarketDataError, IST
+except ImportError:
+    from zoneinfo import ZoneInfo
+    IST = ZoneInfo('Asia/Kolkata')
+    class MarketDataError(RuntimeError): pass
 from pricing_inputs import get_rate, get_yields
 
 ROOT=Path(__file__).resolve().parent
@@ -159,8 +164,7 @@ mkt_border = "rgba(16, 185, 129, 0.42)" if is_open else ("rgba(245, 158, 11, 0.4
 mkt_bg = "rgba(16, 185, 129, 0.12)" if is_open else ("rgba(245, 158, 11, 0.12)" if is_pre else "rgba(15, 23, 42, 0.85)")
 mkt_label = "● Market Live" if is_open else ("◐ Pre-Open" if is_pre else "○ Market Closed")
 
-cloud_url = "https://volatilitylab.in"
-app_cloud_url = "https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/"
+cloud_url = "https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/"
 repo_url = "https://github.com/pankagsaini/volatility-lab"
 edit_url = "https://github.com/pankagsaini/volatility-lab/edit/master/Volatility%20Lab/dashboard.py"
 try:

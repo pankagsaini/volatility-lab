@@ -20,7 +20,13 @@ from plotly.subplots import make_subplots
 
 import streamlit as st
 
-from market_data import IST,MarketDataError,history_cutoff
+try:
+    from market_data import IST,MarketDataError,history_cutoff
+except ImportError:
+    from zoneinfo import ZoneInfo
+    IST = ZoneInfo('Asia/Kolkata')
+    class MarketDataError(RuntimeError): pass
+    def history_cutoff(*a, **kw): return None
 
 from market_table import INDICES,COLUMNS,DATA,one_year,historical_vol,chart_iv_spread
 
@@ -929,7 +935,7 @@ def render_monitor(rate=.065,dividend=0.,spread=3.):
         if st.session_state.get('options_refresh_error'):st.warning(st.session_state.options_refresh_error)
 
         requested_config=config
-        snap_rev=_file_rev(DATA/'expiry_latest.json',DATA/'monitor.sqlite',DATA/'google_archive'/'status.json') + _price_history_revision('NIFTY') + _price_history_revision('BANKNIFTY')
+        snap_rev=_file_rev(DATA/'expiry_latest.json',DATA/'monitor.sqlite') + _price_history_revision('NIFTY') + _price_history_revision('BANKNIFTY')
         result=_cached_load_snapshot(config,allow_saved=True,rev=snap_rev)
         if result is not None:st.session_state['_last_options_snapshot']=result
         else:result=st.session_state.get('_last_options_snapshot')

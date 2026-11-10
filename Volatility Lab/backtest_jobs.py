@@ -4,7 +4,10 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 import threading
-from upstox_archive import INDICES
+try:
+    from upstox_archive import INDICES
+except ImportError:
+    INDICES = {'NIFTY': 'NSE_INDEX|Nifty 50', 'BANKNIFTY': 'NSE_INDEX|Nifty Bank'}
 from strategy_backtest import simulate as simulate_options
 
 SLOT = '_active_backtest_task'

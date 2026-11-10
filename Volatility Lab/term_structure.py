@@ -2,7 +2,11 @@
 from datetime import datetime, time
 import numpy as np
 import pandas as pd
-from market_data import IST
+try:
+    from market_data import IST
+except ImportError:
+    from zoneinfo import ZoneInfo
+    IST = ZoneInfo('Asia/Kolkata')
 
 
 def compute_forward_vol(iv1, dte1, iv2, dte2):

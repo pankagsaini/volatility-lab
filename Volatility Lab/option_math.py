@@ -1,57 +1,7 @@
 """European spot Black-Scholes with a configurable continuous dividend yield."""
 import numpy as np
 import pandas as pd
-try:
-    from scipy.optimize import brentq
-except (ImportError, Exception):
-    def brentq(f, a, b, xtol=1e-8, rtol=1e-8, maxiter=100):  # type: ignore[no-redef]
-        """Pure-Python Brent-Dekker root finder with machine-precision convergence."""
-        fa = f(a)
-        fb = f(b)
-        if fa * fb > 0:
-            raise ValueError("f(a) and f(b) must have different signs")
-        if abs(fa) < abs(fb):
-            a, b = b, a
-            fa, fb = fb, fa
-        c = a
-        fc = fa
-        mflag = True
-        d = 0.0
-        for _ in range(maxiter):
-            tol = 2 * (rtol * abs(b) + xtol)
-            if fb == 0.0 or abs(b - a) < tol:
-                return b
-            if fa != fc and fb != fc:
-                s = (a * fb * fc) / ((fa - fb) * (fa - fc)) + \
-                    (b * fa * fc) / ((fb - fa) * (fb - fc)) + \
-                    (c * fa * fb) / ((fc - fa) * (fc - fb))
-            else:
-                s = b - fb * (b - a) / (fb - fa)
-            low, high = min((3 * a + b) / 4, b), max((3 * a + b) / 4, b)
-            cond1 = not (low < s < high)
-            cond2 = mflag and abs(s - b) >= abs(b - c) / 2
-            cond3 = (not mflag) and abs(s - b) >= abs(c - d) / 2
-            cond4 = mflag and abs(b - c) < tol
-            cond5 = (not mflag) and abs(c - d) < tol
-            if cond1 or cond2 or cond3 or cond4 or cond5:
-                s = (a + b) / 2
-                mflag = True
-            else:
-                mflag = False
-            fs = f(s)
-            d = c
-            c = b
-            fc = fb
-            if fa * fs < 0:
-                b = s
-                fb = fs
-            else:
-                a = s
-                fa = fs
-            if abs(fa) < abs(fb):
-                a, b = b, a
-                fa, fb = fb, fa
-        return b
+from scipy.optimize import brentq
 from scipy.special import ndtr
 
 _INV_SQRT_2PI = 0.3989422804014327
@@ -134,7 +84,7 @@ def delta_iv_details(chain, kind, target):
     for column in ('iv', 'delta'):
         side[column] = pd.to_numeric(side[column], errors='coerce').astype(float)
     side = side[np.isfinite(side.iv) & np.isfinite(side.delta) & (side.iv > 0)]
-    side = side[((side.delta > 1e-6) & (side.delta < 1.0 - 1e-6)) if kind == 'CE' else ((side.delta < -1e-6) & (side.delta > -1.0 + 1e-6))]
+    side = side[side.delta.between(0, 1) if kind == 'CE' else side.delta.between(-1, 0)]
     if side.empty:
         return np.nan, 'Unavailable', chain.iloc[:0]
     side['abs_delta'] = side.delta.abs()

@@ -605,51 +605,13 @@ def install_classic_modern_theme() -> None:
 
 def market_session_badge_html(now: datetime | None = None) -> str:
     """Return a Classic & Modern dark-slate pill badge for current NSE market status."""
-    from market_calendar import SPECIAL_SESSIONS
     current = now or datetime.now(IST)
     if current.tzinfo is None:
         current = current.replace(tzinfo=IST)
     else:
         current = current.astimezone(IST)
     minute = current.hour * 60 + current.minute
-    cur_date = current.date()
-
-    if cur_date in SPECIAL_SESSIONS:
-        info = SPECIAL_SESSIONS[cur_date]
-        pre_start = info.get("pre_open_start", (18, 0))
-        trade_start = info.get("trading_start", (18, 15))
-        trade_end = info.get("trading_end", (19, 15))
-        snap_end = info.get("snap_end_min", 1170)
-
-        pre_min = pre_start[0] * 60 + pre_start[1]
-        trade_start_min = trade_start[0] * 60 + trade_start[1]
-        trade_end_min = trade_end[0] * 60 + trade_end[1]
-
-        if pre_min <= minute < trade_start_min:
-            label = "◐ NSE · MUHURAT PRE-OPEN"
-            style = (
-                "background:rgba(245,158,11,0.18); color:#fbbf24; "
-                "border:1px solid rgba(245,158,11,0.55); box-shadow:0 0 10px rgba(245,158,11,0.25);"
-            )
-        elif trade_start_min <= minute <= trade_end_min:
-            label = "● NSE LIVE · MUHURAT SPECIAL SESSION"
-            style = (
-                "background:rgba(245,158,11,0.22); color:#fef08a; "
-                "border:1px solid #eab308; box-shadow:0 0 16px rgba(234,179,8,0.45); font-weight:700;"
-            )
-        elif trade_end_min < minute <= snap_end:
-            label = "◐ NSE · MUHURAT CLOSING"
-            style = (
-                "background:rgba(245,158,11,0.14); color:#fbbf24; "
-                "border:1px solid rgba(245,158,11,0.45);"
-            )
-        else:
-            label = "○ NSE CLOSED · SPECIAL SESSION ARCHIVE"
-            style = (
-                "background:rgba(148,163,184,0.10); color:#cbd5e1; "
-                "border:1px solid rgba(148,163,184,0.28);"
-            )
-    elif current.weekday() < 5 and 555 <= minute <= 930:
+    if current.weekday() < 5 and 555 <= minute <= 930:
         label = "● NSE LIVE · REGULAR SESSION"
         style = (
             "background:rgba(16,185,129,0.14); color:#34d399; "

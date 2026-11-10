@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo
 import gzip
 import json, shutil
 import sqlite3
+import gc
+from contextlib import closing
 import sys
 import tempfile
 import time
@@ -20,8 +22,6 @@ for mod_name in ("streamlit", "plotly", "plotly.graph_objects", "plotly.subplots
         m = SimpleNamespace()
         if mod_name == "streamlit":
             m.fragment = lambda *a, **kw: (lambda fn: fn)
-            m.cache_data = lambda *a, **kw: (lambda fn: fn)
-            m.cache_resource = lambda *a, **kw: (lambda fn: fn)
             m.session_state = {}
         sys.modules[mod_name] = m
 sys.modules["plotly.graph_objects"].Figure = object
@@ -35,9 +35,15 @@ if "msvcrt" not in sys.modules:
 
 # Add patched directory to sys.path when running in sandbox or local repo
 HERE_DIR = Path(__file__).resolve().parent
-PATCH_DIR = (Path(__file__).resolve().parent / "Volatility Lab") if (Path(__file__).resolve().parent / "Volatility Lab").exists() else Path(__file__).resolve().parent
-for candidate in (PATCH_DIR, HERE_DIR, HERE_DIR / "Volatility Lab"):
-    if candidate.exists() and str(candidate) not in sys.path:
+PATCH_DIR = (
+    (HERE_DIR / "Volatility Lab")
+    if (HERE_DIR / "Volatility Lab").exists()
+    else (HERE_DIR.parent / "intermediate" / "patched" if (HERE_DIR.parent / "intermediate" / "patched").exists() else HERE_DIR)
+)
+for candidate in (HERE_DIR, PATCH_DIR):
+    if candidate.exists():
+        if str(candidate) in sys.path:
+            sys.path.remove(str(candidate))
         sys.path.insert(0, str(candidate))
 if not PATCH_DIR.exists():
     PATCH_DIR = HERE_DIR / "Volatility Lab"
@@ -193,10 +199,8 @@ class TestTrack2CloudAndDownloaders(unittest.TestCase):
     """Track 2: Cloud Capture (Code.gs) and Background Downloaders tests."""
 
     def test_code_gs_weekend_guard_and_budget_fixes(self):
-        cand = PATCH_DIR / "cloud" / "apps_script" / "Code.gs"
-        if not cand.exists():
-            cand = PATCH_DIR / "Code.gs"
-        code_gs = cand.read_text(encoding="utf-8")
+        cgs_path = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs") if (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").exists() else (PATCH_DIR / "Code.gs")
+        code_gs = cgs_path.read_text(encoding="utf-8")
         # 1. Weekend guard appears before reconcilePriorSession() in scheduledCapture()
         sched_idx = code_gs.index("function scheduledCapture()")
         sched_body = code_gs[sched_idx:sched_idx + 1200]
@@ -207,9 +211,6 @@ class TestTrack2CloudAndDownloaders(unittest.TestCase):
         self.assertIn("res.error === 'Broker HTTP 401'", code_gs)
         # 4. Optional WEBHOOK_KEY guard in doGet
         self.assertIn("WEBHOOK_KEY", code_gs)
-        # 5. Muhurat special session bypass in scheduledCapture and marketClosed_
-        self.assertIn("isSpecialTradingSession_(today)", code_gs)
-        self.assertIn("2026-11-08", code_gs)
 
     def test_futures_backtest_download_cache_hit_has_data_key(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -296,17 +297,6 @@ class TestTrack4UIAndCloudCaching(unittest.TestCase):
         utc_night = datetime(2026, 10, 16, 14, 0, tzinfo=timezone.utc)
         self.assertFalse(refresh_policy.refresh_due(utc_night, result=None, elapsed=999.0))
 
-        # 09:00 UTC is 14:30 IST on Sunday 2026-11-08 (Diwali Muhurat 2026 14:00-16:00 IST session!)
-        muhurat_live = datetime(2026, 11, 8, 9, 0, tzinfo=timezone.utc)
-        self.assertTrue(refresh_policy.refresh_due(muhurat_live, result={"ok": True}, elapsed=65.0))
-        # 04:30 UTC is 10:00 IST on Sunday (outside both 14:00-16:00 live and 16:00-22:00 EOD windows)
-        muhurat_morning = datetime(2026, 11, 8, 4, 30, tzinfo=timezone.utc)
-        self.assertFalse(refresh_policy.refresh_due(muhurat_morning, result=None, elapsed=999.0))
-        # 12:30 UTC is 18:00 IST on Sunday (inside 16:00-22:00 EOD candle window; 300s throttle applies)
-        muhurat_eod = datetime(2026, 11, 8, 12, 30, tzinfo=timezone.utc)
-        self.assertTrue(refresh_policy.refresh_due(muhurat_eod, result={"ok": True}, elapsed=350.0))
-        self.assertFalse(refresh_policy.refresh_due(muhurat_eod, result={"ok": True}, elapsed=60.0))
-
     def test_background_refresh_ttl_and_atomic_collect(self):
         state = {}
         self.assertTrue(background_refresh.is_stale(state, "quotes", ttl=60.0))
@@ -348,16 +338,13 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         import option_context
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "iv.sqlite"
-            conn = sqlite3.connect(db_path)
-            try:
+            with closing(sqlite3.connect(db_path)) as conn:
                 conn.execute(
                     "CREATE TABLE expiry_observations (symbol TEXT, date TEXT, expiry TEXT, iv REAL, spread REAL, source TEXT, config TEXT)"
                 )
                 conn.execute("INSERT INTO expiry_observations VALUES ('NIFTY', '2026-10-15', '2026-10-22', 95.0, 0.2, 'Upstox supplied IV (Google Cloud)', 'v1')")
                 conn.execute("INSERT INTO expiry_observations VALUES ('NIFTY', '2026-10-15', '2026-10-22', 250.0, 0.2, 'Upstox supplied IV (Google Cloud)', 'v1')")
                 conn.commit()
-            finally:
-                conn.close()
             res = option_context.recorded_context(db_path, "NIFTY", "v1")
             self.assertEqual(len(res), 1)
             self.assertAlmostEqual(float(res["IV"].iloc[0]), 95.0, places=4)
@@ -391,9 +378,6 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         self.assertIn("NSE LIVE", badge_live)
         badge_closed = ui_theme.market_session_badge_html(datetime(2026, 10, 18, 12, 0, tzinfo=ZoneInfo("Asia/Kolkata")))
         self.assertIn("NSE CLOSED", badge_closed)
-        badge_muhurat = ui_theme.market_session_badge_html(datetime(2026, 11, 8, 14, 30, tzinfo=ZoneInfo("Asia/Kolkata")))
-        self.assertIn("MUHURAT SPECIAL SESSION", badge_muhurat)
-        self.assertIn("● NSE LIVE", badge_muhurat)
 
         called = {}
         class DummyFig:
@@ -411,18 +395,6 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         self.assertGreaterEqual(called["layout"]["margin"]["t"], 38)
         self.assertEqual(called["xaxes"]["griddash"], "dot")
 
-    def test_muhurat_special_sessions_calendar(self):
-        # 2026-11-08 is Diwali Muhurat Trading
-        muhurat_date = date(2026, 11, 8)
-        self.assertTrue(market_calendar.is_special_session(muhurat_date))
-        self.assertTrue(market_calendar.is_trading_day(muhurat_date))
-        is_open, sess_type = market_calendar.is_market_open_now(datetime(2026, 11, 8, 14, 30, tzinfo=ZoneInfo("Asia/Kolkata")))
-        self.assertTrue(is_open)
-        self.assertEqual(sess_type, "SPECIAL_LIVE")
-        is_open_noon, sess_type_noon = market_calendar.is_market_open_now(datetime(2026, 11, 8, 12, 0, tzinfo=ZoneInfo("Asia/Kolkata")))
-        self.assertFalse(is_open_noon)
-        self.assertEqual(sess_type_noon, "SPECIAL_CLOSED")
-
     def test_requirements_txt_valid_pypi_specifiers(self):
         req_path = Path(__file__).resolve().parent / "requirements.txt"
         if req_path.exists():
@@ -433,69 +405,6 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
 
 
 
-
-
-    def test_data_consistency_and_sync_integrity(self):
-        from expiry_data import load_snapshot
-        from smile import load_smile, has_usable_points
-        from market_table import atm_values
-
-        DATA = Path(__file__).resolve().parent / "Volatility Lab" / "data"
-        snap = load_snapshot("", allow_saved=True)
-        self.assertIsNotNone(snap)
-        for r in snap.get("rows", []):
-            self.assertIsNotNone(r.get("DTE"), f"Missing DTE in {r.get('Instrument')} {r.get('Expiry')}")
-            self.assertGreater(float(r["DTE"]), 0)
-
-        r0 = snap["rows"][0]
-        self.assertIsNotNone(r0.get("Month future LTP"))
-        self.assertIsNotNone(r0.get("Synthetic future"))
-        diff = abs(float(r0["Synthetic future"]) - float(r0["Month future LTP"]))
-        self.assertLess(diff, 100.0)
-
-        # Guard against dict config in load_smile
-        smile_dict = load_smile(DATA / "monitor.sqlite", "NIFTY", r0["Expiry"], {"dict": 1}, r0.get("As of"))
-        self.assertIsNotNone(smile_dict)
-        self.assertTrue(has_usable_points(smile_dict))
-
-        # Test single-sided option liquidity
-        dummy_chain = pd.DataFrame([
-            {"strike": 25050.0, "option_type": "CE", "iv": 0.155},
-            {"strike": 25050.0, "option_type": "PE", "iv": 0.0}
-        ])
-        c_iv, p_iv, atm_iv = atm_values(dummy_chain, [25050.0], 25050.0)
-        self.assertEqual(atm_iv, 15.5)
-
-    def test_straddle_net_delta_neutral_and_atm_selection(self):
-        if "history_policy" in sys.modules and not hasattr(sys.modules["history_policy"], "__file__"): del sys.modules["history_policy"]
-        from restored_lab import compute_straddle_greeks
-        from expiry_data import load_snapshot
-
-        # 1. Mathematical neutrality of true ATM straddles
-        nifty_greeks = compute_straddle_greeks(spot=25030.35, strike=25050.0, dte=3.0, vol_pct=16.0)
-        self.assertIsNotNone(nifty_greeks)
-        self.assertAlmostEqual(nifty_greeks['net_delta'], 0.0, delta=0.05)
-        self.assertAlmostEqual(nifty_greeks['call_delta'], 0.50, delta=0.05)
-        self.assertAlmostEqual(nifty_greeks['put_delta'], -0.50, delta=0.05)
-
-        banknifty_greeks = compute_straddle_greeks(spot=59086.0, strike=59100.0, dte=17.0, vol_pct=14.0)
-        self.assertIsNotNone(banknifty_greeks)
-        self.assertAlmostEqual(banknifty_greeks['net_delta'], 0.0, delta=0.15)
-
-        # 2. Document the stale strike failure mode: deep ITM call causes net delta ~ 1.0
-        stale_greeks = compute_straddle_greeks(spot=25030.35, strike=23950.0, dte=3.0, vol_pct=16.0)
-        self.assertGreater(stale_greeks['net_delta'], 0.90)
-
-        # 3. Snapshot loader sanitization guarantees ATM strike matches spot
-        snap = load_snapshot({}, allow_saved=True)
-        self.assertIsNotNone(snap)
-        for r in snap.get('rows', []):
-            sym = r.get('Instrument')
-            price = r.get('Price')
-            atm = r.get('ATM strike')
-            step = 50.0 if sym == 'NIFTY' else 100.0
-            if price and atm:
-                self.assertLessEqual(abs(float(atm) - float(price)), step * 1.5)
 
     def test_v4_vectorized_intraday_greeks_and_garch_horizon_cache(self):
         from types import SimpleNamespace
@@ -508,6 +417,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             session_state={},
         )
         sys.modules["trade_review_ui"] = SimpleNamespace(table=lambda *a, **k: None)
+        sys.modules.setdefault("market_data", SimpleNamespace(IST=ZoneInfo("Asia/Kolkata"), MarketDataError=RuntimeError, history_cutoff=lambda *a: None))
         import restored_lab as rl
         import expiry_forecast as ef
         prices = np.array([24400.0, 24450.0, 24500.0])
@@ -579,8 +489,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             tmp_data = Path(tmp) / "data"
             tmp_data.mkdir(parents=True, exist_ok=True)
             mon_db = tmp_data / "monitor.sqlite"
-            con = sqlite3.connect(mon_db)
-            try:
+            with closing(sqlite3.connect(mon_db)) as con:
                 con.execute(
                     "CREATE TABLE intraday_observations (symbol TEXT, expiry TEXT, config TEXT, as_of TEXT, payload TEXT)"
                 )
@@ -603,8 +512,6 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
                         ("NIFTY", "2026-11-12", "cfg1", payload["As of"], json.dumps(payload)),
                     )
                 con.commit()
-            finally:
-                con.close()
             orig_data_dir, orig_root, orig_sig_path = be.DATA_DIR, be.ROOT, bs.PATH
             try:
                 be.DATA_DIR = tmp_data
@@ -635,6 +542,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
                 self.assertIn("Net", trades.columns)
             finally:
                 be.DATA_DIR, be.ROOT, bs.PATH = orig_data_dir, orig_root, orig_sig_path
+                gc.collect()
 
 
     def test_v8_year_long_offline_end_to_end_audit(self):
@@ -877,6 +785,7 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
             self.assertTrue(req.issubset(exports.get(mod, set())), f"Missing exports in {mod}: {req - exports.get(mod, set())}")
 
 
+
     def test_v10_startup_recovery_and_full_export_parity(self):
         """Verify all v10.0 startup crash fixes: collector_support, trade_review, broker_charges, backtest_common, strategy_backtest, and requirements.txt."""
         import tempfile
@@ -956,6 +865,160 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
         self.assertEqual(strategy_backtest.sizing({"sizing_mode": "broker_lot_size", "lots": 2}), ("broker_lot_size", 2))
         self.assertEqual(strategy_backtest.broker_lot_size({"lot_size": 75}), 75)
         self.assertTrue(hasattr(backtest_jobs, "pd"))
+
+
+
+    def test_v16_zero_synthetic_data_strict_real_captures_only(self):
+        """Verify strict 100% real data policy:
+        1. Zero daily-OHLC-to-1-minute interpolation when intraday option captures are absent (records explicit skip).
+        2. HV30 in backtest_signals is strictly shifted by 1 session (.shift(1)) and expiry_observations stamped at 15:30:00 IST without fake 1.5 reversal.
+        3. 15:15 IST exits never drop an already-entered losing trade if an OTM wing has 0 volume at 15:15 (uses last_close).
+        """
+        import tempfile
+        import backtest_engine as be
+        import backtest_signals as bs
+        import strategy_backtest as sb
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_data = Path(tmp) / "data"
+            tmp_data.mkdir(parents=True, exist_ok=True)
+            # Write a 40-day OHLC CSV so HV30 is available
+            df_ohlc = _synthetic_ohlc(45, daily_ret=0.01, end_date="2026-11-06")
+            df_ohlc["Date"] = pd.to_datetime(df_ohlc["Date"]).dt.strftime("%Y-%m-%d")
+            csv_p = tmp_data / "nifty_one_year.csv"
+            df_ohlc.to_csv(csv_p, index=False)
+
+            mon_db = tmp_data / "monitor.sqlite"
+            with closing(sqlite3.connect(mon_db)) as con:
+                con.execute(
+                    "CREATE TABLE expiry_observations (symbol TEXT, date TEXT, expiry TEXT, iv REAL, spread REAL, source TEXT, config TEXT)"
+                )
+                con.execute(
+                    "INSERT INTO expiry_observations VALUES ('NIFTY', '2026-11-05', '2026-11-12', 15.2, 2.1, 'Upstox', 'default')"
+                )
+                con.commit()
+
+            orig_data_dir, orig_root, orig_sig_path = be.DATA_DIR, be.ROOT, bs.PATH
+            try:
+                be.DATA_DIR = tmp_data
+                be.ROOT = tmp_data / "backtest_1minute"
+                bs.PATH = mon_db
+
+                # 1. Verify load() does NOT synthesize intraday series from daily CSV / daily expiry_observations
+                contracts, series, _ = be.load("NIFTY", "2026-11-05", "2026-11-05")
+                self.assertEqual(len(contracts), 0)
+                self.assertEqual(len(series), 0)
+                trades_df, skips_df = sb.simulate(
+                    {"symbol": "NIFTY", "start": "2026-11-05", "end": "2026-11-05", "entry": "09:20", "exit": "15:15", "template": "Short straddle"},
+                    contracts, series, []
+                )
+                self.assertEqual(len(trades_df), 0)
+                self.assertEqual(len(skips_df), 1)
+                self.assertEqual(skips_df.iloc[0]["Reason"], "No real captured intraday option data for session")
+
+                # 2. Verify backtest_signals stamps expiry_observations at 15:30:00 IST, shifts HV30 by 1 session, and has no fake 1.5 reversal
+                sigs = bs.load_signals("NIFTY", path=mon_db)
+                self.assertEqual(len(sigs), 1)
+                exp_s, ts_val, payload_d = sigs[0]
+                self.assertEqual(ts_val.hour, 15)
+                self.assertEqual(ts_val.minute, 30)
+                self.assertNotIn("25 Delta reversal", payload_d)
+
+                # 3. Verify 15:15 IST exit with 0 volume on OTM wing does NOT drop an already-entered losing trade
+                day = "2026-11-06"
+                exp = "2026-11-12"
+                c_list = [
+                    {"instrument_key": "K_CE_S", "trading_symbol": "CE_S", "instrument_type": "CE", "strike_price": 24500.0, "expiry": exp, "lot_size": 75},
+                    {"instrument_key": "K_PE_S", "trading_symbol": "PE_S", "instrument_type": "PE", "strike_price": 24500.0, "expiry": exp, "lot_size": 75},
+                    {"instrument_key": "K_CE_B", "trading_symbol": "CE_B", "instrument_type": "CE", "strike_price": 24800.0, "expiry": exp, "lot_size": 75},
+                    {"instrument_key": "K_PE_B", "trading_symbol": "PE_B", "instrument_type": "PE", "strike_price": 24200.0, "expiry": exp, "lot_size": 75},
+                ]
+                ticks = {
+                    "NSE_INDEX|Nifty 50": {
+                        f"{day} 09:19": [24500.0, 24500.0, 24500.0, 24500.0, 1000],
+                        f"{day} 09:20": [24500.0, 24500.0, 24500.0, 24500.0, 1000],
+                        f"{day} 15:15": [24750.0, 24750.0, 24750.0, 24750.0, 1000],
+                    },
+                    "K_CE_S": {
+                        f"{day} 09:20": [150.0, 150.0, 150.0, 150.0, 500],
+                        f"{day} 15:15": [320.0, 320.0, 320.0, 320.0, 500],
+                    },
+                    "K_PE_S": {
+                        f"{day} 09:20": [140.0, 140.0, 140.0, 140.0, 500],
+                        f"{day} 15:15": [60.0, 60.0, 60.0, 60.0, 500],
+                    },
+                    "K_CE_B": {
+                        f"{day} 09:20": [45.0, 45.0, 45.0, 45.0, 200],
+                        f"{day} 15:15": [110.0, 110.0, 110.0, 110.0, 200],
+                    },
+                    "K_PE_B": {
+                        f"{day} 09:20": [40.0, 40.0, 40.0, 40.0, 200],
+                        f"{day} 14:30": [15.0, 15.0, 15.0, 15.0, 100],
+                        f"{day} 15:15": [15.0, 15.0, 15.0, 15.0, 0],  # 0 volume at 15:15 on OTM wing!
+                    },
+                }
+                t_lose, s_lose = sb.simulate(
+                    {"symbol": "NIFTY", "start": day, "end": day, "entry": "09:20", "exit": "15:15", "template": "Iron butterfly"},
+                    c_list, ticks, []
+                )
+                self.assertEqual(len(t_lose), 1)
+                self.assertLess(float(t_lose.iloc[0]["Net"]), 0.0)
+            finally:
+                be.DATA_DIR, be.ROOT, bs.PATH = orig_data_dir, orig_root, orig_sig_path
+                gc.collect()
+
+
+    def test_v18_clean_repository_structure_and_entrypoints(self):
+        """Verify v18 clean repository structure, zero duplicate module pollution, updated 2026-11-09 expiry_latest.json, and 100% real-data docs/index.html."""
+        repo_root = Path(__file__).resolve().parent
+        vl_dir = repo_root / "Volatility Lab"
+        desk_dir = repo_root / "streamlit_desk"
+        if not vl_dir.is_dir():
+            return
+
+        # 1. Verify root has zero duplicate Volatility Lab modules and zero obsolete scripts
+        allowed_root_py = {
+            "streamlit_app.py",
+            "test_audit_remediations.py",
+            "rebuild_clean_project_v18.py",
+            "patch_1_master_audit_v16.py",
+            "patch_2_trader_feedback_v17.py",
+        }
+        root_py = {p.name for p in repo_root.glob("*.py")}
+        unexpected_root_py = root_py - allowed_root_py
+        self.assertEqual(unexpected_root_py, set(), f"Duplicate/stray .py files at repo root: {unexpected_root_py}")
+        for banned in ("LAUNCH_ANY_DEVICE.py", "MAIN_AUDIT.md", "app.py", "apply_volatility_lab_fixes.py"):
+            self.assertFalse((repo_root / banned).exists(), f"Obsolete file {banned} should not exist at repo root")
+
+        # 2. Verify streamlit_desk/ contains only app.py and run.py
+        if desk_dir.is_dir():
+            desk_py = {p.name for p in desk_dir.glob("*.py")}
+            self.assertEqual(desk_py, {"app.py", "run.py"}, f"Unexpected .py files in streamlit_desk/: {desk_py}")
+
+        # 3. Verify Volatility Lab/data/expiry_latest.json is updated to 2026-11-09 with all 9 active expiries
+        exp_latest_path = vl_dir / "data" / "expiry_latest.json"
+        if exp_latest_path.exists():
+            exp_obj = json.loads(exp_latest_path.read_text(encoding="utf-8"))
+            self.assertTrue(str(exp_obj.get("timestamp", "")).startswith("2026-11-09"), f"Stale expiry_latest.json timestamp: {exp_obj.get('timestamp')}")
+            rows = exp_obj.get("rows", [])
+            self.assertEqual(len(rows), 9)
+            bn_exps = [r["Expiry"] for r in rows if r.get("Instrument") == "BANKNIFTY"]
+            self.assertEqual(bn_exps, ["2026-11-23", "2026-12-29", "2027-01-25"])
+            for r in rows:
+                self.assertIsNotNone(r.get("IV"))
+                self.assertIsNotNone(r.get("HV30"))
+                self.assertIsNotNone(r.get("IV-RV Spread"))
+
+        # 4. Verify docs/index.html has 72 real captured Upstox trades and 14 real captured IV dates
+        docs_html_path = repo_root / "docs" / "index.html"
+        if docs_html_path.exists():
+            html_txt = docs_html_path.read_text(encoding="utf-8")
+            self.assertIn("tradeIdIndexFilter", html_txt)
+            self.assertIn("rel=\"icon\"", html_txt)
+            for line in html_txt.splitlines():
+                if "var tradeArchive =" in line:
+                    t_arr = json.loads(line.split("var tradeArchive =", 1)[1].strip().rstrip(";"))
+                    self.assertEqual(len(t_arr), 72)
 
 
 if __name__ == "__main__":

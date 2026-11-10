@@ -62,6 +62,15 @@ def _default_backtest_date_window(symbol: str = 'NIFTY') -> tuple[date, date, st
             with sqlite3.connect(mon_db, timeout=5) as con:
                 has_tbl = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='intraday_observations'").fetchone()
                 if has_tbl:
+                    cq_row = con.execute(
+                        "SELECT MIN(substr(as_of,1,10)), MAX(substr(as_of,1,10)), COUNT(DISTINCT substr(as_of,1,10)) "
+                        "FROM intraday_observations WHERE symbol=? AND payload LIKE '%\"chain_quotes\"%'",
+                        (symbol,),
+                    ).fetchone()
+                    if cq_row and cq_row[0] and cq_row[1] and int(cq_row[2] or 0) > 0:
+                        d_min = date.fromisoformat(str(cq_row[0])[:10])
+                        d_max = date.fromisoformat(str(cq_row[1])[:10])
+                        return d_min, d_max, f"Real Captured Upstox Option Chains ({d_min} to {d_max} · {cq_row[2]} sessions)"
                     row = con.execute(
                         "SELECT MIN(substr(as_of,1,10)), MAX(substr(as_of,1,10)), COUNT(*) FROM intraday_observations WHERE symbol=?",
                         (symbol,),
@@ -69,11 +78,7 @@ def _default_backtest_date_window(symbol: str = 'NIFTY') -> tuple[date, date, st
                     if row and row[0] and row[1] and int(row[2] or 0) > 0:
                         d_min = date.fromisoformat(str(row[0])[:10])
                         d_max = date.fromisoformat(str(row[1])[:10])
-                        if csv_max and csv_max > d_max:
-                            d_max = csv_max
-                        if (d_max - d_min).days < 14 and csv_min:
-                            d_min = max(csv_min, d_max - timedelta(days=30))
-                        return d_min, d_max, f"Cloud + Historical archive ({d_min} to {d_max} · {row[2]} intraday captures)"
+                        return d_min, d_max, f"Cloud archive ({d_min} to {d_max} · {row[2]} captures)"
         except Exception:
             pass
 

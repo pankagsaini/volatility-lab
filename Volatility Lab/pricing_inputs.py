@@ -3,7 +3,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 import json, threading, time
-from market_data import IST
+try:
+    from market_data import IST
+except ImportError:
+    from zoneinfo import ZoneInfo
+    IST = ZoneInfo('Asia/Kolkata')
 
 _ROOT = Path(__file__).resolve().parent / 'data'
 _pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='pricing-inputs')

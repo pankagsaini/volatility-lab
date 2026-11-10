@@ -8,7 +8,7 @@ import gzip,hashlib,json,os,sqlite3,threading,time,zlib,zlib
 import pandas as pd
 import numpy as np
 from collector_support import atomic_json,read_json,data_lock,STATE
-from market_calendar import HOLIDAYS, SPECIAL_SESSIONS
+from market_calendar import HOLIDAYS
 ROOT=Path(__file__).resolve().parent
 DATA=ROOT/'data'
 STORE=DATA/'google_archive'
@@ -85,12 +85,7 @@ def import_report(obj,rate,dividend,spread):
         q=quotes.get(INDICES[symbol],{})
         valuation=provider_timestamp(q.get('timestamp')) or provider_timestamp(q.get('last_trade_time'))
         trade=provider_timestamp(q.get('last_trade_time'))
-        mins = stamp.hour * 60 + stamp.minute
-        if stamp.date() in SPECIAL_SESSIONS:
-            in_session = 1080 <= mins <= 1170
-        else:
-            in_session = stamp.date() not in HOLIDAYS and stamp.weekday() <= 4 and 555 <= mins <= 940
-        if not in_session:
+        if stamp.date() in HOLIDAYS or stamp.weekday()>4 or not 555<=stamp.hour*60+stamp.minute<=940:
             valuation=trade
         if valuation and (stamp-pd.Timestamp(valuation)).total_seconds()>7*86400:valuation=None
         if not valuation:continue
@@ -130,6 +125,11 @@ def import_report(obj,rate,dividend,spread):
                         continue
             save_intraday(DATA/'monitor.sqlite',config,row)
             save_smile(DATA/'monitor.sqlite',symbol,e,config,row['As of'],smile_points(chain,strikes,spot),capture_source='Google Drive')
+            try:
+                from trade_review import archive_quotes
+                archive_quotes(DATA, symbol, e, {'provider': 'Upstox', 'valuation': asof.isoformat(), 'spot': spot, 'broker_option_chain': raw}, config)
+            except Exception:
+                pass
             from expiry_data import db
             with closing(db()) as con:
                 prior=con.execute('SELECT MAX(as_of) FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND substr(as_of,1,10)=?', (symbol,e,config,str(asof.date()))).fetchone()[0]
@@ -150,7 +150,6 @@ def import_report(obj,rate,dividend,spread):
             cloud_snapshot={'provider':'Upstox','schema':SCHEMA,'config':config, 'parameters':{'rate':rate,'dividend':dividend,'max_spread':spread}, 'timestamp':stamp.isoformat(),'rows':rows,'details':details, 'catalog':catalog,'india_vix':old.get('india_vix',{})}
             from relative_value import capture
             capture(DATA,cloud_snapshot)
-            write_snapshot(cloud_snapshot)
     import_futures(obj,quotes,stamp)
     return len(rows)
 
@@ -160,7 +159,7 @@ def import_futures(obj,quotes,stamp):
     from upstox_archive import connect as research
     from upstox_data import INDICES
     root=DATA/'futures'
-    quote_now=stamp.replace(hour=18,minute=0) if (stamp.date() in HOLIDAYS and stamp.date() not in SPECIAL_SESSIONS) else stamp
+    quote_now=stamp.replace(hour=18,minute=0) if stamp.date() in HOLIDAYS else stamp
     cat=obj.get('catalogue',{}).get('indices',{})
     for symbol,entry in cat.items():
         if symbol not in INDICES:continue
@@ -242,53 +241,27 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
     STORE.mkdir(parents=True,exist_ok=True)
     source=source_folder()
     if source is None:
-        web_url = (read_json(CONFIG, default={}) or {}).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpiRAE9ZRoGGWTyTncZhwUPmTnimv0HyejOiJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
+        web_url = (read_json(CONFIG, default={}) or {}).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpIRAEOZRoGGwTyTncZhwUPmTnimv0Hyej0iJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
         try:
             import requests
-            imported = 0
-            # 1. Real-time snapshot ingestion
-            resp = requests.get(web_url, timeout=15, allow_redirects=True)
+            resp = requests.get(web_url, timeout=12, allow_redirects=True)
             if resp.status_code == 200:
                 obj = resp.json()
                 if obj.get('schema') == 1 and obj.get('records'):
                     retrieved_at = str(obj.get('retrieved_at') or '')
                     prev_status = read_json(STORE/'status.json', default={}) or {}
-                    if not (prev_status.get('mode') == 'web_cloud' and prev_status.get('updated') == retrieved_at and retrieved_at):
-                        with data_lock(timeout=120):
-                            import_report(obj, rate, dividend, spread)
-                        imported += 1
-                        atomic_json(STORE/'status.json',{'status':'ready','mode':'web_cloud','updated':retrieved_at or pd.Timestamp.now(tz='UTC').isoformat(),'total_files':int(prev_status.get('total_files', 0)) + 1,'source':web_url})
-
-            # 2. Historical & previous session backfill
-            try:
-                days_resp = requests.get(f"{web_url}?action=list_days", timeout=12, allow_redirects=True)
-                if days_resp.status_code == 200:
-                    avail_days = days_resp.json().get('days', [])
-                    for d in avail_days[:5]:
-                        d_marker = STORE / f"{d}_synced.json"
-                        if not d_marker.exists():
-                            d_resp = requests.get(f"{web_url}?day={d}", timeout=15, allow_redirects=True)
-                            if d_resp.status_code == 200:
-                                d_obj = d_resp.json()
-                                if d_obj.get('schema') == 1 and d_obj.get('records'):
-                                    with data_lock(timeout=120):
-                                        import_report(d_obj, rate, dividend, spread)
-                                    atomic_json(d_marker, {'day': d, 'imported_at': pd.Timestamp.now(tz='UTC').isoformat()})
-                                    imported += 1
-            except Exception:
-                pass
-
-            if imported > 0:
-                return imported
-            prev_status = read_json(STORE/'status.json', default={}) or {}
-            if prev_status.get('status') == 'ready':
-                return 0
+                    if prev_status.get('mode') == 'web_cloud' and prev_status.get('updated') == retrieved_at and retrieved_at:
+                        return 0
+                    with data_lock(timeout=120):
+                        import_report(obj, rate, dividend, spread)
+                    atomic_json(STORE/'status.json',{'status':'ready','mode':'web_cloud','updated':retrieved_at or pd.Timestamp.now(tz='UTC').isoformat(),'total_files':int(prev_status.get('total_files', 0)) + 1,'source':web_url})
+                    return 1
         except Exception as exc:
             pass
         atomic_json(STORE/'status.json',{'status':'waiting','message':'Sign in to Google Drive desktop to connect the private archive.'});return 0
     manifest=read_json(STORE/'manifest.json', default={}) or {};count=0;errors=[]
     import re
-    pattern=re.compile(r'^\d{4}\-\d{2}\-\d{2}_(snapshot|test|eod|1minute_consolidated|consolidated)(_\d{6})?_(complete|partial)\.json\.gz$')
+    pattern=re.compile(r'^\d{4}\-\d{2}\-\d{2}_(snapshot|test|eod)_\d{6}_(complete|partial)\.json\.gz$')
     for path in sorted(source.glob('*.json.gz'), reverse=True):
         if not pattern.fullmatch(path.name):continue
         try:

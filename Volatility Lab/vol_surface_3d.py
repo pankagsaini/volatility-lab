@@ -14,7 +14,11 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from market_data import IST
+try:
+    from market_data import IST
+except ImportError:
+    from zoneinfo import ZoneInfo
+    IST = ZoneInfo('Asia/Kolkata')
 
 SURFACE_VERSION = 'vol-surface-3d-v1'
 

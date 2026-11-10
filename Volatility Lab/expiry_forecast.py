@@ -5,7 +5,11 @@ import numpy as np
 import pandas as pd
 from forecast import fit_garch
 from vol_lib import validate_ohlc, rv_snapshot
-from market_data import IST
+try:
+    from market_data import IST
+except ImportError:
+    from zoneinfo import ZoneInfo
+    IST = ZoneInfo('Asia/Kolkata')
 from market_calendar import HOLIDAYS, SPECIAL_SESSIONS, last_trading_day_on_or_before
 
 VERSION = 'expiry-v4-session-annualized-nse2026'
@@ -62,8 +66,8 @@ def _prepare_one_year_slice(frame: pd.DataFrame, cutoff_date) -> tuple[pd.DataFr
     if data.empty:
         raise ValueError('No completed candles available at the quote time.')
     last = data.index[-1].date()
-    elapsed = [d for d in sessions(last + timedelta(days=1), cutoff_date) if d not in SPECIAL_SESSIONS]
-    if len(elapsed) > 5:
+    elapsed = sessions(last + timedelta(days=1), cutoff_date)
+    if elapsed:
         raise ValueError('Latest completed session is missing; refresh underlying history.')
     data = data[data.index > data.index[-1] - pd.DateOffset(years=1)]
     if len(data) < 201:
@@ -91,7 +95,7 @@ def _get_base_expiry_models(data: pd.DataFrame, last_str: str) -> tuple[float, n
     garch_vars = None
     garch_status = 'Ready'
     try:
-        _, diagnostics, path, _ = fit_garch(data, (265,), min_observations=200)
+        _, diagnostics, path, _ = fit_garch(data, (245,), min_observations=200)
         garch_vars = (path['Daily conditional vol %'].to_numpy(dtype=float) / 100.0) ** 2 / 245.0
         garch_status = '; '.join(diagnostics['warnings']) or 'Ready'
     except (ValueError, RuntimeError, FloatingPointError, ImportError) as error:
@@ -230,8 +234,7 @@ def term_structure_forecast(frame, expiry, as_of):
     cutoff = quote.date() if quote.time() >= time(15, 40) else quote.date() - timedelta(days=1)
     data, last = _prepare_one_year_slice(frame, cutoff)
     expected_prior = last_trading_day_on_or_before(quote.date() - timedelta(days=1))
-    lag_sessions = sessions(last + timedelta(days=1), expected_prior)
-    if len(lag_sessions) > 5:
+    if last < expected_prior:
         raise ValueError('Latest completed session is missing; refresh underlying history.')
     anchor = datetime.combine(last, time(15, 40), tzinfo=IST)
     model = expiry_forecast(data, expiry, anchor)

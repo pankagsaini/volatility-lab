@@ -1,6 +1,5 @@
-"""Intraday backtest loader & simulator with LRU gzip cache and automatic Cloud monitor.sqlite + one_year.csv fallback."""
+"""Intraday backtest loader & simulator with LRU gzip cache and real captured intraday snapshot fallback (zero synthetic daily-to-1m interpolation)."""
 from pathlib import Path
-from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
 import json, gzip, sqlite3, math, threading
 from collections import OrderedDict
@@ -29,21 +28,30 @@ def _read_gzip_json(path):
     return obj
 
 
-def _next_weekly_expiry(d: date, symbol: str = 'NIFTY') -> date:
-    """Return nearest valid weekly/monthly expiry at least 2 days ahead of `d`."""
-    # Target Thursday (weekday 3) or Tuesday (weekday 1) at least 2 days ahead
-    cur = d + timedelta(days=2)
-    while cur.weekday() != 3:
-        cur += timedelta(days=1)
-    return cur
+def _expected_trading_days(start, end, existing_days=()):
+    """Return sorted list of NSE weekday trading dates in [start, end] unioned with any captured session dates."""
+    try:
+        from market_calendar import HOLIDAYS
+    except Exception:
+        HOLIDAYS = set()
+    s_str, e_str = str(start)[:10], str(end)[:10]
+    days = set(existing_days)
+    try:
+        for dt in pd.date_range(s_str, e_str):
+            d_obj = dt.date()
+            if d_obj.weekday() < 5 and d_obj not in HOLIDAYS:
+                days.add(d_obj.strftime('%Y-%m-%d'))
+    except Exception:
+        pass
+    return sorted(d for d in days if s_str <= d <= e_str)
 
 
 def _fallback_from_monitor_sqlite(symbol, start, end):
-    """Build tradable intraday option contracts & 1-minute series from monitor.sqlite Cloud snapshots
-    and {symbol}_one_year.csv daily OHLC when the 200MB 1-minute archive (`queue.sqlite`) is absent."""
+    """Build tradable intraday option contracts & series ONLY from real captured intraday snapshots
+    (>= 2 timestamps covering morning entry and afternoon exit) in data/google_archive or data/monitor.sqlite.
+    Zero synthetic daily-OHLC-to-1-minute interpolation is performed."""
     mon_db = DATA_DIR / 'monitor.sqlite'
-    csv_path = DATA_DIR / f'{str(symbol).lower()}_one_year.csv'
-    latest_json = DATA_DIR / 'expiry_latest.json'
+    archive_dir = DATA_DIR / 'google_archive'
     try:
         from scipy.special import ndtr
     except Exception:
@@ -57,28 +65,66 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
     start_s = str(start)[:10]
     end_s = str(end)[:10]
 
+    # 1. First check if real Upstox .json.gz snapshots exist in data/google_archive for sessions in [start, end]
+    archive_by_day = {}
+    if archive_dir.is_dir():
+        for gz_path in sorted(archive_dir.glob('*_snapshot_*_complete.json.gz')):
+            day_prefix = gz_path.name[:10]
+            if start_s <= day_prefix <= end_s:
+                archive_by_day.setdefault(day_prefix, []).append(gz_path)
+
+    for day_str, gz_list in sorted(archive_by_day.items()):
+        if len(gz_list) < 2:
+            continue
+        parsed_snaps = []
+        for gz_p in gz_list:
+            try:
+                obj = _read_gzip_json(gz_p)
+                ts = pd.Timestamp(obj['retrieved_at']).tz_convert('Asia/Kolkata')
+                parsed_snaps.append((ts, obj))
+            except Exception:
+                continue
+        if len(parsed_snaps) < 2:
+            continue
+        parsed_snaps.sort(key=lambda x: x[0])
+        # Populate real captured option prices from the snapshots across the session minutes
+        for ts, obj in parsed_snaps:
+            m_of_day = max(0, min(375, (ts.hour * 60 + ts.minute) - 555))
+            stamp_key = (datetime.fromisoformat(f"{day_str} 09:15") + timedelta(minutes=m_of_day)).strftime('%Y-%m-%d %H:%M')
+            for rec in obj.get('records', []):
+                lbl = rec.get('label', '')
+                if not lbl.startswith(symbol + '|') or not isinstance(rec.get('data'), list) or not rec['data']:
+                    continue
+                exp_str = lbl.split('|', 1)[1][:10]
+                raw_chain = rec['data']
+                spot_px = float(raw_chain[0].get('underlying_spot_price') or 0.0)
+                if spot_px > 0:
+                    series.setdefault(spot_key, {})[stamp_key] = [spot_px, spot_px, spot_px, spot_px, 1000]
+                for row in raw_chain:
+                    k = int(round(float(row['strike_price'])))
+                    for kind, opt_key in (('CE', 'call_options'), ('PE', 'put_options')):
+                        opt = row.get(opt_key) or {}
+                        md = opt.get('market_data') or {}
+                        ltp = float(md.get('ltp') or 0.0)
+                        vol = float(md.get('volume') or 0.0)
+                        if ltp > 0:
+                            ikey = f"UPSTOX_OPT|{symbol}|{exp_str}|{k}|{kind}"
+                            if ikey not in contracts:
+                                contracts[ikey] = {
+                                    'instrument_key': ikey,
+                                    'trading_symbol': f"{symbol} {exp_str} {k} {kind}",
+                                    'instrument_type': kind,
+                                    'strike_price': float(k),
+                                    'expiry': exp_str,
+                                    'lot_size': lot_size,
+                                }
+                            series.setdefault(ikey, {})[stamp_key] = [ltp, ltp, ltp, ltp, max(vol, 1.0)]
+
+    # 2. Check intraday_observations in monitor.sqlite ONLY for sessions with >= 2 real intraday timestamps
     by_day_exp = {}
-    daily_iv_lookup = {}
-    default_iv = 14.5 if symbol == 'NIFTY' else 16.5
-    default_rev25 = 1.2
-
-    # 1. Check expiry_latest.json for baseline IV and skew
-    if latest_json.exists():
-        try:
-            snap_obj = json.loads(latest_json.read_text(encoding='utf-8'))
-            for r in snap_obj.get('rows', []):
-                if r.get('Instrument') == symbol and r.get('IV'):
-                    default_iv = float(r['IV'])
-                    if r.get('25 Delta reversal') is not None:
-                        default_rev25 = float(r['25 Delta reversal'])
-                    break
-        except Exception:
-            pass
-
-    # 2. Read intraday_observations and expiry_observations from monitor.sqlite
     if mon_db.exists():
         try:
-            with closing(sqlite3.connect(mon_db, timeout=15)) as con:
+            with sqlite3.connect(mon_db, timeout=15) as con:
                 has_intra = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='intraday_observations'").fetchone()
                 if has_intra:
                     rows = con.execute(
@@ -90,88 +136,20 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
                             dt = pd.Timestamp(as_of)
                             dt = dt.tz_localize('Asia/Kolkata') if dt.tzinfo is None else dt.tz_convert('Asia/Kolkata')
                             day_str = dt.strftime('%Y-%m-%d')
-                            if not (start_s <= day_str <= end_s):
+                            if not (start_s <= day_str <= end_s) or day_str in archive_by_day:
                                 continue
                             rec = json.loads(payload_str)
                             spot = float(rec.get('Price') or 0.0)
                             iv = float(rec.get('IV') or 0.0)
                             if math.isfinite(spot) and spot > 0 and math.isfinite(iv) and iv > 0:
                                 by_day_exp.setdefault((day_str, str(exp)[:10]), []).append((dt, spot, iv, rec))
-                                daily_iv_lookup[day_str] = (iv, float(rec.get('25 Delta reversal') or default_rev25), str(exp)[:10])
-                        except Exception:
-                            continue
-
-                has_exp = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='expiry_observations'").fetchone()
-                if has_exp:
-                    erows = con.execute(
-                        "SELECT date, expiry, iv, spread FROM expiry_observations WHERE symbol=? AND date >= ? AND date <= ? ORDER BY date",
-                        (symbol, start_s, end_s),
-                    ).fetchall()
-                    for d_str, exp_s, iv_val, spr_val in erows:
-                        try:
-                            if iv_val is not None and float(iv_val) > 0:
-                                daily_iv_lookup.setdefault(str(d_str)[:10], (float(iv_val), default_rev25, str(exp_s)[:10]))
                         except Exception:
                             continue
         except Exception:
             pass
 
-    # 3. Read daily OHLC from {symbol}_one_year.csv to cover multi-day historical windows in [start, end]
-    daily_ohlc = {}
-    if csv_path.exists():
-        try:
-            df_csv = pd.read_csv(csv_path)
-            for _, row in df_csv.iterrows():
-                d_str = str(row['Date'])[:10]
-                if start_s <= d_str <= end_s:
-                    daily_ohlc[d_str] = (float(row['Open']), float(row['High']), float(row['Low']), float(row['Close']))
-        except Exception:
-            pass
-
-    # Merge daily_ohlc days that are not already covered with eligible expiries in by_day_exp
-    covered_days = {d for (d, _) in by_day_exp.keys()}
-    for d_str, (o_px, h_px, l_px, c_px) in sorted(daily_ohlc.items()):
-        if d_str in covered_days:
-            continue
-        iv_day, rev_day, exp_day = daily_iv_lookup.get(d_str, (default_iv, default_rev25, None))
-        d_obj = date.fromisoformat(d_str)
-        if not exp_day or exp_day <= d_str or (date.fromisoformat(exp_day) - d_obj).days > 10:
-            exp_day = str(_next_weekly_expiry(d_obj, symbol))
-        # Create key intraday anchor points (09:15 Open, 10:30 High/Low, 13:30 Low/High, 15:30 Close)
-        p1 = h_px if c_px >= o_px else l_px
-        p2 = l_px if c_px >= o_px else h_px
-        anchors = [
-            (pd.Timestamp(f"{d_str} 09:15:00", tz='Asia/Kolkata'), o_px, iv_day),
-            (pd.Timestamp(f"{d_str} 11:00:00", tz='Asia/Kolkata'), p1, iv_day * 1.02),
-            (pd.Timestamp(f"{d_str} 13:30:00", tz='Asia/Kolkata'), p2, iv_day * 0.99),
-            (pd.Timestamp(f"{d_str} 15:30:00", tz='Asia/Kolkata'), c_px, iv_day * 0.97),
-        ]
-        rec_template = {'Price': o_px, 'IV': iv_day, 'Call IV': iv_day, 'Put IV': iv_day, '25 Delta reversal': rev_day}
-        by_day_exp[(d_str, exp_day)] = [(ts, px, iv_v, rec_template) for ts, px, iv_v in anchors]
-
-    # Also ensure that for any day in by_day_exp where all expiries are >10 DTE (e.g. BANKNIFTY monthly),
-    # a near-dated (5 DTE) synthetic expiry is also available if a narrow DTE filter is used
-    extra_day_exp = {}
-    days_grouped = {}
-    for (d_str, exp_str), snaps in by_day_exp.items():
-        days_grouped.setdefault(d_str, []).append((exp_str, snaps))
-    for d_str, exp_list in days_grouped.items():
-        d_obj = date.fromisoformat(d_str)
-        has_short_dte = any(2 <= (date.fromisoformat(e_s) - d_obj).days <= 10 for e_s, _ in exp_list)
-        if not has_short_dte and exp_list:
-            near_exp = str(_next_weekly_expiry(d_obj, symbol))
-            if (d_str, near_exp) not in by_day_exp:
-                extra_day_exp[(d_str, near_exp)] = exp_list[0][1]
-    by_day_exp.update(extra_day_exp)
-
-    if not by_day_exp:
-        return [], {}, 0
-
-    # Cap to most recent 65 sessions to keep memory compact on Streamlit Cloud
-    unique_days = sorted({d for d, _ in by_day_exp.keys()})
-    if len(unique_days) > 65:
-        keep_days = set(unique_days[-65:])
-        by_day_exp = {k: v for k, v in by_day_exp.items() if k[0] in keep_days}
+    # Filter strictly to (day_str, exp_str) pairs that have >= 2 real captured intraday observations
+    by_day_exp = {k: v for k, v in by_day_exp.items() if len(v) >= 2}
 
     rate = 0.065
     for (day_str, exp_str), snaps in by_day_exp.items():
@@ -180,6 +158,15 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
         atm_base = int(round(open_spot / step) * step)
         offsets = [i * step for i in range(-12, 13)]
         strikes = sorted({max(step, atm_base + off) for off in offsets})
+
+        # Check if real chain_quotes are embedded in payload (>= 2 intraday snapshots with real chain quotes)
+        cq_snaps = [s for s in snaps if isinstance(s[3].get('chain_quotes'), dict) and s[3]['chain_quotes']]
+        has_real_chain_quotes = len(cq_snaps) >= 2
+        if has_real_chain_quotes:
+            snaps = cq_snaps
+            all_ks = sorted({int(k_s) for s in snaps for k_s in s[3]['chain_quotes'].keys()})
+            if all_ks:
+                strikes = all_ks
 
         for k in strikes:
             for kind in ('CE', 'PE'):
@@ -198,11 +185,7 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
             dte_days = max(0.5, float((date.fromisoformat(exp_str[:10]) - date.fromisoformat(day_str[:10])).days))
         except Exception:
             dte_days = 5.0
-        T = dte_days / 365.0
-        sqrt_T = math.sqrt(T)
-        df_r = math.exp(-rate * T)
 
-        # Build minute timestamps from 09:15 to 15:30 IST with linear interpolation between anchors
         anchor_mins = []
         for ts_a, sp_a, iv_a, rec_a in snaps:
             m_of_day = max(0, min(375, (ts_a.hour * 60 + ts_a.minute) - 555))
@@ -219,42 +202,57 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
             stamp_key = cur.strftime('%Y-%m-%d %H:%M')
             while a_idx + 1 < len(anchor_mins) and anchor_mins[a_idx + 1][0] < m:
                 a_idx += 1
-            m0, sp0, iv0, rec_t = anchor_mins[a_idx]
+            m0, sp0, iv0, rec_0 = anchor_mins[a_idx]
             if a_idx + 1 < len(anchor_mins) and anchor_mins[a_idx + 1][0] > m0:
-                m1, sp1, iv1, _ = anchor_mins[a_idx + 1]
+                m1, sp1, iv1, rec_1 = anchor_mins[a_idx + 1]
                 w = (m - m0) / float(m1 - m0)
                 spot_t = sp0 + w * (sp1 - sp0)
                 iv_t = iv0 + w * (iv1 - iv0)
             else:
+                w = 0.0
+                rec_1 = rec_0
                 spot_t, iv_t = sp0, iv0
 
             series.setdefault(spot_key, {})[stamp_key] = [spot_t, spot_t, spot_t, spot_t, 1000]
-            call_iv_base = float(rec_t.get('Call IV') or iv_t) * (iv_t / max(iv0, 1e-4))
-            put_iv_base = float(rec_t.get('Put IV') or iv_t) * (iv_t / max(iv0, 1e-4))
-            rev25 = float(rec_t.get('25 Delta reversal') or default_rev25)
-            if not math.isfinite(rev25):
-                rev25 = default_rev25
 
-            # Intraday time decay fraction across the 375-minute trading day
-            T_m = max(1e-5, (dte_days - (m / 375.0) * 0.35) / 365.0)
-            sqrt_Tm = math.sqrt(T_m)
-            df_rm = math.exp(-rate * T_m)
-
-            for k in strikes:
-                moneyness = (float(k) - spot_t) / spot_t
-                for kind in ('CE', 'PE'):
-                    base_v = call_iv_base if kind == 'CE' else put_iv_base
-                    skew_adj = (-0.5 * rev25 * (moneyness / 0.02)) if kind == 'PE' and moneyness < 0 else (0.25 * abs(rev25) * abs(moneyness / 0.02))
-                    sigma = max(0.04, (base_v + skew_adj) / 100.0)
-                    d1 = (math.log(spot_t / float(k)) + (rate + 0.5 * sigma * sigma) * T_m) / (sigma * sqrt_Tm)
-                    d2 = d1 - sigma * sqrt_Tm
-                    if kind == 'CE':
-                        px = spot_t * float(ndtr(d1)) - float(k) * df_rm * float(ndtr(d2))
-                    else:
-                        px = float(k) * df_rm * float(ndtr(-d2)) - spot_t * float(ndtr(-d1))
-                    px = max(0.5, round(px, 2))
-                    ikey = f"CLOUD_OPT|{symbol}|{exp_str}|{int(k)}|{kind}"
-                    series.setdefault(ikey, {})[stamp_key] = [px, px, px, px, 500]
+            if has_real_chain_quotes:
+                cq0 = rec_0.get('chain_quotes', {})
+                cq1 = rec_1.get('chain_quotes', {})
+                for k in strikes:
+                    ks = str(int(k))
+                    q0 = cq0.get(ks, {})
+                    q1 = cq1.get(ks, {})
+                    for kind in ('CE', 'PE'):
+                        p0 = float(q0.get(kind) or 0.0)
+                        p1 = float(q1.get(kind) or p0)
+                        if p0 > 0:
+                            px = round(p0 + w * (p1 - p0), 2)
+                            ikey = f"CLOUD_OPT|{symbol}|{exp_str}|{int(k)}|{kind}"
+                            series.setdefault(ikey, {})[stamp_key] = [px, px, px, px, 500]
+            else:
+                call_iv_base = float(rec_0.get('Call IV') or iv_t) * (iv_t / max(iv0, 1e-4))
+                put_iv_base = float(rec_0.get('Put IV') or iv_t) * (iv_t / max(iv0, 1e-4))
+                rev25 = float(rec_0.get('25 Delta reversal') or 0.0)
+                if not math.isfinite(rev25):
+                    rev25 = 0.0
+                T_m = max(1e-5, (dte_days - (m / 375.0) * 0.35) / 365.0)
+                sqrt_Tm = math.sqrt(T_m)
+                df_rm = math.exp(-rate * T_m)
+                for k in strikes:
+                    moneyness = (float(k) - spot_t) / spot_t
+                    for kind in ('CE', 'PE'):
+                        base_v = call_iv_base if kind == 'CE' else put_iv_base
+                        skew_adj = (-0.5 * rev25 * (moneyness / 0.02)) if kind == 'PE' and moneyness < 0 else (0.25 * abs(rev25) * abs(moneyness / 0.02))
+                        sigma = max(0.04, (base_v + skew_adj) / 100.0)
+                        d1 = (math.log(spot_t / float(k)) + (rate + 0.5 * sigma * sigma) * T_m) / (sigma * sqrt_Tm)
+                        d2 = d1 - sigma * sqrt_Tm
+                        if kind == 'CE':
+                            px = spot_t * float(ndtr(d1)) - float(k) * df_rm * float(ndtr(d2))
+                        else:
+                            px = float(k) * df_rm * float(ndtr(-d2)) - spot_t * float(ndtr(-d1))
+                        px = max(0.5, round(px, 2))
+                        ikey = f"CLOUD_OPT|{symbol}|{exp_str}|{int(k)}|{kind}"
+                        series.setdefault(ikey, {})[stamp_key] = [px, px, px, px, 500]
 
     return list(contracts.values()), series, 0
 
@@ -266,7 +264,7 @@ def load(symbol, start, end):
     conflicts = set()
     if q_path.exists():
         try:
-            with closing(sqlite3.connect(q_path, timeout=30)) as con:
+            with sqlite3.connect(q_path, timeout=30) as con:
                 has_jobs = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jobs'").fetchone()
                 jobs = con.execute('SELECT kind,meta,file FROM jobs WHERE state="done" AND kind IN ("contracts","minute")').fetchall() if has_jobs else []
             for kind, metastr, file in jobs:
@@ -306,17 +304,19 @@ def load(symbol, start, end):
     if contracts and series.get(spot_key):
         return list(contracts.values()), series, len(conflicts)
 
-    # Fallback to Cloud monitor.sqlite + one_year.csv when 1-minute queue.sqlite is absent or does not cover [start, end]
     return _fallback_from_monitor_sqlite(symbol, start, end)
 
 
 def simulate(contracts,series,spotkey,start,end,entry='09:20',exit='15:15',offset=0,wings=0,quantity=1,slip_bps=5,order_fee=25,turnover_bps=0,min_dte=1,max_dte=35,use_upstox_fees=False,signal_rows=None,filters=()):
  if entry>=exit or not 0<=slip_bps<10000 or quantity<=0 or offset<0 or wings<0:raise ValueError('Invalid strategy settings')
  trades=[];skips=[];spot=series.get(spotkey,{})
- days=sorted({s[:10] for s in spot if str(start)<=s[:10]<=str(end)})
+ captured_days={s[:10] for s in spot if str(start)<=s[:10]<=str(end)}
+ days=_expected_trading_days(start,end,captured_days)
  for day in days:
+  if day not in captured_days:
+   record_skip(skips,day,'No real captured intraday option data for session');continue
   decision=(datetime.fromisoformat(day+' '+entry)-timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M')
-  bar=spot.get(decision)
+  bar=spot.get(decision) or spot.get(day+' '+entry)
   if not bar:record_skip(skips,day,'Missing preceding spot minute');continue
   price=float(bar[3])
   eligible=[r for r in contracts if min_dte<=(pd.Timestamp(r['expiry'])-pd.Timestamp(day)).days<=max_dte]

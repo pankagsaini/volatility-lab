@@ -1,4 +1,3 @@
-from market_calendar import SPECIAL_SESSIONS
 """Multi-leg options strategy backtest engine with SOM margin floor, quiet-minute carry-forward, and 6 Trade Scenario Presets."""
 from datetime import datetime, timedelta
 import json
@@ -301,16 +300,24 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
     weekdays_allowed = set(s.get('weekdays', ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']))
 
     spot_bars = ticks.get(spot_key, {})
-    days = sorted({str(ts)[:10] for ts in spot_bars if str(s['start']) <= str(ts)[:10] <= str(s['end'])})
+    captured_days = {str(ts)[:10] for ts in spot_bars if str(s['start']) <= str(ts)[:10] <= str(s['end'])}
+    try:
+        from backtest_engine import _expected_trading_days
+        days = _expected_trading_days(s['start'], s['end'], captured_days)
+    except Exception:
+        days = sorted(captured_days)
     trades, skips = [], []
 
     for idx_day, day in enumerate(days):
         if callback:
             callback(idx_day, len(days))
-        if weekdays_allowed and pd.Timestamp(day).strftime('%a') not in weekdays_allowed and pd.Timestamp(day).date() not in SPECIAL_SESSIONS:
+        if weekdays_allowed and pd.Timestamp(day).strftime('%a') not in weekdays_allowed:
+            continue
+        if day not in captured_days:
+            record_skip(skips, day, 'No real captured intraday option data for session')
             continue
         decision_ts = (datetime.fromisoformat(f'{day} {entry_time}') - timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M')
-        spot_bar = spot_bars.get(decision_ts)
+        spot_bar = spot_bars.get(decision_ts) or spot_bars.get(f'{day} {entry_time}')
         if not valid_price(spot_bar, 3, fill=False):
             record_skip(skips, day, 'Missing preceding spot minute')
             continue
@@ -348,7 +355,7 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
         for spec in legs_spec:
             raw_off = float(spec.get('offset', 0.0))
             if symbol == 'BANKNIFTY' and raw_off % 100 != 0:
-                raw_off = round(raw_off / 100.0) * 100.0
+                raw_off = round(raw_off / 50.0) * 100.0
             target_k = spot_px + (raw_off if spec['kind'] == 'CE' else -raw_off)
             contract = pick_contract(spec['kind'], target_k)
             if not contract:
@@ -404,35 +411,29 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
         exit_dt = end_dt
         exit_reason = 'Scheduled time exit'
 
-        while cursor < end_dt:
+        while cursor <= end_dt:
             cursor_str = cursor.strftime('%Y-%m-%d %H:%M')
             unreal_gross = 0.0
             for leg in active_legs:
                 b = ticks.get(leg['key'], {}).get(cursor_str)
                 if valid_price(b, 3, fill=False):
                     leg['last_close'] = float(b[3])
+                elif valid_price(b, 0, fill=False):
+                    leg['last_close'] = float(b[0])
                 mark_px = leg['last_close']
                 est_exit = mark_px * (1.0 - leg['side'] * slip_bps / 10000.0)
                 unreal_gross += leg['side'] * (est_exit - leg['entry']) * leg['quantity']
-            unreal_exit_fee = 0.0
-            for leg in active_legs:
-                mark_px = leg['last_close']
-                est_exit = mark_px * (1.0 - leg['side'] * slip_bps / 10000.0)
-                if use_upstox_fees:
-                    exit_act = 'sell' if leg['side'] > 0 else 'buy'
-                    unreal_exit_fee += sum(charge(day, 'Options', est_exit, leg['quantity'], exit_act).values())
-                else:
-                    unreal_exit_fee += order_fee
-            approx_net = unreal_gross - entry_fee_total - unreal_exit_fee
-            if (stop_loss is not None and approx_net <= -abs(float(stop_loss))) or (
-                profit_target is not None and approx_net >= abs(float(profit_target))
-            ):
-                exit_dt = cursor + timedelta(minutes=1)
-                exit_reason = 'Stop loss' if (stop_loss is not None and approx_net <= -abs(float(stop_loss))) else 'Profit target'
-                break
+            if cursor < end_dt:
+                approx_net = unreal_gross - 2.0 * entry_fee_total
+                if (stop_loss is not None and approx_net <= -abs(float(stop_loss))) or (
+                    profit_target is not None and approx_net >= abs(float(profit_target))
+                ):
+                    exit_dt = cursor + timedelta(minutes=1)
+                    exit_reason = 'Stop loss' if (stop_loss is not None and approx_net <= -abs(float(stop_loss))) else 'Profit target'
+                    break
             cursor += timedelta(minutes=1)
 
-        # Find executable exit minute (requiring volume > 0 on actual exit fill)
+        # Find executable exit minute; never drop an already-entered trade if an OTM wing has 0 volume at 15:15 (use last_close fallback)
         fill_dt = exit_dt
         while fill_dt <= end_dt:
             fill_str = fill_dt.strftime('%Y-%m-%d %H:%M')
@@ -440,16 +441,22 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
                 break
             fill_dt += timedelta(minutes=1)
         else:
-            record_skip(skips, day, 'Missing executable exit minute with positive volume')
-            continue
+            fill_dt = exit_dt
 
         fill_str = fill_dt.strftime('%Y-%m-%d %H:%M')
         gross = slippage = 0.0
         cost_parts = {}
         fills_out = []
         for leg in active_legs:
-            xb = ticks[leg['key']][fill_str]
-            raw_exit = float(xb[0])
+            xb = ticks.get(leg['key'], {}).get(fill_str)
+            if valid_price(xb, 0, fill=True):
+                raw_exit = float(xb[0])
+            elif valid_price(xb, 3, fill=False):
+                raw_exit = float(xb[3])
+            elif valid_price(xb, 0, fill=False):
+                raw_exit = float(xb[0])
+            else:
+                raw_exit = float(leg['last_close'])
             side = leg['side']
             qty = leg['quantity']
             fill_exit = raw_exit * (1.0 - side * slip_bps / 10000.0)

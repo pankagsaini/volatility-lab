@@ -1,10 +1,8 @@
-"""Centralized NSE trading calendar with 2023-2028 (including Leap Year 2028) holiday and special session support."""
+"""Centralized NSE trading calendar with 2023-2028 (including Leap Year 2028) holiday & special session support."""
 from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
 
 MIN_SUPPORTED_YEAR = 2023
 MAX_SUPPORTED_YEAR = 2028
-IST = ZoneInfo('Asia/Kolkata')
 
 
 class CalendarHorizonError(ValueError):
@@ -45,124 +43,13 @@ HOLIDAYS = {
     date(2028, 12, 25),
 }
 
-# Recognized NSE Special / Muhurat Trading Sessions with verified timing windows (IST)
-EXTRA_SESSIONS = {
-    date(2024, 11, 1): {
-        "name": "Diwali Muhurat Trading 2024",
-        "pre_open_start": (18, 0),
-        "trading_start": (18, 15),
-        "trading_end": (19, 15),
-        "snap_start_min": 1080,
-        "snap_end_min": 1170,
-        "eod_start_min": 1170,
-        "eod_end_min": 1320,
-    },
-    date(2025, 10, 21): {
-        "name": "Diwali Muhurat Trading 2025",
-        "pre_open_start": (18, 0),
-        "trading_start": (18, 15),
-        "trading_end": (19, 15),
-        "snap_start_min": 1080,
-        "snap_end_min": 1170,
-        "eod_start_min": 1170,
-        "eod_end_min": 1320,
-    },
-    date(2026, 11, 8): {
-        "name": "Diwali Muhurat Trading 2026 (14:00-16:00 IST)",
-        "pre_open_start": (14, 5),
-        "trading_start": (14, 20),
-        "trading_end": (15, 40),
-        "snap_start_min": 840,
-        "snap_end_min": 960,
-        "eod_start_min": 960,
-        "eod_end_min": 1320,
-    },
-    date(2027, 10, 29): {
-        "name": "Diwali Muhurat Trading 2027",
-        "pre_open_start": (18, 0),
-        "trading_start": (18, 15),
-        "trading_end": (19, 15),
-        "snap_start_min": 1080,
-        "snap_end_min": 1170,
-        "eod_start_min": 1170,
-        "eod_end_min": 1320,
-    },
-    date(2028, 10, 17): {
-        "name": "Diwali Muhurat Trading 2028",
-        "pre_open_start": (18, 0),
-        "trading_start": (18, 15),
-        "trading_end": (19, 15),
-        "snap_start_min": 1080,
-        "snap_end_min": 1170,
-        "eod_start_min": 1170,
-        "eod_end_min": 1320,
-    },
-}
-
-class SpecialSessionsSet(set):
-    """Set subclass supporting dictionary lookup and metadata access for backwards compatibility."""
-    def __getitem__(self, item):
-        return EXTRA_SESSIONS[item]
-    def get(self, item, default=None):
-        return EXTRA_SESSIONS.get(item, default)
-    def items(self):
-        return EXTRA_SESSIONS.items()
-    def values(self):
-        return EXTRA_SESSIONS.values()
-
-SPECIAL_SESSIONS = SpecialSessionsSet(EXTRA_SESSIONS.keys())
-
-_LEGACY_SPECIAL_SESSIONS = {
-    date(2024, 11, 1): {
-        "name": "Diwali Muhurat Trading 2024",
-        "pre_open_start": (18, 0),
-        "trading_start": (18, 15),
-        "trading_end": (19, 15),
-        "snap_start_min": 1080,
-        "snap_end_min": 1170,
-        "eod_start_min": 1170,
-        "eod_end_min": 1320,
-    },
-    date(2025, 10, 21): {
-        "name": "Diwali Muhurat Trading 2025",
-        "pre_open_start": (18, 0),
-        "trading_start": (18, 15),
-        "trading_end": (19, 15),
-        "snap_start_min": 1080,
-        "snap_end_min": 1170,
-        "eod_start_min": 1170,
-        "eod_end_min": 1320,
-    },
-    date(2026, 11, 8): {
-        "name": "Diwali Muhurat Trading 2026 (14:00-16:00 IST)",
-        "pre_open_start": (14, 5),
-        "trading_start": (14, 20),
-        "trading_end": (15, 40),
-        "snap_start_min": 840,
-        "snap_end_min": 960,
-        "eod_start_min": 960,
-        "eod_end_min": 1320,
-    },
-    date(2027, 10, 29): {
-        "name": "Diwali Muhurat Trading 2027",
-        "pre_open_start": (18, 0),
-        "trading_start": (18, 15),
-        "trading_end": (19, 15),
-        "snap_start_min": 1080,
-        "snap_end_min": 1170,
-        "eod_start_min": 1170,
-        "eod_end_min": 1320,
-    },
-    date(2028, 10, 17): {
-        "name": "Diwali Muhurat Trading 2028",
-        "pre_open_start": (18, 0),
-        "trading_start": (18, 15),
-        "trading_end": (19, 15),
-        "snap_start_min": 1080,
-        "snap_end_min": 1170,
-        "eod_start_min": 1170,
-        "eod_end_min": 1320,
-    },
+# Muhurat 1-hour evening sessions (optional for EOD history requirement so missing Sunday/Holiday candle never halts Monday open)
+SPECIAL_SESSIONS = {
+    date(2024, 11, 1),
+    date(2025, 10, 21),
+    date(2026, 11, 8),
+    date(2027, 10, 29),
+    date(2028, 10, 17),
 }
 
 
@@ -174,20 +61,7 @@ def _coerce_date(value) -> date:
     return date.fromisoformat(str(value)[:10])
 
 
-def is_special_session(d) -> bool:
-    """Check if given date hosts an authorized special session (e.g. Diwali Muhurat)."""
-    cur = _coerce_date(d)
-    return cur in SPECIAL_SESSIONS
-
-
-def special_session_info(d) -> dict | None:
-    """Retrieve timing and name metadata for a special trading session date."""
-    cur = _coerce_date(d)
-    return SPECIAL_SESSIONS.get(cur)
-
-
-def is_trading_day(d, include_special: bool = True) -> bool:
-    """Return True if date is an active NSE trading day (including Muhurat special sessions by default)."""
+def is_trading_day(d, include_special: bool = False) -> bool:
     cur = _coerce_date(d)
     if cur.year < MIN_SUPPORTED_YEAR or cur.year > MAX_SUPPORTED_YEAR:
         raise CalendarHorizonError(f"Date {cur} falls outside verified NSE holiday calendar horizon ({MIN_SUPPORTED_YEAR}-{MAX_SUPPORTED_YEAR}).")
@@ -197,55 +71,9 @@ def is_trading_day(d, include_special: bool = True) -> bool:
 
 
 def last_trading_day_on_or_before(d, include_special: bool = False) -> date:
-    """Find the most recent trading day on or before d.
-    include_special defaults to False to prevent optional 1-hour Muhurat sessions from halting EOD series.
-    """
     cur = _coerce_date(d)
     if cur.year < MIN_SUPPORTED_YEAR or cur.year > MAX_SUPPORTED_YEAR:
         raise CalendarHorizonError(f"Date {cur} falls outside verified NSE holiday calendar horizon ({MIN_SUPPORTED_YEAR}-{MAX_SUPPORTED_YEAR}).")
     while not is_trading_day(cur, include_special=include_special):
         cur -= timedelta(days=1)
     return cur
-
-
-def is_market_open_now(dt: datetime | None = None) -> tuple[bool, str]:
-    """Check whether NSE is currently actively trading (regular session or Muhurat special session).
-    Returns (is_open: bool, session_type: str).
-    """
-    now = dt or datetime.now(IST)
-    if now.tzinfo is None:
-        now = now.replace(tzinfo=IST)
-    else:
-        now = now.astimezone(IST)
-    cur_date = now.date()
-    mins = now.hour * 60 + now.minute
-
-    if cur_date in SPECIAL_SESSIONS:
-        info = SPECIAL_SESSIONS[cur_date]
-        pre_start = info.get("pre_open_start", (18, 0))
-        trade_start = info.get("trading_start", (18, 15))
-        trade_end = info.get("trading_end", (19, 15))
-        snap_end = info.get("snap_end_min", 1170)
-
-        pre_min = pre_start[0] * 60 + pre_start[1]
-        trade_start_min = trade_start[0] * 60 + trade_start[1]
-        trade_end_min = trade_end[0] * 60 + trade_end[1]
-
-        if pre_min <= mins < trade_start_min:
-            return True, 'SPECIAL_PRE_OPEN'
-        elif trade_start_min <= mins <= trade_end_min:
-            return True, 'SPECIAL_LIVE'
-        elif trade_end_min < mins <= snap_end:
-            return True, 'SPECIAL_CLOSING'
-        return False, 'SPECIAL_CLOSED'
-
-    if cur_date.weekday() < 5 and cur_date not in HOLIDAYS:
-        if 540 <= mins < 555:
-            return True, 'REGULAR_PRE_OPEN'
-        elif 555 <= mins <= 930:
-            return True, 'REGULAR_LIVE'
-        elif 930 < mins <= 960:
-            return False, 'REGULAR_CLOSING'
-        return False, 'REGULAR_CLOSED'
-
-    return False, 'CLOSED'

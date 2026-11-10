@@ -2,8 +2,8 @@
 import json
 import math
 import sqlite3
-from pathlib import Path
 from contextlib import closing
+from pathlib import Path
 import numpy as np
 import pandas as pd
 
@@ -29,14 +29,15 @@ _METRIC_ALIASES = {
 def load_signals(symbol, path=None, start=None, end=None):
     p = Path(path or PATH)
     out = []
-    # Compute rolling 30-day HV lookup from {symbol}_one_year.csv if available
+    # Compute rolling 30-day HV lookup from {symbol}_one_year.csv strictly shifted by 1 session (prior completed close)
     hv_map = {}
     csv_path = p.parent / f'{str(symbol).lower()}_one_year.csv'
     if csv_path.exists():
         try:
             df_c = pd.read_csv(csv_path).sort_values('Date')
-            ret = np.log(pd.to_numeric(df_c['Close'], errors='coerce') / pd.to_numeric(df_c['Close'], errors='coerce').shift(1))
-            hv_s = ret.rolling(30).std(ddof=1) * math.sqrt(245.0) * 100.0
+            closes = pd.to_numeric(df_c['Close'], errors='coerce')
+            ret = np.log(closes / closes.shift(1))
+            hv_s = (ret.rolling(30).std(ddof=1) * math.sqrt(245.0) * 100.0).shift(1)
             for d_val, hv_val in zip(df_c['Date'], hv_s):
                 if pd.notna(hv_val) and math.isfinite(float(hv_val)):
                     hv_map[str(d_val)[:10]] = float(hv_val)
@@ -79,7 +80,7 @@ def load_signals(symbol, path=None, start=None, end=None):
                     r['HV30'] = hv_map[day_key]
                 out.append((str(r.get('Expiry') or exp)[:10], t, r))
 
-            # Also load daily expiry_observations as prior-close baseline signals (timestamped at 15:30 IST on `date`)
+            # Load daily expiry_observations stamped strictly at 15:30:00 IST (never 09:15:00 IST) with zero fabricated 25 Delta reversal
             has_exp_tbl = con.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='expiry_observations'"
             ).fetchone()
@@ -94,14 +95,17 @@ def load_signals(symbol, path=None, start=None, end=None):
                             continue
                         d_clean = str(d_str)[:10]
                         t_eod = pd.Timestamp(f'{d_clean} 15:30:00', tz='Asia/Kolkata')
-                        hv_v = hv_map.get(d_clean, float(iv_v) - float(spr_v) if spr_v is not None and math.isfinite(float(spr_v)) else 12.5)
-                        spr_clean = float(spr_v) if spr_v is not None and math.isfinite(float(spr_v)) else (float(iv_v) - hv_v)
+                        hv_v = hv_map.get(d_clean)
+                        if hv_v is None and spr_v is not None and math.isfinite(float(spr_v)):
+                            hv_v = float(iv_v) - float(spr_v)
+                        spr_clean = float(spr_v) if spr_v is not None and math.isfinite(float(spr_v)) else (
+                            (float(iv_v) - hv_v) if hv_v is not None else None
+                        )
                         rec_d = {
                             'Expiry': str(exp_s)[:10],
                             'IV': float(iv_v),
-                            'HV30': float(hv_v),
-                            'IV-RV Spread': float(spr_clean),
-                            '25 Delta reversal': 1.5,
+                            'HV30': float(hv_v) if hv_v is not None else None,
+                            'IV-RV Spread': float(spr_clean) if spr_clean is not None else None,
                         }
                         out.append((str(exp_s)[:10], t_eod, rec_d))
                     except Exception:
@@ -126,12 +130,11 @@ def decide(rows, expiry, day, entry, filters):
         if exp == exp_str and t <= at and str(t.date()) == day_str and 0 <= (at - t).total_seconds() <= 9600
     ]
     if not candidates:
-        # 2. Check same-day pre-entry observation across active expiries on `day_str` (if synthetic near-expiry was selected)
+        # 2. Check same-day pre-entry observation across active expiries on `day_str`
         same_day_any_exp = [
             r for exp, t, r in rows
             if t <= at and str(t.date()) == day_str and 0 <= (at - t).total_seconds() <= 9600
         ]
-        # Only use cross-expiry fallback when the exact expiry has no rows at all on `day_str`
         has_exact_exp_today = any(exp == exp_str and str(t.date()) == day_str for exp, t, _ in rows)
         if same_day_any_exp and not has_exact_exp_today:
             candidates = [same_day_any_exp[-1]]

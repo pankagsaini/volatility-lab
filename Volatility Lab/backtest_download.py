@@ -9,7 +9,11 @@ except ImportError:
     msvcrt = None
 from concurrent.futures import ThreadPoolExecutor
 import threading
-from upstox_archive import Collector,INDICES
+try:
+    from upstox_archive import Collector,INDICES
+except ImportError:
+    Collector = object
+    INDICES = {'NIFTY': 'NSE_INDEX|Nifty 50', 'BANKNIFTY': 'NSE_INDEX|Nifty Bank'}
 from collector_support import atomic_json as _atomic_json
 ROOT=Path(__file__).resolve().parent/'data'/'backtest_1minute'
 ROOT.mkdir(parents=True,exist_ok=True)

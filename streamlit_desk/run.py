@@ -1,12 +1,11 @@
-#!/usr/bin/env python3
-"""Streamlit Quant Desk — Standalone Local & Wi-Fi LAN Runner.
+"""Streamlit Quant Desk – Local Server Launcher.
 
-Launches the encapsulated Streamlit desk locally on 0.0.0.0:8501.
-Accessible from your local browser, or any phone/tablet on the same Wi-Fi network.
+Launches the encapsulated Streamlit desktop application on localhost with explicit
+port mapping and clean terminal feedback.
 
 Usage:
-  python streamlit_desk/run.py
-  python streamlit_desk/run.py --port 8502
+    python streamlit_desk/run.py
+    python streamlit_desk/run.py --port 8502
 """
 import argparse
 import os
@@ -44,11 +43,11 @@ def main() -> None:
     lan_url = f"http://{lan_ip}:{args.port}"
 
     print("=" * 72)
-    print("  ❖ VOLATILITY LAB — STREAMLIT QUANT DESK")
+    print("  ❖ VOLATILITY LAB – STREAMLIT QUANT DESK")
     print("=" * 72)
-    print(f"  • Primary Web Portal (Production):    {PORTAL_URL}")
-    print(f"  • Local Desktop Browser:               {local_url}")
-    print(f"  • Mobile / Tablet (Wi-Fi LAN):         {lan_url}")
+    print(f"  • Primary Web Portal (Production):   {PORTAL_URL}")
+    print(f"  • Local Desktop Browser:             {local_url}")
+    print(f"  • Mobile / Tablet (Wi-Fi LAN):       {lan_url}")
     print("=" * 72)
     print("Starting Streamlit server... Press Ctrl+C to stop.\n")
 
