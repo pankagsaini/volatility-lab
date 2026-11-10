@@ -1,4 +1,4 @@
-"""Intraday backtest loader & simulator with LRU gzip cache and real captured intraday snapshot fallback (zero synthetic daily-to-1m interpolation)."""
+"""Intraday loader and simulator; sparse snapshots are marks only and cannot create executable minute fills."""
 from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
 import json, gzip, sqlite3, math, threading
@@ -8,6 +8,7 @@ from backtest_common import record_skip
 
 ROOT = Path(__file__).resolve().parent / 'data/backtest_1minute'
 DATA_DIR = Path(__file__).resolve().parent / 'data'
+EXECUTION_MODEL_VERSION = 'v2_quote_validated'
 _CACHE_LOCK = threading.RLock()
 _FILE_CACHE = OrderedDict()
 _MAX_CACHE_FILES = 128
@@ -26,6 +27,17 @@ def _read_gzip_json(path):
         while len(_FILE_CACHE) > _MAX_CACHE_FILES:
             _FILE_CACHE.popitem(last=False)
     return obj
+
+
+def _nontradable_mark_bar(price):
+    """Represent an observed LTP as a mark only; snapshots lack minute volume and executable depth."""
+    try:
+        px = float(price)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(px) or px <= 0:
+        return None
+    return [px, px, px, px, 0.0]
 
 
 def _expected_trading_days(start, end, existing_days=()):
@@ -52,11 +64,6 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
     Zero synthetic daily-OHLC-to-1-minute interpolation is performed."""
     mon_db = DATA_DIR / 'monitor.sqlite'
     archive_dir = DATA_DIR / 'google_archive'
-    try:
-        from scipy.special import ndtr
-    except Exception:
-        ndtr = lambda x: 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
-
     contracts = {}
     series = {}
     spot_key = 'NSE_INDEX|Nifty 50' if symbol == 'NIFTY' else 'NSE_INDEX|Nifty Bank'
@@ -99,14 +106,15 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
                 raw_chain = rec['data']
                 spot_px = float(raw_chain[0].get('underlying_spot_price') or 0.0)
                 if spot_px > 0:
-                    series.setdefault(spot_key, {})[stamp_key] = [spot_px, spot_px, spot_px, spot_px, 1000]
+                    spot_mark = _nontradable_mark_bar(spot_px)
+                    if spot_mark is not None:
+                        series.setdefault(spot_key, {})[stamp_key] = spot_mark
                 for row in raw_chain:
                     k = int(round(float(row['strike_price'])))
                     for kind, opt_key in (('CE', 'call_options'), ('PE', 'put_options')):
                         opt = row.get(opt_key) or {}
                         md = opt.get('market_data') or {}
                         ltp = float(md.get('ltp') or 0.0)
-                        vol = float(md.get('volume') or 0.0)
                         if ltp > 0:
                             ikey = f"UPSTOX_OPT|{symbol}|{exp_str}|{k}|{kind}"
                             if ikey not in contracts:
@@ -118,7 +126,10 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
                                     'expiry': exp_str,
                                     'lot_size': lot_size,
                                 }
-                            series.setdefault(ikey, {})[stamp_key] = [ltp, ltp, ltp, ltp, max(vol, 1.0)]
+                            # Snapshot volume is cumulative/session-level, not minute execution volume.
+                            option_mark = _nontradable_mark_bar(ltp)
+                            if option_mark is not None:
+                                series.setdefault(ikey, {})[stamp_key] = option_mark
 
     # 2. Check intraday_observations in monitor.sqlite ONLY for sessions with >= 2 real intraday timestamps
     by_day_exp = {}
@@ -151,7 +162,6 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
     # Filter strictly to (day_str, exp_str) pairs that have >= 2 real captured intraday observations
     by_day_exp = {k: v for k, v in by_day_exp.items() if len(v) >= 2}
 
-    rate = 0.065
     for (day_str, exp_str), snaps in by_day_exp.items():
         snaps.sort(key=lambda x: x[0])
         open_spot = snaps[0][1]
@@ -181,78 +191,31 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
                         'lot_size': lot_size,
                     }
 
-        try:
-            dte_days = max(0.5, float((date.fromisoformat(exp_str[:10]) - date.fromisoformat(day_str[:10])).days))
-        except Exception:
-            dte_days = 5.0
-
         anchor_mins = []
         for ts_a, sp_a, iv_a, rec_a in snaps:
             m_of_day = max(0, min(375, (ts_a.hour * 60 + ts_a.minute) - 555))
             anchor_mins.append((m_of_day, sp_a, iv_a, rec_a))
-        if anchor_mins[0][0] > 0:
-            anchor_mins.insert(0, (0, anchor_mins[0][1], anchor_mins[0][2], anchor_mins[0][3]))
-        if anchor_mins[-1][0] < 375:
-            anchor_mins.append((375, anchor_mins[-1][1], anchor_mins[-1][2], anchor_mins[-1][3]))
-
-        day_start = datetime.fromisoformat(f"{day_str} 09:15")
-        a_idx = 0
-        for m in range(376):
-            cur = day_start + timedelta(minutes=m)
-            stamp_key = cur.strftime('%Y-%m-%d %H:%M')
-            while a_idx + 1 < len(anchor_mins) and anchor_mins[a_idx + 1][0] < m:
-                a_idx += 1
-            m0, sp0, iv0, rec_0 = anchor_mins[a_idx]
-            if a_idx + 1 < len(anchor_mins) and anchor_mins[a_idx + 1][0] > m0:
-                m1, sp1, iv1, rec_1 = anchor_mins[a_idx + 1]
-                w = (m - m0) / float(m1 - m0)
-                spot_t = sp0 + w * (sp1 - sp0)
-                iv_t = iv0 + w * (iv1 - iv0)
-            else:
-                w = 0.0
-                rec_1 = rec_0
-                spot_t, iv_t = sp0, iv0
-
-            series.setdefault(spot_key, {})[stamp_key] = [spot_t, spot_t, spot_t, spot_t, 1000]
-
-            if has_real_chain_quotes:
-                cq0 = rec_0.get('chain_quotes', {})
-                cq1 = rec_1.get('chain_quotes', {})
-                for k in strikes:
-                    ks = str(int(k))
-                    q0 = cq0.get(ks, {})
-                    q1 = cq1.get(ks, {})
-                    for kind in ('CE', 'PE'):
-                        p0 = float(q0.get(kind) or 0.0)
-                        p1 = float(q1.get(kind) or p0)
-                        if p0 > 0:
-                            px = round(p0 + w * (p1 - p0), 2)
-                            ikey = f"CLOUD_OPT|{symbol}|{exp_str}|{int(k)}|{kind}"
-                            series.setdefault(ikey, {})[stamp_key] = [px, px, px, px, 500]
-            else:
-                call_iv_base = float(rec_0.get('Call IV') or iv_t) * (iv_t / max(iv0, 1e-4))
-                put_iv_base = float(rec_0.get('Put IV') or iv_t) * (iv_t / max(iv0, 1e-4))
-                rev25 = float(rec_0.get('25 Delta reversal') or 0.0)
-                if not math.isfinite(rev25):
-                    rev25 = 0.0
-                T_m = max(1e-5, (dte_days - (m / 375.0) * 0.35) / 365.0)
-                sqrt_Tm = math.sqrt(T_m)
-                df_rm = math.exp(-rate * T_m)
-                for k in strikes:
-                    moneyness = (float(k) - spot_t) / spot_t
-                    for kind in ('CE', 'PE'):
-                        base_v = call_iv_base if kind == 'CE' else put_iv_base
-                        skew_adj = (-0.5 * rev25 * (moneyness / 0.02)) if kind == 'PE' and moneyness < 0 else (0.25 * abs(rev25) * abs(moneyness / 0.02))
-                        sigma = max(0.04, (base_v + skew_adj) / 100.0)
-                        d1 = (math.log(spot_t / float(k)) + (rate + 0.5 * sigma * sigma) * T_m) / (sigma * sqrt_Tm)
-                        d2 = d1 - sigma * sqrt_Tm
-                        if kind == 'CE':
-                            px = spot_t * float(ndtr(d1)) - float(k) * df_rm * float(ndtr(d2))
-                        else:
-                            px = float(k) * df_rm * float(ndtr(-d2)) - spot_t * float(ndtr(-d1))
-                        px = max(0.5, round(px, 2))
+        # Keep only observed timestamps; never extrapolate or interpolate quote bars.
+        anchors_by_minute = {anchor[0]: anchor for anchor in anchor_mins}
+        for minute in sorted(anchors_by_minute):
+            _minute, spot_px, _iv_px, rec = anchors_by_minute[minute]
+            stamp_key = (datetime.fromisoformat(f"{day_str} 09:15") + timedelta(minutes=minute)).strftime('%Y-%m-%d %H:%M')
+            spot_mark = _nontradable_mark_bar(spot_px)
+            if spot_mark is not None:
+                series.setdefault(spot_key, {})[stamp_key] = spot_mark
+            if not has_real_chain_quotes:
+                continue
+            quotes = rec.get('chain_quotes', {})
+            for k in strikes:
+                quote = quotes.get(str(int(k)), {})
+                for kind in ('CE', 'PE'):
+                    px = float(quote.get(kind) or 0.0)
+                    if px > 0 and math.isfinite(px):
                         ikey = f"CLOUD_OPT|{symbol}|{exp_str}|{int(k)}|{kind}"
-                        series.setdefault(ikey, {})[stamp_key] = [px, px, px, px, 500]
+                        # Captured LTPs have no minute execution volume or order-book depth.
+                        option_mark = _nontradable_mark_bar(px)
+                        if option_mark is not None:
+                            series.setdefault(ikey, {})[stamp_key] = option_mark
 
     return list(contracts.values()), series, 0
 
@@ -307,7 +270,7 @@ def load(symbol, start, end):
     return _fallback_from_monitor_sqlite(symbol, start, end)
 
 
-def simulate(contracts,series,spotkey,start,end,entry='09:20',exit='15:15',offset=0,wings=0,quantity=1,slip_bps=5,order_fee=25,turnover_bps=0,min_dte=1,max_dte=35,use_upstox_fees=False,signal_rows=None,filters=()):
+def simulate(contracts,series,spotkey,start,end,entry='09:20',exit='15:15',offset=0,wings=0,quantity=1,slip_bps=5,order_fee=25,turnover_bps=0,min_dte=1,max_dte=35,use_upstox_fees=True,signal_rows=None,filters=()):
  if entry>=exit or not 0<=slip_bps<10000 or quantity<=0 or offset<0 or wings<0:raise ValueError('Invalid strategy settings')
  trades=[];skips=[];spot=series.get(spotkey,{})
  captured_days={s[:10] for s in spot if str(start)<=s[:10]<=str(end)}
@@ -342,9 +305,11 @@ def simulate(contracts,series,spotkey,start,end,entry='09:20',exit='15:15',offse
    data=series.get(r['instrument_key'],{});a=data.get(day+' '+entry);b=data.get(day+' '+exit)
    if a is None or b is None:reason='Missing exact entry/exit minute';break
    try:
-    raw_a=float(a[0]);raw_b=float(b[0])
-    if not all(math.isfinite(x) and x>0 for x in (raw_a,raw_b,float(a[4]),float(b[4]))):raise ValueError()
-   except (ValueError,TypeError,IndexError):reason='Invalid price or no traded volume';break
+    raw_a=float(a[0]);raw_b=float(b[0]);volume_a=float(a[4]);volume_b=float(b[4])
+    if not all(math.isfinite(x) and x>0 for x in (raw_a,raw_b)):raise ValueError()
+    if not all(math.isfinite(x) and x>=quantity for x in (volume_a,volume_b)):
+     reason='Insufficient traded minute volume';break
+   except (ValueError,TypeError,IndexError):reason='Invalid price or missing minute volume';break
    buy_a=raw_a*(1+side*slip_bps/10000);sell_b=raw_b*(1-side*slip_bps/10000)
    gross+=side*(raw_b-raw_a)*quantity
    slippage+=(raw_a+raw_b)*slip_bps/10000*quantity
@@ -356,5 +321,5 @@ def simulate(contracts,series,spotkey,start,end,entry='09:20',exit='15:15',offse
    fills.append({'contract':r['trading_symbol'],'key':r['instrument_key'],'side':side,'entry':buy_a,'exit':sell_b,'quantity':quantity})
   if reason:record_skip(skips,day,reason);continue
   charges=sum(cost_parts.values()) if use_upstox_fees else 2*len(legs)*order_fee+turnover*turnover_bps/10000
-  trades.append({'Date':day,'Expiry':exp,'Spot signal':price,'Gross':gross,'Slippage':slippage,'Charges':charges,'Net':gross-slippage-charges,'Legs':json.dumps(fills),**cost_parts})
+  trades.append({'Date':day,'Expiry':exp,'Spot signal':price,'Gross':gross,'Slippage':slippage,'Charges':charges,'Net':gross-slippage-charges,'Legs':json.dumps(fills),'Execution model':EXECUTION_MODEL_VERSION,'Fee model':'upstox_statutory' if use_upstox_fees else 'legacy_order_fee',**cost_parts})
  return pd.DataFrame(trades),pd.DataFrame(skips)

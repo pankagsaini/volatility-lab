@@ -1074,17 +1074,16 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
 
     def test_33_python_forward_test_clean_slate_and_2026_11_11_simulation(self):
         import copy
-        import gzip
         from forward_test import (
+            CLEAN_SLATE_LEDGER,
             MIN_FORWARD_DATE,
-            load_forward_test_ledger,
             evaluate_forward_test_scorecard,
             process_live_upstox_snapshot,
         )
         self.assertEqual(MIN_FORWARD_DATE, "2026-11-11")
 
-        # 1. Verify initial clean-slate ledger has 0 open positions and 0 closed trades
-        ledger = load_forward_test_ledger()
+        # 1. Verify an in-memory clean-slate ledger without reading persisted data files
+        ledger = copy.deepcopy(CLEAN_SLATE_LEDGER)
         self.assertEqual(ledger.get("version"), "forward-test-v19.1-clean")
         self.assertEqual(ledger.get("inception_date"), "2026-11-11")
         self.assertEqual(ledger.get("min_trigger_date"), "2026-11-11")
@@ -1107,20 +1106,39 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
             self.assertEqual(row["roc_pct"], 0.0)
             self.assertEqual(row["status"], "ARMED · 11 NOV 09:20 IST")
 
-        # 2. Verify polling the 2026-11-09 snapshot does NOT trigger any trades
-        snap_gz = HERE_DIR / "data" / "google_archive" / "2026-11-09_snapshot_154842_complete.json.gz"
-        if not snap_gz.exists():
-            snap_gz = PATCH_DIR / "data" / "google_archive" / "2026-11-09_snapshot_154842_complete.json.gz"
-        snap_payload_09 = json.loads(gzip.decompress(snap_gz.read_bytes()).decode("utf-8"))
-        after_09 = process_live_upstox_snapshot(snap_payload_09, ledger=ledger, now_ist="2026-11-10T13:15:00+05:30")
+        def live_payload(day, timestamp):
+            rows = []
+            for strike in range(24000, 26100, 50):
+                call_book = {
+                    "ltp": 100.0, "bid_price": 99.5, "ask_price": 100.5,
+                    "bid_qty": 10000, "ask_qty": 10000, "volume": 10000,
+                }
+                put_book = {
+                    "ltp": 90.0, "bid_price": 89.5, "ask_price": 90.5,
+                    "bid_qty": 10000, "ask_qty": 10000, "volume": 10000,
+                }
+                rows.append({
+                    "strike_price": strike,
+                    "underlying_spot_price": 25050.0,
+                    "call_options": {"market_data": dict(call_book), "option_greeks": {"iv": 20.0}},
+                    "put_options": {"market_data": dict(put_book), "option_greeks": {"iv": 20.0}},
+                })
+            return {
+                "schema": 1,
+                "day": day,
+                "retrieved_at": timestamp,
+                "records": [{"label": "NIFTY|2026-11-17", "retrieved_at": timestamp, "data": rows}],
+            }
+
+        # 2. Verify a prior-day snapshot does NOT trigger any trades
+        prior_payload = live_payload("2026-11-09", "2026-11-09T13:15:00+05:30")
+        after_09 = process_live_upstox_snapshot(prior_payload, ledger=ledger, now_ist="2026-11-10T13:15:00+05:30")
         self.assertEqual(after_09["open_positions"], [])
         self.assertEqual(after_09["closed_trades"], [])
         self.assertTrue(after_09.get("gate_blocked"))
 
         # 3. Simulate a live 2026-11-11T09:20:42+05:30 Upstox snapshot during market hours (>= 2026-11-11)
-        snap_11_0920 = copy.deepcopy(snap_payload_09)
-        snap_11_0920["day"] = "2026-11-11"
-        snap_11_0920["retrieved_at"] = "2026-11-11T09:20:42+05:30"
+        snap_11_0920 = live_payload("2026-11-11", "2026-11-11T09:20:42+05:30")
         after_11_open = process_live_upstox_snapshot(
             snap_11_0920,
             ledger=after_09,
@@ -1136,8 +1154,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 self.assertEqual(pos["maxLoss"], 7800)  # 120 max loss pts * 65 NIFTY lot size
 
         # 4. Simulate mid-day mark-to-market at 2026-11-11T12:30:00+05:30 and auto-close at 2026-11-11T15:15:00+05:30
-        snap_11_1230 = copy.deepcopy(snap_11_0920)
-        snap_11_1230["retrieved_at"] = "2026-11-11T12:30:00+05:30"
+        snap_11_1230 = live_payload("2026-11-11", "2026-11-11T12:30:00+05:30")
         after_11_mid = process_live_upstox_snapshot(
             snap_11_1230,
             ledger=after_11_open,
@@ -1146,8 +1163,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
         self.assertGreater(len(after_11_mid["open_positions"]), 0)
         self.assertGreaterEqual(len(after_11_mid["intraday_mtm_series"]), 2)
 
-        snap_11_1515 = copy.deepcopy(snap_11_0920)
-        snap_11_1515["retrieved_at"] = "2026-11-11T15:15:00+05:30"
+        snap_11_1515 = live_payload("2026-11-11", "2026-11-11T15:15:00+05:30")
         after_11_close = process_live_upstox_snapshot(
             snap_11_1515,
             ledger=after_11_mid,

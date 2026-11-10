@@ -1,0 +1,260 @@
+"""Focused regressions for live quote integrity and tradable backtest inputs."""
+import copy
+from pathlib import Path
+import inspect
+import shutil
+import subprocess
+import sys
+import unittest
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / "volatility_lab"))
+
+import backtest_engine
+import forward_test
+
+
+class TestExecutionSafetyFixes(unittest.TestCase):
+    @staticmethod
+    def _chain_row(strike, call_bid=99.0, call_ask=101.0, put_bid=89.0, put_ask=91.0, depth=1000):
+        return {
+            "strike_price": strike,
+            "call_options": {
+                "market_data": {
+                    "ltp": 100.0, "bid_price": call_bid, "ask_price": call_ask,
+                    "bid_qty": depth, "ask_qty": depth,
+                },
+                "option_greeks": {"iv": 20.0},
+            },
+            "put_options": {
+                "market_data": {
+                    "ltp": 90.0, "bid_price": put_bid, "ask_price": put_ask,
+                    "bid_qty": depth, "ask_qty": depth,
+                },
+                "option_greeks": {"iv": 20.0},
+            },
+        }
+
+    @staticmethod
+    def _position():
+        return {
+            "id": "OPEN-20261111-NIF-1117-S1",
+            "date": "2026-11-11",
+            "session_date": "2026-11-11",
+            "sym": "NIFTY",
+            "exp": "2026-11-17",
+            "strat": "S1",
+            "capital": 28037,
+            "maxLoss": 7800,
+            "maxCredit": 11000,
+            "legs": [
+                {"side": -1, "mult": 1, "strike": 25250, "type": "CE", "entryPx": 99.0, "curPx": 99.0},
+                {"side": -1, "mult": 1, "strike": 24850, "type": "PE", "entryPx": 89.0, "curPx": 89.0},
+            ],
+        }
+
+    def test_forward_entry_rejects_ltp_without_executable_book(self):
+        rows = [
+            {
+                "strike": strike, "cLtp": 100.0, "pLtp": 90.0,
+                "cIv": 20.0, "pIv": 20.0,
+            }
+            for strike in range(24000, 26100, 50)
+        ]
+        setups = forward_test.evaluate_strategies_for_chain(
+            "NIFTY", "2026-11-17", 25050.0, rows, hv10=14.0, hv30=15.0, dte=6,
+        )
+        self.assertEqual(setups, [])
+
+    def test_forward_quote_helper_rejects_nonfinite_prices_and_depth(self):
+        invalid_books = [
+            {"cBid": float("inf"), "cAsk": float("inf"), "cBidQty": 100, "cAskQty": 100},
+            {"cBid": 99, "cAsk": 101, "cBidQty": 100, "cAskQty": float("nan")},
+        ]
+        for book in invalid_books:
+            self.assertEqual(forward_test._executable_quote(book, "CE", -1, 65, True), 0.0)
+        normalized = forward_test._build_strike_quote_map([
+            {"strike_price": 25050, "call_options": {"market_data": {"bid_price": "invalid"}}},
+            {"strike_price": "invalid", "cLtp": 1},
+        ])
+        self.assertEqual(normalized[25050]["cBid"], 0.0)
+        self.assertEqual(len(normalized), 1)
+
+    def test_live_forward_gate_entries_mtm_and_scheduled_exit_are_consistent(self):
+        rows = [
+            dict(self._chain_row(strike), underlying_spot_price=25050.0)
+            for strike in range(24000, 26100, 50)
+        ]
+        ledger = copy.deepcopy(forward_test.CLEAN_SLATE_LEDGER)
+
+        def payload(timestamp):
+            return {
+                "schema": 1,
+                "day": "2026-11-11",
+                "retrieved_at": timestamp,
+                "records": [{"label": "NIFTY|2026-11-17", "retrieved_at": timestamp, "data": rows}],
+            }
+
+        opened = forward_test.process_live_upstox_snapshot(
+            payload("2026-11-11T09:20:00+05:30"), ledger=ledger, now_ist="2026-11-11T09:20:00+05:30",
+        )
+        self.assertGreater(len(opened["open_positions"]), 0)
+        midday = forward_test.process_live_upstox_snapshot(
+            payload("2026-11-11T12:30:00+05:30"), ledger=opened, now_ist="2026-11-11T12:30:00+05:30",
+        )
+        self.assertGreater(len(midday["open_positions"]), 0)
+        self.assertGreaterEqual(len(midday["intraday_mtm_series"]), 2)
+        closed = forward_test.process_live_upstox_snapshot(
+            payload("2026-11-11T15:15:00+05:30"), ledger=midday, now_ist="2026-11-11T15:15:00+05:30",
+        )
+        self.assertEqual(closed["open_positions"], [])
+        self.assertGreater(len(closed["closed_trades"]), 0)
+        self.assertTrue(all(tr["exitTime"] == "15:15 IST" for tr in closed["closed_trades"]))
+
+    def test_stale_quote_defers_1515_close_until_fresh_two_sided_depth(self):
+        chain = [self._chain_row(25250), self._chain_row(24850)]
+        stale_open, stale_closed = forward_test.mark_open_positions_to_market(
+            [self._position()], {"NIFTY|2026-11-17": chain},
+            current_time_ist="15:15 IST", auto_close_intraday_1515=True,
+            live_chain_timestamps={"NIFTY|2026-11-17": "2026-11-11T09:00:00+05:30"},
+            reference_timestamp="2026-11-11T15:15:00+05:30",
+        )
+        self.assertEqual(len(stale_open), 1)
+        self.assertEqual(stale_closed, [])
+        self.assertTrue(stale_open[0]["exit_pending"])
+        self.assertEqual(stale_open[0]["freshness"], "STALE")
+
+        fresh_open, fresh_closed = forward_test.mark_open_positions_to_market(
+            stale_open, {"NIFTY|2026-11-17": chain},
+            current_time_ist="15:16 IST", auto_close_intraday_1515=False,
+            live_chain_timestamps={"NIFTY|2026-11-17": "2026-11-11T15:16:00+05:30"},
+            reference_timestamp="2026-11-11T15:16:00+05:30",
+        )
+        self.assertEqual(fresh_open, [])
+        self.assertEqual(len(fresh_closed), 1)
+        self.assertEqual(fresh_closed[0]["legs"][0]["exitPx"], 101.0)
+        self.assertIn("delayed until fresh quote", fresh_closed[0]["exitReason"])
+
+    def test_empty_close_snapshot_marks_open_position_exit_pending(self):
+        ledger = copy.deepcopy(forward_test.CLEAN_SLATE_LEDGER)
+        ledger["open_positions"] = [self._position()]
+        state = forward_test.process_live_upstox_snapshot(
+            {"day": "2026-11-11", "retrieved_at": "2026-11-11T15:15:00+05:30", "records": []},
+            ledger=ledger,
+            now_ist="2026-11-11T15:15:00+05:30",
+        )
+        self.assertEqual(len(state["open_positions"]), 1)
+        self.assertTrue(state["open_positions"][0]["exit_pending"])
+        self.assertEqual(state["open_positions"][0]["freshness"], "STALE")
+        self.assertEqual(state["status"], "EXIT_PENDING_MISSING_QUOTES")
+
+    def test_backtest_snapshot_marks_cannot_pass_execution_volume_gate(self):
+        mark = backtest_engine._nontradable_mark_bar(100.0)
+        self.assertEqual(mark, [100.0, 100.0, 100.0, 100.0, 0.0])
+        self.assertIsNone(backtest_engine._nontradable_mark_bar(float("nan")))
+        self.assertIsNone(backtest_engine._nontradable_mark_bar(float("inf")))
+
+        day = "2026-11-11"
+        contracts = [
+            {"instrument_key": "CE", "trading_symbol": "NIFTY CE", "instrument_type": "CE", "strike_price": 25050, "expiry": "2026-11-17"},
+            {"instrument_key": "PE", "trading_symbol": "NIFTY PE", "instrument_type": "PE", "strike_price": 25050, "expiry": "2026-11-17"},
+        ]
+        series = {
+            "NSE_INDEX|Nifty 50": {f"{day} 09:19": [25050.0, 25050.0, 25050.0, 25050.0, 0.0]},
+            "CE": {f"{day} 09:20": mark, f"{day} 15:15": mark},
+            "PE": {f"{day} 09:20": mark, f"{day} 15:15": mark},
+        }
+        with patch.object(backtest_engine, "_expected_trading_days", return_value=[day]):
+            trades, skips = backtest_engine.simulate(
+                contracts, series, "NSE_INDEX|Nifty 50", day, day,
+            )
+        self.assertTrue(trades.empty)
+        self.assertIn("Insufficient traded minute volume", skips["Reason"].tolist())
+
+        source = Path(backtest_engine.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("for m in range(376)", source)
+        self.assertNotIn("max(vol, 1.0)", source)
+        self.assertNotIn("[px, px, px, px, 500]", source)
+
+    def test_backtest_defaults_to_dated_upstox_fee_schedule(self):
+        parameters = inspect.signature(backtest_engine.simulate).parameters
+        self.assertTrue(parameters["use_upstox_fees"].default)
+        self.assertEqual(parameters["order_fee"].default, 25)
+
+        day = "2026-11-11"
+        contracts = [
+            {"instrument_key": "CE", "trading_symbol": "NIFTY CE", "instrument_type": "CE", "strike_price": 25050, "expiry": "2026-11-17"},
+            {"instrument_key": "PE", "trading_symbol": "NIFTY PE", "instrument_type": "PE", "strike_price": 25050, "expiry": "2026-11-17"},
+        ]
+        traded = [100.0, 101.0, 99.0, 100.0, 1000.0]
+        series = {
+            "NSE_INDEX|Nifty 50": {f"{day} 09:19": [25050.0, 25050.0, 25050.0, 25050.0, 0.0]},
+            "CE": {f"{day} 09:20": traded, f"{day} 15:15": traded},
+            "PE": {f"{day} 09:20": traded, f"{day} 15:15": traded},
+        }
+        with patch.object(backtest_engine, "_expected_trading_days", return_value=[day]):
+            trades, skips = backtest_engine.simulate(
+                contracts, series, "NSE_INDEX|Nifty 50", day, day,
+            )
+        self.assertTrue(skips.empty)
+        self.assertEqual(trades.loc[0, "Fee model"], "upstox_statutory")
+        self.assertEqual(trades.loc[0, "Execution model"], backtest_engine.EXECUTION_MODEL_VERSION)
+        self.assertGreater(trades.loc[0, "Charges"], 0.0)
+
+    def test_apps_script_guards_property_size_and_never_fabricates_entry_price(self):
+        code = (ROOT / "volatility_lab" / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
+        self.assertIn("EOD_PENDING_DAY_", code)
+        self.assertIn("function loadPendingEod_()", code)
+        self.assertIn("function savePendingEod_(pending)", code)
+        self.assertIn("properties.getProperty('LAST_SNAPSHOT_PRUNE_DAY') === today", code)
+        self.assertNotIn("retentionDays === undefined", code)
+        self.assertIn("function forwardQuoteFresh_(timestamp)", code)
+        self.assertIn("function executableQuote_(node, type, side, quantity, isExit)", code)
+        self.assertIn("[bid, ask, bidQty, askQty].every(Number.isFinite)", code)
+        self.assertIn("Number.isFinite(ch.spot) || ch.spot <= 0", code)
+        self.assertIn("const debitInr = Math.round(legs.reduce", code)
+        self.assertIn("mins >= 915 || Boolean(pos.exit_pending)", code)
+        self.assertIn("delayed until fresh quote", code)
+        self.assertIn("function listDriveFilesPage_(folderId, pageToken)", code)
+        self.assertIn("function permanentlyDeleteDriveFile_(fileId)", code)
+        self.assertIn("method: 'delete'", code)
+        self.assertIn("timeoutSeconds: 8", code)
+        self.assertIn("timeoutSeconds: 30", code)
+        self.assertIn("timeoutSeconds: 15", code)
+        self.assertIn("timeoutSeconds: 120", code)
+        self.assertNotIn("timeoutSeconds: 240", code)
+        self.assertIn("Date.now() - started > 210000", code)
+        self.assertIn("Date.now() - started > 60000", code)
+        self.assertIn("if (budget.ms >= 75 * 60000)", code)
+        self.assertIn("function readRuntimeBudget_(properties, key, nowMs)", code)
+        self.assertIn("windowEndMs", code)
+        self.assertIn("Preserve the prior calendar-day counter during migration", code)
+        self.assertNotIn("budget.day !== today", code)
+        self.assertNotIn("file.setTrashed(true)", code)
+        self.assertNotIn("|| 25.0", code)
+        self.assertNotIn("close_price || 0", code)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the Apps Script helper")
+    def test_apps_script_runtime_budget_uses_a_rolling_24_hour_window(self):
+        code = (ROOT / "volatility_lab" / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
+        start = code.index("function readRuntimeBudget_(")
+        end = code.index("\nfunction addRuntimeBudget_(", start)
+        helper = code[start:end]
+        script = "\n".join([
+            "const RUNTIME_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;",
+            helper,
+            "const props = value => ({getProperty: () => JSON.stringify(value)});",
+            "const active = readRuntimeBudget_(props({windowStartMs: 1000, windowEndMs: 86401000, ms: 1200}), 'x', 86400999);",
+            "if (active.ms !== 1200) throw new Error('active window lost accumulated runtime');",
+            "const expired = readRuntimeBudget_(props({windowStartMs: 1000, windowEndMs: 86401000, ms: 1200}), 'x', 86401000);",
+            "if (expired.ms !== 0 || expired.windowStartMs !== 86401000) throw new Error('expired window did not roll');",
+            "const migrated = readRuntimeBudget_(props({day: '2026-11-11', ms: 3400}), 'x', 500);",
+            "if (migrated.ms !== 3400) throw new Error('legacy runtime was discarded');",
+        ])
+        result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

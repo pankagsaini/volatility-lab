@@ -7,21 +7,21 @@
  * v20.0 Upgrades:
  * 1. Tightened Regular Market Hours (09:15–15:31 IST, mins 555..931) — saves 45
  *    wasted snapshots/day while capturing the full NSE F&O session + closing print.
- * 2. Zero Off-Hours PropertiesService Writes — skips PropertiesService writes
- *    when the exchange is closed or outside active capture windows.
+ * 2. Skips capture/status writes outside active windows; bounded scheduler state
+ *    records trigger runtime for the free-tier execution quota.
  * 3. 55-Second CacheService Layer on doGet(e) — serves frequent web/Streamlit
  *    polls from in-memory CacheService without repeated Drive/Gzip reads.
  * 4. 30-Day Cap on COMPLETED_EOD_DAYS (capCompletedEodDays_(map, 30)) — prevents
  *    ScriptProperties 9 KB per-key / 500 KB total storage exhaustion.
- * 5. 7-Day Rolling Retention of Raw 1-Minute Snapshots (pruneOldMinuteSnapshots_(7)) —
- *    automatically prunes raw 1-minute *_snapshot_*.json.gz files older than 7 days
- *    once consolidated so the 15 GB free-tier Google Drive never fills up.
+ * 5. Bounded retention permanently prunes raw minute snapshots beyond the configured window;
+ *    EOD archives are retained separately and require their own storage monitoring.
  * 6. Black-76 Put-Call Parity Forward F = K + exp(r*T)*(C - P) in evaluateForwardTest_.
  * ==============================================================================
  */
 
 const MAX_COMPLETED_EOD_DAYS = 30;
 const SNAPSHOT_RETENTION_DAYS = 7;
+const RUNTIME_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const CONFIG = {
   timeZone: 'Asia/Kolkata',
@@ -90,6 +90,36 @@ function props_() {
   return PropertiesService.getScriptProperties();
 }
 
+function readRuntimeBudget_(properties, key, nowMs) {
+  const stored = JSON.parse(properties.getProperty(key) || '{}');
+  const startMs = Number(stored.windowStartMs);
+  const endMs = Number(stored.windowEndMs);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+    // Preserve the prior calendar-day counter during migration to the rolling window.
+    return {
+      windowStartMs: nowMs,
+      windowEndMs: nowMs + RUNTIME_BUDGET_WINDOW_MS,
+      ms: Math.max(0, Number(stored.ms) || 0)
+    };
+  }
+  if (startMs > nowMs || endMs <= nowMs) {
+    return { windowStartMs: nowMs, windowEndMs: nowMs + RUNTIME_BUDGET_WINDOW_MS, ms: 0 };
+  }
+  return {
+    windowStartMs: startMs,
+    windowEndMs: endMs,
+    ms: Math.max(0, Number(stored.ms) || 0)
+  };
+}
+
+function addRuntimeBudget_(properties, key, elapsedMs) {
+  const ended = Date.now();
+  const budget = readRuntimeBudget_(properties, key, ended);
+  budget.ms += Math.max(0, Number(elapsedMs) || 0);
+  properties.setProperty(key, JSON.stringify(budget));
+  return budget;
+}
+
 function scriptCache_() {
   try {
     if (typeof CacheService !== 'undefined' && CacheService && typeof CacheService.getScriptCache === 'function') {
@@ -145,9 +175,8 @@ function capCompletedEodDays_(completedMap, maxDays) {
 }
 
 /**
- * 7-day rolling retention of raw 1-minute *_snapshot_*.json.gz files once consolidated.
- * Preserves all *_eod_*, *_1minute_indices_*, and forward_test_ledger.json files permanently
- * so the 15 GB free-tier Google Drive never fills up.
+ * Permanently deletes raw 1-minute snapshots beyond the configured retention window.
+ * EOD archives and snapshots pending EOD reconciliation are preserved.
  */
 function pruneOldMinuteSnapshots_(retentionDays) {
   const daysKeep = Number(retentionDays || CONFIG.snapshotRetentionDays || 7);
@@ -157,37 +186,121 @@ function pruneOldMinuteSnapshots_(retentionDays) {
   const properties = props_();
   const today = day_(now);
 
-  // Run at most once per calendar day to conserve Drive API quota
-  if (properties.getProperty('LAST_SNAPSHOT_PRUNE_DAY') === today && retentionDays === undefined) {
+  // Explicit retention overrides must not bypass the once-per-day Drive scan guard.
+  if (properties.getProperty('LAST_SNAPSHOT_PRUNE_DAY') === today) {
     return { pruned: 0, cutoff_day: cutoffDay, skipped: true };
   }
 
-  const completedEod = JSON.parse(properties.getProperty('COMPLETED_EOD_DAYS') || '{}');
-  const pendingEod = JSON.parse(properties.getProperty('EOD_PENDING') || '{}');
+  // Mark before scanning so an exception cannot cause 120 repeated scans in the premarket window.
+  properties.setProperty('LAST_SNAPSHOT_PRUNE_DAY', today);
+  const pendingEod = loadPendingEod_();
   const folder = folder_();
-  const files = folder.getFiles();
   const snapPattern = /^(\d{4}-\d{2}-\d{2})_snapshot_\d{6}_(complete|partial)\.json\.gz$/;
   let pruned = 0;
   let scanned = 0;
+  let pageToken = '';
+  let cutoffReached = false;
+  const started = Date.now();
 
-  while (files.hasNext() && scanned < 400 && pruned < 150) {
-    const file = files.next();
-    scanned++;
-    const name = file.getName();
-    const match = snapPattern.exec(name);
-    if (!match) continue;
-    const fileDay = match[1];
-    // Only prune raw 1-minute snapshots strictly older than cutoffDay that are not pending EOD reconciliation
-    if (fileDay < cutoffDay && !pendingEod[fileDay] && (completedEod[fileDay] || fileDay < cutoffDay)) {
-      try {
-        file.setTrashed(true);
-        pruned++;
-      } catch (e) {}
+  do {
+    if (scanned >= 5000 || pruned >= 400 || Date.now() - started >= 240000) break;
+    const page = listDriveFilesPage_(folder.getId(), pageToken);
+    const files = Array.isArray(page.files) ? page.files : [];
+    for (const file of files) {
+      scanned++;
+      const name = String(file.name || '');
+      const match = snapPattern.exec(name);
+      if (match) {
+        const fileDay = match[1];
+        if (fileDay >= cutoffDay) {
+          cutoffReached = true;
+          break;
+        }
+        if (!pendingEod[fileDay]) {
+          try {
+            permanentlyDeleteDriveFile_(file.id);
+            pruned++;
+          } catch (e) {
+            console.log('Snapshot deletion failed: ' + safeError_(e));
+          }
+        }
+      }
+      if (scanned >= 5000 || pruned >= 400 || Date.now() - started >= 240000) break;
     }
-  }
+    pageToken = page.nextPageToken || '';
+  } while (pageToken && !cutoffReached && scanned < 5000 && pruned < 400 && Date.now() - started < 240000);
 
-  properties.setProperty('LAST_SNAPSHOT_PRUNE_DAY', today);
   return { pruned: pruned, scanned: scanned, cutoff_day: cutoffDay };
+}
+
+function listDriveFilesPage_(folderId, pageToken) {
+  const query = "'" + folderId + "' in parents and trashed = false";
+  const params = {
+    q: query,
+    orderBy: 'name',
+    pageSize: '1000',
+    fields: 'nextPageToken,files(id,name)'
+  };
+  if (pageToken) params.pageToken = pageToken;
+  const queryString = Object.keys(params)
+    .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(params[key]))
+    .join('&');
+  const response = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files?' + queryString, {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true,
+    timeoutSeconds: 30
+  });
+  if (response.getResponseCode() !== 200) {
+    throw new Error('Drive file listing failed with HTTP ' + response.getResponseCode());
+  }
+  return JSON.parse(response.getContentText());
+}
+
+function permanentlyDeleteDriveFile_(fileId) {
+  if (!fileId) throw new Error('Missing Drive file ID');
+  const response = UrlFetchApp.fetch(
+    'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId),
+    {
+      method: 'delete',
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true,
+      timeoutSeconds: 30
+    }
+  );
+  const statusCode = response.getResponseCode();
+  if (statusCode !== 204 && statusCode !== 404) {
+    throw new Error('Drive permanent delete failed with HTTP ' + statusCode);
+  }
+}
+
+const EOD_PENDING_PREFIX_ = 'EOD_PENDING_DAY_';
+
+function loadPendingEod_() {
+  const properties = props_();
+  const all = properties.getProperties();
+  const pending = JSON.parse(all.EOD_PENDING || '{}');
+  Object.keys(all).forEach(key => {
+    const match = /^EOD_PENDING_DAY_(\d{4}-\d{2}-\d{2})$/.exec(key);
+    if (match) pending[match[1]] = all[key];
+  });
+  if (Object.prototype.hasOwnProperty.call(all, 'EOD_PENDING')) savePendingEod_(pending);
+  return pending;
+}
+
+function savePendingEod_(pending) {
+  const properties = props_();
+  const all = properties.getProperties();
+  Object.keys(all).forEach(key => {
+    const match = /^EOD_PENDING_DAY_(\d{4}-\d{2}-\d{2})$/.exec(key);
+    if (match && !Object.prototype.hasOwnProperty.call(pending, match[1])) {
+      properties.deleteProperty(key);
+    }
+  });
+  Object.keys(pending).forEach(day => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !pending[day]) return;
+    properties.setProperty(EOD_PENDING_PREFIX_ + day, String(pending[day]));
+  });
+  properties.deleteProperty('EOD_PENDING');
 }
 
 function api_(path, params) {
@@ -215,7 +328,8 @@ function api_(path, params) {
         'User-Agent': 'VolatilityLab/20.0 (read-only market-data client)'
       },
       muteHttpExceptions: true,
-      followRedirects: false
+      followRedirects: false,
+      timeoutSeconds: 15
     });
     const statusCode = response.getResponseCode();
     if (statusCode === 200) {
@@ -264,7 +378,8 @@ function apiAll_(requests) {
           'User-Agent': 'VolatilityLab/20.0 (read-only market-data client)'
         },
         muteHttpExceptions: true,
-        followRedirects: false
+        followRedirects: false,
+        timeoutSeconds: 120
       };
     });
     const responses = UrlFetchApp.fetchAll(payloads);
@@ -284,7 +399,11 @@ function apiAll_(requests) {
       return { label: req.label, path: req.path, params: req.params, error: 'Broker HTTP ' + statusCode };
     });
   }
+  const fallbackStarted = Date.now();
   return requests.map(req => {
+    if (Date.now() - fallbackStarted >= 60000) {
+      return { label: req.label, path: req.path, params: req.params, error: 'API fallback time budget exhausted' };
+    }
     try {
       const data = api_(req.path, req.params);
       return { label: req.label, path: req.path, params: req.params, data: data };
@@ -314,7 +433,7 @@ function catalogue_(now) {
   }
   const response = UrlFetchApp.fetch(
     'https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz',
-    { muteHttpExceptions: true, followRedirects: false }
+    { muteHttpExceptions: true, followRedirects: false, timeoutSeconds: 30 }
   );
   if (response.getResponseCode() !== 200) {
     if (cached) return JSON.parse(cached);
@@ -401,7 +520,8 @@ function marketWindow_(dateObj) {
           Authorization: 'Bearer ' + properties.getProperty('UPSTOX_TOKEN')
         },
         muteHttpExceptions: true,
-        followRedirects: false
+        followRedirects: false,
+        timeoutSeconds: 8
       });
       if (response.getResponseCode() === 200) {
         const body = JSON.parse(response.getContentText());
@@ -455,7 +575,8 @@ function marketClosed_(now) {
           Authorization: 'Bearer ' + properties.getProperty('UPSTOX_TOKEN')
         },
         muteHttpExceptions: true,
-        followRedirects: false
+        followRedirects: false,
+        timeoutSeconds: 8
       });
       if (response.getResponseCode() !== 200) {
         throw new Error('Calendar unavailable');
@@ -550,14 +671,14 @@ function capture_(mode, recovery) {
 
     const responses = apiAll_(requests);
     for (const res of responses) {
-      if (Date.now() - started > 240000) {
+      if (Date.now() - started > 210000) {
         report.errors.push({ item: res.label, reason: 'Runtime budget exhausted' });
         continue;
       }
 
       let data = res.data;
       if (res.error) {
-        if (res.error === 'Broker HTTP 401' || res.error === 'Broker HTTP 403') {
+        if (res.error === 'Broker HTTP 401' || res.error === 'Broker HTTP 403' || res.error === 'API fallback time budget exhausted') {
           report.errors.push({ item: res.label, reason: res.error });
           continue;
         }
@@ -625,7 +746,7 @@ function capture_(mode, recovery) {
   }));
 
   if (mode === 'eod') {
-    const pending = JSON.parse(properties.getProperty('EOD_PENDING') || '{}');
+    const pending = loadPendingEod_();
     const target = report.target_day || today;
     if (report.status === 'complete') {
       delete pending[target];
@@ -633,11 +754,10 @@ function capture_(mode, recovery) {
       completedMap[target] = fileId;
       completedMap = capCompletedEodDays_(completedMap, CONFIG.completedEodMaxDays);
       properties.setProperty('COMPLETED_EOD_DAYS', JSON.stringify(completedMap));
-      try { pruneOldMinuteSnapshots_(CONFIG.snapshotRetentionDays); } catch (pruneErr) {}
     } else if (report.catalogue) {
       pending[target] = fileId;
     }
-    properties.setProperty('EOD_PENDING', JSON.stringify(pending));
+    savePendingEod_(pending);
   }
 
   if (report.status === 'complete' && !recovery) {
@@ -779,25 +899,34 @@ function scheduledCapture() {
     return;
   }
 
+  let budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now());
+  if (budget.ms >= 75 * 60000) {
+    properties.setProperty('RUNTIME_BUDGET', JSON.stringify(budget));
+    properties.setProperty('COLLECTOR_STATUS', 'Rolling 24-hour runtime safety limit reached. ' + today);
+    return;
+  }
+
+  const started = Date.now();
   let closed;
   try {
     closed = marketClosed_(now);
   } catch (err) {
+    addRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now() - started);
     throw err;
   }
 
-  // Skip PropertiesService writes on closed holidays if status is already recorded for today
+  // Avoid capture work and status writes on known closed holidays.
   if (closed) {
+    addRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now() - started);
     return;
   }
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(100)) {
+    addRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now() - started);
     return;
   }
 
-  const started = Date.now();
-  let attempted = false;
   let failureMessage = null;
 
   try {
@@ -820,17 +949,13 @@ function scheduledCapture() {
       }
     }
 
-    let budget = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
-    if (budget.day !== today) {
-      budget = { day: today, ms: 0 };
-    }
+    budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now());
     if (budget.ms >= 75 * 60000) {
-      const message = 'Daily runtime safety limit reached.';
+      const message = 'Rolling 24-hour runtime safety limit reached.';
       properties.setProperty('COLLECTOR_STATUS', message + ' ' + today);
       return;
     }
 
-    attempted = true;
     properties.setProperty('ATTEMPT_' + mode, String(now.getTime()));
 
     const result = capture_(mode);
@@ -859,14 +984,10 @@ function scheduledCapture() {
     properties.setProperty('COLLECTOR_STATUS', 'failed ' + mode + ' ' + new Date().toISOString() + ' · ' + message);
     throw err;
   } finally {
-    if (attempted) {
-      let b = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
-      if (b.day !== today) {
-        b = { day: today, ms: 0 };
-      }
-      b.ms += Date.now() - started;
-      properties.setProperty('RUNTIME_BUDGET', JSON.stringify(b));
-    }
+    const ended = Date.now();
+    const b = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', ended);
+    b.ms += ended - started;
+    properties.setProperty('RUNTIME_BUDGET', JSON.stringify(b));
     lock.releaseLock();
   }
 }
@@ -890,9 +1011,11 @@ function reconcilePriorSession() {
 
   try {
     // Run daily 7-day rolling retention pruning of consolidated 1-minute snapshots
+    attempted = true;
     try { pruneOldMinuteSnapshots_(CONFIG.snapshotRetentionDays); } catch (pruneErr) {}
+    if (Date.now() - started > 60000) return;
 
-    let pending = JSON.parse(properties.getProperty('EOD_PENDING') || '{}');
+    let pending = loadPendingEod_();
     let completedMap = capCompletedEodDays_(
       JSON.parse(properties.getProperty('COMPLETED_EOD_DAYS') || '{}'),
       CONFIG.completedEodMaxDays
@@ -903,7 +1026,7 @@ function reconcilePriorSession() {
       if (last && last.status !== 'complete' && last.file_id) {
         pending[last.day] = last.file_id;
       }
-      properties.setProperty('EOD_PENDING', JSON.stringify(pending));
+      savePendingEod_(pending);
       properties.setProperty('RECONCILIATION_MIGRATED', '1');
     }
 
@@ -917,14 +1040,8 @@ function reconcilePriorSession() {
       return;
     }
 
-    let budget = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
-    if (budget.day !== today) {
-      budget = { day: today, ms: 0 };
-    }
-    let reconciliationBudget = JSON.parse(properties.getProperty('RECONCILIATION_BUDGET') || '{}');
-    if (reconciliationBudget.day !== today) {
-      reconciliationBudget = { day: today, ms: 0 };
-    }
+    let budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', now.getTime());
+    let reconciliationBudget = readRuntimeBudget_(properties, 'RECONCILIATION_BUDGET', now.getTime());
 
     if (budget.ms >= 55 * 60000 || reconciliationBudget.ms >= 8 * 60000) {
       return;
@@ -940,6 +1057,7 @@ function reconcilePriorSession() {
     if (!oldReport.catalogue || oldReport.mode !== 'eod') {
       throw new Error('Invalid reconciliation archive');
     }
+    if (Date.now() - started > 60000) return;
 
     const result = capture_('eod', { target_day: targetDay, catalogue: oldReport.catalogue });
     if (result.status === 'complete') {
@@ -955,11 +1073,9 @@ function reconcilePriorSession() {
   } finally {
     if (attempted) {
       for (const key of ['RUNTIME_BUDGET', 'RECONCILIATION_BUDGET']) {
-        let b = JSON.parse(properties.getProperty(key) || '{}');
-        if (b.day !== today) {
-          b = { day: today, ms: 0 };
-        }
-        b.ms += Date.now() - started;
+        const ended = Date.now();
+        const b = readRuntimeBudget_(properties, key, ended);
+        b.ms += ended - started;
         properties.setProperty(key, JSON.stringify(b));
       }
     }
@@ -1198,6 +1314,29 @@ function buildStrategyLegs_(sym, K, stratCode) {
 }
 
 const MIN_FORWARD_DATE = '2026-11-11';
+const MAX_FORWARD_QUOTE_AGE_MS = 120000;
+
+function forwardQuoteFresh_(timestamp) {
+  const observed = Date.parse(timestamp || '');
+  if (!Number.isFinite(observed)) return false;
+  const age = Date.now() - observed;
+  return age >= -30000 && age <= MAX_FORWARD_QUOTE_AGE_MS;
+}
+
+function executableQuote_(node, type, side, quantity, isExit) {
+  if (!node) return 0;
+  const prefix = type === 'CE' ? 'c' : 'p';
+  const bid = Number(node[prefix + 'Bid'] || 0);
+  const ask = Number(node[prefix + 'Ask'] || 0);
+  const bidQty = Number(node[prefix + 'BidQty'] || 0);
+  const askQty = Number(node[prefix + 'AskQty'] || 0);
+  if (![bid, ask, bidQty, askQty].every(Number.isFinite)) return 0;
+  if (!(bid > 0 && ask >= bid && ask > 0)) return 0;
+  const buy = isExit ? Number(side) < 0 : Number(side) > 0;
+  const depth = buy ? askQty : bidQty;
+  if (!Number.isFinite(depth) || depth < quantity) return 0;
+  return buy ? ask : bid;
+}
 
 function getNseMarketStatusIST(nowOpt) {
   const d = nowOpt instanceof Date ? nowOpt : (nowOpt ? new Date(nowOpt) : new Date());
@@ -1321,7 +1460,7 @@ function saveForwardLedger_(ledger) {
  * strictly enforcing MIN_FORWARD_DATE = '2026-11-11' AND live market hours (09:15-15:31 IST).
  */
 function evaluateForwardTest_(report) {
-  if (!report || !Array.isArray(report.records) || !report.records.length) return null;
+  if (!report || !Array.isArray(report.records)) return null;
   const snapDate = report.retrieved_at ? new Date(report.retrieved_at) : new Date();
   const mkt = getNseMarketStatusIST(snapDate);
   const snapshotDay = String(report.day || mkt.isoDay).slice(0, 10);
@@ -1332,6 +1471,17 @@ function evaluateForwardTest_(report) {
   const ledger = loadForwardLedger_();
 
   if (snapshotDay < MIN_FORWARD_DATE || !mkt.open) {
+    report.forward_test_ledger = ledger;
+    return ledger;
+  }
+
+  if (!report.records.length) {
+    ledger.open_positions.forEach(pos => {
+      pos.freshness = 'STALE';
+      pos.staleReason = 'No live option-chain records in snapshot';
+      if (mins >= 915) pos.exit_pending = true;
+    });
+    if (ledger.open_positions.length) saveForwardLedger_(ledger);
     report.forward_test_ledger = ledger;
     return ledger;
   }
@@ -1348,13 +1498,25 @@ function evaluateForwardTest_(report) {
       const cg = (row.call_options && row.call_options.option_greeks) || {};
       const pg = (row.put_options && row.put_options.option_greeks) || {};
       strikes[k] = {
-        cLtp: Number(cm.ltp || cm.close_price || 0),
-        pLtp: Number(pm.ltp || pm.close_price || 0),
+        cLtp: Number(cm.ltp || 0),
+        pLtp: Number(pm.ltp || 0),
+        cBid: Number(cm.bid_price || 0),
+        cAsk: Number(cm.ask_price || 0),
+        cBidQty: Number(cm.bid_qty || 0),
+        cAskQty: Number(cm.ask_qty || 0),
+        pBid: Number(pm.bid_price || 0),
+        pAsk: Number(pm.ask_price || 0),
+        pBidQty: Number(pm.bid_qty || 0),
+        pAskQty: Number(pm.ask_qty || 0),
         cIv: Number(cg.iv || 0),
         pIv: Number(pg.iv || 0)
       };
     });
-    chainMap[rec.label] = { spot: spot, strikes: strikes };
+    chainMap[rec.label] = {
+      spot: spot,
+      strikes: strikes,
+      fresh: forwardQuoteFresh_(rec.retrieved_at)
+    };
   });
 
   const existingKeys = new Set(
@@ -1370,7 +1532,7 @@ function evaluateForwardTest_(report) {
       const parts = key.split('|');
       const sym = parts[0], exp = parts[1];
       const ch = chainMap[key];
-      if (!ch || !ch.spot) return;
+      if (!ch || !Number.isFinite(ch.spot) || ch.spot <= 0 || !ch.fresh) return;
       const step = sym === 'NIFTY' ? 50 : 100;
       const lotQty = sym === 'NIFTY' ? 65 : 30;
       const K = Math.round(ch.spot / step) * step;
@@ -1406,16 +1568,23 @@ function evaluateForwardTest_(report) {
         const sCode = item[0], isTrig = item[1], metricsTxt = item[2];
         if (!isTrig || existingKeys.has(sym + '|' + exp + '|' + sCode)) return;
         const legs = buildStrategyLegs_(sym, K, sCode);
+        let invalidQuote = false;
         legs.forEach(l => {
-          const node = ch.strikes[l.strike] || atmNode;
-          const px = Number((l.type === 'CE' ? node.cLtp : node.pLtp) || 25.0);
+          const node = ch.strikes[l.strike];
+          const px = executableQuote_(node, l.type, l.side, lotQty * Number(l.mult || 1), false);
+          if (!(Number.isFinite(px) && px > 0)) {
+            invalidQuote = true;
+            return;
+          }
           l.entryPx = Number(px.toFixed(2));
           l.curPx = Number(px.toFixed(2));
         });
+        if (invalidQuote) return;
         const cap = (STRATEGY_CAPITAL_PER_LOT[sym] || STRATEGY_CAPITAL_PER_LOT.NIFTY)[sCode];
         const credPts = Math.max(15.0, legs.reduce((acc, l) => acc + (-l.side) * l.mult * l.entryPx, 0));
-        const maxCr = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty * 0.65) : Math.round(credPts * lotQty);
-        const maxLoss = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty) : Math.round((sym === 'NIFTY' ? 120 : 300) * lotQty);
+        const debitInr = Math.round(legs.reduce((acc, l) => acc + l.entryPx * lotQty * l.mult, 0));
+        const maxCr = sCode === 'S2' ? Math.round(debitInr * 0.65) : Math.round(credPts * lotQty);
+        const maxLoss = sCode === 'S2' ? debitInr : Math.round((sym === 'NIFTY' ? 120 : 300) * lotQty);
         const chg = positionCharges_(legs, sym, true);
 
         ledger.open_positions.push({
@@ -1453,33 +1622,45 @@ function evaluateForwardTest_(report) {
     const key = pos.sym + '|' + pos.exp;
     const ch = chainMap[key];
     const lotQty = pos.sym === 'NIFTY' ? 65 : 30;
-    if (ch && ch.strikes) {
-      let gross = 0.0;
-      (pos.legs || []).forEach(l => {
-        const node = ch.strikes[l.strike];
-        const fld = l.type === 'CE' ? 'cLtp' : 'pLtp';
-        if (node && node[fld] > 0) {
-          l.curPx = Number(node[fld].toFixed(2));
-        }
-        const curPx = Number(l.curPx !== undefined ? l.curPx : l.entryPx);
-        const ePx = Number(l.entryPx || 0);
-        const qty = lotQty * Number(l.mult || 1);
-        gross += (Number(l.side) < 0 ? (ePx - curPx) : (curPx - ePx)) * qty;
-      });
-      pos.grossMtm = Number(gross.toFixed(2));
-      pos.estCharges = positionCharges_(pos.legs, pos.sym, true);
-      pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
-      pos.markedAt = timeIstLabel;
+    const legs = Array.isArray(pos.legs) ? pos.legs : [];
+    let allLegsFresh = Boolean(ch && ch.fresh && legs.length);
+    let gross = 0.0;
+    legs.forEach(l => {
+      const node = ch && ch.strikes ? ch.strikes[l.strike] : null;
+      const qty = lotQty * Number(l.mult || 1);
+      const px = executableQuote_(node, l.type, l.side, qty, true);
+      if (!(Number.isFinite(px) && px > 0)) {
+        allLegsFresh = false;
+        return;
+      }
+      l.curPx = Number(px.toFixed(2));
+      const ePx = Number(l.entryPx || 0);
+      gross += (Number(l.side) < 0 ? (ePx - px) : (px - ePx)) * qty;
+    });
+
+    if (!allLegsFresh) {
+      pos.freshness = 'STALE';
+      pos.staleReason = !ch || !ch.fresh ? 'Missing or stale option-chain timestamp' : 'Missing or insufficient executable bid/ask depth';
+      if (mins >= 915 || pos.exit_pending) pos.exit_pending = true;
+      stillOpen.push(pos);
+      return;
     }
+
+    pos.freshness = 'FRESH';
+    delete pos.staleReason;
+    pos.grossMtm = Number(gross.toFixed(2));
+    pos.estCharges = positionCharges_(pos.legs, pos.sym, true);
+    pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
+    pos.markedAt = timeIstLabel;
 
     const slThresh = -0.50 * Number(pos.maxLoss || 9000);
     const tpThresh = pos.strat === 'S2' ? 0.30 * Number(pos.maxLoss || 37590) : 0.50 * Number(pos.maxCredit || 12000);
-    const isIntradayExit = mins >= 915;
+    const isIntradayExit = mins >= 915 || Boolean(pos.exit_pending);
 
     if (pos.grossMtm <= slThresh || pos.grossMtm >= tpThresh || isIntradayExit) {
       const reason = pos.grossMtm <= slThresh
         ? 'Stop-Loss Hit (-50% MaxLoss)'
-        : (pos.grossMtm >= tpThresh ? 'Profit Target Hit (+50% Cr)' : '15:15 IST Auto-Close');
+        : (pos.grossMtm >= tpThresh ? 'Profit Target Hit (+50% Cr)' : (pos.exit_pending ? '15:15 IST Auto-Close (delayed until fresh quote)' : '15:15 IST Auto-Close (fresh quote)'));
       (pos.legs || []).forEach(l => { l.exitPx = l.curPx; });
       ledger.closed_trades.unshift({
         id: String(pos.id || '').replace('OPEN-', 'FWD-'),
