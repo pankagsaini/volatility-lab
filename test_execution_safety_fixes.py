@@ -26,13 +26,17 @@ class TestExecutionSafetyFixes(unittest.TestCase):
             return "".join(next(stream, "") for _ in range(end - start + 1))
 
     @staticmethod
-    def _chain_row(strike, call_bid=99.0, call_ask=101.0, put_bid=89.0, put_ask=91.0, depth=1000):
+    def _chain_row(
+        strike, call_bid=99.0, call_ask=101.0, put_bid=89.0, put_ask=91.0,
+        depth=1000, quote_time="2026-11-11T15:15:00+05:30",
+    ):
         return {
             "strike_price": strike,
             "call_options": {
                 "market_data": {
                     "ltp": 100.0, "bid_price": call_bid, "ask_price": call_ask,
                     "bid_qty": depth, "ask_qty": depth,
+                    "quote_timestamp": quote_time,
                 },
                 "option_greeks": {"iv": 20.0},
             },
@@ -40,6 +44,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
                 "market_data": {
                     "ltp": 90.0, "bid_price": put_bid, "ask_price": put_ask,
                     "bid_qty": depth, "ask_qty": depth,
+                    "quote_timestamp": quote_time,
                 },
                 "option_greeks": {"iv": 20.0},
             },
@@ -51,6 +56,8 @@ class TestExecutionSafetyFixes(unittest.TestCase):
             "id": "OPEN-20261111-NIF-1117-S1",
             "date": "2026-11-11",
             "session_date": "2026-11-11",
+            "triggerTime": "2026-11-11T09:20:00+05:30",
+            "trigTime": "09:20 IST",
             "sym": "NIFTY",
             "exp": "2026-11-17",
             "strat": "S1",
@@ -91,17 +98,22 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertEqual(len(normalized), 1)
 
     def test_live_forward_gate_entries_mtm_and_scheduled_exit_are_consistent(self):
-        rows = [
-            dict(self._chain_row(strike), underlying_spot_price=25050.0)
-            for strike in range(24000, 26100, 50)
-        ]
         ledger = copy.deepcopy(forward_test.CLEAN_SLATE_LEDGER)
 
         def payload(timestamp):
+            rows = [
+                dict(self._chain_row(strike, quote_time=timestamp), underlying_spot_price=25050.0)
+                for strike in range(24000, 26100, 50)
+            ]
             return {
                 "schema": 1,
+                "provider": "Upstox",
+                "mode": "snapshot",
+                "status": "complete",
                 "day": "2026-11-11",
                 "retrieved_at": timestamp,
+                "nfo_session_validated": True,
+                "risk_metrics": {"NIFTY": {"as_of": "2026-11-11", "hv10": 14.0, "hv30": 15.0}},
                 "records": [{"label": "NIFTY|2026-11-17", "retrieved_at": timestamp, "data": rows}],
             }
 
@@ -149,7 +161,11 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         ledger = copy.deepcopy(forward_test.CLEAN_SLATE_LEDGER)
         ledger["open_positions"] = [self._position()]
         state = forward_test.process_live_upstox_snapshot(
-            {"day": "2026-11-11", "retrieved_at": "2026-11-11T15:15:00+05:30", "records": []},
+            {
+                "schema": 1, "provider": "Upstox", "mode": "snapshot", "status": "complete",
+                "day": "2026-11-11", "retrieved_at": "2026-11-11T15:15:00+05:30",
+                "nfo_session_validated": True, "records": [],
+            },
             ledger=ledger,
             now_ist="2026-11-11T15:15:00+05:30",
         )
@@ -157,6 +173,39 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertTrue(state["open_positions"][0]["exit_pending"])
         self.assertEqual(state["open_positions"][0]["freshness"], "STALE")
         self.assertEqual(state["status"], "EXIT_PENDING_MISSING_QUOTES")
+        mtm_point = state["intraday_mtm_series"][-1]
+        self.assertIsNone(mtm_point["gross_mtm"])
+        self.assertIsNone(mtm_point["net_mtm"])
+        self.assertEqual(mtm_point["integrity_status"], "WITHHELD_NO_LIVE_OPTION_CHAIN")
+
+    def test_stale_open_position_withholds_aggregate_mtm_instead_of_carrying_a_mark(self):
+        ledger = copy.deepcopy(forward_test.CLEAN_SLATE_LEDGER)
+        position = self._position()
+        position.update({"grossMtm": 4200.0, "netMtm": 3950.0, "estCharges": 250.0})
+        ledger["open_positions"] = [position]
+        stale_rows = [self._chain_row(25250, quote_time="2026-11-11T09:00:00+05:30")]
+        payload = {
+            "schema": 1,
+            "provider": "Upstox",
+            "mode": "snapshot",
+            "status": "complete",
+            "day": "2026-11-11",
+            "retrieved_at": "2026-11-11T12:30:00+05:30",
+            "nfo_session_validated": True,
+            "records": [{
+                "label": "NIFTY|2026-11-17",
+                "retrieved_at": "2026-11-11T09:00:00+05:30",
+                "data": stale_rows,
+            }],
+        }
+        state = forward_test.process_live_upstox_snapshot(
+            payload, ledger=ledger, now_ist="2026-11-11T12:30:00+05:30",
+        )
+        self.assertEqual(state["open_positions"][0]["freshness"], "STALE")
+        mtm_point = state["intraday_mtm_series"][-1]
+        self.assertIsNone(mtm_point["gross_mtm"])
+        self.assertIsNone(mtm_point["net_mtm"])
+        self.assertEqual(mtm_point["integrity_status"], "WITHHELD_STALE_OR_UNVERIFIED_POSITION")
 
     def test_backtest_snapshot_marks_cannot_pass_execution_volume_gate(self):
         mark = backtest_engine._nontradable_mark_bar(100.0)
@@ -216,44 +265,53 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertIn("EOD_PENDING_DAY_", code)
         self.assertIn("function loadPendingEod_()", code)
         self.assertIn("function savePendingEod_(pending)", code)
-        self.assertIn("properties.getProperty('LAST_SNAPSHOT_PRUNE_DAY') === today", code)
+        self.assertIn("const SNAPSHOT_RETENTION_DAYS = 0", code)
+        self.assertIn("retention: 'indefinite'", code)
         self.assertNotIn("retentionDays === undefined", code)
-        self.assertIn("function forwardQuoteFresh_(timestamp)", code)
-        self.assertIn("function executableQuote_(node, type, side, quantity, isExit)", code)
+        self.assertIn("function forwardQuoteFresh_(timestamp, referenceTimestamp)", code)
+        self.assertIn("const FORWARD_SESSION_WINDOWS_ = {}", code)
+        self.assertIn("session = marketWindow_(d)", code)
+        self.assertIn("customSpecial[today] || SPECIAL_SESSIONS[today]", code)
+        self.assertNotIn("isoDay === '2026-11-10'", code)
+        self.assertIn("function executableQuote_(node, type, side, quantity, isExit, referenceTimestamp)", code)
         self.assertIn("[bid, ask, bidQty, askQty].every(Number.isFinite)", code)
         self.assertIn("Number.isFinite(ch.spot) || ch.spot <= 0", code)
         self.assertIn("const debitInr = Math.round(legs.reduce", code)
         self.assertIn("mins >= 915 || Boolean(pos.exit_pending)", code)
         self.assertIn("delayed until fresh quote", code)
-        self.assertIn("function listDriveFilesPage_(folderId, pageToken)", code)
-        self.assertIn("function permanentlyDeleteDriveFile_(fileId)", code)
-        self.assertIn("method: 'delete'", code)
+        self.assertIn("function listDriveFilesPage_(folderId, pageToken, orderBy)", code)
+        self.assertIn("'modifiedTime desc'", code)
+        self.assertNotIn("method: 'delete'", code)
         self.assertIn("timeoutSeconds: 8", code)
         self.assertIn("timeoutSeconds: 30", code)
         self.assertIn("timeoutSeconds: 15", code)
-        self.assertIn("timeoutSeconds: 120", code)
+        self.assertIn("timeoutSeconds: 60", code)
         self.assertNotIn("timeoutSeconds: 240", code)
-        self.assertIn("Date.now() - started > 210000", code)
+        self.assertIn("Date.now() - started > CAPTURE_SAFE_DEADLINE_MS", code)
         self.assertIn("Date.now() - started > 60000", code)
         self.assertIn("if (budget.ms >= 75 * 60000)", code)
         self.assertIn("function readRuntimeBudget_(properties, key, nowMs)", code)
         self.assertIn("windowEndMs", code)
         self.assertIn("Preserve the prior calendar-day counter during migration", code)
+        self.assertIn("properties.setProperty('SNAPSHOT_GAP_DAY', today)", code)
+        self.assertIn("properties.getProperty('SNAPSHOT_GAP_DAY') === String(payload.day || '').slice(0, 10)", code)
         self.assertNotIn("budget.day !== today", code)
         self.assertNotIn("file.setTrashed(true)", code)
         self.assertNotIn("|| 25.0", code)
         self.assertNotIn("close_price || 0", code)
+        self.assertIn("WITHHELD_STALE_OR_UNVERIFIED_POSITION", code)
+        self.assertIn("WITHHELD_NO_LIVE_OPTION_CHAIN", code)
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the Apps Script helper")
     def test_apps_script_runtime_budget_uses_a_rolling_24_hour_window(self):
         code = (ROOT / "volatility_lab" / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
-        start = code.index("function readRuntimeBudget_(")
+        start = code.index("function readJsonProperty_(")
         end = code.index("\nfunction addRuntimeBudget_(", start)
         helper = code[start:end]
         script = "\n".join([
             "const RUNTIME_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;",
             helper,
-            "const props = value => ({getProperty: () => JSON.stringify(value)});",
+            "const props = value => ({getProperty: () => JSON.stringify(value), setProperty: () => {}});",
             "const active = readRuntimeBudget_(props({windowStartMs: 1000, windowEndMs: 86401000, ms: 1200}), 'x', 86400999);",
             "if (active.ms !== 1200) throw new Error('active window lost accumulated runtime');",
             "const expired = readRuntimeBudget_(props({windowStartMs: 1000, windowEndMs: 86401000, ms: 1200}), 'x', 86401000);",
@@ -282,7 +340,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the browser Black-76 helpers")
     def test_browser_black76_handles_expiry_and_keeps_missing_inputs_unpriced(self):
-        html = self._read_docs_range(1200, 1360)
+        html = self._read_docs_range(1180, 1400)
 
         def function_source(name, next_name):
             start = html.index(f"function {name}(")
@@ -307,16 +365,30 @@ class TestExecutionSafetyFixes(unittest.TestCase):
             helpers,
             "var expiry = black76Greeks(105, 100, 0, 0.05, 0, true);",
             "if (expiry.price !== 5 || expiry.gamma !== 0) throw new Error('expiry intrinsic value failed');",
-            "var subday = enrichItemWithBlack76({dte: 0.01, atm: 100, chain: [{k: 100, cLtp: 10, pLtp: 9, uCallIv: 22, uPutIv: 23}]});",
+            "var unverified = enrichItemWithBlack76({dte: 0.01, atm: 100, chain: [{k: 100, cLtp: 10, pLtp: 9, uCallIv: 22, uPutIv: 23}]});",
+            "if (!Number.isNaN(unverified.syn) || unverified.chain[0].b76CallIv !== null || seenTimes.length !== 0) throw new Error('unverified LTPs were promoted to Black-76 inputs');",
+            "var subday = enrichItemWithBlack76({quoteIntegrity: 'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK', dte: 0.01, atm: 100, chain: [{k: 100, cBid: 9.9, cAsk: 10.1, pBid: 8.9, pAsk: 9.1}]});",
             "if (Math.abs(seenTimes[0] - (0.01 / 365)) > 1e-15) throw new Error('sub-day DTE was floored');",
             "if (subday.chain[0].b76CallIv !== null || subday.chain[0].b76PutIv !== null) throw new Error('unpriced IV was substituted');",
-            "var zeroDte = enrichItemWithBlack76({dte: 0, atm: 100, chain: [{k: 100, cLtp: 10, pLtp: 9}]});",
+            "var zeroDte = enrichItemWithBlack76({quoteIntegrity: 'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK', dte: 0, atm: 100, chain: [{k: 100, cBid: 9.9, cAsk: 10.1, pBid: 8.9, pAsk: 9.1}]});",
             "if (!Number.isNaN(zeroDte.syn) || zeroDte.b76AtmIv !== null) throw new Error('date-only zero DTE was treated as a precise expiry time');",
             "var missing = enrichItemWithBlack76({dte: 1, atm: 100, syn: 110, spot: 111, chain: [{k: 100, cLtp: 0, pLtp: 0, uCallIv: 22, uPutIv: 23}]});",
             "if (!Number.isNaN(missing.syn) || missing.chain[0].b76CallIv !== null || missing.chain[0].b76OtmIv !== null) throw new Error('spot or upstream IV fallback was used');",
         ])
         result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_browser_forward_workspace_never_recalculates_or_persists_cloud_ledger(self):
+        html = self._read_docs_range(675, 3400)
+        self.assertIn("CLOUD-AUTHORITATIVE FORWARD-TEST LEDGER", html)
+        self.assertIn("MTM WITHHELD — STALE MARK", html)
+        self.assertIn("isFreshValidatedCloudSnapshot(payload)", html)
+        self.assertIn("isFreshCloudForwardLedger(cloudLedger, snapshot)", html)
+        self.assertIn("Browser-side forward-trade construction is disabled", html)
+        self.assertNotIn("forwardOpenPositions.push", html)
+        self.assertNotIn("forwardClosedTrades.unshift", html)
+        self.assertNotIn("calcPositionUpstoxCharges", html)
+        self.assertNotIn("localStorage.setItem(FWD_STORAGE_KEY", html)
 
 
 if __name__ == "__main__":

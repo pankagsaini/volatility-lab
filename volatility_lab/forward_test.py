@@ -9,7 +9,7 @@
 3. Starts with a clean-slate ledger (0 Open Positions, 0 Closed Trades prior to 2026-11-11,
    status='ARMED_WAITING_FOR_NEXT_SESSION') and automatically places the first forward trades
    when live Upstox option-chain captures begin on 2026-11-11 09:20 IST onwards, marks them
-   to market against live option-chain LTPs, and auto-closes them at 15:15 IST or on SL/TP hit.
+   to market against timestamped, two-sided option books, and auto-closes them at 15:15 IST or on SL/TP hit.
 """
 from __future__ import annotations
 
@@ -27,6 +27,11 @@ try:
     import broker_charges
 except ImportError:
     from . import broker_charges  # type: ignore
+
+try:
+    from market_calendar import HOLIDAYS as CALENDAR_HOLIDAYS
+except ImportError:
+    from .market_calendar import HOLIDAYS as CALENDAR_HOLIDAYS  # type: ignore
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
@@ -200,14 +205,9 @@ def _executable_quote(
     depth = ask_qty if is_buy else bid_qty
     return ask if is_buy and depth >= quantity else bid if not is_buy and depth >= quantity else 0.0
 
-NSE_HOLIDAYS: set[str] = {
-    "2026-01-26", "2026-03-03", "2026-03-26", "2026-03-31",
-    "2026-04-03", "2026-04-14", "2026-05-01", "2026-05-28",
-    "2026-06-26", "2026-09-14", "2026-10-02", "2026-10-20",
-    "2026-11-10", "2026-11-24", "2026-12-25",
-    "2027-01-26", "2027-03-17", "2027-03-26", "2027-04-14",
-    "2027-04-15", "2027-08-15", "2027-10-02", "2027-12-25",
-}
+# Keep session gates aligned with the maintained NSE calendar rather than a
+# partial second copy that can silently open an exchange holiday.
+NSE_HOLIDAYS: set[str] = {day.isoformat() for day in CALENDAR_HOLIDAYS}
 
 SPECIAL_SESSIONS: dict[str, dict[str, Any]] = {
     "2026-11-08": {"start_mins": 13 * 60 + 45, "end_mins": 15 * 60 + 30, "label": "MUHURAT"},
@@ -314,17 +314,24 @@ def get_nse_market_status_ist(now_dt: datetime | str | None = None) -> dict[str,
 getNseMarketStatusIST = get_nse_market_status_ist
 
 
-def is_valid_forward_record(item: dict[str, Any]) -> bool:
-    """Accept only correctly dated, in-session forward entries from 09:20 through 15:14 IST."""
+def _forward_record_session_date(item: dict[str, Any]) -> str | None:
+    """Return a forward-ledger session date only when it is parseable and in scope."""
     if not isinstance(item, dict):
-        return False
+        return None
     s_date = str(item.get("session_date") or item.get("date") or "").strip()[:10]
     try:
-        session_day = datetime.strptime(s_date, "%Y-%m-%d").date()
+        datetime.strptime(s_date, "%Y-%m-%d")
     except ValueError:
+        return None
+    return s_date if s_date >= MIN_FORWARD_DATE else None
+
+
+def is_valid_forward_record(item: dict[str, Any]) -> bool:
+    """Accept only correctly dated, in-session forward entries from 09:20 through 15:14 IST."""
+    s_date = _forward_record_session_date(item)
+    if s_date is None:
         return False
-    if s_date < MIN_FORWARD_DATE:
-        return False
+    session_day = datetime.strptime(s_date, "%Y-%m-%d").date()
     trig = str(item.get("triggerTime") or item.get("trigTime") or item.get("entryTime") or "").strip()
     parsed = _parse_aware_timestamp(trig)
     if parsed is not None:
@@ -353,13 +360,33 @@ def is_valid_forward_record(item: dict[str, Any]) -> bool:
     return True
 
 
+def _retain_forward_records(records: Any, *, open_position: bool) -> list[dict[str, Any]]:
+    """Retain in-scope records and make malformed provenance visible, never silent."""
+    retained: list[dict[str, Any]] = []
+    for item in records or []:
+        if not isinstance(item, dict) or _forward_record_session_date(item) is None:
+            continue
+        saved = copy.deepcopy(item)
+        if not is_valid_forward_record(saved):
+            saved["integrity_status"] = "UNVERIFIED_RECORD"
+            saved["freshness"] = "STALE"
+            saved["staleReason"] = (
+                "Forward record lacks a verifiable in-session trigger timestamp; "
+                "automatic marking and exit are withheld."
+            )
+            if open_position:
+                saved["manual_reconciliation_required"] = True
+        retained.append(saved)
+    return retained
+
+
 def sanitize_forward_ledger(raw_ledger: dict[str, Any] | None) -> dict[str, Any]:
-    """Ensure clean-slate v19.1 schema and purge any historical (< 2026-11-11) trades."""
+    """Preserve in-scope records while flagging, rather than dropping, bad provenance."""
     base = copy.deepcopy(CLEAN_SLATE_LEDGER)
     if not isinstance(raw_ledger, dict):
         return base
-    open_pos = [p for p in (raw_ledger.get("open_positions") or []) if is_valid_forward_record(p)]
-    closed_tr = [t for t in (raw_ledger.get("closed_trades") or []) if is_valid_forward_record(t)]
+    open_pos = _retain_forward_records(raw_ledger.get("open_positions"), open_position=True)
+    closed_tr = _retain_forward_records(raw_ledger.get("closed_trades"), open_position=False)
     mtm_series = [
         pt for pt in (raw_ledger.get("intraday_mtm_series") or [])
         if isinstance(pt, dict) and str(pt.get("session_date") or pt.get("date") or MIN_FORWARD_DATE)[:10] >= MIN_FORWARD_DATE
@@ -368,7 +395,9 @@ def sanitize_forward_ledger(raw_ledger: dict[str, Any] | None) -> dict[str, Any]
     base["open_positions"] = open_pos
     base["closed_trades"] = closed_tr
     base["intraday_mtm_series"] = mtm_series
-    if open_pos or closed_tr:
+    if any(p.get("manual_reconciliation_required") for p in open_pos):
+        base["status"] = "INTEGRITY_REVIEW_REQUIRED"
+    elif open_pos or closed_tr:
         base["status"] = str(raw_ledger.get("status") or "ACTIVE_FORWARD_TESTING")
     else:
         base["status"] = "ARMED_WAITING_FOR_NEXT_SESSION"
@@ -684,9 +713,25 @@ def mark_open_positions_to_market(
 
     for pos in copy.deepcopy(open_positions):
         if not is_valid_forward_record(pos):
+            if _forward_record_session_date(pos) is not None:
+                pos["freshness"] = "STALE"
+                pos["integrity_status"] = "UNVERIFIED_RECORD"
+                pos["manual_reconciliation_required"] = True
+                pos["staleReason"] = (
+                    "Forward record lacks a verifiable in-session trigger timestamp; "
+                    "automatic marking and exit are withheld."
+                )
+                still_open.append(pos)
             continue
-        sym = pos["sym"]
-        exp = pos["exp"]
+        sym = str(pos.get("sym") or "").upper()
+        exp = str(pos.get("exp") or "")
+        if not sym or not exp:
+            pos["freshness"] = "STALE"
+            pos["integrity_status"] = "UNVERIFIED_RECORD"
+            pos["manual_reconciliation_required"] = True
+            pos["staleReason"] = "Forward record lacks a symbol or expiry; automatic marking and exit are withheld."
+            still_open.append(pos)
+            continue
         exit_was_pending = bool(pos.get("exit_pending"))
         lot_qty = 65 if sym == "NIFTY" else 30
         key = f"{sym}|{exp}"
@@ -717,11 +762,12 @@ def mark_open_positions_to_market(
 
         pos["freshness"] = "FRESH" if all_legs_fresh else "STALE"
         if not all_legs_fresh:
-            pos["staleReason"] = f"Missing, stale, or non-executable quote in snapshot for {key}"
+            pos["staleReason"] = f"Missing live quote, stale quote, or non-executable book in snapshot for {key}"
             if auto_close_intraday_1515 or pos.get("exit_pending"):
                 pos["exit_pending"] = True
         else:
             pos.pop("staleReason", None)
+            pos["integrity_status"] = "VALIDATED_FRESH_EXECUTABLE_MARK"
 
         if all_legs_fresh:
             gross = 0.0
@@ -879,6 +925,27 @@ def process_live_upstox_snapshot(
                 position["exit_pending"] = True
             if state["open_positions"]:
                 state["status"] = "EXIT_PENDING_MISSING_QUOTES"
+        state["intraday_mtm_series"] = [
+            point for point in state.get("intraday_mtm_series", [])
+            if not (
+                str(point.get("session_date") or point.get("date") or "")[:10] == snapshot_day
+                and str(point.get("t") or "") == mkt["hm"]
+            )
+        ]
+        state["intraday_mtm_series"].append({
+            "session_date": snapshot_day,
+            "t": mkt["hm"],
+            "time_ist": f"{mkt['hm']} IST",
+            "gross_mtm": None,
+            "net_mtm": None,
+            "open_count": len(state["open_positions"]),
+            "closed_count": len([
+                trade for trade in state["closed_trades"]
+                if str(trade.get("session_date") or trade.get("date") or "")[:10] == snapshot_day
+            ]),
+            "integrity_status": "WITHHELD_NO_LIVE_OPTION_CHAIN",
+        })
+        state["updated_at"] = f"{snapshot_day}T{mkt['hm']}:00+05:30"
         return state
 
     # 1. Trigger new forward trades at >= 09:20 IST and < 15:15 IST
@@ -977,26 +1044,56 @@ def process_live_upstox_snapshot(
     if newly_closed:
         state["closed_trades"] = newly_closed + state["closed_trades"]
 
-    # 3. Record intraday MTM series point
-    agg_gross = round(
-        sum(float(p.get("grossMtm", 0.0)) for p in still_open)
-        + sum(float(t.get("gross", 0.0)) for t in newly_closed),
-        2,
+    # 3. Record an aggregate MTM point only when every open position has a
+    # fresh, executable mark.  Carrying a prior total forward would turn a
+    # missing quote into a deceptively current P&L value.
+    session_closed = [
+        trade for trade in state["closed_trades"]
+        if str(trade.get("session_date") or trade.get("date") or "")[:10] == snapshot_day
+    ]
+    marks_withheld = any(
+        str(position.get("freshness") or "").upper() != "FRESH"
+        or str(position.get("integrity_status") or "") == "UNVERIFIED_RECORD"
+        or bool(position.get("manual_reconciliation_required"))
+        for position in still_open
     )
-    agg_net = round(
-        sum(float(p.get("netMtm", 0.0)) for p in still_open)
-        + sum(float(t.get("net", 0.0)) for t in newly_closed),
-        2,
-    )
-    state["intraday_mtm_series"].append({
+    mtm_point: dict[str, Any] = {
         "session_date": snapshot_day,
         "t": mkt["hm"],
         "time_ist": f"{mkt['hm']} IST",
-        "gross_mtm": agg_gross,
-        "net_mtm": agg_net,
         "open_count": len(still_open),
-        "closed_count": len(state["closed_trades"]),
-    })
+        "closed_count": len(session_closed),
+    }
+    if marks_withheld:
+        mtm_point.update({
+            "gross_mtm": None,
+            "net_mtm": None,
+            "integrity_status": "WITHHELD_STALE_OR_UNVERIFIED_POSITION",
+        })
+    else:
+        agg_gross = round(
+            sum(float(p.get("grossMtm", 0.0)) for p in still_open)
+            + sum(float(t.get("gross", 0.0)) for t in session_closed),
+            2,
+        )
+        agg_net = round(
+            sum(float(p.get("netMtm", 0.0)) for p in still_open)
+            + sum(float(t.get("net", 0.0)) for t in session_closed),
+            2,
+        )
+        mtm_point.update({
+            "gross_mtm": agg_gross,
+            "net_mtm": agg_net,
+            "integrity_status": "VALIDATED_FRESH_EXECUTABLE_MARKS",
+        })
+    state["intraday_mtm_series"] = [
+        point for point in state.get("intraday_mtm_series", [])
+        if not (
+            str(point.get("session_date") or point.get("date") or "")[:10] == snapshot_day
+            and str(point.get("t") or "") == mkt["hm"]
+        )
+    ]
+    state["intraday_mtm_series"].append(mtm_point)
     state["updated_at"] = f"{snapshot_day}T{mkt['hm']}:00+05:30"
     state["status"] = (
         "ACTIVE_LIVE_SESSION"

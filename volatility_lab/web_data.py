@@ -146,6 +146,16 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
     spot = float(content.get('spot', 0.0))
     raw_chain = content.get('broker_option_chain', [])
 
+    def aware_payload_timestamp(*values):
+        for value in values:
+            try:
+                stamp = pd.Timestamp(value)
+                if stamp.tzinfo is not None:
+                    return stamp.tz_convert('Asia/Kolkata')
+            except (TypeError, ValueError, OverflowError):
+                continue
+        return None
+
     # Strike step and nearest ATM strike
     strike_step = 50.0 if spot < 35000 else 100.0
     atm_strike = round(spot / strike_step) * strike_step
@@ -233,23 +243,63 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
     matched_exp = next((e for e in available if e['expiry'] == expiry), None)
     dte_val = float(matched_exp['dte']) if matched_exp else 0.0
 
+    def same_expiry_month(left, right):
+        try:
+            left_stamp, right_stamp = pd.Timestamp(left), pd.Timestamp(right)
+            return (left_stamp.year, left_stamp.month) == (right_stamp.year, right_stamp.month)
+        except (TypeError, ValueError):
+            return False
+
+    matching_futures = [
+        contract for contract in content.get('contracts', [])
+        if isinstance(contract, dict)
+        and str(contract.get('instrument_type', '')).upper() == 'FUT'
+        and same_expiry_month(contract.get('expiry'), expiry)
+    ]
+    # A forward reference is valid only when the archive identifies exactly one
+    # listed future in the option expiry month; never choose an arbitrary FUT.
+    future_contract = matching_futures[0] if len(matching_futures) == 1 else None
     future_quote = None
-    for q_key, q_val in content.get('quotes', {}).items():
-        if 'FUT' in q_key and isinstance(q_val, dict):
-            future_quote = q_val
-            break
+    if future_contract:
+        future_symbol = future_contract.get('tradingsymbol') or future_contract.get('trading_symbol')
+        quote = (content.get('quotes') or {}).get(f'NFO:{future_symbol}')
+        if isinstance(quote, dict):
+            future_quote = dict(quote)
+            future_quote['expiry'] = str(future_contract.get('expiry'))[:10]
 
     from synthetic_future import determine_forward
-    valuation_now = pd.Timestamp.now(tz='Asia/Kolkata')
+    spot_quote = content.get('spot_quote') if isinstance(content.get('spot_quote'), dict) else {}
+    valuation = aware_payload_timestamp(content.get('broker_received_at'), content.get('valuation'))
+    # Valuation/retrieval time is not an instrument event time.  Without an
+    # explicit spot timestamp, observed forwards are deliberately withheld.
+    spot_timestamp = spot_quote.get('timestamp')
+    dte_for_pricing = dte_val
+    if valuation is not None:
+        try:
+            expiry_close = pd.Timestamp(expiry).tz_localize('Asia/Kolkata') + pd.Timedelta(hours=15, minutes=30)
+            dte_for_pricing = max(0.0, (expiry_close - valuation).total_seconds() / 86400.0)
+        except (TypeError, ValueError):
+            pass
     fwd_res = determine_forward(
-        raw_chain, spot, future_quote=future_quote, dte_days=dte_val,
-        expiry=expiry, as_of=valuation_now, spot_timestamp=content.get('valuation'),
+        raw_chain, spot, future_quote=future_quote, dte_days=dte_for_pricing,
+        expiry=expiry, as_of=valuation, spot_timestamp=spot_timestamp,
     )
     forward_value = fwd_res.get('forward')
-    effective_forward = float(forward_value) if forward_value is not None and np.isfinite(forward_value) and forward_value > 0 else None
     forward_source = fwd_res.get('source')
-    future_price = effective_forward if forward_source == 'listed_future' else None
-    synthetic_future = effective_forward if forward_source == 'synthetic_forward' else None
+    observed_forward = (
+        float(forward_value)
+        if forward_source in {'listed_future', 'synthetic_forward'}
+        and forward_value is not None and np.isfinite(forward_value) and forward_value > 0
+        else None
+    )
+    theoretical_forward = (
+        float(forward_value)
+        if fwd_res.get('confidence') == 'THEORETICAL'
+        and forward_value is not None and np.isfinite(forward_value) and forward_value > 0
+        else None
+    )
+    future_price = observed_forward if forward_source == 'listed_future' else None
+    synthetic_future = observed_forward if forward_source == 'synthetic_forward' else None
 
     future_basis = round(future_price - spot, 2) if future_price and spot else None
     synthetic_basis = round(synthetic_future - spot, 2) if synthetic_future and spot else None
@@ -263,8 +313,14 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
         'future_basis': future_basis,
         'synthetic_future': synthetic_future,
         'synthetic_basis': synthetic_basis,
-        'forward_price': effective_forward,
+        'forward_price': observed_forward,
         'forward_source': forward_source,
+        'forward_confidence': fwd_res.get('confidence'),
+        'forward_status': 'Validated forward available' if observed_forward is not None else 'No validated forward available',
+        'theoretical_forward': theoretical_forward,
+        # Preserve the public model label for existing clients.  Consumers must
+        # use forward_price / forward_status rather than treating this label as
+        # proof that a usable live forward was available.
         'pricing_model': 'Black-76 (Forward Anchored)',
         'atm_strike': atm_strike,
         'straddle_ltp': round(atm_straddle, 2),

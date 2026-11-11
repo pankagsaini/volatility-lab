@@ -303,7 +303,11 @@ class ExpiryMonitor(base.Monitor):
 
                     pd.DataFrame(audit).to_csv(quality_dir/f'{symbol}_{expiry}_{datetime.now(IST).strftime("%Y%m%dT%H%M%S%f")}.csv',index=False)
 
-                    call,put,iv=base.atm_values(chain,sub.strike.unique(),spot)
+                    # Broker chain rows do not carry a validated two-sided,
+                    # event-time quote per option.  Preserve broker IV here;
+                    # Black-76 re-solving is limited to `synthetic_rows`,
+                    # which passed quote-quality validation above.
+                    call,put,iv=base.atm_values(chain,sub.strike.unique(),spot,use_black76=False)
 
                     source='Upstox supplied IV'
                     alignment=base.aligned_spread(iv,valuation,source,frame)

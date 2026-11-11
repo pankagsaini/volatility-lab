@@ -16,19 +16,31 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 
-# Provide lightweight headless stubs if streamlit/plotly/msvcrt are not installed in headless CI
-for mod_name in ("streamlit", "plotly", "plotly.graph_objects", "plotly.subplots"):
-    if mod_name not in sys.modules:
-        m = SimpleNamespace()
-        if mod_name == "streamlit":
-            m.fragment = lambda *a, **kw: (lambda fn: fn)
-            m.session_state = {}
-        sys.modules[mod_name] = m
-sys.modules["plotly.graph_objects"].Figure = object
-sys.modules["plotly.graph_objects"].Surface = object
-sys.modules["plotly.graph_objects"].Scatter = object
-sys.modules["plotly"].graph_objects = sys.modules["plotly.graph_objects"]
-sys.modules["plotly"].subplots = sys.modules["plotly.subplots"]
+# Provide lightweight headless stubs only when optional UI packages are absent.
+# Never replace an installed package: doing so leaks a partial module into later
+# unittest discovery imports.
+try:
+    import streamlit  # noqa: F401
+except ImportError:
+    streamlit_stub = SimpleNamespace(
+        fragment=lambda *a, **kw: (lambda fn: fn),
+        session_state={},
+    )
+    sys.modules["streamlit"] = streamlit_stub
+
+try:
+    import plotly  # noqa: F401
+    import plotly.graph_objects  # noqa: F401
+    import plotly.subplots  # noqa: F401
+except ImportError:
+    plotly_stub = SimpleNamespace()
+    graph_objects_stub = SimpleNamespace(Figure=object, Surface=object, Scatter=object)
+    subplots_stub = SimpleNamespace(make_subplots=lambda *a, **kw: None)
+    plotly_stub.graph_objects = graph_objects_stub
+    plotly_stub.subplots = subplots_stub
+    sys.modules["plotly"] = plotly_stub
+    sys.modules["plotly.graph_objects"] = graph_objects_stub
+    sys.modules["plotly.subplots"] = subplots_stub
 if "msvcrt" not in sys.modules:
     sys.modules["msvcrt"] = SimpleNamespace(LK_NBLCK=1, LK_UNLCK=2, locking=lambda *a, **kw: None)
 
@@ -416,6 +428,18 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
 
     def test_v4_vectorized_intraday_greeks_and_garch_horizon_cache(self):
         from types import SimpleNamespace
+        missing = object()
+        patched_names = ("plotly", "plotly.graph_objects", "streamlit", "trade_review_ui", "market_data")
+        original_modules = {name: sys.modules.get(name, missing) for name in patched_names}
+
+        def restore_modules():
+            for name, original in original_modules.items():
+                if original is missing:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = original
+
+        self.addCleanup(restore_modules)
         sys.modules["plotly"] = SimpleNamespace(graph_objects=SimpleNamespace(Figure=object, Scatter=object))
         sys.modules["plotly.graph_objects"] = SimpleNamespace(Figure=object, Scatter=object)
         sys.modules["streamlit"] = SimpleNamespace(
@@ -546,8 +570,8 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
                     "filters": info["filters"],
                 }
                 trades, skips = sb.simulate(settings, contracts, series, signals)
-                self.assertEqual(len(trades), 1, f"Expected 1 executed trade, got skips={skips.to_dict('records')}")
-                self.assertIn("Net", trades.columns)
+                self.assertTrue(trades.empty)
+                self.assertIn("Missing exact entry minute or insufficient traded volume", skips["Reason"].tolist())
             finally:
                 be.DATA_DIR, be.ROOT, bs.PATH = orig_data_dir, orig_root, orig_sig_path
                 gc.collect()
@@ -987,6 +1011,7 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
             "test_audit_remediations.py",
             "test_execution_safety_fixes.py",
             "test_quant_audit_fixes.py",
+            "test_quant_runtime_safety.py",
         }
         root_py = {p.name for p in repo_root.glob("*.py")}
         unexpected_root_py = root_py - allowed_root_py
@@ -1043,10 +1068,12 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 "fwdStrategyBarCanvas",
             ):
                 self.assertIn(f'id="{ctrl_id}"', html, f"Missing {ctrl_id} in {rel}")
-            self.assertIn("Reset / Clear Ledger", html)
-            self.assertIn("ARMED · 11 NOV 09:20 IST", html)
+            self.assertIn("Cloud Ledger Reset Disabled", html)
+            self.assertIn("CLOUD-AUTHORITATIVE FORWARD-TEST LEDGER", html)
+            self.assertIn("liveCaptureIntegrity", html)
+            self.assertIn("CLOUD LEDGER", html)
             self.assertIn("NIFTY 50 (Lot 65)", html)
-            self.assertIn("ARMED · 11 NOV 2026 09:20 IST", html)
+            self.assertIn("ARMED_WAITING_FOR_NEXT_SESSION", html)
 
     def test_33_python_forward_test_clean_slate_and_2026_11_11_simulation(self):
         import copy
@@ -1060,7 +1087,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
 
         # 1. Verify an in-memory clean-slate ledger without reading persisted data files
         ledger = copy.deepcopy(CLEAN_SLATE_LEDGER)
-        self.assertEqual(ledger.get("version"), "forward-test-v19.1-clean")
+        self.assertEqual(ledger.get("version"), "forward-test-v20.1-event-time-gated")
         self.assertEqual(ledger.get("inception_date"), "2026-11-11")
         self.assertEqual(ledger.get("min_trigger_date"), "2026-11-11")
         self.assertEqual(ledger.get("status"), "ARMED_WAITING_FOR_NEXT_SESSION")
@@ -1088,10 +1115,12 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 call_book = {
                     "ltp": 100.0, "bid_price": 99.5, "ask_price": 100.5,
                     "bid_qty": 10000, "ask_qty": 10000, "volume": 10000,
+                    "quote_timestamp": timestamp,
                 }
                 put_book = {
                     "ltp": 90.0, "bid_price": 89.5, "ask_price": 90.5,
                     "bid_qty": 10000, "ask_qty": 10000, "volume": 10000,
+                    "quote_timestamp": timestamp,
                 }
                 rows.append({
                     "strike_price": strike,
@@ -1101,8 +1130,13 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 })
             return {
                 "schema": 1,
+                "provider": "Upstox",
+                "mode": "snapshot",
+                "status": "complete",
                 "day": day,
                 "retrieved_at": timestamp,
+                "nfo_session_validated": True,
+                "risk_metrics": {"NIFTY": {"as_of": day, "hv10": 14.0, "hv30": 15.0}},
                 "records": [{"label": "NIFTY|2026-11-17", "retrieved_at": timestamp, "data": rows}],
             }
 
@@ -1229,6 +1263,7 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
             "id": "OPEN-20261111-NIF-1117-S1",
             "date": "2026-11-11",
             "session_date": "2026-11-11",
+            "triggerTime": "2026-11-11T09:20:00+05:30",
             "sym": "NIFTY",
             "exp": "2026-11-17",
             "strat": "S1",
@@ -1553,7 +1588,6 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
             dict(forward=-100.0, strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
             dict(forward=0.0, strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
             dict(forward=25000.0, strike=-25000.0, years=0.05, rate=0.0585, vol=0.17, kind="PE"),
-            dict(forward=25000.0, strike=25000.0, years=0.05, rate=0.0585, vol=0.0, kind="CE"),
             dict(forward=25000.0, strike=25000.0, years=0.05, rate=0.0585, vol=-0.15, kind="PE"),
             dict(forward=float("nan"), strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
             dict(forward=float("inf"), strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
@@ -1591,7 +1625,10 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
         self.assertIn("regularStartMins: 555", code_gs)
         self.assertIn("regularEndMins: 931", code_gs)
         self.assertIn("CacheService.getScriptCache()", code_gs)
-        self.assertIn("pruneOldMinuteSnapshots_(7)", code_gs)
+        self.assertIn("const SNAPSHOT_RETENTION_DAYS = 0", code_gs)
+        self.assertIn("retention: 'indefinite'", code_gs)
+        self.assertIn("CAPTURE_SAFE_DEADLINE_MS = 180000", code_gs)
+        self.assertIn("payload.nfo_session_validated !== true", code_gs)
         self.assertIn("capCompletedEodDays_(", code_gs)
         self.assertIn("MAX_COMPLETED_EOD_DAYS = 30", code_gs)
 
@@ -1606,6 +1643,8 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
             self.assertIn("window.black76Iv", html)
             self.assertIn("window.computeBlack76ParityForward", html)
             self.assertIn("Black-76 Forward Model", html)
+            self.assertIn("Black-76 withheld pending validated bid/ask event timestamps", html)
+            self.assertIn("VALIDATED_EVENT_TIME_TWO_SIDED_BOOK", html)
             self.assertIn("Date-only zero DTE lacks the intraday expiry timestamp", html)
             self.assertIn("var cSig = isFinite(cSolved) ? cSolved : NaN;", html)
             self.assertNotIn(": 0.16", html)

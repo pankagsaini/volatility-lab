@@ -68,7 +68,7 @@ jobs:
           from volatility_lab.forward_test import load_forward_test_ledger, LOT_SIZES
           from volatility_lab.market_calendar import is_trading_day
           ledger = load_forward_test_ledger()
-          assert ledger['version'] == 'forward-test-v19.1-clean', 'Bad ledger version'
+          assert ledger['version'] == 'forward-test-v20.1-event-time-gated', 'Bad ledger version'
           assert LOT_SIZES['NIFTY'] == 65, 'Bad NIFTY lot size'
           print('Installed wheel clean-env smoke test passed successfully!')
           "

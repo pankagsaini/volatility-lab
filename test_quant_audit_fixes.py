@@ -13,8 +13,12 @@ sys.path.insert(0, str(ROOT / 'volatility_lab'))
 
 import backtest_signals
 import broker_charges
+import data_accuracy
+import forward_test
 import option_math
+import quote_quality
 import strategy_backtest
+import synthetic_future
 import vol_lib
 
 
@@ -77,6 +81,61 @@ class TestQuantAuditFixes(unittest.TestCase):
         np.testing.assert_allclose(vector['price'], [5.0, 5.0])
         np.testing.assert_allclose(vector['gamma'], [0.0, 0.0])
 
+    def test_synthetic_future_withholds_nested_broker_chain_not_normalized_quotes(self):
+        raw_chain = [{
+            'expiry': '2026-11-17', 'strike_price': 25000,
+            'call_options': {'market_data': {'ltp': 240.0}},
+            'put_options': {'market_data': {'ltp': 210.0}},
+        }]
+        result = synthetic_future.calculate(
+            raw_chain, spot=25000.0, years=7 / 365,
+            expiry='2026-11-17', as_of='2026-11-11T09:20:00+05:30',
+            spot_timestamp='2026-11-11T09:20:00+05:30',
+        )
+        self.assertIsNone(result['Synthetic future'])
+        self.assertEqual(result['Synthetic status'], 'Normalized option quotes required')
+
+    def test_quote_freshness_accepts_explicit_epoch_milliseconds(self):
+        as_of = '2026-11-11T09:20:00+05:30'
+        epoch_ms = int(pd.Timestamp(as_of).timestamp() * 1000)
+        rows = [
+            {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'CE',
+             'bid': 239.0, 'ask': 241.0, 'timestamp': epoch_ms},
+            {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'PE',
+             'bid': 209.0, 'ask': 211.0, 'timestamp': epoch_ms},
+        ]
+        result = synthetic_future.calculate(
+            rows, spot=25005.0, years=7 / 365, expiry='2026-11-17',
+            as_of=as_of, spot_timestamp=epoch_ms,
+        )
+        self.assertIsNotNone(result['Synthetic future'])
+        quote = {
+            'timestamp': epoch_ms,
+            'depth': {
+                'buy': [{'price': 99.9, 'quantity': 10}],
+                'sell': [{'price': 100.1, 'quantity': 10}],
+            },
+        }
+        self.assertTrue(quote_quality.assess_quote(quote, as_of, max_spread=10.0)['accepted'])
+
+    def test_independent_check_does_not_promote_raw_ltp_to_parity_input(self):
+        timestamp = '2026-11-11T09:20:00+05:30'
+        payload = {
+            'spot': 25000.0,
+            'broker_received_at': timestamp,
+            'spot_quote': {'timestamp': timestamp},
+            'broker_option_chain': [{
+                'expiry': '2026-11-17', 'strike_price': 25000,
+                'call_options': {'market_data': {'ltp': 240.0}},
+                'put_options': {'market_data': {'ltp': 210.0}},
+            }],
+        }
+        checks = data_accuracy.check_row(
+            {'Expiry': '2026-11-17', 'Synthetic future': 25030.0}, payload, None,
+        )
+        synthetic = next(item for item in checks if item['Check'] == 'ATM synthetic future')
+        self.assertEqual(synthetic['Result'], 'Not verifiable')
+
     def test_bsm_scalar_and_vector_agree_for_live_contracts(self):
         scalar = option_math.bsm_greeks(100.0, 105.0, 0.25, 0.04, 0.22, 'PE', dividend=0.01)
         vector = option_math.bsm_greeks_vec(
@@ -87,6 +146,13 @@ class TestQuantAuditFixes(unittest.TestCase):
             ('vega', 'vega'), ('theta_daily', 'theta'),
         ):
             self.assertAlmostEqual(float(scalar[scalar_key]), float(vector[vector_key]), places=12)
+
+    def test_forward_session_gate_uses_the_central_holiday_calendar(self):
+        # 2027-03-10 is a maintained NSE holiday but was absent from the old
+        # duplicate forward-test list, which would have admitted a live entry.
+        status = forward_test.get_nse_market_status_ist('2027-03-10T10:00:00+05:30')
+        self.assertFalse(status['open'])
+        self.assertIn('2027-03-10', forward_test.NSE_HOLIDAYS)
 
     def test_signal_loader_does_not_fabricate_eod_availability(self):
         connection = sqlite3.connect(':memory:')
@@ -164,7 +230,7 @@ class TestQuantAuditFixes(unittest.TestCase):
         self.assertAlmostEqual(buy['Stamp duty'], 0.225)
         self.assertAlmostEqual(sell['STT'], 11.25)
         self.assertEqual(sell['Stamp duty'], 0.0)
-        self.assertAlmostEqual(sell['Exchange'], 100.0 * 75 * 0.0003503)
+        self.assertAlmostEqual(sell['Exchange'], 100.0 * 75 * 0.0003553)
         self.assertAlmostEqual(sell['IPFT'], 100.0 * 75 * 0.000005)
         self.assertAlmostEqual(sell['SEBI'], 100.0 * 75 * 0.000001)
         self.assertAlmostEqual(sell['GST'], 0.18 * (20.0 + sell['Exchange'] + sell['IPFT']))

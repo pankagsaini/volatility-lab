@@ -5,7 +5,10 @@ import math
 import numpy as np
 import pandas as pd
 from backtest_common import record_skip, dated_lot_size
-from broker_charges import charge
+from broker_charges import CHARGE_MODEL_VERSION, charge
+
+EXECUTION_ASSUMPTION_VERSION = 'minute-bar-uniform-bps-proxy-v2'
+MARGIN_ASSUMPTION_VERSION = 'scenario-margin-proxy-v2'
 
 TEMPLATES = {
     'Short straddle': [
@@ -318,6 +321,9 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
     entry_time = s.get('entry', '09:20')
     exit_time = s.get('exit', '15:15')
     slip_bps = _finite_nonnegative(s.get('slip_bps', 5.0), 'Slippage (bps)')
+    slippage_model = str(s.get('slippage_model', 'uniform_bps_proxy_v1'))
+    if slippage_model != 'uniform_bps_proxy_v1':
+        raise ValueError('Unsupported slippage_model; only the documented uniform_bps_proxy_v1 is available')
     stop_loss = s.get('stop') if s.get('stop') and float(s.get('stop', 0)) > 0 else None
     profit_target = s.get('target') if s.get('target') and float(s.get('target', 0)) > 0 else None
     use_upstox_fees = bool(s.get('use_upstox_fees', True))
@@ -420,6 +426,8 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
         user_margin = float(s.get('margin_per_lot') or 0.0)
         if user_margin > 0:
             cap_req = user_margin * lots_mult
+            margin_model = 'user_supplied_per_lot'
+            margin_status = 'USER_SUPPLIED'
         elif s.get('estimate_margin', True):
             cap_req = estimate_exchange_margin(
                 active_legs, spot_px, symbol=symbol,
@@ -427,11 +435,15 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
                 exposure_add_rate=float(s.get('exposure_add_rate', 0.02)),
                 spread_floor_rate=float(s.get('spread_floor_rate', 0.015)),
             )
+            margin_model = 'scenario_proxy'
+            margin_status = 'UNVALIDATED_PROXY'
         else:
             cap_req = 0.0
+            margin_model = 'not_modelled'
+            margin_status = 'NOT_MODELLED'
         cap_alloc = float(s['capital_allocated']) if s.get('capital_allocated') else None
         if cap_alloc is not None and cap_alloc > 0 and cap_req > cap_alloc + 0.005:
-            record_skip(skips, day, 'Insufficient allocated capital for exchange margin')
+            record_skip(skips, day, 'Insufficient allocated capital for configured margin assumption')
             continue
 
         # Precompute fixed entry fee once outside the 1-minute monitoring loop
@@ -537,9 +549,16 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
             'Exit reason': exit_reason,
             'Spot signal': spot_px,
             'Capital required': cap_req,
+            'Margin model': margin_model,
+            'Margin assumption status': margin_status,
+            'Margin assumption version': MARGIN_ASSUMPTION_VERSION,
             'Premium': premium_val,
             'Gross': gross,
             'Slippage': slippage,
+            'Slippage bps': slip_bps,
+            'Slippage model': slippage_model,
+            'Execution assumption version': EXECUTION_ASSUMPTION_VERSION,
+            'Charge model version': CHARGE_MODEL_VERSION if use_upstox_fees else 'per-order-fee-proxy',
             'Charges': charges_total,
             'Cost': total_cost_val,
             'Net': net_pnl,

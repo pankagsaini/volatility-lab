@@ -19,18 +19,37 @@ from option_math import (
 MODEL_NAME = 'Black-76 Forward Model · F = K + e^{rT}(C − P)'
 
 
+def _timestamp_utc(value):
+    """Parse ISO or explicit epoch timestamps without pandas' nanosecond guess."""
+    if value is None or value == '':
+        return None
+    try:
+        if isinstance(value, (int, float)) or str(value).strip().isdigit():
+            numeric = float(value)
+            if not np.isfinite(numeric):
+                return None
+            stamp = pd.to_datetime(numeric, unit='ms' if abs(numeric) > 1e11 else 's', utc=True)
+        else:
+            stamp = pd.Timestamp(value)
+        if pd.isna(stamp) or stamp.tzinfo is None:
+            return None
+        return stamp.tz_convert('UTC')
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _fresh_quote(value, as_of, max_age_seconds=60.0) -> bool:
-    stamp_value = value.get('timestamp') or value.get('quote_timestamp') if hasattr(value, 'get') else None
+    stamp_value = (value.get('timestamp') or value.get('quote_timestamp')) if hasattr(value, 'get') else None
     if not stamp_value or as_of is None:
         return False
+    stamp = _timestamp_utc(stamp_value)
+    reference = _timestamp_utc(as_of)
+    if stamp is None or reference is None:
+        return False
     try:
-        stamp = pd.Timestamp(stamp_value)
-        reference = pd.Timestamp(as_of)
-        if stamp.tzinfo is None or reference.tzinfo is None:
-            return False
-        age = (reference.tz_convert('UTC') - stamp.tz_convert('UTC')).total_seconds()
+        age = (reference - stamp).total_seconds()
         return -5.0 <= age <= float(max_age_seconds)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return False
 
 
@@ -145,6 +164,18 @@ def calculate(
         }
     strike_col = 'strike' if 'strike' in df.columns else ('Strike' if 'Strike' in df.columns else 'strike_price')
     type_col = 'option_type' if 'option_type' in df.columns else ('Type' if 'Type' in df.columns else 'Kind')
+    if strike_col not in df.columns or type_col not in df.columns:
+        return {
+            'ATM strike': None,
+            'ATM call LTP': None,
+            'ATM put LTP': None,
+            'Synthetic future': None,
+            'Month future LTP': None,
+            'Basis': None,
+            'Black-76 ATM IV': None,
+            'Synthetic status': 'Normalized option quotes required',
+            'Pricing model': MODEL_NAME,
+        }
 
     df[strike_col] = pd.to_numeric(df[strike_col], errors='coerce')
     df = df[np.isfinite(df[strike_col]) & (df[strike_col] > 0)]

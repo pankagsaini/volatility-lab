@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * VOLATILITY LAB — CLOUD ARCHIVE, BLACK-76 FORWARD TEST & QUOTA-OPTIMIZED ENGINE (v20.0)
+ * VOLATILITY LAB — CLOUD ARCHIVE, BLACK-76 FORWARD TEST & INTEGRITY ENGINE (v21.0)
  * ==============================================================================
  * Private, read-only automated data pipeline for Upstox NSE Market Feeds.
  *
@@ -13,15 +13,18 @@
  *    polls from in-memory CacheService without repeated Drive/Gzip reads.
  * 4. 30-Day Cap on COMPLETED_EOD_DAYS (capCompletedEodDays_(map, 30)) — prevents
  *    ScriptProperties 9 KB per-key / 500 KB total storage exhaustion.
- * 5. Bounded retention permanently prunes raw minute snapshots beyond the configured window;
- *    EOD archives are retained separately and require their own storage monitoring.
+ * 5. Raw minute snapshots are retained indefinitely. Capture health is surfaced instead
+ *    of silently deleting research evidence.
  * 6. Black-76 Put-Call Parity Forward F = K + exp(r*T)*(C - P) in evaluateForwardTest_.
  * ==============================================================================
  */
 
 const MAX_COMPLETED_EOD_DAYS = 30;
-const SNAPSHOT_RETENTION_DAYS = 7;
+// A zero value means raw minute archives are retained indefinitely.  Do not
+// convert this to a truthy fallback: historical snapshots are research evidence.
+const SNAPSHOT_RETENTION_DAYS = 0;
 const RUNTIME_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
+const CAPTURE_SAFE_DEADLINE_MS = 180000;
 
 const CONFIG = {
   timeZone: 'Asia/Kolkata',
@@ -31,7 +34,7 @@ const CONFIG = {
   eodStartMins: 18 * 60,         // 18:00 IST (1080)
   eodEndMins: 22 * 60,           // 22:00 IST (1320)
   completedEodMaxDays: 30,
-  snapshotRetentionDays: 7,
+  snapshotRetentionDays: SNAPSHOT_RETENTION_DAYS,
   doGetCacheSeconds: 55,
   indices: {
     NIFTY: 'NSE_INDEX|Nifty 50',
@@ -90,8 +93,19 @@ function props_() {
   return PropertiesService.getScriptProperties();
 }
 
+function readJsonProperty_(properties, key, fallback) {
+  const raw = properties.getProperty(key);
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    properties.setProperty('COLLECTOR_STATUS', 'Invalid saved state for ' + key + '; safe defaults applied');
+    return fallback;
+  }
+}
+
 function readRuntimeBudget_(properties, key, nowMs) {
-  const stored = JSON.parse(properties.getProperty(key) || '{}');
+  const stored = readJsonProperty_(properties, key, {});
   const startMs = Number(stored.windowStartMs);
   const endMs = Number(stored.windowEndMs);
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
@@ -175,69 +189,18 @@ function capCompletedEodDays_(completedMap, maxDays) {
 }
 
 /**
- * Permanently deletes raw 1-minute snapshots beyond the configured retention window.
- * EOD archives and snapshots pending EOD reconciliation are preserved.
+ * Legacy retention hook.  Raw minute archives are deliberately never pruned by
+ * this project because they are the source evidence for the displayed research.
  */
-function pruneOldMinuteSnapshots_(retentionDays) {
-  const daysKeep = Number(retentionDays || CONFIG.snapshotRetentionDays || 7);
-  const now = new Date();
-  const cutoffDate = new Date(now.getTime() - daysKeep * 86400000);
-  const cutoffDay = day_(cutoffDate);
-  const properties = props_();
-  const today = day_(now);
-
-  // Explicit retention overrides must not bypass the once-per-day Drive scan guard.
-  if (properties.getProperty('LAST_SNAPSHOT_PRUNE_DAY') === today) {
-    return { pruned: 0, cutoff_day: cutoffDay, skipped: true };
-  }
-
-  // Mark before scanning so an exception cannot cause 120 repeated scans in the premarket window.
-  properties.setProperty('LAST_SNAPSHOT_PRUNE_DAY', today);
-  const pendingEod = loadPendingEod_();
-  const folder = folder_();
-  const snapPattern = /^(\d{4}-\d{2}-\d{2})_snapshot_\d{6}_(complete|partial)\.json\.gz$/;
-  let pruned = 0;
-  let scanned = 0;
-  let pageToken = '';
-  let cutoffReached = false;
-  const started = Date.now();
-
-  do {
-    if (scanned >= 5000 || pruned >= 400 || Date.now() - started >= 240000) break;
-    const page = listDriveFilesPage_(folder.getId(), pageToken);
-    const files = Array.isArray(page.files) ? page.files : [];
-    for (const file of files) {
-      scanned++;
-      const name = String(file.name || '');
-      const match = snapPattern.exec(name);
-      if (match) {
-        const fileDay = match[1];
-        if (fileDay >= cutoffDay) {
-          cutoffReached = true;
-          break;
-        }
-        if (!pendingEod[fileDay]) {
-          try {
-            permanentlyDeleteDriveFile_(file.id);
-            pruned++;
-          } catch (e) {
-            console.log('Snapshot deletion failed: ' + safeError_(e));
-          }
-        }
-      }
-      if (scanned >= 5000 || pruned >= 400 || Date.now() - started >= 240000) break;
-    }
-    pageToken = page.nextPageToken || '';
-  } while (pageToken && !cutoffReached && scanned < 5000 && pruned < 400 && Date.now() - started < 240000);
-
-  return { pruned: pruned, scanned: scanned, cutoff_day: cutoffDay };
+function pruneOldMinuteSnapshots_(_retentionDays) {
+  return { pruned: 0, retention: 'indefinite', disabled: true };
 }
 
-function listDriveFilesPage_(folderId, pageToken) {
+function listDriveFilesPage_(folderId, pageToken, orderBy) {
   const query = "'" + folderId + "' in parents and trashed = false";
   const params = {
     q: query,
-    orderBy: 'name',
+    orderBy: orderBy || 'name',
     pageSize: '1000',
     fields: 'nextPageToken,files(id,name)'
   };
@@ -256,29 +219,12 @@ function listDriveFilesPage_(folderId, pageToken) {
   return JSON.parse(response.getContentText());
 }
 
-function permanentlyDeleteDriveFile_(fileId) {
-  if (!fileId) throw new Error('Missing Drive file ID');
-  const response = UrlFetchApp.fetch(
-    'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId),
-    {
-      method: 'delete',
-      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-      muteHttpExceptions: true,
-      timeoutSeconds: 30
-    }
-  );
-  const statusCode = response.getResponseCode();
-  if (statusCode !== 204 && statusCode !== 404) {
-    throw new Error('Drive permanent delete failed with HTTP ' + statusCode);
-  }
-}
-
 const EOD_PENDING_PREFIX_ = 'EOD_PENDING_DAY_';
 
 function loadPendingEod_() {
   const properties = props_();
   const all = properties.getProperties();
-  const pending = JSON.parse(all.EOD_PENDING || '{}');
+  const pending = readJsonProperty_(properties, 'EOD_PENDING', {});
   Object.keys(all).forEach(key => {
     const match = /^EOD_PENDING_DAY_(\d{4}-\d{2}-\d{2})$/.exec(key);
     if (match) pending[match[1]] = all[key];
@@ -424,9 +370,9 @@ function save_(name, value) {
 function catalogue_(now) {
   const properties = props_();
   const today = day_(now);
-  const cached = properties.getProperty('CATALOGUE');
+  const cached = readJsonProperty_(properties, 'CATALOGUE', null);
   if (cached) {
-    const parsed = JSON.parse(cached);
+    const parsed = cached;
     if (parsed.day === today) {
       return parsed;
     }
@@ -436,7 +382,7 @@ function catalogue_(now) {
     { muteHttpExceptions: true, followRedirects: false, timeoutSeconds: 30 }
   );
   if (response.getResponseCode() !== 200) {
-    if (cached) return JSON.parse(cached);
+    if (cached) return cached;
     throw new Error('Instrument master unavailable');
   }
   const master = JSON.parse(Utilities.ungzip(response.getBlob()).getDataAsString());
@@ -510,8 +456,8 @@ function marketWindow_(dateObj) {
     return { closed: true, special: false, label: 'Weekend' };
   }
 
-  let calendar = JSON.parse(properties.getProperty('MARKET_CALENDAR') || 'null');
-  const todayStr = day_(new Date());
+  let calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
+  const todayStr = targetDay;
   if (!calendar || calendar.checked !== todayStr) {
     try {
       const response = UrlFetchApp.fetch('https://api.upstox.com/v2/market/holidays', {
@@ -544,7 +490,11 @@ function marketWindow_(dateObj) {
     } catch (err) {}
   }
 
-  if (calendar && Array.isArray(calendar.closed) && calendar.closed.includes(targetDay)) {
+  if (!calendar || !Array.isArray(calendar.closed)) {
+    return { closed: true, special: false, label: 'Market calendar unavailable' };
+  }
+
+  if (calendar.closed.includes(targetDay)) {
     return { closed: true, special: false, label: 'Trading Holiday' };
   }
 
@@ -563,10 +513,14 @@ function marketClosed_(now) {
   const properties = props_();
   const today = day_(now);
   const year = today.slice(0, 4);
-  if (SPECIAL_SESSIONS[today]) {
+  let customSpecial = {};
+  try {
+    customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
+  } catch (e) {}
+  if (customSpecial[today] || SPECIAL_SESSIONS[today]) {
     return false;
   }
-  let calendar = JSON.parse(properties.getProperty('MARKET_CALENDAR') || 'null');
+  let calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
   if (!calendar || calendar.checked !== today) {
     try {
       const response = UrlFetchApp.fetch('https://api.upstox.com/v2/market/holidays', {
@@ -604,6 +558,9 @@ function marketClosed_(now) {
         throw new Error('Market calendar unavailable; retry next trigger');
       }
     }
+  }
+  if (!calendar || !Array.isArray(calendar.closed)) {
+    throw new Error('Market calendar unavailable; retry next trigger');
   }
   return calendar.closed.includes(today);
 }
@@ -675,7 +632,7 @@ function capture_(mode, recovery) {
 
     const responses = apiAll_(requests);
     for (const res of responses) {
-      if (Date.now() - started > 180000) {
+      if (Date.now() - started > CAPTURE_SAFE_DEADLINE_MS) {
         report.errors.push({ item: res.label, reason: 'Runtime budget exhausted' });
         continue;
       }
@@ -684,6 +641,12 @@ function capture_(mode, recovery) {
       if (res.error) {
         if (res.error === 'Broker HTTP 401' || res.error === 'Broker HTTP 403' || res.error === 'API fallback time budget exhausted') {
           report.errors.push({ item: res.label, reason: res.error });
+          continue;
+        }
+        // api_ can spend up to about 31 seconds retrying.  Do not start a
+        // fallback retry late in the run and risk Apps Script's 6-minute cap.
+        if (Date.now() - started > CAPTURE_SAFE_DEADLINE_MS - 35000) {
+          report.errors.push({ item: res.label, reason: 'Retry budget exhausted' });
           continue;
         }
         try {
@@ -696,12 +659,20 @@ function capture_(mode, recovery) {
 
       try {
         if (res.label === 'quotes') {
+          if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            throw new Error('Invalid quote response');
+          }
           const returnedTokens = new Set(Object.values(data).map(q => q.instrument_token));
           if (keys.some(k => !returnedTokens.has(k))) {
             throw new Error('Incomplete quote response');
           }
-        } else if (res.path === '/v2/option/chain' && data.some(r => r.expiry !== res.params.expiry_date)) {
-          throw new Error('Wrong option expiry');
+        } else if (res.path === '/v2/option/chain') {
+          if (!Array.isArray(data) || !data.length) {
+            throw new Error('Invalid option-chain response');
+          }
+          if (data.some(r => !r || r.expiry !== res.params.expiry_date || !Number.isFinite(Number(r.underlying_spot_price)) || Number(r.underlying_spot_price) <= 0)) {
+            throw new Error('Wrong option expiry');
+          }
         }
 
         report.records.push({
@@ -766,7 +737,7 @@ function capture_(mode, recovery) {
     const target = report.target_day || today;
     if (report.status === 'complete') {
       delete pending[target];
-      let completedMap = JSON.parse(properties.getProperty('COMPLETED_EOD_DAYS') || '{}');
+      let completedMap = readJsonProperty_(properties, 'COMPLETED_EOD_DAYS', {});
       completedMap[target] = fileId;
       completedMap = capCompletedEodDays_(completedMap, CONFIG.completedEodMaxDays);
       properties.setProperty('COMPLETED_EOD_DAYS', JSON.stringify(completedMap));
@@ -854,7 +825,7 @@ function installIntradaySchedule() {
   folder_();
 
   ScriptApp.getProjectTriggers()
-    .filter(t => t.getHandlerFunction() === 'scheduledCapture' || t.getHandlerFunction() === 'weeklyCleanup')
+    .filter(t => ['scheduledCapture', 'scheduledWatchdog', 'weeklyCleanup'].includes(t.getHandlerFunction()))
     .forEach(t => ScriptApp.deleteTrigger(t));
 
   ScriptApp.newTrigger('scheduledCapture')
@@ -862,10 +833,39 @@ function installIntradaySchedule() {
     .everyMinutes(1)
     .create();
 
+  ScriptApp.newTrigger('scheduledWatchdog')
+    .timeBased()
+    .everyHours(1)
+    .create();
+
   properties.setProperty('INTERVAL_MINUTES', '1');
   properties.setProperty('SCHEDULE_MODE', 'intraday');
 
-  console.log('Enabled: one-minute snapshots, weekdays 09:15-15:31 IST; EOD retries 18:00-22:00 IST; 7-day raw snapshot pruning.');
+  console.log('Enabled: one-minute snapshots, weekdays 09:15-15:31 IST; EOD retries 18:00-22:00 IST; raw snapshots retained indefinitely; watchdog enabled.');
+}
+
+/**
+ * Re-create a deleted minute trigger and surface stale capture state.  It is a
+ * best-effort recovery mechanism; upstream platform and market-data outages are
+ * still reported rather than fabricated as successful data.
+ */
+function scheduledWatchdog() {
+  const properties = props_();
+  if (properties.getProperty('SCHEDULE_MODE') !== 'intraday') return;
+  const handlers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+  if (!handlers.includes('scheduledCapture')) {
+    ScriptApp.newTrigger('scheduledCapture').timeBased().everyMinutes(1).create();
+    properties.setProperty('COLLECTOR_STATUS', 'recovered missing scheduledCapture trigger ' + new Date().toISOString());
+  }
+  const last = readJsonProperty_(properties, 'LAST_SNAPSHOT', null);
+  const now = new Date();
+  if (!last || !last.day || last.day !== day_(now)) return;
+  const at = Number(properties.getProperty('LAST_SNAPSHOT_AT_MS') || 0);
+  const session = marketWindow_(now);
+  if (at > 0 && !session.closed && minute_(now) >= session.startMins && minute_(now) <= session.endMins
+      && now.getTime() - at > 3 * 60000) {
+    properties.setProperty('COLLECTOR_STATUS', 'stale snapshot health alert ' + new Date().toISOString());
+  }
 }
 
 /**
@@ -885,9 +885,15 @@ function scheduledCapture() {
     return;
   }
 
+  let customSpecial = {};
+  try {
+    customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
+  } catch (e) {}
+  const sp = customSpecial[today] || SPECIAL_SESSIONS[today];
+
   // Skip weekends (Saturday=6, Sunday=7) before any reconciliation or capture (unless special session)
   if (weekday > 5) {
-    if (!SPECIAL_SESSIONS[today]) return;
+    if (!sp) return;
   }
 
   // Pre-market reconciliation & 7-day snapshot pruning window: 07:00 - 09:00 IST (minutes 420 to 540)
@@ -896,7 +902,6 @@ function scheduledCapture() {
     return;
   }
 
-  const sp = SPECIAL_SESSIONS[today];
   const snapStart = sp ? sp.startMins : CONFIG.regularStartMins; // 555 (09:15 IST)
   const snapEnd = sp ? sp.endMins : CONFIG.regularEndMins;       // 931 (15:31 IST)
   const eodStart = sp ? sp.eodStartMins : CONFIG.eodStartMins;   // 1080 (18:00 IST)
@@ -939,6 +944,7 @@ function scheduledCapture() {
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(100)) {
+    properties.setProperty('COLLECTOR_STATUS', 'capture overlap; retrying next minute ' + new Date().toISOString());
     addRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now() - started);
     return;
   }
@@ -952,6 +958,22 @@ function scheduledCapture() {
       properties.setProperty('INTERVAL_MINUTES', '1');
     }
     const slot = today + '|' + Math.floor((mins - snapStart) / interval);
+
+    if (mode === 'snapshot') {
+      const previousSlot = String(properties.getProperty('LAST_SNAPSHOT_SLOT') || '');
+      const previousParts = previousSlot.split('|');
+      const currentSlotNumber = Number(slot.split('|')[1]);
+      const previousSlotNumber = Number(previousParts[1]);
+      if (previousParts[0] !== today) {
+        properties.deleteProperty('SNAPSHOT_GAP');
+        properties.deleteProperty('SNAPSHOT_GAP_DAY');
+      }
+      if (previousParts[0] === today && Number.isFinite(previousSlotNumber)
+          && Number.isFinite(currentSlotNumber) && currentSlotNumber > previousSlotNumber + 1) {
+        properties.setProperty('SNAPSHOT_GAP', previousSlot + ' to ' + slot + ' detected ' + new Date().toISOString());
+        properties.setProperty('SNAPSHOT_GAP_DAY', today);
+      }
+    }
 
     if (mode === 'snapshot' && properties.getProperty('LAST_SNAPSHOT_SLOT') === slot) {
       return;
@@ -978,6 +1000,7 @@ function scheduledCapture() {
 
     if (mode === 'snapshot' && result.status === 'complete') {
       properties.setProperty('LAST_SNAPSHOT_SLOT', slot);
+      properties.setProperty('LAST_SNAPSHOT_AT_MS', String(Date.now()));
       if (result.file_id) {
         properties.setProperty('LATEST_SNAPSHOT_FILE_ID', result.file_id);
       }
@@ -1009,8 +1032,7 @@ function scheduledCapture() {
 }
 
 /**
- * Reconcile prior session partial EOD captures and run 7-day rolling minute-snapshot pruning
- * between 07:00 and 09:00 IST.
+ * Reconcile prior-session partial EOD captures between 07:00 and 09:00 IST.
  */
 function reconcilePriorSession() {
   const properties = props_();
@@ -1026,19 +1048,19 @@ function reconcilePriorSession() {
   let attempted = false;
 
   try {
-    // Run daily 7-day rolling retention pruning of consolidated 1-minute snapshots
+    // Deliberately a no-op: raw minute archives are retained indefinitely.
     attempted = true;
     try { pruneOldMinuteSnapshots_(CONFIG.snapshotRetentionDays); } catch (pruneErr) {}
     if (Date.now() - started > 60000) return;
 
     let pending = loadPendingEod_();
     let completedMap = capCompletedEodDays_(
-      JSON.parse(properties.getProperty('COMPLETED_EOD_DAYS') || '{}'),
+      readJsonProperty_(properties, 'COMPLETED_EOD_DAYS', {}),
       CONFIG.completedEodMaxDays
     );
 
     if (!properties.getProperty('RECONCILIATION_MIGRATED')) {
-      const last = JSON.parse(properties.getProperty('LAST_EOD') || 'null');
+      const last = readJsonProperty_(properties, 'LAST_EOD', null);
       if (last && last.status !== 'complete' && last.file_id) {
         pending[last.day] = last.file_id;
       }
@@ -1110,8 +1132,8 @@ function auditStatus() {
     snapshot_retention_days: CONFIG.snapshotRetentionDays,
     completed_eod_cap_days: CONFIG.completedEodMaxDays,
     status: properties.getProperty('COLLECTOR_STATUS'),
-    last_snapshot: JSON.parse(properties.getProperty('LAST_SNAPSHOT') || 'null'),
-    last_eod: JSON.parse(properties.getProperty('LAST_EOD') || 'null')
+    last_snapshot: readJsonProperty_(properties, 'LAST_SNAPSHOT', null),
+    last_eod: readJsonProperty_(properties, 'LAST_EOD', null)
   }));
 }
 
@@ -1151,7 +1173,10 @@ function doGet(e) {
         regular_window_ist: '09:15-15:31',
         triggers: triggers,
         calendar: properties.getProperty('MARKET_CALENDAR'),
-        budget: properties.getProperty('RUNTIME_BUDGET')
+        budget: properties.getProperty('RUNTIME_BUDGET'),
+        last_snapshot_at_ms: properties.getProperty('LAST_SNAPSHOT_AT_MS'),
+        snapshot_gap: properties.getProperty('SNAPSHOT_GAP'),
+        raw_snapshot_retention: 'indefinite'
       });
       if (cache) {
         try { cache.put('DOGET_STATUS_JSON', statusJson, CONFIG.doGetCacheSeconds); } catch (e) {}
@@ -1192,22 +1217,13 @@ function doGet(e) {
     }
 
     if (!file) {
-      const folder = folder_();
-      const files = folder.getFiles();
-      let latestTime = 0;
-      let count = 0;
-      while (files.hasNext() && count < 60) {
-        const f = files.next();
-        count++;
-        const name = f.getName();
-        if (name.endsWith('_complete.json.gz')) {
-          const time = f.getLastUpdated().getTime();
-          if (time > latestTime) {
-            latestTime = time;
-            file = f;
-          }
-        }
-      }
+      // A lost file-id must not make recovery dependent on Drive's arbitrary
+      // iterator order or a small prefix of an indefinitely retained archive.
+      const page = listDriveFilesPage_(folder_().getId(), '', 'modifiedTime desc');
+      const latest = (page.files || []).find(f =>
+        /^\d{4}-\d{2}-\d{2}_snapshot_\d{6}_complete\.json\.gz$/.test(f.name)
+      );
+      if (latest && latest.id) file = DriveApp.getFileById(latest.id);
     }
 
     if (!file) {
@@ -1217,6 +1233,21 @@ function doGet(e) {
 
     const uncompressed = Utilities.ungzip(file.getBlob());
     const payload = JSON.parse(uncompressed.getDataAsString());
+    if (payload.schema !== 1 || payload.provider !== 'Upstox' || payload.mode !== 'snapshot'
+        || payload.status !== 'complete' || payload.nfo_session_validated !== true
+        || !Array.isArray(payload.records) || !payload.records.length) {
+      throw new Error('Latest archived snapshot is incomplete or invalid');
+    }
+    const capturedAt = timestampMillis_(payload.retrieved_at);
+    payload.capture_integrity = {
+      status: properties.getProperty('COLLECTOR_STATUS'),
+      captured_at: payload.retrieved_at || null,
+      age_seconds: Number.isFinite(capturedAt) ? Math.max(0, (Date.now() - capturedAt) / 1000) : null,
+      snapshot_gap: properties.getProperty('SNAPSHOT_GAP_DAY') === String(payload.day || '').slice(0, 10)
+        ? (properties.getProperty('SNAPSHOT_GAP') || 'Detected snapshot gap')
+        : null,
+      raw_snapshot_retention: 'indefinite'
+    };
     try { payload.forward_test_ledger = loadForwardLedger_(); } catch (fwdErr) {}
     const outStr = JSON.stringify(payload);
     if (cache && outStr.length < 95000) {
@@ -1251,7 +1282,8 @@ function upstoxOptionCharge_(price, qty, isSell) {
   const turnover = Math.abs(Number(price || 0) * Number(qty || 0));
   const brokerage = 20.0;
   const stt = isSell ? turnover * 0.0015 : 0.0;
-  const exch = turnover * 0.0003503;
+  // NSE equity-options transaction charge plus IPFT effective 2026-03-01.
+  const exch = turnover * 0.0003553;
   const sebi = turnover * 0.000001;
   const ipft = turnover * 0.000005;
   const stamp = isSell ? 0.0 : turnover * 0.00003;
@@ -1383,29 +1415,31 @@ function executableQuote_(node, type, side, quantity, isExit, referenceTimestamp
   return buy ? ask : bid;
 }
 
+const FORWARD_SESSION_WINDOWS_ = {};
+
 function getNseMarketStatusIST(nowOpt) {
   const d = nowOpt instanceof Date ? nowOpt : (nowOpt ? new Date(nowOpt) : new Date());
   const isoDay = day_(d);
   const mins = minute_(d);
   const hmLabel = Utilities.formatDate(d, CONFIG.timeZone, 'HH:mm');
   const timeIstLabel = Utilities.formatDate(d, CONFIG.timeZone, 'dd MMM HH:mm') + ' IST';
-  if (SPECIAL_SESSIONS[isoDay]) {
-    const sp = SPECIAL_SESSIONS[isoDay];
-    const openSp = mins >= sp.startMins && mins <= sp.endMins;
-    return { open: openSp, isOpen: openSp, isoDay: isoDay, mins: mins, hmLabel: hmLabel, timeIstLabel: timeIstLabel };
+  let session = FORWARD_SESSION_WINDOWS_[isoDay];
+  if (!session || session.label === 'Market calendar unavailable') {
+    session = marketWindow_(d);
+    FORWARD_SESSION_WINDOWS_[isoDay] = session;
   }
-  const dow = Number(Utilities.formatDate(d, CONFIG.timeZone, 'u'));
-  const isWeekend = dow >= 6;
-  const closedToday = (isoDay === '2026-11-10') || isWeekend;
-  const inHours = mins >= CONFIG.regularStartMins && mins <= CONFIG.regularEndMins;
-  const isOpen = !closedToday && inHours;
-  return { open: isOpen, isOpen: isOpen, isoDay: isoDay, mins: mins, hmLabel: hmLabel, timeIstLabel: timeIstLabel };
+  const isOpen = !session.closed && mins >= session.startMins && mins <= session.endMins;
+  return {
+    open: isOpen, isOpen: isOpen, isoDay: isoDay, mins: mins,
+    hmLabel: hmLabel, timeIstLabel: timeIstLabel,
+    reason: isOpen ? (session.label || 'OPEN') : (session.label || 'CLOSED')
+  };
 }
 
 function isValidForwardRecord_(rec) {
   if (!rec || typeof rec !== 'object') return false;
   const sDate = String(rec.session_date || rec.date || '').slice(0, 10);
-  if (!sDate || sDate < MIN_FORWARD_DATE) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(sDate) || sDate < MIN_FORWARD_DATE) return false;
   const trig = String(rec.triggerTime || rec.trigTime || rec.entryTime || '');
   if (/^\d{4}-\d{2}-\d{2}T/.test(trig) && !/(Z|[+-]\d{2}:\d{2})$/i.test(trig)) return false;
   const parsed = timestampMillis_(trig);
@@ -1429,6 +1463,25 @@ function isValidForwardRecord_(rec) {
   return triggerDate === sDate && triggerMins >= 560 && triggerMins < 915;
 }
 
+function inScopeForwardRecord_(rec) {
+  const sDate = String((rec && (rec.session_date || rec.date)) || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(sDate) && sDate >= MIN_FORWARD_DATE;
+}
+
+function retainForwardRecords_(items, isOpenPosition) {
+  if (!Array.isArray(items)) return [];
+  return items.filter(inScopeForwardRecord_).map(item => {
+    const saved = JSON.parse(JSON.stringify(item));
+    if (!isValidForwardRecord_(saved)) {
+      saved.integrity_status = 'UNVERIFIED_RECORD';
+      saved.freshness = 'STALE';
+      saved.staleReason = 'Forward record lacks a verifiable in-session trigger timestamp; automatic marking and exit are withheld.';
+      if (isOpenPosition) saved.manual_reconciliation_required = true;
+    }
+    return saved;
+  });
+}
+
 function cleanSlateForwardLedger_() {
   return {
     schema: 2,
@@ -1447,15 +1500,17 @@ function cleanSlateForwardLedger_() {
 function sanitizeForwardLedger_(raw) {
   const base = cleanSlateForwardLedger_();
   if (!raw || typeof raw !== 'object') return base;
-  base.open_positions = Array.isArray(raw.open_positions) ? raw.open_positions.filter(isValidForwardRecord_) : [];
-  base.closed_trades = Array.isArray(raw.closed_trades) ? raw.closed_trades.filter(isValidForwardRecord_) : [];
+  base.open_positions = retainForwardRecords_(raw.open_positions, true);
+  base.closed_trades = retainForwardRecords_(raw.closed_trades, false);
   base.intraday_mtm_series = Array.isArray(raw.intraday_mtm_series)
     ? raw.intraday_mtm_series.filter(pt => pt && String(pt.session_date || pt.date || MIN_FORWARD_DATE).slice(0, 10) >= MIN_FORWARD_DATE)
     : [];
   if (raw.updated_at) base.updated_at = raw.updated_at;
-  base.status = (base.open_positions.length || base.closed_trades.length)
-    ? (raw.status || 'ACTIVE_FORWARD_TESTING')
-    : 'ARMED_WAITING_FOR_NEXT_SESSION';
+  base.status = base.open_positions.some(pos => pos.manual_reconciliation_required)
+    ? 'INTEGRITY_REVIEW_REQUIRED'
+    : ((base.open_positions.length || base.closed_trades.length)
+      ? (raw.status || 'ACTIVE_FORWARD_TESTING')
+      : 'ARMED_WAITING_FOR_NEXT_SESSION');
   return base;
 }
 
@@ -1565,7 +1620,20 @@ function evaluateForwardTest_(report) {
       pos.staleReason = 'No live option-chain records in snapshot';
       if (mins >= 915) pos.exit_pending = true;
     });
-    if (ledger.open_positions.length) saveForwardLedger_(ledger);
+    ledger.intraday_mtm_series = (Array.isArray(ledger.intraday_mtm_series) ? ledger.intraday_mtm_series : [])
+      .filter(point => !(String(point.session_date || point.date || '').slice(0, 10) === snapshotDay && String(point.t || '') === hmLabel));
+    ledger.intraday_mtm_series.push({
+      session_date: snapshotDay,
+      t: hmLabel,
+      time_ist: timeIstLabel,
+      gross_mtm: null,
+      net_mtm: null,
+      open_count: ledger.open_positions.length,
+      closed_count: ledger.closed_trades.filter(trade => String(trade.session_date || trade.date || '').slice(0, 10) === snapshotDay).length,
+      integrity_status: 'WITHHELD_NO_LIVE_OPTION_CHAIN'
+    });
+    ledger.updated_at = snapDate.toISOString();
+    saveForwardLedger_(ledger);
     report.forward_test_ledger = ledger;
     return ledger;
   }
@@ -1728,6 +1796,14 @@ function evaluateForwardTest_(report) {
 
   const stillOpen = [];
   ledger.open_positions.forEach(pos => {
+    if (!isValidForwardRecord_(pos)) {
+      pos.freshness = 'STALE';
+      pos.integrity_status = 'UNVERIFIED_RECORD';
+      pos.manual_reconciliation_required = true;
+      pos.staleReason = 'Forward record lacks a verifiable in-session trigger timestamp; automatic marking and exit are withheld.';
+      stillOpen.push(pos);
+      return;
+    }
     const key = pos.sym + '|' + pos.exp;
     const ch = chainMap[key];
     const positionMkt = ch && ch.mkt ? ch.mkt : mkt;
@@ -1758,6 +1834,7 @@ function evaluateForwardTest_(report) {
 
     pos.freshness = 'FRESH';
     delete pos.staleReason;
+    pos.integrity_status = 'VALIDATED_FRESH_EXECUTABLE_MARK';
     pos.grossMtm = Number(gross.toFixed(2));
     pos.estCharges = positionCharges_(pos.legs, pos.sym, true);
     pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
@@ -1802,7 +1879,45 @@ function evaluateForwardTest_(report) {
     }
   });
   ledger.open_positions = stillOpen;
-  ledger.status = stillOpen.length ? 'ACTIVE_LIVE_SESSION' : (ledger.closed_trades.length ? 'SESSION_COMPLETED_1515_IST' : 'ARMED_WAITING_FOR_NEXT_SESSION');
+  // Do not carry a prior aggregate MTM forward across a missing or
+  // unverified position mark.  The series explicitly withholds the point so
+  // display consumers cannot mistake an old total for a current valuation.
+  const sessionClosed = ledger.closed_trades.filter(trade =>
+    String(trade.session_date || trade.date || '').slice(0, 10) === snapshotDay
+  );
+  const marksWithheld = stillOpen.some(pos =>
+    String(pos.freshness || '').toUpperCase() !== 'FRESH'
+    || String(pos.integrity_status || '') === 'UNVERIFIED_RECORD'
+    || Boolean(pos.manual_reconciliation_required)
+  );
+  const mtmPoint = {
+    session_date: snapshotDay,
+    t: hmLabel,
+    time_ist: timeIstLabel,
+    open_count: stillOpen.length,
+    closed_count: sessionClosed.length
+  };
+  if (marksWithheld) {
+    mtmPoint.gross_mtm = null;
+    mtmPoint.net_mtm = null;
+    mtmPoint.integrity_status = 'WITHHELD_STALE_OR_UNVERIFIED_POSITION';
+  } else {
+    mtmPoint.gross_mtm = Number((
+      stillOpen.reduce((sum, pos) => sum + Number(pos.grossMtm || 0), 0)
+      + sessionClosed.reduce((sum, trade) => sum + Number(trade.gross || 0), 0)
+    ).toFixed(2));
+    mtmPoint.net_mtm = Number((
+      stillOpen.reduce((sum, pos) => sum + Number(pos.netMtm || 0), 0)
+      + sessionClosed.reduce((sum, trade) => sum + Number(trade.net || 0), 0)
+    ).toFixed(2));
+    mtmPoint.integrity_status = 'VALIDATED_FRESH_EXECUTABLE_MARKS';
+  }
+  ledger.intraday_mtm_series = (Array.isArray(ledger.intraday_mtm_series) ? ledger.intraday_mtm_series : [])
+    .filter(point => !(String(point.session_date || point.date || '').slice(0, 10) === snapshotDay && String(point.t || '') === hmLabel));
+  ledger.intraday_mtm_series.push(mtmPoint);
+  ledger.status = stillOpen.some(pos => pos.manual_reconciliation_required)
+    ? 'INTEGRITY_REVIEW_REQUIRED'
+    : (stillOpen.length ? 'ACTIVE_LIVE_SESSION' : (ledger.closed_trades.length ? 'SESSION_COMPLETED_1515_IST' : 'ARMED_WAITING_FOR_NEXT_SESSION'));
 
   saveForwardLedger_(ledger);
   report.forward_test_ledger = ledger;

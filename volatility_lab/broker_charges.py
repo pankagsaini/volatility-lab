@@ -6,9 +6,14 @@ import json
 ROOT = Path(__file__).resolve().parent
 STORE = ROOT / 'data' / 'charges' / 'upstox'
 
+# Dated against the NSE transaction-charge circular effective 2026-03-01 and
+# the STT change effective 2026-04-01.  Keep the version alongside reports so
+# historical simulations retain their original cost convention.
+CHARGE_MODEL_VERSION = 'upstox-nse-2026-03-v3'
+
 REGIMES = [
-    (date(2026, 4, 1), {'fut_stt': 0.0005, 'opt_stt': 0.0015, 'fut_exch': 0.0000173, 'opt_exch': 0.0003503, 'fut_stamp': 0.00002, 'opt_stamp': 0.00003, 'sebi': 0.000001, 'ipft_fut': 0.000001, 'ipft_opt': 0.000005, 'stt_opt_sell': 0.0015, 'stt_fut_sell': 0.0005, 'exch_opt': 0.0003553, 'exch_fut': 0.0000183, 'ipft': 0.000005}),
-    (date(2026, 3, 1), {'fut_stt': 0.0002, 'opt_stt': 0.001,  'fut_exch': 0.0000173, 'opt_exch': 0.0003503, 'fut_stamp': 0.00002, 'opt_stamp': 0.00003, 'sebi': 0.000001, 'ipft_fut': 0.000001, 'ipft_opt': 0.000005, 'stt_opt_sell': 0.0010, 'stt_fut_sell': 0.0002, 'exch_opt': 0.0003553, 'exch_fut': 0.0000183, 'ipft': 0.000005}),
+    (date(2026, 4, 1), {'fut_stt': 0.0005, 'opt_stt': 0.0015, 'fut_exch': 0.0000183, 'opt_exch': 0.0003553, 'fut_stamp': 0.00002, 'opt_stamp': 0.00003, 'sebi': 0.000001, 'ipft_fut': 0.000001, 'ipft_opt': 0.000005, 'stt_opt_sell': 0.0015, 'stt_fut_sell': 0.0005, 'exch_opt': 0.0003553, 'exch_fut': 0.0000183, 'ipft': 0.000005}),
+    (date(2026, 3, 1), {'fut_stt': 0.0002, 'opt_stt': 0.001,  'fut_exch': 0.0000183, 'opt_exch': 0.0003553, 'fut_stamp': 0.00002, 'opt_stamp': 0.00003, 'sebi': 0.000001, 'ipft_fut': 0.000001, 'ipft_opt': 0.000005, 'stt_opt_sell': 0.0010, 'stt_fut_sell': 0.0002, 'exch_opt': 0.0003553, 'exch_fut': 0.0000183, 'ipft': 0.000005}),
     (date(2024, 10, 1), {'fut_stt': 0.0002, 'opt_stt': 0.001,  'fut_exch': 0.0000173, 'opt_exch': 0.0003503, 'fut_stamp': 0.00002, 'opt_stamp': 0.00003, 'sebi': 0.000001, 'ipft_fut': 0.000001, 'ipft_opt': 0.000005, 'stt_opt_sell': 0.0010, 'stt_fut_sell': 0.0002, 'exch_opt': 0.0003503, 'exch_fut': 0.0000173, 'ipft': 0.000005}),
     (date(1970, 1, 1), {'fut_stt': 0.000125, 'opt_stt': 0.000625, 'fut_exch': 0.0000188, 'opt_exch': 0.000495, 'fut_stamp': 0.00002, 'opt_stamp': 0.00003, 'sebi': 0.000001, 'ipft_fut': 0.000001, 'ipft_opt': 0.000005, 'stt_opt_sell': 0.000625, 'stt_fut_sell': 0.000125, 'exch_opt': 0.000495, 'exch_fut': 0.000019, 'ipft': 0.000005}),
 ]

@@ -67,12 +67,62 @@ def check_row(row,payload,prices):
             hv=statistics.stdev(returns)*math.sqrt(245)*100
     check('HV30 %',row.get('HV30'),hv)
     check('IV − HV30 · pp',row.get('IV-RV Spread'),mean-hv if mean is not None and hv is not None else None)
-    future=next((item for item in payload.get('contracts',[]) if item.get('instrument_type')=='FUT'),None)
-    future_quote=(payload.get('quotes') or {}).get('NFO:'+future['tradingsymbol'],{}) if future else None
-    synthetic=synthetic_future(raw,spot,future_quote,future)
+    expiry = str(row.get('Expiry') or '')[:10]
+    def same_month(left, right):
+        try:
+            a, b = pd.Timestamp(left), pd.Timestamp(right)
+            return (a.year, a.month) == (b.year, b.month)
+        except (TypeError, ValueError):
+            return False
+    matching_futures=[
+        item for item in payload.get('contracts', [])
+        if str(item.get('instrument_type', '')).upper() == 'FUT'
+        and same_month(item.get('expiry'), expiry)
+    ]
+    # The audit must not pick an arbitrary contract when the saved response is
+    # ambiguous about which monthly future belongs to this option expiry.
+    future=matching_futures[0] if len(matching_futures)==1 else None
+    future_symbol=(future.get('tradingsymbol') or future.get('trading_symbol')) if future else None
+    future_quote=(payload.get('quotes') or {}).get('NFO:'+future_symbol,{}) if future_symbol else None
+    if isinstance(future_quote, dict) and future:
+        future_quote = dict(future_quote)
+        future_quote['expiry'] = str(future.get('expiry') or '')[:10]
+    as_of = payload.get('broker_received_at') or payload.get('valuation')
+    spot_quote = payload.get('spot_quote') or {}
+    years = 7.0 / 365.0
+    try:
+        valuation = pd.Timestamp(as_of)
+        expiry_close = pd.Timestamp(expiry).tz_localize('Asia/Kolkata') + pd.Timedelta(hours=15, minutes=30)
+        if valuation.tzinfo is not None:
+            years = max(0.0, (expiry_close - valuation.tz_convert('Asia/Kolkata')).total_seconds() / (365.0 * 86400.0))
+    except (TypeError, ValueError):
+        pass
+    # Reconstruct only explicitly timestamped two-sided books.  Nested broker
+    # chain rows and LTPs are not valid inputs to parity valuation.
+    normalized_quotes=[]
+    for source_row in raw:
+        try:
+            strike=float(source_row.get('strike_price'))
+        except (TypeError,ValueError):
+            continue
+        for side,kind in (('call_options','CE'),('put_options','PE')):
+            market=(source_row.get(side) or {}).get('market_data') or {}
+            normalized_quotes.append({
+                'expiry':str(source_row.get('expiry') or '')[:10],
+                'strike':strike,
+                'option_type':kind,
+                'bid':market.get('bid_price'),
+                'ask':market.get('ask_price'),
+                'timestamp':market.get('quote_timestamp') or market.get('timestamp'),
+            })
+    synthetic=synthetic_future(
+        normalized_quotes, spot, years=years, future_quote=future_quote, future_contract=future,
+        expiry=expiry, as_of=as_of,
+        spot_timestamp=spot_quote.get('timestamp'),
+    )
     check('ATM synthetic future',row.get('Synthetic future'),synthetic.get('Synthetic future'))
-    check('Listed futures LTP',row.get('Listed future'),synthetic.get('Listed future'))
-    check('Synthetic − future',row.get('Synthetic − future'),synthetic.get('Synthetic − future'))
+    check('Month future LTP',row.get('Month future LTP', row.get('Listed future')),synthetic.get('Month future LTP'))
+    check('Synthetic − future',row.get('Basis', row.get('Synthetic − future')),synthetic.get('Basis'))
     return checks
 
 

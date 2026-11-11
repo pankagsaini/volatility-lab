@@ -14,7 +14,13 @@ def number(value):
 
 
 def timestamp(value):
-    stamp=pd.Timestamp(value)
+    if value is None or value=='':raise ValueError('Missing timestamp')
+    if isinstance(value,(int,float)) or str(value).strip().isdigit():
+        numeric=float(value)
+        if not math.isfinite(numeric):raise ValueError('Invalid timestamp')
+        stamp=pd.to_datetime(numeric,unit='ms' if abs(numeric)>1e11 else 's',utc=True)
+    else:
+        stamp=pd.Timestamp(value)
     if pd.isna(stamp):raise ValueError('Missing timestamp')
     return stamp.tz_localize(IST) if stamp.tzinfo is None else stamp.tz_convert(IST)
 
