@@ -379,7 +379,7 @@ function apiAll_(requests) {
         },
         muteHttpExceptions: true,
         followRedirects: false,
-        timeoutSeconds: 120
+        timeoutSeconds: 60
       };
     });
     const responses = UrlFetchApp.fetchAll(payloads);
@@ -628,6 +628,10 @@ function capture_(mode, recovery) {
   };
 
   try {
+    if (mode === 'snapshot') {
+      if (marketClosed_(now)) throw new Error('NFO session is closed');
+      report.nfo_session_validated = true;
+    }
     const catalogue = recovery ? recovery.catalogue : catalogue_(now);
     report.catalogue = catalogue;
     const targetDay = recovery ? recovery.target_day : today;
@@ -671,7 +675,7 @@ function capture_(mode, recovery) {
 
     const responses = apiAll_(requests);
     for (const res of responses) {
-      if (Date.now() - started > 210000) {
+      if (Date.now() - started > 180000) {
         report.errors.push({ item: res.label, reason: 'Runtime budget exhausted' });
         continue;
       }
@@ -723,9 +727,21 @@ function capture_(mode, recovery) {
   }
 
   report.fetch_seconds = (Date.now() - started) / 1000;
+  // Session gates use the completed capture time; per-instrument event times
+  // remain separate and are validated before entry or MTM.
+  report.retrieved_at = new Date().toISOString();
 
   if (mode === 'snapshot' && report.records && report.records.length) {
-    try { evaluateForwardTest_(report); } catch (fwdErr) { console.log('Forward test warning: ' + fwdErr); }
+    try {
+      const forwardLedger = evaluateForwardTest_(report);
+      if (!forwardLedger) throw new Error('Forward evaluator returned no ledger');
+      report.forward_test_status = 'complete';
+    } catch (fwdErr) {
+      report.forward_test_status = 'failed';
+      report.errors.push({ item: 'forward_test', reason: safeError_(fwdErr) });
+      report.status = 'partial';
+      console.log('Forward test failed; snapshot marked partial: ' + safeError_(fwdErr));
+    }
   }
 
   const fileName = (report.target_day || today) + '_' + mode + '_' + Utilities.formatDate(now, CONFIG.timeZone, 'HHmmss') + '_' + report.status;
@@ -1316,16 +1332,45 @@ function buildStrategyLegs_(sym, K, stratCode) {
 const MIN_FORWARD_DATE = '2026-11-11';
 const MAX_FORWARD_QUOTE_AGE_MS = 120000;
 
-function forwardQuoteFresh_(timestamp) {
-  const observed = Date.parse(timestamp || '');
-  if (!Number.isFinite(observed)) return false;
-  const age = Date.now() - observed;
+function timestampMillis_(timestamp) {
+  if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
+    return timestamp > 1e11 ? timestamp : timestamp * 1000;
+  }
+  const value = String(timestamp || '').trim();
+  if (/^\d{13}$/.test(value)) return Number(value);
+  if (/^\d{10}$/.test(value)) return Number(value) * 1000;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function forwardQuoteTimestamp_(marketData) {
+  if (!marketData || typeof marketData !== 'object') return null;
+  for (const key of ['quote_timestamp', 'feed_timestamp', 'currentTs', 'ts']) {
+    if (marketData[key] !== undefined && marketData[key] !== null) return marketData[key];
+  }
+  return null;
+}
+
+function forwardIvPercent_(value) {
+  const iv = Number(value);
+  if (!Number.isFinite(iv) || iv <= 0 || iv > 500) return NaN;
+  if (iv <= 1) return iv * 100;
+  if (iv < 5) return NaN; // Unit cannot be inferred safely in this interval.
+  return iv;
+}
+
+function forwardQuoteFresh_(timestamp, referenceTimestamp) {
+  const observed = timestampMillis_(timestamp);
+  const reference = referenceTimestamp === undefined ? Date.now() : timestampMillis_(referenceTimestamp);
+  if (!Number.isFinite(observed) || !Number.isFinite(reference)) return false;
+  const age = reference - observed;
   return age >= -30000 && age <= MAX_FORWARD_QUOTE_AGE_MS;
 }
 
-function executableQuote_(node, type, side, quantity, isExit) {
+function executableQuote_(node, type, side, quantity, isExit, referenceTimestamp) {
   if (!node) return 0;
   const prefix = type === 'CE' ? 'c' : 'p';
+  if (!forwardQuoteFresh_(node[prefix + 'QuoteAt'], referenceTimestamp)) return 0;
   const bid = Number(node[prefix + 'Bid'] || 0);
   const ask = Number(node[prefix + 'Ask'] || 0);
   const bidQty = Number(node[prefix + 'BidQty'] || 0);
@@ -1362,14 +1407,32 @@ function isValidForwardRecord_(rec) {
   const sDate = String(rec.session_date || rec.date || '').slice(0, 10);
   if (!sDate || sDate < MIN_FORWARD_DATE) return false;
   const trig = String(rec.triggerTime || rec.trigTime || rec.entryTime || '');
-  if (trig.indexOf('2026-11-0') === 0 || /^0[1-9]\s+Nov/i.test(trig)) return false;
-  return true;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(trig) && !/(Z|[+-]\d{2}:\d{2})$/i.test(trig)) return false;
+  const parsed = timestampMillis_(trig);
+  let triggerDate = '';
+  let triggerMins = NaN;
+  if (Number.isFinite(parsed)) {
+    const date = new Date(parsed);
+    triggerDate = day_(date);
+    triggerMins = minute_(date);
+  } else {
+    const hm = trig.match(/(?:^|\D)(\d{1,2}):(\d{2})(?:\s*IST)?\b/i);
+    if (!hm) return false;
+    triggerDate = sDate;
+    triggerMins = Number(hm[1]) * 60 + Number(hm[2]);
+    const monthDay = trig.match(/\b(\d{1,2})\s+([A-Za-z]{3})\b/i);
+    if (monthDay) {
+      const parsedDay = new Date(Date.parse(monthDay[1] + ' ' + monthDay[2] + ' ' + sDate.slice(0, 4) + ' 00:00:00 UTC'));
+      if (!Number.isFinite(parsedDay.getTime()) || day_(parsedDay) !== sDate) return false;
+    }
+  }
+  return triggerDate === sDate && triggerMins >= 560 && triggerMins < 915;
 }
 
 function cleanSlateForwardLedger_() {
   return {
-    schema: 1,
-    version: 'forward-test-v19.1-clean',
+    schema: 2,
+    version: 'forward-test-v20.1-event-time-gated',
     pricing_model: 'Black-76',
     inception_date: MIN_FORWARD_DATE,
     min_trigger_date: MIN_FORWARD_DATE,
@@ -1454,6 +1517,24 @@ function saveForwardLedger_(ledger) {
   return file.getId();
 }
 
+function forwardRiskMetrics_(report, sym, snapshotDay) {
+  const all = report && report.risk_metrics;
+  const item = all && all[sym];
+  if (!item || typeof item !== 'object') return { hv10: NaN, hv30: NaN, item: null };
+  const asOf = String(item.as_of || '').slice(0, 10);
+  const asOfMs = Date.parse(asOf + 'T00:00:00Z');
+  const sessionMs = Date.parse(snapshotDay + 'T00:00:00Z');
+  const ageDays = (sessionMs - asOfMs) / 86400000;
+  if (!Number.isFinite(ageDays) || ageDays < 0 || ageDays > 5) {
+    return { hv10: NaN, hv30: NaN, item: null };
+  }
+  return {
+    hv10: forwardIvPercent_(item.hv10),
+    hv30: forwardIvPercent_(item.hv30),
+    item: item
+  };
+}
+
 /**
  * Evaluates all active expiries against S1–S6 during capture_('snapshot'),
  * using Black-76 Put-Call Parity Forward F = K + exp(r*T)*(C - P) and
@@ -1461,9 +1542,12 @@ function saveForwardLedger_(ledger) {
  */
 function evaluateForwardTest_(report) {
   if (!report || !Array.isArray(report.records)) return null;
+  if (report.nfo_session_validated !== true) throw new Error('NFO trading session was not validated');
   const snapDate = report.retrieved_at ? new Date(report.retrieved_at) : new Date();
+  if (!Number.isFinite(snapDate.getTime())) throw new Error('Invalid snapshot timestamp');
   const mkt = getNseMarketStatusIST(snapDate);
   const snapshotDay = String(report.day || mkt.isoDay).slice(0, 10);
+  if (snapshotDay !== mkt.isoDay) throw new Error('Snapshot day does not match its timestamp');
   const mins = mkt.mins;
   const timeIstLabel = mkt.timeIstLabel;
   const hmLabel = mkt.hmLabel;
@@ -1508,14 +1592,19 @@ function evaluateForwardTest_(report) {
         pAsk: Number(pm.ask_price || 0),
         pBidQty: Number(pm.bid_qty || 0),
         pAskQty: Number(pm.ask_qty || 0),
-        cIv: Number(cg.iv || 0),
-        pIv: Number(pg.iv || 0)
+        cIv: forwardIvPercent_(cg.iv),
+        pIv: forwardIvPercent_(pg.iv),
+        cQuoteAt: forwardQuoteTimestamp_(cm),
+        pQuoteAt: forwardQuoteTimestamp_(pm)
       };
     });
+    const recTime = rec.retrieved_at || null;
     chainMap[rec.label] = {
       spot: spot,
       strikes: strikes,
-      fresh: forwardQuoteFresh_(rec.retrieved_at)
+      retrievedAt: recTime,
+      mkt: recTime ? getNseMarketStatusIST(new Date(recTime)) : null,
+      fresh: Boolean(recTime) && forwardQuoteFresh_(recTime)
     };
   });
 
@@ -1532,36 +1621,56 @@ function evaluateForwardTest_(report) {
       const parts = key.split('|');
       const sym = parts[0], exp = parts[1];
       const ch = chainMap[key];
-      if (!ch || !Number.isFinite(ch.spot) || ch.spot <= 0 || !ch.fresh) return;
+      const chainMkt = ch && ch.mkt;
+      if (!ch || !Number.isFinite(ch.spot) || ch.spot <= 0 || !ch.fresh || !chainMkt
+          || chainMkt.isoDay !== snapshotDay || !chainMkt.open
+          || chainMkt.mins < 560 || chainMkt.mins >= 915) return;
       const step = sym === 'NIFTY' ? 50 : 100;
       const lotQty = sym === 'NIFTY' ? 65 : 30;
       const K = Math.round(ch.spot / step) * step;
       const atmNode = ch.strikes[K];
-      if (!atmNode || !atmNode.cIv || !atmNode.pIv) return;
+      if (!atmNode || !(Number.isFinite(atmNode.cIv) && atmNode.cIv > 0)
+          || !(Number.isFinite(atmNode.pIv) && atmNode.pIv > 0)
+          || !forwardQuoteFresh_(atmNode.cQuoteAt, ch.retrievedAt)
+          || !forwardQuoteFresh_(atmNode.pQuoteAt, ch.retrievedAt)) return;
 
-      const dte = Math.max(1, Math.round((Date.parse(exp + 'T15:30:00+05:30') - snapDate.getTime()) / 86400000));
-      const years = dte / 365.0;
+      const expiryMs = Date.parse(exp + 'T15:30:00+05:30');
+      const secondsToExpiry = (expiryMs - new Date(ch.retrievedAt).getTime()) / 1000.0;
+      if (!Number.isFinite(secondsToExpiry) || secondsToExpiry <= 0) return;
+      const dte = Math.ceil(secondsToExpiry / 86400.0);
+      const years = secondsToExpiry / (365.0 * 86400.0);
       const iv = Number((0.5 * (atmNode.cIv + atmNode.pIv)).toFixed(2));
-      const hv10 = sym === 'NIFTY' ? 14.82 : 17.70;
-      const hv30 = sym === 'NIFTY' ? 14.45 : 15.76;
-      const vrp30 = Number((iv - hv30).toFixed(2));
-      const vrp10 = Number((iv - hv10).toFixed(2));
+      const riskMetrics = forwardRiskMetrics_(report, sym, snapshotDay);
+      const hv10 = riskMetrics.hv10;
+      const hv30 = riskMetrics.hv30;
+      const hv10Valid = Number.isFinite(hv10) && hv10 > 0;
+      const hv30Valid = Number.isFinite(hv30) && hv30 > 0;
+      const vrp30 = hv30Valid ? Number((iv - hv30).toFixed(2)) : NaN;
+      const vrp10 = hv10Valid ? Number((iv - hv10).toFixed(2)) : NaN;
       const wShort = sym === 'NIFTY' ? 200 : 400;
-      const p25Node = ch.strikes[K - wShort] || atmNode;
-      const c25Node = ch.strikes[K + wShort] || atmNode;
-      const rev25 = Number(((p25Node.pIv || iv) - (c25Node.cIv || iv)).toFixed(2));
-      const bfly25 = Number((0.5 * ((p25Node.pIv || iv) + (c25Node.cIv || iv)) - iv).toFixed(2));
-      // Black-76 Put-Call Parity Implied Forward F = K + exp(r * T) * (C - P)
-      const syn = Number((K + Math.exp(CONFIG.riskFreeRate * years) * (atmNode.cLtp - atmNode.pLtp)).toFixed(2));
-      const basis = Number((syn - ch.spot).toFixed(1));
+      const p25Node = ch.strikes[K - wShort];
+      const c25Node = ch.strikes[K + wShort];
+      const wingsFresh = Boolean(p25Node && c25Node
+        && Number.isFinite(p25Node.pIv) && p25Node.pIv > 0
+        && Number.isFinite(c25Node.cIv) && c25Node.cIv > 0
+        && forwardQuoteFresh_(p25Node.pQuoteAt, ch.retrievedAt)
+        && forwardQuoteFresh_(c25Node.cQuoteAt, ch.retrievedAt));
+      const rev25 = wingsFresh ? Number((p25Node.pIv - c25Node.cIv).toFixed(2)) : NaN;
+      const bfly25 = wingsFresh ? Number((0.5 * (p25Node.pIv + c25Node.cIv) - iv).toFixed(2)) : NaN;
+      const metricsItem = riskMetrics.item;
+      const basisExpiry = metricsItem ? String(metricsItem.forward_basis_expiry || '').slice(0, 10) : '';
+      const basisTime = metricsItem ? metricsItem.forward_basis_timestamp : null;
+      const basis = metricsItem && basisExpiry === exp && forwardQuoteFresh_(basisTime, ch.retrievedAt)
+        ? Number(metricsItem.forward_basis) : NaN;
+      const basisValid = Number.isFinite(basis);
 
       const trigs = [
-        ['S1', vrp30 >= 1.50 && hv30 <= 16.5 && dte >= 2 && dte <= 35, 'IV ' + iv + '% · HV30 ' + hv30 + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp'],
-        ['S2', vrp30 <= -0.25 || iv < hv10, 'IV ' + iv + '% · HV10 ' + hv10 + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp'],
-        ['S3', iv >= 15.2 && vrp30 >= 1.0 && dte <= 22, 'ATM IV ' + iv + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp · DTE ' + dte + 'd'],
-        ['S4', rev25 >= 1.50 && dte >= 5, 'RR25 ' + (rev25 >= 0 ? '+' : '') + rev25 + ' pp · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp'],
-        ['S5', vrp10 >= 0.80 && dte <= 16, 'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp · HV10 ' + hv10 + '% · DTE ' + dte + 'd'],
-        ['S6', Math.abs(basis) >= (sym === 'NIFTY' ? 10.0 : 35.0) || Math.abs(bfly25) >= 0.25, 'Basis ' + (basis >= 0 ? '+' : '') + basis + ' pts · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp']
+        ['S1', hv30Valid && vrp30 >= 1.50 && hv30 <= 16.5 && dte >= 2 && dte <= 35, hv30Valid ? 'IV ' + iv + '% · HV30 ' + hv30 + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp' : 'HV30 unavailable'],
+        ['S2', hv10Valid && hv30Valid && (vrp30 <= -0.25 || iv < hv10), hv10Valid && hv30Valid ? 'IV ' + iv + '% · HV10 ' + hv10 + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp' : 'IV/HV inputs unavailable'],
+        ['S3', hv30Valid && iv >= 15.2 && vrp30 >= 1.0 && dte <= 22, hv30Valid ? 'ATM IV ' + iv + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp · DTE ' + dte + 'd' : 'HV30 unavailable'],
+        ['S4', wingsFresh && rev25 >= 1.50 && dte >= 5, wingsFresh ? 'RR25 ' + (rev25 >= 0 ? '+' : '') + rev25 + ' pp · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp' : '25-delta wing IV unavailable'],
+        ['S5', hv10Valid && vrp10 >= 0.80 && dte <= 16, hv10Valid ? 'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp · HV10 ' + hv10 + '% · DTE ' + dte + 'd' : 'HV10 unavailable'],
+        ['S6', (basisValid && Math.abs(basis) >= (sym === 'NIFTY' ? 10.0 : 35.0)) || (wingsFresh && Math.abs(bfly25) >= 0.25), basisValid ? 'Forward basis ' + (basis >= 0 ? '+' : '') + basis + ' pts · BF25 ' + (Number.isFinite(bfly25) ? (bfly25 >= 0 ? '+' : '') + bfly25 : 'unavailable') + ' pp' : (wingsFresh ? 'BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp' : 'Validated forward basis and wing IV unavailable')]
       ];
 
       trigs.forEach(item => {
@@ -1571,7 +1680,7 @@ function evaluateForwardTest_(report) {
         let invalidQuote = false;
         legs.forEach(l => {
           const node = ch.strikes[l.strike];
-          const px = executableQuote_(node, l.type, l.side, lotQty * Number(l.mult || 1), false);
+          const px = executableQuote_(node, l.type, l.side, lotQty * Number(l.mult || 1), false, ch.retrievedAt);
           if (!(Number.isFinite(px) && px > 0)) {
             invalidQuote = true;
             return;
@@ -1591,9 +1700,9 @@ function evaluateForwardTest_(report) {
           id: 'OPEN-' + snapshotDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + exp.replace(/-/g, '').slice(4) + '-' + sCode,
           date: snapshotDay,
           session_date: snapshotDay,
-          triggerTime: snapshotDay + 'T' + hmLabel + ':00+05:30',
-          trigTime: timeIstLabel,
-          markedAt: timeIstLabel,
+          triggerTime: snapshotDay + 'T' + chainMkt.hmLabel + ':00+05:30',
+          trigTime: chainMkt.timeIstLabel,
+          markedAt: chainMkt.timeIstLabel,
           sym: sym,
           exp: exp,
           kind: dte <= 10 ? 'Weekly' : 'Monthly',
@@ -1621,6 +1730,7 @@ function evaluateForwardTest_(report) {
   ledger.open_positions.forEach(pos => {
     const key = pos.sym + '|' + pos.exp;
     const ch = chainMap[key];
+    const positionMkt = ch && ch.mkt ? ch.mkt : mkt;
     const lotQty = pos.sym === 'NIFTY' ? 65 : 30;
     const legs = Array.isArray(pos.legs) ? pos.legs : [];
     let allLegsFresh = Boolean(ch && ch.fresh && legs.length);
@@ -1628,7 +1738,7 @@ function evaluateForwardTest_(report) {
     legs.forEach(l => {
       const node = ch && ch.strikes ? ch.strikes[l.strike] : null;
       const qty = lotQty * Number(l.mult || 1);
-      const px = executableQuote_(node, l.type, l.side, qty, true);
+      const px = executableQuote_(node, l.type, l.side, qty, true, ch && ch.retrievedAt);
       if (!(Number.isFinite(px) && px > 0)) {
         allLegsFresh = false;
         return;
@@ -1641,7 +1751,7 @@ function evaluateForwardTest_(report) {
     if (!allLegsFresh) {
       pos.freshness = 'STALE';
       pos.staleReason = !ch || !ch.fresh ? 'Missing or stale option-chain timestamp' : 'Missing or insufficient executable bid/ask depth';
-      if (mins >= 915 || pos.exit_pending) pos.exit_pending = true;
+      if (positionMkt.mins >= 915 || pos.exit_pending) pos.exit_pending = true;
       stillOpen.push(pos);
       return;
     }
@@ -1651,11 +1761,11 @@ function evaluateForwardTest_(report) {
     pos.grossMtm = Number(gross.toFixed(2));
     pos.estCharges = positionCharges_(pos.legs, pos.sym, true);
     pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
-    pos.markedAt = timeIstLabel;
+    pos.markedAt = positionMkt.timeIstLabel;
 
     const slThresh = -0.50 * Number(pos.maxLoss || 9000);
     const tpThresh = pos.strat === 'S2' ? 0.30 * Number(pos.maxLoss || 37590) : 0.50 * Number(pos.maxCredit || 12000);
-    const isIntradayExit = mins >= 915 || Boolean(pos.exit_pending);
+    const isIntradayExit = positionMkt.mins >= 915 || Boolean(pos.exit_pending);
 
     if (pos.grossMtm <= slThresh || pos.grossMtm >= tpThresh || isIntradayExit) {
       const reason = pos.grossMtm <= slThresh
@@ -1668,7 +1778,7 @@ function evaluateForwardTest_(report) {
         session_date: pos.session_date || pos.date || snapshotDay,
         triggerTime: pos.triggerTime || (snapshotDay + 'T09:20:00+05:30'),
         entryTime: pos.trigTime || '09:20 IST',
-        exitTime: hmLabel + ' IST',
+        exitTime: positionMkt.hmLabel + ' IST',
         sym: pos.sym,
         exp: pos.exp,
         kind: pos.kind || 'Weekly',

@@ -40,9 +40,20 @@ MAX_FORWARD_QUOTE_AGE_SECONDS = 120
 def _parse_aware_timestamp(value: datetime | str | None) -> datetime | None:
     if isinstance(value, datetime):
         parsed = value
+    elif isinstance(value, (int, float)) and np.isfinite(value):
+        try:
+            epoch = float(value)
+            parsed = datetime.fromtimestamp(epoch / 1000.0 if epoch > 1e11 else epoch, tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
     elif isinstance(value, str) and value.strip():
         try:
-            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+            normalized = value.strip()
+            if normalized.isdigit() and len(normalized) in (10, 13):
+                epoch = int(normalized)
+                parsed = datetime.fromtimestamp(epoch / 1000.0 if len(normalized) == 13 else epoch, tz=timezone.utc)
+            else:
+                parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
         except ValueError:
             return None
     else:
@@ -61,8 +72,47 @@ def _quote_timestamp_is_fresh(observed: datetime | str | None, reference: dateti
     return -30.0 <= age_seconds <= MAX_FORWARD_QUOTE_AGE_SECONDS
 
 
-def _build_strike_quote_map(chain_rows: list[dict[str, Any]]) -> dict[int, dict[str, float]]:
-    strike_map: dict[int, dict[str, float]] = {}
+def _quote_event_timestamp(market_data: dict[str, Any]) -> datetime | str | None:
+    """Read an instrument/feed event time; retrieval time is deliberately excluded."""
+    for key in ("quote_timestamp", "feed_timestamp", "currentTs", "ts"):
+        if market_data.get(key) is not None:
+            return market_data[key]
+    return None
+
+
+def _iv_percent(value: Any) -> float | None:
+    """Normalize decimal or percent IV and reject unit-ambiguous/out-of-range values."""
+    try:
+        iv = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not np.isfinite(iv) or iv <= 0.0 or iv > 500.0:
+        return None
+    if iv <= 1.0:
+        iv *= 100.0
+    elif iv < 5.0:
+        return None
+    return iv
+
+
+def _risk_vol_metrics(payload: dict[str, Any], symbol: str, session_day: str) -> tuple[float | None, float | None]:
+    metrics = payload.get("risk_metrics")
+    item = metrics.get(symbol) if isinstance(metrics, dict) else None
+    if not isinstance(item, dict):
+        return None, None
+    as_of = str(item.get("as_of") or "")[:10]
+    try:
+        age_days = (datetime.strptime(session_day, "%Y-%m-%d").date()
+                    - datetime.strptime(as_of, "%Y-%m-%d").date()).days
+    except ValueError:
+        return None, None
+    if age_days < 0 or age_days > 5:
+        return None, None
+    return _iv_percent(item.get("hv10")), _iv_percent(item.get("hv30"))
+
+
+def _build_strike_quote_map(chain_rows: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+    strike_map: dict[int, dict[str, Any]] = {}
     for row in chain_rows or []:
         if not isinstance(row, dict):
             continue
@@ -91,6 +141,10 @@ def _build_strike_quote_map(chain_rows: list[dict[str, Any]]) -> dict[int, dict[
                 "pBidQty": pm.get("bid_qty"), "pAskQty": pm.get("ask_qty"),
                 "cIv": cg.get("iv"), "pIv": pg.get("iv"),
             }
+            quote_timestamps = {
+                "cQuoteTimestamp": _quote_event_timestamp(cm),
+                "pQuoteTimestamp": _quote_event_timestamp(pm),
+            }
         else:
             values = {
                 "cLtp": row.get("cLtp") or row.get("call_ltp"),
@@ -102,21 +156,39 @@ def _build_strike_quote_map(chain_rows: list[dict[str, Any]]) -> dict[int, dict[
                 "cIv": row.get("cIv") or row.get("iv"),
                 "pIv": row.get("pIv") or row.get("iv"),
             }
-        normalized: dict[str, float] = {}
+            quote_timestamps = {
+                "cQuoteTimestamp": row.get("cQuoteTimestamp") or row.get("c_quote_timestamp"),
+                "pQuoteTimestamp": row.get("pQuoteTimestamp") or row.get("p_quote_timestamp"),
+            }
+        normalized: dict[str, Any] = {}
         for name, value in values.items():
             try:
                 parsed = float(value or 0.0)
             except (TypeError, ValueError, OverflowError):
                 parsed = 0.0
             normalized[name] = parsed if np.isfinite(parsed) else 0.0
+        normalized.update(quote_timestamps)
         strike_map[k_val] = normalized
     return strike_map
 
 
-def _executable_quote(node: dict[str, float] | None, kind: str, side: int, quantity: int, is_exit: bool) -> float:
+def _executable_quote(
+    node: dict[str, Any] | None,
+    kind: str,
+    side: int,
+    quantity: int,
+    is_exit: bool,
+    *,
+    reference_timestamp: datetime | str | None = None,
+    require_event_timestamp: bool = False,
+) -> float:
     if not node:
         return 0.0
     prefix = "c" if kind == "CE" else "p"
+    if require_event_timestamp and not _quote_timestamp_is_fresh(
+        node.get(prefix + "QuoteTimestamp"), reference_timestamp
+    ):
+        return 0.0
     bid, ask = float(node.get(prefix + "Bid", 0.0)), float(node.get(prefix + "Ask", 0.0))
     bid_qty = float(node.get(prefix + "BidQty", 0.0))
     ask_qty = float(node.get(prefix + "AskQty", 0.0))
@@ -160,18 +232,17 @@ STRATEGY_NAMES: dict[str, str] = {
 }
 
 ARMED_TABLE_MESSAGE = (
-    "0 trades placed yet · Forward Test Engine is ARMED for first trade tomorrow "
-    "(11 Nov 2026 · 09:20 IST) when live Upstox option-chain captures begin."
+    "No eligible positions in the current ledger · Entries require validated, timestamped option books "
+    "and current risk metrics after 09:20 IST."
 )
 
 ARMED_TOAST_MESSAGE = (
-    "Forward Test is armed for tomorrow (11 Nov 2026 09:20 IST) — "
-    "waiting for live market open to place first trade."
+    "Forward-test gate is armed; entries require a valid session timestamp and fresh exchange quote timestamps."
 )
 
 CLEAN_SLATE_LEDGER: dict[str, Any] = {
-    "schema": 1,
-    "version": "forward-test-v19.1-clean",
+    "schema": 2,
+    "version": "forward-test-v20.1-event-time-gated",
     "inception_date": "2026-11-11",
     "min_trigger_date": "2026-11-11",
     "updated_at": "2026-11-10T13:15:00+05:30",
@@ -244,14 +315,40 @@ getNseMarketStatusIST = get_nse_market_status_ist
 
 
 def is_valid_forward_record(item: dict[str, Any]) -> bool:
-    """Return True strictly for forward-test positions/trades triggered on or after MIN_FORWARD_DATE (2026-11-11)."""
+    """Accept only correctly dated, in-session forward entries from 09:20 through 15:14 IST."""
     if not isinstance(item, dict):
         return False
     s_date = str(item.get("session_date") or item.get("date") or "").strip()[:10]
-    if not s_date or s_date < MIN_FORWARD_DATE:
+    try:
+        session_day = datetime.strptime(s_date, "%Y-%m-%d").date()
+    except ValueError:
+        return False
+    if s_date < MIN_FORWARD_DATE:
         return False
     trig = str(item.get("triggerTime") or item.get("trigTime") or item.get("entryTime") or "").strip()
-    if trig.startswith("2026-11-0") or re.match(r"^0[1-9]\s+Nov\b", trig, flags=re.IGNORECASE):
+    parsed = _parse_aware_timestamp(trig)
+    if parsed is not None:
+        if parsed.date() != session_day:
+            return False
+        trigger_minutes = parsed.hour * 60 + parsed.minute
+    else:
+        if re.match(r"^\d{4}-\d{2}-\d{2}T", trig):
+            return False  # ISO trigger timestamps must carry an explicit timezone.
+        hm = re.search(r"(?<!\d)(\d{1,2}):(\d{2})(?:\s*IST)?\b", trig, flags=re.IGNORECASE)
+        if not hm:
+            return False
+        trigger_minutes = int(hm.group(1)) * 60 + int(hm.group(2))
+        month_day = re.search(r"\b(\d{1,2})\s+([A-Za-z]{3})\b", trig)
+        if month_day:
+            try:
+                parsed_day = datetime.strptime(
+                    f"{month_day.group(1)} {month_day.group(2)} {session_day.year}", "%d %b %Y"
+                ).date()
+            except ValueError:
+                return False
+            if parsed_day != session_day:
+                return False
+    if trigger_minutes < 560 or trigger_minutes >= 915:
         return False
     return True
 
@@ -408,8 +505,8 @@ def evaluate_strategies_for_chain(
     expiry: str,
     spot: float,
     chain_rows: list[dict[str, Any]],
-    hv10: float,
-    hv30: float,
+    hv10: float | None,
+    hv30: float | None,
     dte: int,
     fut_price: float | None = None,
     rev25: float | None = None,
@@ -417,6 +514,9 @@ def evaluate_strategies_for_chain(
     lots: int = 1,
     date_str: str = "2026-11-11",
     trig_time_str: str = "11 Nov 09:20 IST",
+    forward_basis: float | None = None,
+    quote_reference: datetime | str | None = None,
+    require_event_timestamps: bool = False,
 ) -> list[dict[str, Any]]:
     """Evaluate all 6 quantitative strategies (S1-S6) on a real Upstox option chain."""
     sym = str(symbol).upper()
@@ -426,41 +526,80 @@ def evaluate_strategies_for_chain(
 
     strike_map = _build_strike_quote_map(chain_rows)
 
-    if not strike_map or K not in strike_map:
+    if not np.isfinite(float(spot)) or float(spot) <= 0 or not strike_map or K not in strike_map:
         # Data integrity gate: cannot evaluate setups without valid ATM strikes
         return []
 
     atm_node = strike_map[K]
-    if atm_node.get("cLtp", 0.0) <= 0 or atm_node.get("pLtp", 0.0) <= 0:
-        # Reject: missing real market quotes for ATM strike
+    c_iv = _iv_percent(atm_node.get("cIv"))
+    p_iv = _iv_percent(atm_node.get("pIv"))
+    if c_iv is None or p_iv is None:
+        return []
+    if require_event_timestamps and not all(
+        _quote_timestamp_is_fresh(atm_node.get(prefix + "QuoteTimestamp"), quote_reference)
+        for prefix in ("c", "p")
+    ):
         return []
 
-    iv = round(0.5 * (atm_node["cIv"] + atm_node["pIv"]), 2) if (atm_node.get("cIv", 0) > 0 and atm_node.get("pIv", 0) > 0) else 16.0
-    strad_pts = round(atm_node["cLtp"] + atm_node["pLtp"], 2)
-    syn_fut = round(K + atm_node["cLtp"] - atm_node["pLtp"], 2)
-    fut_val = float(fut_price) if fut_price is not None else spot
-    basis = round(syn_fut - fut_val, 1)
-    vrp30 = round(iv - float(hv30), 2)
-    vrp10 = round(iv - float(hv10), 2)
+    iv = round(0.5 * (c_iv + p_iv), 2)
+    try:
+        hv10_value = float(hv10) if hv10 is not None else np.nan
+    except (TypeError, ValueError, OverflowError):
+        hv10_value = np.nan
+    try:
+        hv30_value = float(hv30) if hv30 is not None else np.nan
+    except (TypeError, ValueError, OverflowError):
+        hv30_value = np.nan
+    hv10_valid = np.isfinite(hv10_value) and 0.0 < hv10_value <= 500.0
+    hv30_valid = np.isfinite(hv30_value) and 0.0 < hv30_value <= 500.0
+    vrp30 = round(iv - hv30_value, 2) if hv30_valid else np.nan
+    vrp10 = round(iv - hv10_value, 2) if hv10_valid else np.nan
+    try:
+        basis = float(forward_basis) if forward_basis is not None else np.nan
+    except (TypeError, ValueError, OverflowError):
+        basis = np.nan
+    if not np.isfinite(basis):
+        basis = np.nan
 
     w_short = 200 if sym == "NIFTY" else 400
-    if rev25 is None or bfly25 is None:
-        p25_node = strike_map.get(K - w_short, atm_node)
-        c25_node = strike_map.get(K + w_short, atm_node)
-        p25_iv = p25_node.get("pIv") or iv
-        c25_iv = c25_node.get("cIv") or iv
-        if rev25 is None:
-            rev25 = round(float(p25_iv - c25_iv), 2)
-        if bfly25 is None:
-            bfly25 = round(float(0.5 * (p25_iv + c25_iv) - iv), 2)
+    p25_node = strike_map.get(K - w_short)
+    c25_node = strike_map.get(K + w_short)
+    p25_iv = _iv_percent(p25_node.get("pIv")) if p25_node else None
+    c25_iv = _iv_percent(c25_node.get("cIv")) if c25_node else None
+    wings_valid = p25_iv is not None and c25_iv is not None
+    if require_event_timestamps:
+        wings_valid = wings_valid and bool(p25_node and c25_node) and all(
+            _quote_timestamp_is_fresh(node.get(prefix + "QuoteTimestamp"), quote_reference)
+            for node, prefix in ((p25_node, "p"), (c25_node, "c"))
+        )
+    if rev25 is None:
+        rev25 = round(p25_iv - c25_iv, 2) if wings_valid else np.nan
+    if bfly25 is None:
+        bfly25 = round(0.5 * (p25_iv + c25_iv) - iv, 2) if wings_valid else np.nan
+    try:
+        rev25_value = float(rev25)
+    except (TypeError, ValueError, OverflowError):
+        rev25_value = np.nan
+    try:
+        bfly25_value = float(bfly25)
+    except (TypeError, ValueError, OverflowError):
+        bfly25_value = np.nan
 
     trig_defs = [
-        ("S1", vrp30 >= 1.50 and hv30 <= 16.5 and 2 <= dte <= 35, f"IV {iv:.2f}% · HV30 {hv30:.2f}% · VRP {vrp30:+.2f} pp"),
-        ("S2", vrp30 <= -0.25 or iv < hv10, f"IV {iv:.2f}% · HV10 {hv10:.2f}% · IV−HV10 {vrp10:+.2f} pp"),
-        ("S3", iv >= 15.2 and vrp30 >= 1.0 and dte <= 22, f"ATM IV {iv:.2f}% · VRP {vrp30:+.2f} pp · DTE {dte}d"),
-        ("S4", float(rev25) >= 1.50 and dte >= 5, f"RR25 {float(rev25):+.2f} pp · BF25 {float(bfly25):+.2f} pp"),
-        ("S5", vrp10 >= 0.80 and dte <= 16, f"IV−HV10 {vrp10:+.2f} pp · HV10 {hv10:.2f}% · DTE {dte}d"),
-        ("S6", abs(basis) >= (10.0 if sym == "NIFTY" else 35.0) or abs(float(bfly25)) >= 0.25, f"Basis {basis:+.1f} pts · BF25 {float(bfly25):+.2f} pp"),
+        ("S1", hv30_valid and vrp30 >= 1.50 and hv30_value <= 16.5 and 2 <= dte <= 35,
+         f"IV {iv:.2f}% · HV30 {hv30_value:.2f}% · VRP {vrp30:+.2f} pp" if hv30_valid else f"IV {iv:.2f}% · HV30 unavailable"),
+        ("S2", hv10_valid and hv30_valid and (vrp30 <= -0.25 or iv < hv10_value),
+         f"IV {iv:.2f}% · HV10 {hv10_value:.2f}% · IV−HV10 {vrp10:+.2f} pp" if hv10_valid and hv30_valid else "IV/HV inputs unavailable"),
+        ("S3", hv30_valid and iv >= 15.2 and vrp30 >= 1.0 and dte <= 22,
+         f"ATM IV {iv:.2f}% · VRP {vrp30:+.2f} pp · DTE {dte}d" if hv30_valid else f"ATM IV {iv:.2f}% · HV30 unavailable"),
+        ("S4", wings_valid and np.isfinite(rev25_value) and rev25_value >= 1.50 and dte >= 5,
+         f"RR25 {rev25_value:+.2f} pp · BF25 {bfly25_value:+.2f} pp" if wings_valid else "25-delta wing IV unavailable"),
+        ("S5", hv10_valid and vrp10 >= 0.80 and dte <= 16,
+         f"IV−HV10 {vrp10:+.2f} pp · HV10 {hv10_value:.2f}% · DTE {dte}d" if hv10_valid else "HV10 unavailable"),
+        ("S6", (np.isfinite(basis) and abs(basis) >= (10.0 if sym == "NIFTY" else 35.0))
+         or (wings_valid and np.isfinite(bfly25_value) and abs(bfly25_value) >= 0.25),
+         f"Forward basis {basis:+.1f} pts · BF25 {bfly25_value:+.2f} pp" if np.isfinite(basis) and np.isfinite(bfly25_value)
+         else (f"BF25 {bfly25_value:+.2f} pp" if wings_valid and np.isfinite(bfly25_value) else "Validated forward basis and 25-delta wing IV unavailable")),
     ]
 
     results = []
@@ -470,7 +609,11 @@ def evaluate_strategies_for_chain(
         for l in legs:
             k_target = l["strike"]
             node = strike_map.get(k_target)
-            px = _executable_quote(node, l["type"], int(l["side"]), lot_qty * int(l.get("mult", 1)), False)
+            px = _executable_quote(
+                node, l["type"], int(l["side"]), lot_qty * int(l.get("mult", 1)), False,
+                reference_timestamp=quote_reference,
+                require_event_timestamp=require_event_timestamps,
+            )
             if not px:
                 has_missing_quote = True
                 break
@@ -533,6 +676,7 @@ def mark_open_positions_to_market(
     auto_close_intraday_1515: bool = False,
     live_chain_timestamps: dict[str, datetime | str | None] | None = None,
     reference_timestamp: datetime | str | None = None,
+    require_event_timestamps: bool = True,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Mark positions from fresh executable books; defer automated exits when any leg is unpriced."""
     still_open: list[dict[str, Any]] = []
@@ -550,6 +694,7 @@ def mark_open_positions_to_market(
         strike_map = _build_strike_quote_map(chain_rows)
         timestamp = (live_chain_timestamps or {}).get(key)
         chain_fresh = bool(strike_map) and _quote_timestamp_is_fresh(timestamp, reference_timestamp)
+        quote_reference = timestamp or reference_timestamp
         legs = pos.get("legs", [])
         all_legs_fresh = chain_fresh and bool(legs)
         exit_prices: list[float] = []
@@ -557,7 +702,11 @@ def mark_open_positions_to_market(
             for leg in legs:
                 node = strike_map.get(int(leg["strike"]))
                 qty = lot_qty * int(leg.get("mult", 1))
-                px = _executable_quote(node, leg["type"], int(leg["side"]), qty, True)
+                px = _executable_quote(
+                    node, leg["type"], int(leg["side"]), qty, True,
+                    reference_timestamp=quote_reference,
+                    require_event_timestamp=require_event_timestamps,
+                )
                 if not px:
                     all_legs_fresh = False
                     break
@@ -667,20 +816,28 @@ def process_live_upstox_snapshot(
     if not isinstance(payload, dict):
         return state
 
-    snap_ts = (
-        now_ist
-        or payload.get("timestamp")
-        or payload.get("as_of")
-        or payload.get("retrieved_at")
-        or payload.get("day")
-    )
-    mkt = get_nse_market_status_ist(snap_ts)
+    snap_ts = now_ist or payload.get("timestamp") or payload.get("as_of") or payload.get("retrieved_at")
+    snap_dt = _parse_aware_timestamp(snap_ts)
+    if snap_dt is None and isinstance(now_ist, datetime) and now_ist.tzinfo is None:
+        snap_dt = now_ist.replace(tzinfo=IST_TZ)
+    if snap_dt is None:
+        state["gate_blocked"] = True
+        state["gate_message"] = "Missing timezone-aware snapshot timestamp; no trigger or mark was processed."
+        return state
+    mkt = get_nse_market_status_ist(snap_dt)
     snapshot_day = str(payload.get("day") or payload.get("session_date") or mkt["isoDay"])[:10]
 
     # Strict Forward-Only Trigger Gate: never trigger on < 2026-11-11 or when market is closed
-    if snapshot_day < MIN_FORWARD_DATE or not mkt["open"]:
+    if snapshot_day < MIN_FORWARD_DATE or snapshot_day != mkt["isoDay"] or not mkt["open"]:
         state["gate_blocked"] = True
-        state["gate_message"] = ARMED_TOAST_MESSAGE
+        state["gate_message"] = (
+            "Snapshot session date does not match its timestamp; no trigger or mark was processed."
+            if snapshot_day != mkt["isoDay"] else ARMED_TOAST_MESSAGE
+        )
+        return state
+    if payload.get("nfo_session_validated") is not True:
+        state["gate_blocked"] = True
+        state["gate_message"] = "NFO holiday/session status was not validated by the market-data collector."
         return state
 
     state["gate_blocked"] = False
@@ -734,24 +891,50 @@ def process_live_upstox_snapshot(
         if str(t.get("session_date") or t.get("date") or "")[:10] == snapshot_day
     }
 
+    reference_time = snap_dt
     if 560 <= mkt["mins"] < 915:
+        eligible_expiries: dict[str, list[str]] = {"NIFTY": [], "BANKNIFTY": []}
+        for label in live_chains:
+            sym_part, exp_part = label.split("|", 1)
+            if sym_part in eligible_expiries and exp_part >= snapshot_day:
+                eligible_expiries[sym_part].append(exp_part)
+        front_expiries = {
+            "NIFTY": set(sorted(set(eligible_expiries["NIFTY"]))[:2]),
+            "BANKNIFTY": set(sorted(set(eligible_expiries["BANKNIFTY"]))[:1]),
+        }
         for lbl, chain_rows in live_chains.items():
             sym, exp = lbl.split("|", 1)
-            reference_time = now_ist or datetime.now(IST_TZ)
-            if not _quote_timestamp_is_fresh(live_chain_timestamps.get(lbl), reference_time):
+            chain_ts = live_chain_timestamps.get(lbl)
+            chain_dt = _parse_aware_timestamp(chain_ts)
+            if chain_dt is None or not _quote_timestamp_is_fresh(chain_ts, reference_time):
                 continue
-            is_front = (sym == "NIFTY" and exp in ("2026-11-17", "2026-11-23")) or (sym == "BANKNIFTY" and exp == "2026-11-23")
+            chain_mkt = get_nse_market_status_ist(chain_dt)
+            if chain_mkt["isoDay"] != snapshot_day or not chain_mkt["open"] or not (560 <= chain_mkt["mins"] < 915):
+                continue
+            is_front = exp in front_expiries.get(sym, set())
             if front_scope_only and not is_front:
                 continue
             spot_val = spot_map.get(sym) or float(chain_rows[0].get("underlying_spot_price") or 0.0)
             if not np.isfinite(spot_val) or spot_val <= 0:
                 continue
-            hv10 = 14.82 if sym == "NIFTY" else 17.70
-            hv30 = 14.45 if sym == "NIFTY" else 15.76
+            metrics = payload.get("risk_metrics")
+            symbol_metrics = metrics.get(sym, {}) if isinstance(metrics, dict) else {}
+            if not isinstance(symbol_metrics, dict):
+                symbol_metrics = {}
+            hv10, hv30 = _risk_vol_metrics(payload, sym, snapshot_day)
+            basis_timestamp = symbol_metrics.get("forward_basis_timestamp")
+            basis_expiry = str(symbol_metrics.get("forward_basis_expiry") or "")[:10]
+            basis_is_fresh = (
+                basis_expiry == exp
+                and _quote_timestamp_is_fresh(basis_timestamp, chain_ts)
+            )
+            forward_basis = symbol_metrics.get("forward_basis") if basis_is_fresh else None
             try:
-                exp_dt = datetime.strptime(exp, "%Y-%m-%d").date()
-                snap_dt = datetime.strptime(snapshot_day, "%Y-%m-%d").date()
-                dte = max(1, (exp_dt - snap_dt).days)
+                expiry_dt = datetime.fromisoformat(exp + "T15:30:00+05:30")
+                seconds_to_expiry = (expiry_dt - chain_dt).total_seconds()
+                if seconds_to_expiry <= 0:
+                    continue
+                dte = int(np.ceil(seconds_to_expiry / 86400.0))
             except Exception:
                 continue
             eval_setups = evaluate_strategies_for_chain(
@@ -764,13 +947,16 @@ def process_live_upstox_snapshot(
                 dte=dte,
                 lots=lots,
                 date_str=snapshot_day,
-                trig_time_str=mkt["time_label"],
+                trig_time_str=chain_mkt["time_label"],
+                forward_basis=forward_basis,
+                quote_reference=chain_dt,
+                require_event_timestamps=True,
             )
             for setup in eval_setups:
                 s_key = f"{sym}|{exp}|{setup['strat']}"
                 if setup.get("triggered") and s_key not in existing_keys:
-                    setup["triggerTime"] = f"{snapshot_day}T{mkt['hm']}:00+05:30"
-                    setup["mtmPath"] = [{"t": mkt["hm"], "gross": 0.0, "iv": setup["entryIv"]}]
+                    setup["triggerTime"] = f"{snapshot_day}T{chain_mkt['hm']}:00+05:30"
+                    setup["mtmPath"] = [{"t": chain_mkt["hm"], "gross": 0.0, "iv": setup["entryIv"]}]
                     state["open_positions"].append(setup)
                     existing_keys.add(s_key)
 
@@ -784,7 +970,8 @@ def process_live_upstox_snapshot(
         current_time_ist=f"{mkt['hm']} IST",
         auto_close_intraday_1515=is_1515_close,
         live_chain_timestamps=live_chain_timestamps,
-        reference_timestamp=now_ist or datetime.now(IST_TZ),
+        reference_timestamp=snap_dt,
+        require_event_timestamps=True,
     )
     state["open_positions"] = still_open
     if newly_closed:

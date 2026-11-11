@@ -189,6 +189,16 @@ def _positive_int(value, label: str = "Value") -> int:
     return ivalue
 
 
+def _finite_nonnegative(value, label: str) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{label} must be finite and non-negative") from exc
+    if not math.isfinite(number) or number < 0.0:
+        raise ValueError(f"{label} must be finite and non-negative")
+    return number
+
+
 def sizing(s: dict) -> tuple[str, int]:
     mode = s.get("sizing_mode", "broker_lot_size" if "lots" in s else "fixed_units")
     if mode not in ("fixed_units", "broker_lot_size"):
@@ -226,6 +236,15 @@ def validate(settings: dict) -> bool:
         raise ValueError('Entry time must be earlier than Exit time.')
     if int(settings.get('lots', 1)) < 1:
         raise ValueError('Strategy lots must be at least 1.')
+    _finite_nonnegative(settings.get('slip_bps', 5.0), 'Slippage (bps)')
+    _finite_nonnegative(settings.get('order_fee', 20.0), 'Order fee')
+    _finite_nonnegative(settings.get('margin_per_lot', 0.0) or 0.0, 'Margin per lot')
+    for key, label, default in (
+        ('short_option_floor_rate', 'Short option floor rate', 0.05),
+        ('exposure_add_rate', 'Exposure add rate', 0.02),
+        ('spread_floor_rate', 'Spread floor rate', 0.015),
+    ):
+        _finite_nonnegative(settings.get(key, default), label)
     dte = settings.get('dte', (1, 35))
     if isinstance(dte, (list, tuple)) and len(dte) == 2 and dte[0] > dte[1]:
         raise ValueError('Minimum DTE cannot exceed maximum DTE.')
@@ -252,10 +271,12 @@ def estimate_exchange_margin(
     exposure_add_rate=0.02, spread_floor_rate=0.015,
 ):
     """Return a scenario capital proxy; default rates are hypotheses, not exchange margin rules."""
-    rates = (short_option_floor_rate, exposure_add_rate, spread_floor_rate)
-    if (not math.isfinite(float(spot_price)) or float(spot_price) <= 0
-            or any(not math.isfinite(float(rate)) or float(rate) < 0 for rate in rates)):
+    rates = tuple(_finite_nonnegative(rate, 'Margin proxy rate') for rate in (
+        short_option_floor_rate, exposure_add_rate, spread_floor_rate
+    ))
+    if not math.isfinite(float(spot_price)) or float(spot_price) <= 0:
         raise ValueError('Spot and margin proxy rates must be finite and non-negative')
+    short_option_floor_rate, exposure_add_rate, spread_floor_rate = rates
     spot_price = float(spot_price)
     psr = 0.08 if symbol == 'NIFTY' else 0.10
     shifts = [-0.15, -psr, -psr / 2.0, 0.0, psr / 2.0, psr, 0.15]
@@ -291,16 +312,16 @@ def estimate_exchange_margin(
 
 
 def simulate(s, contracts, ticks, signals=None, callback=None):
-    """Simulate multi-leg options strategy with last_valid_close monitoring carry-forward and O(1) loop fee tracking."""
+    """Simulate options with marked-only carry-forward; slippage and margin defaults are calibration hypotheses."""
     symbol = s.get('symbol', 'NIFTY')
     spot_key = s.get('spot_key', 'NSE_INDEX|Nifty 50' if symbol == 'NIFTY' else 'NSE_INDEX|Nifty Bank')
     entry_time = s.get('entry', '09:20')
     exit_time = s.get('exit', '15:15')
-    slip_bps = float(s.get('slip_bps', 5.0))
+    slip_bps = _finite_nonnegative(s.get('slip_bps', 5.0), 'Slippage (bps)')
     stop_loss = s.get('stop') if s.get('stop') and float(s.get('stop', 0)) > 0 else None
     profit_target = s.get('target') if s.get('target') and float(s.get('target', 0)) > 0 else None
     use_upstox_fees = bool(s.get('use_upstox_fees', True))
-    order_fee = float(s.get('order_fee', 20.0))
+    order_fee = _finite_nonnegative(s.get('order_fee', 20.0), 'Order fee')
     raw_legs = s.get('legs') or template(s.get('template', s.get('name', 'Short straddle')) if s.get('template', s.get('name', 'Short straddle')) in TEMPLATES else 'Short straddle')
     legs_spec = [_normalize_leg(item) for item in raw_legs]
     dte_tuple = s.get('dte')
