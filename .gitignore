@@ -1,6 +1,9 @@
 # Backups, Scratch & Temporary Fixes
 .audit_backups/
 scratch/
+patches/
+rebuild_clean_project_*.py
+patch_*.py
 apply_volatility_lab_fixes.py
 *.bak
 *.orig

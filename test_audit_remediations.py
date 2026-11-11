@@ -48,6 +48,14 @@ for candidate in (HERE_DIR, PATCH_DIR):
 if not PATCH_DIR.exists():
     PATCH_DIR = HERE_DIR / "Volatility Lab"
 
+
+def _read_html_audit_range(path):
+    """Read only the user-authorized HTML audit range (lines 675-1850)."""
+    with path.open(encoding="utf-8") as stream:
+        for _ in range(674):
+            next(stream, None)
+        return "".join(next(stream, "") for _ in range(1176))
+
 import vol_lib
 import option_math
 import smile
@@ -872,8 +880,8 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
     def test_v16_zero_synthetic_data_strict_real_captures_only(self):
         """Verify strict 100% real data policy:
         1. Zero daily-OHLC-to-1-minute interpolation when intraday option captures are absent (records explicit skip).
-        2. HV30 in backtest_signals is strictly shifted by 1 session (.shift(1)) and expiry_observations stamped at 15:30:00 IST without fake 1.5 reversal.
-        3. 15:15 IST exits never drop an already-entered losing trade if an OTM wing has 0 volume at 15:15 (uses last_close).
+        2. HV30 in backtest_signals is strictly shifted by 1 session (.shift(1)); timestamp-less daily rows do not become EOD signals.
+        3. 15:15 IST exits without enough traded volume remain mark-only and excluded from realized P&L.
         """
         import tempfile
         import backtest_engine as be
@@ -917,15 +925,11 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
                 self.assertEqual(len(skips_df), 1)
                 self.assertEqual(skips_df.iloc[0]["Reason"], "No real captured intraday option data for session")
 
-                # 2. Verify backtest_signals stamps expiry_observations at 15:30:00 IST, shifts HV30 by 1 session, and has no fake 1.5 reversal
+                # 2. Timestamp-less daily rows cannot be assigned an invented 15:30 availability time.
                 sigs = bs.load_signals("NIFTY", path=mon_db)
-                self.assertEqual(len(sigs), 1)
-                exp_s, ts_val, payload_d = sigs[0]
-                self.assertEqual(ts_val.hour, 15)
-                self.assertEqual(ts_val.minute, 30)
-                self.assertNotIn("25 Delta reversal", payload_d)
+                self.assertEqual(sigs, [])
 
-                # 3. Verify 15:15 IST exit with 0 volume on OTM wing does NOT drop an already-entered losing trade
+                # 3. A stale zero-volume wing mark is not an executable 15:15 fill.
                 day = "2026-11-06"
                 exp = "2026-11-12"
                 c_list = [
@@ -962,15 +966,15 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
                     {"symbol": "NIFTY", "start": day, "end": day, "entry": "09:20", "exit": "15:15", "template": "Iron butterfly"},
                     c_list, ticks, []
                 )
-                self.assertEqual(len(t_lose), 1)
-                self.assertLess(float(t_lose.iloc[0]["Net"]), 0.0)
+                self.assertTrue(t_lose.empty)
+                self.assertEqual(s_lose.iloc[-1]["Status"], "UNFILLED_EXIT")
             finally:
                 be.DATA_DIR, be.ROOT, bs.PATH = orig_data_dir, orig_root, orig_sig_path
                 gc.collect()
 
 
     def test_v18_clean_repository_structure_and_entrypoints(self):
-        """Verify v18 clean repository structure, zero duplicate module pollution, updated 2026-11-09 expiry_latest.json, and 100% real-data docs/index.html."""
+        """Verify repository structure and the permitted Workspace 3 markup range."""
         repo_root = Path(__file__).resolve().parent
         vl_dir = (repo_root / "volatility_lab") if (repo_root / "volatility_lab").exists() else (repo_root / "Volatility Lab")
         desk_dir = repo_root / "streamlit_desk"
@@ -981,14 +985,13 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
         allowed_root_py = {
             "streamlit_app.py",
             "test_audit_remediations.py",
-            "rebuild_clean_project_v19.py",
-            "rebuild_clean_project_v18.py",
-            "patch_1_master_audit_v16.py",
-            "patch_2_trader_feedback_v17.py",
+            "test_execution_safety_fixes.py",
+            "test_quant_audit_fixes.py",
         }
         root_py = {p.name for p in repo_root.glob("*.py")}
         unexpected_root_py = root_py - allowed_root_py
         self.assertEqual(unexpected_root_py, set(), f"Duplicate/stray .py files at repo root: {unexpected_root_py}")
+        self.assertFalse((repo_root / "patches").exists(), "Obsolete patch directory should be absent")
         for banned in ("LAUNCH_ANY_DEVICE.py", "MAIN_AUDIT.md", "app.py", "apply_volatility_lab_fixes.py"):
             self.assertFalse((repo_root / banned).exists(), f"Obsolete file {banned} should not exist at repo root")
 
@@ -997,30 +1000,15 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
             desk_py = {p.name for p in desk_dir.glob("*.py")}
             self.assertEqual(desk_py, {"app.py", "run.py"}, f"Unexpected .py files in streamlit_desk/: {desk_py}")
 
-        # 3. Verify Volatility Lab/data/expiry_latest.json is updated to 2026-11-09 with all 9 active expiries
+        # 3. Confirm the expiry metadata file is present without opening protected JSON data.
         exp_latest_path = vl_dir / "data" / "expiry_latest.json"
-        if exp_latest_path.exists():
-            exp_obj = json.loads(exp_latest_path.read_text(encoding="utf-8"))
-            self.assertTrue(str(exp_obj.get("timestamp", "")).startswith("2026-11-09"), f"Stale expiry_latest.json timestamp: {exp_obj.get('timestamp')}")
-            rows = exp_obj.get("rows", [])
-            self.assertEqual(len(rows), 9)
-            bn_exps = [r["Expiry"] for r in rows if r.get("Instrument") == "BANKNIFTY"]
-            self.assertEqual(bn_exps, ["2026-11-23", "2026-12-29", "2027-01-25"])
-            for r in rows:
-                self.assertIsNotNone(r.get("IV"))
-                self.assertIsNotNone(r.get("HV30"))
-                self.assertIsNotNone(r.get("IV-RV Spread"))
+        self.assertTrue(exp_latest_path.is_file())
 
-        # 4. Verify docs/index.html has 72 real captured Upstox trades and 14 real captured IV dates
+        # 4. Verify the permitted Workspace 3 markup without reading static/embedded data.
         docs_html_path = repo_root / "docs" / "index.html"
         if docs_html_path.exists():
-            html_txt = docs_html_path.read_text(encoding="utf-8")
-            self.assertIn("tradeIdIndexFilter", html_txt)
-            self.assertIn("rel=\"icon\"", html_txt)
-            for line in html_txt.splitlines():
-                if "var tradeArchive =" in line:
-                    t_arr = json.loads(line.split("var tradeArchive =", 1)[1].strip().rstrip(";"))
-                    self.assertEqual(len(t_arr), 72)
+            html_txt = _read_html_audit_range(docs_html_path)
+            self.assertIn('id="workspaceForwardTest"', html_txt)
 
 
 class TestV19AutomatedForwardTesting(unittest.TestCase):
@@ -1029,9 +1017,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
     def test_32_website_forward_test_workspace_and_controls(self):
         for rel in ("docs/index.html", "index.html"):
             p = HERE_DIR / rel
-            html = p.read_text(encoding="utf-8")
-            self.assertIn('id="wsForwardBtn"', html)
-            self.assertIn('Forward Test (Auto Paper)', html)
+            html = _read_html_audit_range(p)
             self.assertIn('id="workspaceForwardTest"', html)
             for ctrl_id in (
                 "fwdAutoModeToggle",
@@ -1057,20 +1043,10 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 "fwdStrategyBarCanvas",
             ):
                 self.assertIn(f'id="{ctrl_id}"', html, f"Missing {ctrl_id} in {rel}")
-            self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", html)
-            self.assertIn("vl_forward_ledger_v19_clean", html)
-            self.assertIn("localStorage.removeItem('vl_forward_ledger_v19')", html)
             self.assertIn("Reset / Clear Ledger", html)
-            self.assertIn("Forward Test is armed for tomorrow (11 Nov 2026 09:20 IST) — waiting for live market open to place first trade.", html)
-            self.assertIn("0 trades placed yet · Forward Test Engine is ARMED for first trade tomorrow (11 Nov 2026 · 09:20 IST) when live Upstox option-chain captures begin.", html)
             self.assertIn("ARMED · 11 NOV 09:20 IST", html)
-            self.assertIn("NIFTY (Lot 65)", html)
             self.assertIn("NIFTY 50 (Lot 65)", html)
-            self.assertIn("window.markForwardPositionsFromPayload", html)
-            self.assertIn("window.closeForwardPosition", html)
-            self.assertIn("window.autoForwardTrackSetup", html)
-            self.assertIn("Auto-Forward Track →", html)
-            self.assertIn("animation: false", html)
+            self.assertIn("ARMED · 11 NOV 2026 09:20 IST", html)
 
     def test_33_python_forward_test_clean_slate_and_2026_11_11_simulation(self):
         import copy
@@ -1624,19 +1600,22 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
             p = repo_root / rel
             if not p.exists():
                 continue
-            html = p.read_text(encoding="utf-8")
+            html = _read_html_audit_range(p)
             self.assertIn("window.black76Price", html)
             self.assertIn("window.black76Greeks", html)
             self.assertIn("window.black76Iv", html)
             self.assertIn("window.computeBlack76ParityForward", html)
             self.assertIn("Black-76 Forward Model", html)
-            self.assertIn('"b76CallIv":16.95,"b76PutIv":16.95', html)
+            self.assertIn("Date-only zero DTE lacks the intraday expiry timestamp", html)
+            self.assertIn("var cSig = isFinite(cSolved) ? cSolved : NaN;", html)
+            self.assertNotIn(": 0.16", html)
+            self.assertNotIn("Number(item.syn || item.spot)", html)
 
 
 
 
 class TestIndependentQuantitativeAuditRegressions(unittest.TestCase):
-    def test_yang_zhang_uses_close_to_close_variance(self):
+    def test_yang_zhang_uses_open_to_close_variance(self):
         opens = np.array([100.0, 111.0, 107.0, 122.0, 118.0])
         closes = np.array([104.0, 109.0, 115.0, 119.0, 124.0])
         frame = pd.DataFrame({
@@ -1649,15 +1628,15 @@ class TestIndependentQuantitativeAuditRegressions(unittest.TestCase):
         window, annualization = 3, 252
         result = vol_lib.rolling_rv_suite(frame, window=window, ann_factor=annualization)
         close, open_s = pd.Series(closes), pd.Series(opens)
-        returns = np.log(close / close.shift(1))
         overnight = np.log(open_s / close.shift(1))
+        intraday = np.log(close / open_s)
         high = pd.Series(np.maximum(opens, closes) + 2.0)
         low = pd.Series(np.minimum(opens, closes) - 2.0)
         rs = np.log(high / close) * np.log(high / open_s) + np.log(low / close) * np.log(low / open_s)
         k = 0.34 / (1.34 + (window + 1) / (window - 1))
         expected_var = (
             overnight.rolling(window).var(ddof=1).iloc[-1]
-            + k * returns.rolling(window).var(ddof=1).iloc[-1]
+            + k * intraday.rolling(window).var(ddof=1).iloc[-1]
             + (1.0 - k) * rs.rolling(window).mean().iloc[-1]
         )
         self.assertAlmostEqual(result['yang_zhang_rv'].iloc[-1] ** 2 / annualization, expected_var, places=12)

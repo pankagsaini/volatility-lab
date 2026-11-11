@@ -1205,13 +1205,16 @@
 
       function black76Greeks(F, K, T, r, sigma, isCall) {
         var fwd = Number(F), strike = Number(K), years = Number(T), rate = (r !== undefined && r !== null) ? Number(r) : B76_RISK_FREE_RATE, vol = Number(sigma);
-        if (!isFinite(fwd) || fwd <= 0 || !isFinite(strike) || strike <= 0 || !isFinite(vol) || vol <= 0 || !isFinite(years)) {
+        if (!isFinite(fwd) || fwd <= 0 || !isFinite(strike) || strike <= 0 || !isFinite(vol) || vol < 0 || !isFinite(years) || !isFinite(rate)) {
           return { price: NaN, delta: NaN, fwdDelta: NaN, forwardDelta: NaN, gamma: NaN, vega: NaN, thetaDaily: NaN };
         }
         if (years <= 0) {
           var intr = isCall ? Math.max(0.0, fwd - strike) : Math.max(0.0, strike - fwd);
           var detD = isCall ? (fwd > strike ? 1.0 : (fwd === strike ? 0.5 : 0.0)) : (fwd < strike ? -1.0 : (fwd === strike ? -0.5 : 0.0));
           return { price: intr, delta: detD, fwdDelta: detD, forwardDelta: detD, gamma: 0.0, vega: 0.0, thetaDaily: 0.0 };
+        }
+        if (vol === 0) {
+          return { price: NaN, delta: NaN, fwdDelta: NaN, forwardDelta: NaN, gamma: NaN, vega: NaN, thetaDaily: NaN };
         }
         var D = Math.exp(-rate * years);
         var sqrtT = Math.sqrt(years);
@@ -1286,22 +1289,28 @@
       function enrichItemWithBlack76(item) {
         if (!item || !Array.isArray(item.chain) || !item.chain.length) return item;
         var K_atm = Number(item.atm || 0);
-        var T = Math.max(0.2, Number(item.dte || 1)) / 365.0;
+        var dte = Number(item.dte);
+        // Date-only zero DTE lacks the intraday expiry timestamp required to price safely.
+        var T = isFinite(dte) && dte > 0 ? dte / 365.0 : NaN;
         var atmNode = item.chain.find(function(x) { return Number(x.k) === K_atm; }) || item.chain[Math.floor(item.chain.length / 2)];
         if (!atmNode) return item;
         var cLtp = Number(atmNode.cLtp || 0);
         var pLtp = Number(atmNode.pLtp || 0);
-        var F = (cLtp > 0 && pLtp > 0) ? Number(computeBlack76ParityForward(K_atm, cLtp, pLtp, T, B76_RISK_FREE_RATE).toFixed(2)) : Number(item.syn || item.spot);
+        var F = NaN;
+        if (isFinite(T) && cLtp > 0 && pLtp > 0) {
+          var parityForward = computeBlack76ParityForward(K_atm, cLtp, pLtp, T, B76_RISK_FREE_RATE);
+          if (isFinite(parityForward) && parityForward > 0) F = Number(parityForward.toFixed(2));
+        }
         item.syn = F;
         item.pricingModel = 'Black-76 Forward Model · F = K + e^{rT}(C − P)';
         if (item.upstoxCallIv === undefined) item.upstoxCallIv = Number(atmNode.uCallIv || item.cIv || item.iv);
         if (item.upstoxPutIv === undefined) item.upstoxPutIv = Number(atmNode.uPutIv || item.pIv || item.iv);
         var atmCIv = black76Iv(cLtp, F, K_atm, T, B76_RISK_FREE_RATE, true);
         var atmPIv = black76Iv(pLtp, F, K_atm, T, B76_RISK_FREE_RATE, false);
+        item.b76CallIv = isFinite(atmCIv) ? atmCIv : null;
+        item.b76PutIv = isFinite(atmPIv) ? atmPIv : null;
+        item.b76AtmIv = isFinite(atmCIv) && isFinite(atmPIv) ? Number((0.5 * (atmCIv + atmPIv)).toFixed(2)) : null;
         if (isFinite(atmCIv) && isFinite(atmPIv)) {
-          item.b76CallIv = atmCIv;
-          item.b76PutIv = atmPIv;
-          item.b76AtmIv = Number((0.5 * (atmCIv + atmPIv)).toFixed(2));
           item.cIv = item.b76CallIv;
           item.pIv = item.b76PutIv;
           item.iv = item.b76AtmIv;
@@ -1314,17 +1323,17 @@
           if (node.uPutDelta === undefined) node.uPutDelta = Number(node.pDelta || 0);
           var cSolved = black76IvDec(node.cLtp, F, k, T, B76_RISK_FREE_RATE, true);
           var pSolved = black76IvDec(node.pLtp, F, k, T, B76_RISK_FREE_RATE, false);
-          var cSig = isFinite(cSolved) ? cSolved : (node.uCallIv > 0 ? node.uCallIv / 100.0 : 0.16);
-          var pSig = isFinite(pSolved) ? pSolved : (node.uPutIv > 0 ? node.uPutIv / 100.0 : 0.16);
+          var cSig = isFinite(cSolved) ? cSolved : NaN;
+          var pSig = isFinite(pSolved) ? pSolved : NaN;
           var cG = black76Greeks(F, k, T, B76_RISK_FREE_RATE, cSig, true);
           var pG = black76Greeks(F, k, T, B76_RISK_FREE_RATE, pSig, false);
-          node.b76CallIv = Number((cSig * 100.0).toFixed(2));
-          node.b76PutIv = Number((pSig * 100.0).toFixed(2));
-          node.b76CallDelta = Number(cG.delta.toFixed(3));
-          node.b76PutDelta = Number(pG.delta.toFixed(3));
-          node.b76CallFwdDelta = Number(cG.fwdDelta.toFixed(3));
-          node.b76PutFwdDelta = Number(pG.fwdDelta.toFixed(3));
-          node.b76OtmIv = k < F ? node.b76PutIv : (k > F ? node.b76CallIv : Number((0.5 * (node.b76CallIv + node.b76PutIv)).toFixed(2)));
+          node.b76CallIv = isFinite(cSig) ? Number((cSig * 100.0).toFixed(2)) : null;
+          node.b76PutIv = isFinite(pSig) ? Number((pSig * 100.0).toFixed(2)) : null;
+          node.b76CallDelta = isFinite(cG.delta) ? Number(cG.delta.toFixed(3)) : null;
+          node.b76PutDelta = isFinite(pG.delta) ? Number(pG.delta.toFixed(3)) : null;
+          node.b76CallFwdDelta = isFinite(cG.fwdDelta) ? Number(cG.fwdDelta.toFixed(3)) : null;
+          node.b76PutFwdDelta = isFinite(pG.fwdDelta) ? Number(pG.fwdDelta.toFixed(3)) : null;
+          node.b76OtmIv = k < F ? node.b76PutIv : (k > F ? node.b76CallIv : (node.b76CallIv !== null && node.b76PutIv !== null && isFinite(node.b76CallIv) && isFinite(node.b76PutIv) ? Number((0.5 * (node.b76CallIv + node.b76PutIv)).toFixed(2)) : null));
           node.cIv = node.b76CallIv;
           node.pIv = node.b76PutIv;
           node.mktIv = node.b76OtmIv;
@@ -1368,9 +1377,15 @@
       // ===================================================================
       // REQUIREMENT 2 & 6: PURE QUANT KPI STRIP (Card #6 = 25D Skew & BF)
       // ===================================================================
+      function formatIv(value) {
+        var iv = Number(value);
+        return value !== null && value !== undefined && isFinite(iv) && iv > 0 ? iv.toFixed(2) + '%' : '—';
+      }
+
       function renderTopKpiStrip() {
         var r = currentRow();
         if (!r) return;
+        enrichItemWithBlack76(r);
         var basis = r.syn - r.fut;
         var vrp30 = r.iv - r.hv30;
         var vrp10 = r.iv - r.hv10;
@@ -1379,14 +1394,14 @@
         var low = Math.round(r.spot - movePts);
         var high = Math.round(r.spot + movePts);
 
-        var b76C = (r.b76CallIv !== undefined ? r.b76CallIv : (r.cIv || r.iv));
-        var b76P = (r.b76PutIv !== undefined ? r.b76PutIv : (r.pIv || r.iv));
-        var uC = (r.upstoxCallIv !== undefined ? r.upstoxCallIv : b76C);
-        var uP = (r.upstoxPutIv !== undefined ? r.upstoxPutIv : b76P);
+        var b76C = (r.b76CallIv !== undefined ? r.b76CallIv : null);
+        var b76P = (r.b76PutIv !== undefined ? r.b76PutIv : null);
+        var uC = (r.upstoxCallIv !== undefined ? r.upstoxCallIv : null);
+        var uP = (r.upstoxPutIv !== undefined ? r.upstoxPutIv : null);
         document.getElementById('kpiSpot').textContent = r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        document.getElementById('kpiForwardSub').textContent = 'F: ' + r.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' · Fut ' + r.fut.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' (Basis ' + (basis >= 0 ? '+' : '') + basis.toFixed(1) + ')';
-        document.getElementById('kpiAtmIv').textContent = r.iv.toFixed(2) + '%';
-        document.getElementById('kpiIvRankSub').textContent = 'B76 CE ' + b76C.toFixed(2) + '% / PE ' + b76P.toFixed(2) + '% · Upstox Ref ' + uC.toFixed(2) + ' / ' + uP.toFixed(2) + ' (' + r.ivPct + 'th %ile)';
+        document.getElementById('kpiForwardSub').textContent = 'F: ' + (isFinite(r.syn) ? r.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—') + ' · Fut ' + r.fut.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' (Basis ' + (isFinite(basis) ? (basis >= 0 ? '+' : '') + basis.toFixed(1) : '—') + ')';
+        document.getElementById('kpiAtmIv').textContent = formatIv(r.b76AtmIv);
+        document.getElementById('kpiIvRankSub').textContent = 'B76 CE ' + formatIv(b76C) + ' / PE ' + formatIv(b76P) + ' · Upstox Ref ' + formatIv(uC) + ' / ' + formatIv(uP) + ' (' + r.ivPct + 'th %ile)';
         document.getElementById('kpiHvGarch').textContent = r.hv10.toFixed(2) + '% / ' + r.hv30.toFixed(2) + '%';
         document.getElementById('kpiHv10Sub').textContent = 'HV20: ' + r.hv20.toFixed(2) + '% · EWMA: ' + r.ewma.toFixed(2) + '%';
         document.getElementById('kpiVrpSpread').textContent = (vrp30 >= 0 ? '+' : '') + vrp30.toFixed(2) + ' pp';
@@ -1736,15 +1751,15 @@
         if (!r) return;
         enrichItemWithBlack76(r);
 
-        var b76C = (r.b76CallIv !== undefined ? r.b76CallIv : (r.cIv || r.iv));
-        var b76P = (r.b76PutIv !== undefined ? r.b76PutIv : (r.pIv || r.iv));
-        var uC = (r.upstoxCallIv !== undefined ? r.upstoxCallIv : b76C);
-        var uP = (r.upstoxPutIv !== undefined ? r.upstoxPutIv : b76P);
+        var b76C = (r.b76CallIv !== undefined ? r.b76CallIv : null);
+        var b76P = (r.b76PutIv !== undefined ? r.b76PutIv : null);
+        var uC = (r.upstoxCallIv !== undefined ? r.upstoxCallIv : null);
+        var uP = (r.upstoxPutIv !== undefined ? r.upstoxPutIv : null);
 
         var atmEl = document.getElementById('smileAtmSummary');
-        if (atmEl) atmEl.textContent = r.atm.toLocaleString('en-IN') + ' · F = ' + r.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' (Spot ' + r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ')';
+        if (atmEl) atmEl.textContent = r.atm.toLocaleString('en-IN') + ' · F = ' + (isFinite(r.syn) ? r.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—') + ' (Spot ' + r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ')';
         var cpEl = document.getElementById('smileCpIvSummary');
-        if (cpEl) cpEl.textContent = 'B76: CE ' + b76C.toFixed(2) + '% / PE ' + b76P.toFixed(2) + '% (Upstox Ref: ' + uC.toFixed(2) + '% / ' + uP.toFixed(2) + '%)';
+        if (cpEl) cpEl.textContent = 'B76: CE ' + formatIv(b76C) + ' / PE ' + formatIv(b76P) + ' (Upstox Ref: ' + formatIv(uC) + ' / ' + formatIv(uP) + ')';
         var rrEl = document.getElementById('smileRrVal');
         if (rrEl) rrEl.textContent = (r.rev25 >= 0 ? '+' : '') + r.rev25.toFixed(2) + ' pp';
         var bfEl = document.getElementById('smileBfVal');
@@ -1773,17 +1788,19 @@
           callIvArr.push(cIv > 0 ? Number(cIv.toFixed(2)) : null);
           putIvArr.push(pIv > 0 ? Number(pIv.toFixed(2)) : null);
 
-          var moneynessPct = ((k / r.syn - 1.0) * 100.0);
-          var zone = k === r.atm
+          var moneynessPct = isFinite(r.syn) && r.syn > 0 ? ((k / r.syn - 1.0) * 100.0) : NaN;
+          var zone = !isFinite(moneynessPct)
+            ? 'Forward unavailable'
+            : (k === r.atm
             ? 'ATM Parity (' + (moneynessPct >= 0 ? '+' : '') + moneynessPct.toFixed(2) + '% vs F)'
-            : (k < r.syn ? 'OTM Put (' + moneynessPct.toFixed(1) + '% vs F)' : 'OTM Call (+' + moneynessPct.toFixed(1) + '% vs F)');
+            : (k < r.syn ? 'OTM Put (' + moneynessPct.toFixed(1) + '% vs F)' : 'OTM Call (+' + moneynessPct.toFixed(1) + '% vs F)'));
 
           var cLtpTxt = cLtp > 0 ? ('₹' + cLtp.toFixed(2)) : '—';
           var pLtpTxt = pLtp > 0 ? ('₹' + pLtp.toFixed(2)) : '—';
           var cDelTxt = (cIv > 0 && cLtp > 0) ? cDel.toFixed(3) : '—';
           var pDelTxt = (pIv > 0 && pLtp > 0) ? pDel.toFixed(3) : '—';
-          var cIvTxt = cIv > 0 ? (cIv.toFixed(2) + '% <span class="text-[10px] text-slate-400">(' + uCallIv.toFixed(2) + ')</span>') : '—';
-          var pIvTxt = pIv > 0 ? (pIv.toFixed(2) + '% <span class="text-[10px] text-slate-400">(' + uPutIv.toFixed(2) + ')</span>') : '—';
+          var cIvTxt = cIv > 0 ? (cIv.toFixed(2) + '% <span class="text-[10px] text-slate-400">(' + (uCallIv > 0 ? uCallIv.toFixed(2) : '—') + ')</span>') : '—';
+          var pIvTxt = pIv > 0 ? (pIv.toFixed(2) + '% <span class="text-[10px] text-slate-400">(' + (uPutIv > 0 ? uPutIv.toFixed(2) : '—') + ')</span>') : '—';
           var otmIvTxt = otmIv > 0 ? (otmIv.toFixed(2) + '%') : '—';
 
           rowsHtml +=

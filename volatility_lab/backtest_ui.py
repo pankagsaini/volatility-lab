@@ -167,13 +167,21 @@ def render_options():
         a, b, c = st.columns(3)
         capital_allocated = a.number_input('Capital allocated · INR · 0 = no cap', min_value=0., value=0., step=50000.)
         margin_per_lot = b.number_input('Broker margin per strategy lot · INR', min_value=0., value=0., step=5000.)
-        fees = c.number_input('Broker fee model · %', min_value=0., max_value=10., value=0.15, step=0.01)
-        estimate_margin = st.checkbox(
-            'Auto-estimate exchange SPAN + Exposure margin proxy for short legs',
-            value=True,
-            help='Approximates SEBI/NSE SPAN and exposure margin (~10% notional for naked shorts / high leverage).',
+        use_upstox_fees = c.checkbox('Use dated Upstox fee schedule', value=True)
+        order_fee = 20.0 if use_upstox_fees else c.number_input(
+            'Flat fee per order · INR', min_value=0., value=20., step=1.
         )
-        st.caption('Enter broker margin per strategy lot, or leave at zero to use the automated exchange SPAN + Exposure proxy.')
+        estimate_margin = st.checkbox(
+            'Use scenario margin proxy for capital estimates',
+            value=True,
+            help='Scenario stress assumptions only; this does not calculate current NSE Clearing SPAN or broker margin.',
+        )
+        st.caption('Enter broker margin per strategy lot when available. Proxy percentages below are calibration assumptions, not exchange rules.')
+        a, b, c, d = st.columns(4)
+        slip_bps = a.number_input('Slippage assumption · bps per side', min_value=0., value=5., step=1.)
+        short_option_floor_rate = b.number_input('Short-option floor hypothesis · %', min_value=0., value=5., step=0.5) / 100.
+        exposure_add_rate = c.number_input('Exposure add-on hypothesis · %', min_value=0., value=2., step=0.5) / 100.
+        spread_floor_rate = d.number_input('Spread floor hypothesis · %', min_value=0., value=1.5, step=0.5) / 100.
         a, b, c, d = st.columns(4)
         stop = a.number_input('Portfolio stop · INR · 0 = off', min_value=0., value=default_stop, step=500., key='builder_stop_' + preset)
         target = b.number_input('Portfolio target · INR · 0 = off', min_value=0., value=default_target, step=500., key='builder_target_' + preset)
@@ -209,7 +217,12 @@ def render_options():
         capital_allocated=capital_allocated,
         margin_per_lot=margin_per_lot,
         estimate_margin=estimate_margin,
-        fees=fees,
+        use_upstox_fees=use_upstox_fees,
+        order_fee=order_fee,
+        slip_bps=slip_bps,
+        short_option_floor_rate=short_option_floor_rate,
+        exposure_add_rate=exposure_add_rate,
+        spread_floor_rate=spread_floor_rate,
         trigger=trigger,
         mode=mode,
         expiry_rank=expiry_rank,

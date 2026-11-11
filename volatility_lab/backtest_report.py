@@ -56,7 +56,7 @@ def render(trades,skips,settings,coverage):
      covered=pd.to_numeric(t['Capital required'],errors='coerce').notna()
      st.caption(f'Return on capital is available for {covered.sum()} of {len(t)} trades. Capital source: {t["Capital source"].iloc[0] if "Capital source" in t.columns and len(t) else "entry debit or margin allocation"}.')
     else:st.caption('Legacy fixed-unit run: no historical lot-size, capital or return-on-capital fields were recorded.')
-    st.caption(f"Costs use {settings.get('charges','saved-run fee assumptions')} plus entered slippage. Drawdown uses closed trades; intratrade risk and margin are not modeled.")
+    st.caption(f"Costs use {settings.get('charges','saved-run fee assumptions')} plus the configured slippage assumption. Scenario margin inputs are calibration hypotheses, not exchange or broker quotes. Drawdown uses closed trades; intratrade risk is not modeled.")
   if tabs[1].open:
    with tabs[1]:
     grouped=pd.DataFrame({'Month':dates.dt.strftime('%Y-%m'),'Weekday':dates.dt.day_name(),'Net':net})
@@ -87,4 +87,4 @@ def render(trades,skips,settings,coverage):
  with st.expander('Run settings & assumptions'):
   st.json(settings)
   if settings.get('engine')!='dated_futures_v1':
-   st.caption(f"Options: one-minute fills, {settings.get('charges','saved-run fee assumptions')}, and archived lot sizes. Stops use minute-close P&L and fill next minute; margin is user-provided.")
+   st.caption(f"Options: one-minute OHLC fill assumptions, {settings.get('charges','saved-run fee assumptions')}, archived lot sizes, and configured slippage. Stops use minute-close P&L and fill at the next executable minute. Missing exits remain unfilled and are excluded from realized P&L; proxy margin inputs are not exchange or broker quotes.")

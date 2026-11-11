@@ -1,5 +1,6 @@
 """Focused regressions for live quote integrity and tradable backtest inputs."""
 import copy
+import json
 from pathlib import Path
 import inspect
 import shutil
@@ -16,6 +17,14 @@ import forward_test
 
 
 class TestExecutionSafetyFixes(unittest.TestCase):
+    @staticmethod
+    def _read_docs_range(start, end):
+        path = ROOT / "docs" / "index.html"
+        with path.open(encoding="utf-8") as stream:
+            for _ in range(start - 1):
+                next(stream, None)
+            return "".join(next(stream, "") for _ in range(end - start + 1))
+
     @staticmethod
     def _chain_row(strike, call_bid=99.0, call_ask=101.0, put_bid=89.0, put_ask=91.0, depth=1000):
         return {
@@ -251,6 +260,60 @@ class TestExecutionSafetyFixes(unittest.TestCase):
             "if (expired.ms !== 0 || expired.windowStartMs !== 86401000) throw new Error('expired window did not roll');",
             "const migrated = readRuntimeBudget_(props({day: '2026-11-11', ms: 3400}), 'x', 500);",
             "if (migrated.ms !== 3400) throw new Error('legacy runtime was discarded');",
+        ])
+        result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the Apps Script helper")
+    def test_apps_script_option_gst_matches_python_charge_schedule(self):
+        code = (ROOT / "volatility_lab" / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
+        start = code.index("function upstoxOptionCharge_(")
+        end = code.index("\nfunction positionCharges_(", start)
+        helper = code[start:end]
+        script = helper + "\nprocess.stdout.write(String(upstoxOptionCharge_(100, 75, true)));"
+        result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        js_total = float(result.stdout)
+
+        import broker_charges
+
+        python_parts = broker_charges.charge("2026-11-11", "Options", 100.0, 75, "sell")
+        self.assertAlmostEqual(js_total, sum(python_parts.values()), places=9)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the browser Black-76 helpers")
+    def test_browser_black76_handles_expiry_and_keeps_missing_inputs_unpriced(self):
+        html = self._read_docs_range(1200, 1360)
+
+        def function_source(name, next_name):
+            start = html.index(f"function {name}(")
+            next_function = html.index(f"function {next_name}(", start)
+            end = html.rfind("\n", start, next_function)
+            return html[start:end]
+
+        helpers = "\n".join([
+            function_source("computeBlack76ParityForward", "black76Greeks"),
+            function_source("black76Greeks", "black76Price"),
+            function_source("enrichItemWithBlack76", "populateExpiryDropdown"),
+        ])
+        script = "\n".join([
+            "var B76_RISK_FREE_RATE = 0.05;",
+            "var seenTimes = [];",
+            "var window = {};",
+            "function normPdf() { return 0; }",
+            "function normCdf() { return 0.5; }",
+            "function black76Price() { return NaN; }",
+            "function black76IvDec(px, fwd, strike, years) { seenTimes.push(years); return NaN; }",
+            "function black76Iv() { return NaN; }",
+            helpers,
+            "var expiry = black76Greeks(105, 100, 0, 0.05, 0, true);",
+            "if (expiry.price !== 5 || expiry.gamma !== 0) throw new Error('expiry intrinsic value failed');",
+            "var subday = enrichItemWithBlack76({dte: 0.01, atm: 100, chain: [{k: 100, cLtp: 10, pLtp: 9, uCallIv: 22, uPutIv: 23}]});",
+            "if (Math.abs(seenTimes[0] - (0.01 / 365)) > 1e-15) throw new Error('sub-day DTE was floored');",
+            "if (subday.chain[0].b76CallIv !== null || subday.chain[0].b76PutIv !== null) throw new Error('unpriced IV was substituted');",
+            "var zeroDte = enrichItemWithBlack76({dte: 0, atm: 100, chain: [{k: 100, cLtp: 10, pLtp: 9}]});",
+            "if (!Number.isNaN(zeroDte.syn) || zeroDte.b76AtmIv !== null) throw new Error('date-only zero DTE was treated as a precise expiry time');",
+            "var missing = enrichItemWithBlack76({dte: 1, atm: 100, syn: 110, spot: 111, chain: [{k: 100, cLtp: 0, pLtp: 0, uCallIv: 22, uPutIv: 23}]});",
+            "if (!Number.isNaN(missing.syn) || missing.chain[0].b76CallIv !== null || missing.chain[0].b76OtmIv !== null) throw new Error('spot or upstream IV fallback was used');",
         ])
         result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)

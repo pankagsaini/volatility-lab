@@ -84,36 +84,8 @@ def load_signals(symbol, path=None, start=None, end=None):
                     r['HV30'] = hv_map[day_key]
                 out.append((str(r.get('Expiry') or exp)[:10], t, r))
 
-            # Load daily expiry_observations stamped strictly at 15:30:00 IST (never 09:15:00 IST) with zero fabricated 25 Delta reversal
-            has_exp_tbl = con.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='expiry_observations'"
-            ).fetchone()
-            if has_exp_tbl:
-                erows = con.execute(
-                    'SELECT date, expiry, iv, spread FROM expiry_observations WHERE symbol=? ORDER BY date',
-                    (symbol,),
-                ).fetchall()
-                for d_str, exp_s, iv_v, spr_v in erows:
-                    try:
-                        if iv_v is None or not math.isfinite(float(iv_v)):
-                            continue
-                        d_clean = str(d_str)[:10]
-                        t_eod = pd.Timestamp(f'{d_clean} 15:30:00', tz='Asia/Kolkata')
-                        hv_v = hv_map.get(d_clean)
-                        if hv_v is None and spr_v is not None and math.isfinite(float(spr_v)):
-                            hv_v = float(iv_v) - float(spr_v)
-                        spr_clean = float(spr_v) if spr_v is not None and math.isfinite(float(spr_v)) else (
-                            (float(iv_v) - hv_v) if hv_v is not None else None
-                        )
-                        rec_d = {
-                            'Expiry': str(exp_s)[:10],
-                            'IV': float(iv_v),
-                            'HV30': float(hv_v) if hv_v is not None else None,
-                            'IV-RV Spread': float(spr_clean) if spr_clean is not None else None,
-                        }
-                        out.append((str(exp_s)[:10], t_eod, rec_d))
-                    except Exception:
-                        continue
+            # expiry_observations stores a session date but no AvailableAt timestamp.
+            # Do not fabricate a 15:30 availability time; only timestamped snapshots qualify.
     except Exception:
         return out
     out.sort(key=lambda x: x[1])

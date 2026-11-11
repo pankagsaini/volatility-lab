@@ -1239,7 +1239,7 @@ function upstoxOptionCharge_(price, qty, isSell) {
   const sebi = turnover * 0.000001;
   const ipft = turnover * 0.000005;
   const stamp = isSell ? 0.0 : turnover * 0.00003;
-  const gst = 0.18 * (brokerage + exch + sebi + ipft);
+  const gst = 0.18 * (brokerage + exch + ipft);
   return brokerage + stt + exch + sebi + ipft + stamp + gst;
 }
 

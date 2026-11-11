@@ -43,15 +43,20 @@ def charge(day, segment, arg3, arg4, arg5='buy', brokerage=20.0):
     r = rates(day)
     turnover = abs(price * quantity)
     is_opt = str(segment).lower().startswith('opt')
+    order_brokerage = float(brokerage)
+    if not is_opt:
+        order_brokerage = min(order_brokerage, turnover * 0.0005)
     is_sell = (action == 'sell')
     stt = turnover * (r['opt_stt'] if is_opt else r['fut_stt']) if is_sell else 0.0
     exch = turnover * (r['opt_exch'] if is_opt else r['fut_exch'])
     sebi = turnover * r['sebi']
     ipft = turnover * (r['ipft_opt'] if is_opt else r['ipft_fut'])
     stamp = turnover * (r['opt_stamp'] if is_opt else r['fut_stamp']) if not is_sell else 0.0
-    gst = 0.18 * (float(brokerage) + exch + sebi + ipft)
+    # Upstox lists GST on brokerage, transaction and IPFT charges; SEBI turnover fees
+    # are a separate statutory line item and are excluded from that published base.
+    gst = 0.18 * (order_brokerage + exch + ipft)
     return {
-        'Brokerage': float(brokerage),
+        'Brokerage': order_brokerage,
         'STT': stt,
         'Exchange': exch,
         'IPFT': ipft,

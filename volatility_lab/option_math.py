@@ -30,22 +30,31 @@ def bsm_greeks(spot, strike, years, rate, vol, kind, dividend=0., *, div_yield=N
         raise ValueError('Invalid option inputs.')
     if div_yield is not None:
         dividend = div_yield
-    spot_a, strike_a, years_a, vol_a = np.broadcast_arrays(
+    spot_a, strike_a, years_a, rate_a, vol_a, dividend_a = np.broadcast_arrays(
         np.asarray(spot, dtype=float), np.asarray(strike, dtype=float),
-        np.asarray(years, dtype=float), np.asarray(vol, dtype=float),
+        np.asarray(years, dtype=float), np.asarray(rate, dtype=float),
+        np.asarray(vol, dtype=float), np.asarray(dividend, dtype=float),
     )
     expired = years_a <= 0
-    if (np.any(spot_a <= 0) or np.any(strike_a <= 0)
-            or np.any((vol_a <= 0) & ~expired)):
+    valid = (
+        np.isfinite(spot_a) & (spot_a > 0)
+        & np.isfinite(strike_a) & (strike_a > 0)
+        & np.isfinite(years_a)
+        & np.isfinite(rate_a)
+        & np.isfinite(vol_a) & (vol_a >= 0)
+        & np.isfinite(dividend_a)
+        & (expired | (vol_a > 0))
+    )
+    if not np.all(valid):
         raise ValueError('Invalid option inputs.')
     active_t = np.where(expired, 1.0, years_a)
     active_vol = np.where(expired, 1.0, vol_a)
     sqrt_t = np.sqrt(active_t)
     vol_sqrt_t = active_vol * sqrt_t
-    d1 = (np.log(spot_a / strike_a) + (rate - dividend + 0.5 * np.square(active_vol)) * active_t) / vol_sqrt_t
+    d1 = (np.log(spot_a / strike_a) + (rate_a - dividend_a + 0.5 * np.square(active_vol)) * active_t) / vol_sqrt_t
     d2 = d1 - vol_sqrt_t
-    df_q = np.exp(-dividend * active_t)
-    df_r = np.exp(-rate * active_t)
+    df_q = np.exp(-dividend_a * active_t)
+    df_r = np.exp(-rate_a * active_t)
     pdf_d1 = _norm_pdf(d1)
     if kind == 'CE':
         nd1, nd2 = ndtr(d1), ndtr(d2)
@@ -53,14 +62,14 @@ def bsm_greeks(spot, strike, years, rate, vol, kind, dividend=0., *, div_yield=N
         delta = df_q * nd1
         fwd_delta = nd1
         theta_ann = (-spot_a * df_q * pdf_d1 * active_vol / (2.0 * sqrt_t)
-                     - rate * strike_a * df_r * nd2 + dividend * spot_a * df_q * nd1)
+                     - rate_a * strike_a * df_r * nd2 + dividend_a * spot_a * df_q * nd1)
     else:
         nd1_neg, nd2_neg = ndtr(-d1), ndtr(-d2)
         price = strike_a * df_r * nd2_neg - spot_a * df_q * nd1_neg
         delta = -df_q * nd1_neg
         fwd_delta = -nd1_neg
         theta_ann = (-spot_a * df_q * pdf_d1 * active_vol / (2.0 * sqrt_t)
-                     + rate * strike_a * df_r * nd2_neg - dividend * spot_a * df_q * nd1_neg)
+                     + rate_a * strike_a * df_r * nd2_neg - dividend_a * spot_a * df_q * nd1_neg)
     gamma = (df_q * pdf_d1) / (spot_a * vol_sqrt_t)
     vega = spot_a * df_q * pdf_d1 * sqrt_t * 0.01
     call_delta_at_expiry = np.where(spot_a > strike_a, 1.0, np.where(spot_a < strike_a, 0.0, 0.5))
@@ -112,44 +121,63 @@ implied_vol = solve_iv
 
 
 def bsm_greeks_vec(spot, strike, years, vol=None, rate=0.0, dividend=0.0, kind='CE', iv=None, div_yield=None):
-    """Vectorized BSM Greeks with intrinsic-value and zero-Greek handling at T <= 0."""
+    """Vectorized BSM Greeks; expired contracts are intrinsic and invalid lanes are NaN."""
     sigma = np.asarray(iv if vol is None else vol, dtype=float)
-    q = float(div_yield if div_yield is not None else dividend)
-    r = float(rate)
+    try:
+        q = float(div_yield if div_yield is not None else dividend)
+        r = float(rate)
+    except (TypeError, ValueError):
+        q = r = np.nan
     S, K, T, sigma, kind_a = np.broadcast_arrays(
         np.asarray(spot, dtype=float), np.asarray(strike, dtype=float),
         np.asarray(years, dtype=float), sigma, np.asarray(kind, dtype=str),
     )
-    S = np.maximum(S, 1e-6)
-    K = np.maximum(K, 1e-6)
-    expired = T <= 0
-    sigma = np.maximum(sigma, 1e-6)
-    T = np.where(expired, 1.0, np.maximum(T, 1e-9))
-    sqrt_T = np.sqrt(T)
-    d1 = (np.log(S / K) + (r - q + 0.5 * np.square(sigma)) * T) / (sigma * sqrt_T)
-    d2 = d1 - sigma * sqrt_T
-    df_r = np.exp(-r * T)
-    df_q = np.exp(-q * T)
-    pdf_d1 = _norm_pdf(d1)
     is_call = np.isin(np.char.upper(kind_a), ['CE', 'CALL', 'C'])
-    price = np.where(is_call, S * df_q * ndtr(d1) - K * df_r * ndtr(d2), K * df_r * ndtr(-d2) - S * df_q * ndtr(-d1))
+    is_put = np.isin(np.char.upper(kind_a), ['PE', 'PUT', 'P'])
+    expired = np.isfinite(T) & (T <= 0)
+    valid = (
+        np.isfinite(S) & (S > 0)
+        & np.isfinite(K) & (K > 0)
+        & np.isfinite(T)
+        & np.isfinite(sigma) & (sigma >= 0)
+        & (expired | (sigma > 0))
+        & (is_call | is_put)
+        & np.isfinite(r) & np.isfinite(q)
+    )
+    active = valid & (T > 0)
+    safe_S = np.where(valid, S, 1.0)
+    safe_K = np.where(valid, K, 1.0)
+    safe_T = np.where(active, T, 1.0)
+    safe_sigma = np.where(active, sigma, 1.0)
+    sqrt_T = np.sqrt(safe_T)
+    d1 = (np.log(safe_S / safe_K) + (r - q + 0.5 * np.square(safe_sigma)) * safe_T) / (safe_sigma * sqrt_T)
+    d2 = d1 - safe_sigma * sqrt_T
+    df_r = np.exp(-r * safe_T)
+    df_q = np.exp(-q * safe_T)
+    pdf_d1 = _norm_pdf(d1)
+    price = np.where(is_call, safe_S * df_q * ndtr(d1) - safe_K * df_r * ndtr(d2), safe_K * df_r * ndtr(-d2) - safe_S * df_q * ndtr(-d1))
     delta = np.where(is_call, df_q * ndtr(d1), -df_q * ndtr(-d1))
-    gamma = (df_q * pdf_d1) / (S * sigma * sqrt_T)
-    vega = S * df_q * pdf_d1 * sqrt_T / 100.0
-    theta_c = (-(S * df_q * pdf_d1 * sigma) / (2.0 * sqrt_T) - r * K * df_r * ndtr(d2) + q * S * df_q * ndtr(d1)) / 365.0
-    theta_p = (-(S * df_q * pdf_d1 * sigma) / (2.0 * sqrt_T) + r * K * df_r * ndtr(-d2) - q * S * df_q * ndtr(-d1)) / 365.0
+    gamma = (df_q * pdf_d1) / (safe_S * safe_sigma * sqrt_T)
+    vega = safe_S * df_q * pdf_d1 * sqrt_T / 100.0
+    theta_c = (-(safe_S * df_q * pdf_d1 * safe_sigma) / (2.0 * sqrt_T) - r * safe_K * df_r * ndtr(d2) + q * safe_S * df_q * ndtr(d1)) / 365.0
+    theta_p = (-(safe_S * df_q * pdf_d1 * safe_sigma) / (2.0 * sqrt_T) + r * safe_K * df_r * ndtr(-d2) - q * safe_S * df_q * ndtr(-d1)) / 365.0
     theta = np.where(is_call, theta_c, theta_p)
-    intrinsic = np.where(is_call, np.maximum(S - K, 0.0), np.maximum(K - S, 0.0))
+    intrinsic = np.where(is_call, np.maximum(safe_S - safe_K, 0.0), np.maximum(safe_K - safe_S, 0.0))
     expiry_delta = np.where(
         is_call,
-        np.where(S > K, 1.0, np.where(S < K, 0.0, 0.5)),
-        np.where(S < K, -1.0, np.where(S > K, 0.0, -0.5)),
+        np.where(safe_S > safe_K, 1.0, np.where(safe_S < safe_K, 0.0, 0.5)),
+        np.where(safe_S < safe_K, -1.0, np.where(safe_S > safe_K, 0.0, -0.5)),
     )
     price = np.where(expired, intrinsic, price)
     delta = np.where(expired, expiry_delta, delta)
     gamma = np.where(expired, 0.0, gamma)
     vega = np.where(expired, 0.0, vega)
     theta = np.where(expired, 0.0, theta)
+    price = np.where(valid, price, np.nan)
+    delta = np.where(valid, delta, np.nan)
+    gamma = np.where(valid, gamma, np.nan)
+    vega = np.where(valid, vega, np.nan)
+    theta = np.where(valid, theta, np.nan)
     return {'price': price, 'delta': delta, 'gamma': gamma, 'vega': vega, 'theta': theta}
 
 
@@ -250,7 +278,7 @@ def _black76_core(forward, strike, years, rate, vol, kind, spot=None, div_yield=
         & np.isfinite(k_b) & (k_b > 0.0)
         & np.isfinite(t_b)
         & np.isfinite(r_b)
-        & np.isfinite(v_b) & (v_b > 0.0)
+        & np.isfinite(v_b) & (v_b >= 0.0)
     )
 
     # 1. Expiry or post-expiry regime (T <= 0): intrinsic value, deterministic delta, zero gamma/vega/theta
@@ -270,7 +298,7 @@ def _black76_core(forward, strike, years, rate, vol, kind, spot=None, div_yield=
         theta_daily[at_expiry] = 0.0
 
     # 2. Active time-to-expiry regime (T > 0), including near-zero expiry (T -> 0+)
-    pos_t = valid_base & (t_b > 0.0)
+    pos_t = valid_base & (t_b > 0.0) & (v_b > 0.0)
     if np.any(pos_t):
         with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):
             F = f_b[pos_t]

@@ -1,4 +1,4 @@
-"""Multi-leg options strategy backtest engine with SOM margin floor, quiet-minute carry-forward, and 6 Trade Scenario Presets."""
+"""Multi-leg options strategy backtest using explicit fills and marked-only missing-minute carry-forward."""
 from datetime import datetime, timedelta
 import json
 import math
@@ -232,7 +232,7 @@ def validate(settings: dict) -> bool:
     return True
 
 
-def valid_price(bar, index=0, fill=False):
+def valid_price(bar, index=0, fill=False, quantity=None):
     if bar is None or len(bar) <= max(index, 4):
         return False
     try:
@@ -240,13 +240,23 @@ def valid_price(bar, index=0, fill=False):
         vol = float(bar[4])
         if not (math.isfinite(px) and px > 0 and math.isfinite(vol) and vol >= 0):
             return False
-        return vol > 0 if fill else True
+        if not fill:
+            return True
+        return vol > 0 if quantity is None else vol >= float(quantity)
     except (TypeError, ValueError):
         return False
 
 
-def estimate_exchange_margin(legs, spot_price, symbol='NIFTY'):
-    """Scenario stress loss + NSE Short Option Minimum (5% SOM) and defined-risk spread floor."""
+def estimate_exchange_margin(
+    legs, spot_price, symbol='NIFTY', *, short_option_floor_rate=0.05,
+    exposure_add_rate=0.02, spread_floor_rate=0.015,
+):
+    """Return a scenario capital proxy; default rates are hypotheses, not exchange margin rules."""
+    rates = (short_option_floor_rate, exposure_add_rate, spread_floor_rate)
+    if (not math.isfinite(float(spot_price)) or float(spot_price) <= 0
+            or any(not math.isfinite(float(rate)) or float(rate) < 0 for rate in rates)):
+        raise ValueError('Spot and margin proxy rates must be finite and non-negative')
+    spot_price = float(spot_price)
     psr = 0.08 if symbol == 'NIFTY' else 0.10
     shifts = [-0.15, -psr, -psr / 2.0, 0.0, psr / 2.0, psr, 0.15]
     test_spots = {spot_price * (1.0 + s) for s in shifts} | {float(leg['strike']) for leg in legs}
@@ -268,15 +278,15 @@ def estimate_exchange_margin(legs, spot_price, symbol='NIFTY'):
         0,
     )
     if net_calls < 0 or net_puts < 0:
-        # Undefined-risk naked short option: apply 5% Short Option Minimum (SOM) floor
-        som_floor = 0.05 * spot_price * short_qty
-        exposure_add = 0.02 * spot_price * short_qty
+        # Calibration defaults only; actual clearing requirements are not calculated here.
+        som_floor = float(short_option_floor_rate) * spot_price * short_qty
+        exposure_add = float(exposure_add_rate) * spot_price * short_qty
         return float(max(worst_loss + exposure_add, som_floor))
     if short_qty == 0:
         # Pure long option structure: capital required is the net entry debit paid
         return float(max(0.0, -net_credit))
-    # Defined-risk spread: apply 1.5% spread margin floor alongside max intrinsic loss
-    spread_floor = 0.015 * spot_price * short_qty
+    # Calibration default only; actual clearing requirements are not calculated here.
+    spread_floor = float(spread_floor_rate) * spot_price * short_qty
     return float(max(worst_loss, spread_floor))
 
 
@@ -363,12 +373,12 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
                 break
             key = contract['instrument_key']
             eb = ticks.get(key, {}).get(entry_stamp)
-            if not valid_price(eb, 0, fill=True):
-                skip_reason = 'Missing exact entry minute or zero volume'
-                break
-            raw_entry = float(eb[0])
             side = int(spec['side'])
             qty = int(contract.get('lot_size') or s.get('quantity') or dated_lot_size(symbol, exp)) * int(spec.get('ratio', 1)) * lots_mult
+            if not valid_price(eb, 0, fill=True, quantity=qty):
+                skip_reason = 'Missing exact entry minute or insufficient traded volume'
+                break
+            raw_entry = float(eb[0])
             fill_entry = raw_entry * (1.0 + side * slip_bps / 10000.0)
             active_legs.append({
                 'contract': contract.get('trading_symbol', key),
@@ -379,7 +389,8 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
                 'quantity': qty,
                 'raw_entry': raw_entry,
                 'entry': fill_entry,
-                'last_close': float(eb[3]) if valid_price(eb, 3, fill=False) else raw_entry,
+                'last_close': float(eb[3]) if valid_price(eb, 3, fill=True) else raw_entry,
+                'last_close_at': entry_stamp,
             })
         if skip_reason:
             record_skip(skips, day, skip_reason)
@@ -389,7 +400,12 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
         if user_margin > 0:
             cap_req = user_margin * lots_mult
         elif s.get('estimate_margin', True):
-            cap_req = estimate_exchange_margin(active_legs, spot_px, symbol=symbol)
+            cap_req = estimate_exchange_margin(
+                active_legs, spot_px, symbol=symbol,
+                short_option_floor_rate=float(s.get('short_option_floor_rate', 0.05)),
+                exposure_add_rate=float(s.get('exposure_add_rate', 0.02)),
+                spread_floor_rate=float(s.get('spread_floor_rate', 0.015)),
+            )
         else:
             cap_req = 0.0
         cap_alloc = float(s['capital_allocated']) if s.get('capital_allocated') else None
@@ -416,10 +432,12 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
             unreal_gross = 0.0
             for leg in active_legs:
                 b = ticks.get(leg['key'], {}).get(cursor_str)
-                if valid_price(b, 3, fill=False):
+                if valid_price(b, 3, fill=True):
                     leg['last_close'] = float(b[3])
-                elif valid_price(b, 0, fill=False):
+                    leg['last_close_at'] = cursor_str
+                elif valid_price(b, 0, fill=True):
                     leg['last_close'] = float(b[0])
+                    leg['last_close_at'] = cursor_str
                 mark_px = leg['last_close']
                 est_exit = mark_px * (1.0 - leg['side'] * slip_bps / 10000.0)
                 unreal_gross += leg['side'] * (est_exit - leg['entry']) * leg['quantity']
@@ -433,15 +451,31 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
                     break
             cursor += timedelta(minutes=1)
 
-        # Find executable exit minute; never drop an already-entered trade if an OTM wing has 0 volume at 15:15 (use last_close fallback)
+        # Search for an executable exit; carried last_close values remain marks and are never treated as fills.
         fill_dt = exit_dt
         while fill_dt <= end_dt:
             fill_str = fill_dt.strftime('%Y-%m-%d %H:%M')
-            if all(valid_price(ticks.get(leg['key'], {}).get(fill_str), 0, fill=True) for leg in active_legs):
+            if all(valid_price(
+                ticks.get(leg['key'], {}).get(fill_str), 0, fill=True, quantity=leg['quantity']
+            ) for leg in active_legs):
                 break
             fill_dt += timedelta(minutes=1)
         else:
-            fill_dt = exit_dt
+            mark_gross = sum(
+                leg['side'] * (leg['last_close'] - leg['raw_entry']) * leg['quantity']
+                for leg in active_legs
+            )
+            skips.append({
+                'Date': day,
+                'Status': 'UNFILLED_EXIT',
+                'Reason': f'Position has no executable exit quote by {end_dt:%H:%M}; latest prices are marks only',
+                'Expiry': exp,
+                'Entry time': entry_time,
+                'Exit reason': exit_reason,
+                'Last mark times': json.dumps({leg['contract']: leg['last_close_at'] for leg in active_legs}),
+                'Unrealised gross': mark_gross,
+            })
+            continue
 
         fill_str = fill_dt.strftime('%Y-%m-%d %H:%M')
         gross = slippage = 0.0
@@ -451,12 +485,8 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
             xb = ticks.get(leg['key'], {}).get(fill_str)
             if valid_price(xb, 0, fill=True):
                 raw_exit = float(xb[0])
-            elif valid_price(xb, 3, fill=False):
-                raw_exit = float(xb[3])
-            elif valid_price(xb, 0, fill=False):
-                raw_exit = float(xb[0])
             else:
-                raw_exit = float(leg['last_close'])
+                raise RuntimeError('Exit selection did not produce a volume-qualified fill')
             side = leg['side']
             qty = leg['quantity']
             fill_exit = raw_exit * (1.0 - side * slip_bps / 10000.0)
