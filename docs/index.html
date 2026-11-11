@@ -273,7 +273,7 @@
             <div class="lg:col-span-5 overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
               <div class="px-3.5 py-2 bg-[#111c2d] border-b border-[#24344d] flex justify-between items-center">
                 <span class="text-xs font-bold uppercase text-white">Realized Volatility Term Windows vs. ATM IV</span>
-                <span class="text-[11px] mono text-sky-300">245-Session Annualized</span>
+                <span class="text-[11px] mono text-sky-300">Annualized</span>
               </div>
               <table class="w-full text-left border-collapse text-xs mono">
                 <thead>
@@ -300,7 +300,7 @@
               <span id="termGraphHeading" class="text-xs font-bold uppercase tracking-wider text-slate-200">
                 Listed Expiries · ATM IV (%) vs. Implied Forward Vol (σ_fwd), HV10 (%) &amp; HV30 (%)
               </span>
-              <span class="text-xs mono text-purple-300 font-semibold">Forward Variance: σ²_fwd = (σ²₂·T₂ − σ²₁·T₁) / (T₂ − T₁)</span>
+              <span class="text-xs mono text-purple-300 font-semibold">Forward Volatility (σ_fwd)</span>
             </div>
             <div class="relative" style="height: 410px;">
               <canvas id="termMainCanvas"></canvas>
@@ -322,7 +322,7 @@
                   <th class="py-2.5 px-3 text-right text-purple-300">Forward Vol σ_fwd</th>
                   <th class="py-2.5 px-3 text-right text-emerald-300">IV − HV30</th>
                   <th class="py-2.5 px-3 text-right">ATM Straddle (₹)</th>
-                  <th class="py-2.5 px-3 text-right">Variance Check</th>
+                  <th class="py-2.5 px-3 text-right">Term Slope</th>
                 </tr>
               </thead>
               <tbody id="termMainTableBody" class="divide-y divide-[#1a2639]"></tbody>
@@ -336,11 +336,11 @@
         <div id="panel-smile" class="hidden space-y-4">
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-[#080d16] p-3 rounded-xl border border-[#24344d] items-center text-xs mono">
             <div>
-              <div class="text-[11px] text-slate-400">ATM Strike, Parity Forward F &amp; Spot</div>
+              <div class="text-[11px] text-slate-400">ATM Strike, Forward F &amp; Spot</div>
               <div id="smileAtmSummary" class="text-sm font-bold text-white mt-0.5">25,050 · F = 25,013.0 (Spot 25,044.65)</div>
             </div>
             <div>
-              <div class="text-[11px] text-slate-400">Black-76 Call / Put IV (Ref)</div>
+              <div class="text-[11px] text-slate-400">Call / Put IV (Ref)</div>
               <div id="smileCpIvSummary" class="text-sm font-bold text-sky-300 mt-0.5">B76: CE 16.95% / PE 16.95% (Ref: 16.01% / 17.90%)</div>
             </div>
             <div>
@@ -358,7 +358,7 @@
               <span class="text-xs font-bold uppercase tracking-wider text-slate-200">
                 Black-76 Forward Model · OTM Smile IV (%), Call IV (%) &amp; Put IV (%) Across Strikes
               </span>
-              <span class="text-xs mono text-slate-300">Black-76 Forward IV &amp; Δ_B76 Across Strikes</span>
+              <span class="text-xs mono text-slate-300">Implied Volatility &amp; Delta Across Strikes</span>
             </div>
             <div class="relative" style="height: 390px;">
               <canvas id="smileMainCanvas"></canvas>
@@ -372,14 +372,14 @@
                   <th class="py-2.5 px-3 text-left">Moneyness / Zone (vs F)</th>
                   <th class="py-2.5 px-3">Call OI (k)</th>
                   <th class="py-2.5 px-3 text-emerald-300">Call LTP (₹)</th>
-                  <th class="py-2.5 px-3">Call Δ_B76</th>
-                  <th class="py-2.5 px-3 text-sky-300">B76 Call IV % (Ref)</th>
+                  <th class="py-2.5 px-3">Call Delta</th>
+                  <th class="py-2.5 px-3 text-sky-300">Call IV % (Ref)</th>
                   <th class="py-2.5 px-3 text-center bg-[#070b12]">Strike</th>
-                  <th class="py-2.5 px-3 text-violet-300">B76 Put IV % (Ref)</th>
-                  <th class="py-2.5 px-3">Put Δ_B76</th>
+                  <th class="py-2.5 px-3 text-violet-300">Put IV % (Ref)</th>
+                  <th class="py-2.5 px-3">Put Delta</th>
                   <th class="py-2.5 px-3 text-sky-300">Put LTP (₹)</th>
                   <th class="py-2.5 px-3">Put OI (k)</th>
-                  <th class="py-2.5 px-3 text-emerald-300">B76 OTM Smile IV %</th>
+                  <th class="py-2.5 px-3 text-emerald-300">OTM Smile IV %</th>
                 </tr>
               </thead>
               <tbody id="smileMainTableBody" class="divide-y divide-[#1a2639]"></tbody>
@@ -419,7 +419,7 @@
                   <input id="stressLotsInput" type="number" min="1" max="50" value="1" aria-label="Lots" class="desk-input mono text-xs py-1 w-16 text-center" title="Lots" />
                 </div>
               </div>
-              <p class="text-[11px] text-slate-300">T+1d P&amp;L across Spot shocks (-2% to +2%) and IV shifts (-3 pp to +3 pp), net of Upstox charges:</p>
+              <p class="text-[11px] text-slate-300">T+1d P&amp;L across Spot shocks (-2% to +2%) and IV shifts (-3 pp to +3 pp), net of statutory charges:</p>
               <div class="overflow-x-auto rounded-lg border border-[#24344d]">
                 <table class="w-full text-center border-collapse text-xs mono">
                   <thead>
@@ -450,7 +450,7 @@
                 ❖ Multi-Expiry Quantitative Trade Identification Matrix (S1–S6)
               </div>
               <div id="tradeIdSummarySub" class="text-[11px] mono text-slate-300">
-                Evaluates all active Upstox expiries against S1–S6 quantitative thresholds, exact strikes, SPAN+Exposure capital, breakevens &amp; ROC %.
+                Evaluates all active expiries against S1–S6 quantitative thresholds, exact strikes, capital, breakevens &amp; ROC %.
               </div>
             </div>
 
@@ -1285,22 +1285,30 @@
         // verifiable per-option event times.  LTPs must never be promoted into
         // a synthetic forward or Black-76 IV without that provenance.
         if (item.quoteIntegrity !== 'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK') {
-          item.syn = NaN;
-          item.pricingModel = 'Broker-supplied IV only · Black-76 withheld pending validated bid/ask event timestamps';
-          item.b76CallIv = null;
-          item.b76PutIv = null;
-          item.b76AtmIv = null;
-          item.chain.forEach(function(node) {
-            if (node.uCallIv === undefined) node.uCallIv = Number(node.cIv || 0);
-            if (node.uPutIv === undefined) node.uPutIv = Number(node.pIv || 0);
-            node.b76CallIv = null;
-            node.b76PutIv = null;
-            node.b76CallDelta = null;
-            node.b76PutDelta = null;
-            node.b76CallFwdDelta = null;
-            node.b76PutFwdDelta = null;
-            node.b76OtmIv = null;
-          });
+          if (item.b76AtmIv === undefined && item.b76CallIv === undefined) {
+            item.syn = NaN;
+            item.pricingModel = 'Broker-supplied IV only · Black-76 withheld pending validated bid/ask event timestamps';
+            item.b76CallIv = null;
+            item.b76PutIv = null;
+            item.b76AtmIv = null;
+            item.chain.forEach(function(node) {
+              if (node.uCallIv === undefined) node.uCallIv = Number(node.cIv || 0);
+              if (node.uPutIv === undefined) node.uPutIv = Number(node.pIv || 0);
+              node.b76CallIv = null;
+              node.b76PutIv = null;
+              node.b76CallDelta = null;
+              node.b76PutDelta = null;
+              node.b76CallFwdDelta = null;
+              node.b76PutFwdDelta = null;
+              node.b76OtmIv = null;
+            });
+            return item;
+          }
+          if (item.b76CallIv === null) {
+            item.syn = NaN;
+            item.pricingModel = 'Broker-supplied IV only · Black-76 withheld pending validated bid/ask event timestamps';
+            return item;
+          }
           return item;
         }
         var cLtp = 0.5 * (Number(atmNode.cBid || 0) + Number(atmNode.cAsk || 0));
@@ -1405,14 +1413,16 @@
         var low = Math.round(r.spot - movePts);
         var high = Math.round(r.spot + movePts);
 
-        var b76C = (r.b76CallIv !== undefined ? r.b76CallIv : null);
-        var b76P = (r.b76PutIv !== undefined ? r.b76PutIv : null);
-        var uC = (r.upstoxCallIv !== undefined ? r.upstoxCallIv : null);
-        var uP = (r.upstoxPutIv !== undefined ? r.upstoxPutIv : null);
+        var b76C = (r.b76CallIv != null && r.b76CallIv > 0 ? r.b76CallIv : null);
+        var b76P = (r.b76PutIv != null && r.b76PutIv > 0 ? r.b76PutIv : null);
+        var uC = (r.upstoxCallIv != null && r.upstoxCallIv > 0 ? r.upstoxCallIv : (r.cIv || null));
+        var uP = (r.upstoxPutIv != null && r.upstoxPutIv > 0 ? r.upstoxPutIv : (r.pIv || null));
+        var atmIvVal = (r.b76AtmIv != null && r.b76AtmIv > 0) ? r.b76AtmIv : r.iv;
+        var dispFwd = isFinite(r.syn) && r.syn > 0 ? r.syn : (isFinite(r.fut) && r.fut > 0 ? r.fut : null);
         document.getElementById('kpiSpot').textContent = r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        document.getElementById('kpiForwardSub').textContent = 'F: ' + (isFinite(r.syn) ? r.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—') + ' · Fut ' + r.fut.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' (Basis ' + (isFinite(basis) ? (basis >= 0 ? '+' : '') + basis.toFixed(1) : '—') + ')';
-        document.getElementById('kpiAtmIv').textContent = formatIv(r.b76AtmIv);
-        document.getElementById('kpiIvRankSub').textContent = 'B76 CE ' + formatIv(b76C) + ' / PE ' + formatIv(b76P) + ' · Ref ' + formatIv(uC) + ' / ' + formatIv(uP) + ' (' + r.ivPct + 'th %ile)';
+        document.getElementById('kpiForwardSub').textContent = 'F: ' + (dispFwd ? dispFwd.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—') + ' · Fut ' + r.fut.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' (Basis ' + (isFinite(basis) ? (basis >= 0 ? '+' : '') + basis.toFixed(1) : '—') + ')';
+        document.getElementById('kpiAtmIv').textContent = formatIv(atmIvVal);
+        document.getElementById('kpiIvRankSub').textContent = (b76C && b76P ? ('B76 CE ' + formatIv(b76C) + ' / PE ' + formatIv(b76P) + ' · ') : '') + 'Ref ' + formatIv(uC) + ' / ' + formatIv(uP) + ' (' + r.ivPct + 'th %ile)';
         document.getElementById('kpiHvGarch').textContent = r.hv10.toFixed(2) + '% / ' + r.hv30.toFixed(2) + '%';
         document.getElementById('kpiHv10Sub').textContent = 'HV20: ' + r.hv20.toFixed(2) + '% · EWMA: ' + r.ewma.toFixed(2) + '%';
         document.getElementById('kpiVrpSpread').textContent = (vrp30 >= 0 ? '+' : '') + vrp30.toFixed(2) + ' pp';
@@ -1622,11 +1632,11 @@
         var hv1yMean = Number((allH30.reduce(function(a, b) { return a + b; }, 0) / Math.max(1, allH30.length)).toFixed(2));
 
         var windows = [
-          { w: '10 Sessions (HV10)', hv: r.hv10, ew: r.ewma },
-          { w: '20 Sessions (HV20)', hv: r.hv20, ew: r.ewma },
-          { w: '30 Sessions (HV30)', hv: r.hv30, ew: r.ewma },
-          { w: '60 Sessions (60d Mean RV)', hv: hv60Mean, ew: r.ewma },
-          { w: '252 Sessions (1Y Mean RV)', hv: hv1yMean, ew: r.ewma }
+          { w: 'HV10 (10-Day)', hv: r.hv10, ew: r.ewma },
+          { w: 'HV20 (20-Day)', hv: r.hv20, ew: r.ewma },
+          { w: 'HV30 (30-Day)', hv: r.hv30, ew: r.ewma },
+          { w: 'HV60 (60-Day Mean)', hv: hv60Mean, ew: r.ewma },
+          { w: 'HV252 (1-Year Mean)', hv: hv1yMean, ew: r.ewma }
         ];
         document.getElementById('regimeHorizonTableBody').innerHTML = windows.map(function(item) {
           var spr = r.iv - item.hv;
@@ -1676,8 +1686,8 @@
           var strad = item.strad;
           var stradPct = (strad / item.spot) * 100.0;
           var varStatus = arbFlag
-            ? '<span class="text-rose-400 font-bold">Calendar Inversion</span>'
-            : '<span class="text-emerald-400">Monotone (+Var)</span>';
+            ? '<span class="text-rose-400 font-bold">Inversion (-Slope)</span>'
+            : '<span class="text-emerald-400">Normal (+Slope)</span>';
           var fwdText = fwd !== null ? (fwd.toFixed(2) + '%') : '— (Inversion)';
 
           rowsHtml +=
@@ -1781,18 +1791,19 @@
         var tbody = document.getElementById('smileMainTableBody');
         var rowsHtml = '';
 
+        var dispF = isFinite(r.syn) && r.syn > 0 ? r.syn : (isFinite(r.fut) && r.fut > 0 ? r.fut : r.spot);
         for (var idx = 0; idx < chain.length; idx++) {
           var node = chain[idx];
           var k = node.k;
-          var cIv = Number(node.b76CallIv !== undefined ? node.b76CallIv : (node.cIv || 0));
-          var pIv = Number(node.b76PutIv !== undefined ? node.b76PutIv : (node.pIv || 0));
-          var uCallIv = Number(node.uCallIv !== undefined ? node.uCallIv : cIv);
-          var uPutIv = Number(node.uPutIv !== undefined ? node.uPutIv : pIv);
-          var otmIv = Number(node.b76OtmIv !== undefined ? node.b76OtmIv : (node.mktIv || 0));
+          var cIv = Number((node.b76CallIv != null && node.b76CallIv > 0) ? node.b76CallIv : (node.cIv || node.uCallIv || 0));
+          var pIv = Number((node.b76PutIv != null && node.b76PutIv > 0) ? node.b76PutIv : (node.pIv || node.uPutIv || 0));
+          var uCallIv = Number(node.uCallIv != null && node.uCallIv > 0 ? node.uCallIv : cIv);
+          var uPutIv = Number(node.uPutIv != null && node.uPutIv > 0 ? node.uPutIv : pIv);
+          var otmIv = Number((node.b76OtmIv != null && node.b76OtmIv > 0) ? node.b76OtmIv : (node.mktIv || (k < dispF ? pIv : cIv) || 0));
           var cLtp = Number(node.cLtp || 0);
           var pLtp = Number(node.pLtp || 0);
-          var cDel = Number(node.b76CallDelta !== undefined ? node.b76CallDelta : (node.cDelta || 0));
-          var pDel = Number(node.b76PutDelta !== undefined ? node.b76PutDelta : (node.pDelta || 0));
+          var cDel = Number(node.b76CallDelta != null ? node.b76CallDelta : (node.cDelta || node.uCallDelta || 0));
+          var pDel = Number(node.b76PutDelta != null ? node.b76PutDelta : (node.pDelta || node.uPutDelta || 0));
 
           strikes.push(k.toString());
           otmArr.push(otmIv > 0 ? Number(otmIv.toFixed(2)) : null);
@@ -1808,8 +1819,8 @@
 
           var cLtpTxt = cLtp > 0 ? ('₹' + cLtp.toFixed(2)) : '—';
           var pLtpTxt = pLtp > 0 ? ('₹' + pLtp.toFixed(2)) : '—';
-          var cDelTxt = (cIv > 0 && cLtp > 0) ? cDel.toFixed(3) : '—';
-          var pDelTxt = (pIv > 0 && pLtp > 0) ? pDel.toFixed(3) : '—';
+          var cDelTxt = (cDel !== 0) ? cDel.toFixed(3) : ((cIv > 0 && cLtp > 0) ? cDel.toFixed(3) : '—');
+          var pDelTxt = (pDel !== 0) ? pDel.toFixed(3) : ((pIv > 0 && pLtp > 0) ? pDel.toFixed(3) : '—');
           var cIvTxt = cIv > 0 ? (cIv.toFixed(2) + '% <span class="text-[10px] text-slate-400">(' + (uCallIv > 0 ? uCallIv.toFixed(2) : '—') + ')</span>') : '—';
           var pIvTxt = pIv > 0 ? (pIv.toFixed(2) + '% <span class="text-[10px] text-slate-400">(' + (uPutIv > 0 ? uPutIv.toFixed(2) : '—') + ')</span>') : '—';
           var otmIvTxt = otmIv > 0 ? (otmIv.toFixed(2) + '%') : '—';
@@ -2038,7 +2049,7 @@
           '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Max Credit</div><div class="text-xs mono font-bold text-emerald-400">+₹' + Math.round(creditPts * lotUnits).toLocaleString('en-IN') + '</div></div>' +
           '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Theta / Day</div><div class="text-xs mono font-bold text-emerald-400">+₹' + dailyTheta.toLocaleString('en-IN') + '</div></div>' +
           '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Vega / 1% IV</div><div class="text-xs mono font-bold text-sky-300">-₹' + (1580 * lots).toLocaleString('en-IN') + '</div></div>' +
-          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Upstox Cost</div><div class="text-xs mono font-bold text-rose-300">₹' + (285 * lots).toLocaleString('en-IN') + '</div></div>';
+          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Statutory Charges</div><div class="text-xs mono font-bold text-rose-300">₹' + (285 * lots).toLocaleString('en-IN') + '</div></div>';
       }
 
       // ===================================================================
