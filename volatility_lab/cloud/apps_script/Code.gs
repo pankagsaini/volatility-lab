@@ -702,7 +702,11 @@ function capture_(mode, recovery) {
   // remain separate and are validated before entry or MTM.
   report.retrieved_at = new Date().toISOString();
 
-  if (mode === 'snapshot' && report.records && report.records.length) {
+  if (mode === 'snapshot' && report.status !== 'complete') {
+    // A partial capture may omit an expiry, a leg, or the index quote.  It is
+    // retained for diagnostics but cannot create or mark a forward-test trade.
+    report.forward_test_status = 'withheld_incomplete_snapshot';
+  } else if (mode === 'snapshot' && report.records && report.records.length) {
     try {
       const forwardLedger = evaluateForwardTest_(report);
       if (!forwardLedger) throw new Error('Forward evaluator returned no ledger');
@@ -1597,6 +1601,7 @@ function forwardRiskMetrics_(report, sym, snapshotDay) {
  */
 function evaluateForwardTest_(report) {
   if (!report || !Array.isArray(report.records)) return null;
+  if (report.status !== 'complete') throw new Error('Forward test requires a complete snapshot');
   if (report.nfo_session_validated !== true) throw new Error('NFO trading session was not validated');
   const snapDate = report.retrieved_at ? new Date(report.retrieved_at) : new Date();
   if (!Number.isFinite(snapDate.getTime())) throw new Error('Invalid snapshot timestamp');

@@ -861,6 +861,10 @@ def process_live_upstox_snapshot(
     state = sanitize_forward_ledger(ledger if ledger is not None else load_forward_ledger())
     if not isinstance(payload, dict):
         return state
+    if payload.get("status") != "complete":
+        state["gate_blocked"] = True
+        state["gate_message"] = "Snapshot is incomplete; no trigger or mark was processed."
+        return state
 
     snap_ts = now_ist or payload.get("timestamp") or payload.get("as_of") or payload.get("retrieved_at")
     snap_dt = _parse_aware_timestamp(snap_ts)

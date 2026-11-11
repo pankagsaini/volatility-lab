@@ -133,6 +133,42 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertGreater(len(closed["closed_trades"]), 0)
         self.assertTrue(all(tr["exitTime"] == "15:15 IST" for tr in closed["closed_trades"]))
 
+    def test_partial_snapshot_cannot_create_or_mark_forward_positions(self):
+        timestamp = "2026-11-11T09:20:00+05:30"
+        rows = [
+            dict(self._chain_row(strike, quote_time=timestamp), underlying_spot_price=25050.0)
+            for strike in range(24000, 26100, 50)
+        ]
+        complete_payload = {
+            "schema": 1,
+            "provider": "Upstox",
+            "mode": "snapshot",
+            "status": "complete",
+            "day": "2026-11-11",
+            "retrieved_at": timestamp,
+            "nfo_session_validated": True,
+            "risk_metrics": {"NIFTY": {"as_of": "2026-11-11", "hv10": 14.0, "hv30": 15.0}},
+            "records": [{"label": "NIFTY|2026-11-17", "retrieved_at": timestamp, "data": rows}],
+        }
+        complete_state = forward_test.process_live_upstox_snapshot(
+            complete_payload,
+            ledger=copy.deepcopy(forward_test.CLEAN_SLATE_LEDGER),
+            now_ist=timestamp,
+        )
+        self.assertGreater(len(complete_state["open_positions"]), 0)
+
+        partial_payload = copy.deepcopy(complete_payload)
+        partial_payload["status"] = "partial"
+        partial_payload["errors"] = [{"item": "BANKNIFTY|2026-11-17", "reason": "Upstream request failed"}]
+        withheld_state = forward_test.process_live_upstox_snapshot(
+            partial_payload,
+            ledger=copy.deepcopy(forward_test.CLEAN_SLATE_LEDGER),
+            now_ist=timestamp,
+        )
+        self.assertEqual(withheld_state["open_positions"], [])
+        self.assertTrue(withheld_state["gate_blocked"])
+        self.assertIn("incomplete", withheld_state["gate_message"].lower())
+
     def test_stale_quote_defers_1515_close_until_fresh_two_sided_depth(self):
         chain = [self._chain_row(25250), self._chain_row(24850)]
         stale_open, stale_closed = forward_test.mark_open_positions_to_market(
@@ -320,6 +356,9 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertNotIn("close_price || 0", code)
         self.assertIn("WITHHELD_STALE_OR_UNVERIFIED_POSITION", code)
         self.assertIn("WITHHELD_NO_LIVE_OPTION_CHAIN", code)
+        self.assertIn("mode === 'snapshot' && report.status !== 'complete'", code)
+        self.assertIn("withheld_incomplete_snapshot", code)
+        self.assertIn("Forward test requires a complete snapshot", code)
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the Apps Script helper")
     def test_apps_script_runtime_budget_uses_a_rolling_24_hour_window(self):
