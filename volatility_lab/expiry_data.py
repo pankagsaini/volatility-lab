@@ -13,7 +13,10 @@ import numpy as np
 
 import pandas as pd
 
-import market_table as base
+try:
+    from . import market_table as base
+except ImportError:  # Support existing standalone Streamlit/script entrypoints.
+    import market_table as base
 
 from collector_support import serialized,atomic_csv
 

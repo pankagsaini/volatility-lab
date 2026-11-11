@@ -6,7 +6,10 @@ import sqlite3
 import numpy as np
 import pandas as pd
 from market_data import IST, history_cutoff, MarketDataError
-from market_table import Monitor
+try:
+    from .market_table import Monitor
+except ImportError:  # Support existing standalone Streamlit/script entrypoints.
+    from market_table import Monitor
 from market_calendar import HOLIDAYS,SPECIAL_SESSIONS,last_trading_day_on_or_before
 from collector_support import serialized,atomic_csv
 

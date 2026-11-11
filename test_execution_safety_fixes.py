@@ -260,6 +260,25 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertEqual(trades.loc[0, "Execution model"], backtest_engine.EXECUTION_MODEL_VERSION)
         self.assertGreater(trades.loc[0, "Charges"], 0.0)
 
+    def test_package_collectors_import_shared_monitor_base(self):
+        """Facade imports must not fail after the market-table collector rewrite."""
+        script = "\n".join([
+            "from volatility_lab.market_table import INDICES, Monitor",
+            "from volatility_lab.expiry_data import ExpiryMonitor",
+            "from volatility_lab.futures_data import FuturesMonitor",
+            "assert set(INDICES) == {'NIFTY', 'BANKNIFTY'}",
+            "assert issubclass(ExpiryMonitor, Monitor)",
+            "assert issubclass(FuturesMonitor, Monitor)",
+        ])
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_apps_script_guards_property_size_and_never_fabricates_entry_price(self):
         code = (ROOT / "volatility_lab" / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
         self.assertIn("EOD_PENDING_DAY_", code)
