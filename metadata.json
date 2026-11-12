@@ -1,0 +1,5 @@
+{
+  "name": "Volatility Lab",
+  "description": "Quantitative NSE Options & Volatility Desk (NIFTY 50 & BANKNIFTY Black-76 Surface, Strategy Backtest & Automated Forward Testing)",
+  "requestFramePermissions": []
+}
