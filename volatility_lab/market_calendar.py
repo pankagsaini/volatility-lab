@@ -1,22 +1,4 @@
-"""Centralized NSE trading calendar with 2023-2028 (including Leap Year 2028) holiday & special session support.
-
-================================================================================
-ANNUAL CALENDAR MAINTENANCE PROTOCOL:
-================================================================================
-1. Horizon Verification:
-   - This calendar strictly verifies NSE trading days across 2023-01-01 to 2028-12-31.
-   - Any query outside MIN_SUPPORTED_YEAR..MAX_SUPPORTED_YEAR raises `CalendarHorizonError`
-     to prevent synthetic or silent calculation errors.
-
-2. Annual Update Checklist (Each November/December):
-   a. Download the official NSE Trading Holidays Circular for the upcoming calendar year
-      from https://www.nseindia.com/resources/exchange-communication-circulars
-   b. Add newly declared trading holidays to `HOLIDAYS` set with date(YYYY, MM, DD).
-   c. Add special trading sessions (e.g. Diwali Laxmi Pujan / Muhurat Trading) to `SPECIAL_SESSIONS`.
-   d. Bump `MAX_SUPPORTED_YEAR` when the next annual schedule is codified.
-   e. Run `python test_audit_remediations.py` to assert calendar continuity and leap-year rules.
-================================================================================
-"""
+"""Centralized NSE trading calendar with 2023-2028 (including Leap Year 2028) holiday & special session support."""
 from datetime import date, datetime, timedelta
 
 MIN_SUPPORTED_YEAR = 2023
@@ -95,17 +77,3 @@ def last_trading_day_on_or_before(d, include_special: bool = False) -> date:
     while not is_trading_day(cur, include_special=include_special):
         cur -= timedelta(days=1)
     return cur
-
-
-def check_horizon_warning(as_of_date: date | datetime | None = None) -> str | None:
-    """Return a warning string if current date is within 365 days of calendar horizon expiration."""
-    ref_d = (
-        as_of_date.date() if isinstance(as_of_date, datetime) else (as_of_date or date.today())
-    )
-    horizon_end = date(MAX_SUPPORTED_YEAR, 12, 31)
-    days_left = (horizon_end - ref_d).days
-    if days_left <= 0:
-        return f"CRITICAL: NSE calendar horizon expired on {horizon_end}. Update market_calendar.py immediately."
-    if days_left <= 365:
-        return f"WARNING: NSE calendar horizon expires in {days_left} days ({horizon_end}). Update per annual protocol."
-    return None

@@ -1,108 +1,75 @@
-# Backups, Scratch & Temporary Fixes
-.audit_backups/
-scratch/
-patches/
-rebuild_clean_project_*.py
-patch_*.py
-apply_volatility_lab_fixes.py
-*.bak
-*.orig
-
-# Byte-compiled / optimized / cache files
+# Python bytecode & caches
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 .pytest_cache/
+.mypy_cache/
 .ruff_cache/
-*.egg-info/
-*.egg
-build/
-dist/
 
-# Windows Batch & Untracked Shell Scripts
-*.cmd
-*.ps1
+# Virtual environments
+.venv/
+venv/
+env/
 
-# Embedded Python Runtime & MinGit Binary Tools
-volatility_lab/.runtime/
-volatility_lab/.dependencies/
-
-# Encrypted Auth Credentials, Secrets & Token Storage
-volatility_lab/.auth/
-.streamlit/secrets.toml
-volatility_lab/.streamlit/secrets.toml
-*.bin
+# Runtime state, locks & secrets
+.runtime/
+.dependencies/
+.auth/
+.audit_backups/
 *.lock
-*.tmp
-.clasprc.json
-.env
-.env.*
-!.env.example
+sync.lock
+token.json
+upstox_token.json
+.streamlit/secrets.toml
+Volatility Lab/.streamlit/secrets.toml
 
-# System Diagnostic Logs
-volatility_lab/logs/
-*.log
+# SQLite WAL / shared-memory sidecars
+*.sqlite-wal
+*.sqlite-shm
+*.db-wal
+*.db-shm
 
-# Large Market Data Files & Binary Databases
-*.sqlite*
-**/*.sqlite*
-volatility_lab/data/backtest_1minute/*.json.gz
-volatility_lab/data/backtest_1minute/*.sqlite*
-volatility_lab/data/backtest_futures/*.json.gz
-volatility_lab/data/google_archive/*.json.gz
-data/google_archive/*.json.gz
-data/google_archive/
-volatility_lab/data/quote_archive/
-volatility_lab/data/quote_quality/
-volatility_lab/data/underlying_history/
-volatility_lab/data/dividend_sources/*.pdf
-volatility_lab/data/*.sqlite*
-volatility_lab/data/**/*.sqlite*
-
-# Node / Frontend Dependencies (Legacy)
-node_modules/
-**/node_modules/
-.npm/
-
-# Data subdirectories to ignore
-archive_to_verify_before_delete/
-volatility_lab/data/upstox/chains/
-volatility_lab/data/upstox/catalogues/
-volatility_lab/data/experiments/
-volatility_lab/data/validation/
-volatility_lab/data/input_history/
-volatility_lab/data/exports/
-volatility_lab/data/futures/
-volatility_lab/data/research_inputs/
-volatility_lab/data/backtest_1minute/
-!volatility_lab/data/backtest_1minute/status.json
-!volatility_lab/data/backtest_1minute/scope.json
-volatility_lab/data/backtest_futures/
-!volatility_lab/data/backtest_futures/*status.json
-!volatility_lab/data/backtest_futures/scope.json
-volatility_lab/data/google_archive/
-!volatility_lab/data/google_archive/*.json
-
-# Explicitly Keep Tracking Metadatas, Baseline Quotes, and Historical Prices
-!volatility_lab/data/*.json
-!volatility_lab/data/*.csv
-!volatility_lab/data/dividend_sources/*.txt
-
-# Charges: Track active Upstox fee schedules only; ignore dated daily scrapes and legacy brokers
-volatility_lab/data/charges/*
-!volatility_lab/data/charges/upstox/
-volatility_lab/data/charges/upstox/*
-!volatility_lab/data/charges/upstox/current.json
-!volatility_lab/data/charges/upstox/check_status.json
-
-# Upstox: Track contract lists & master catalogue; ignore transient event feeds and diagnostics
-volatility_lab/data/upstox/*
-!volatility_lab/data/upstox/master.json
-!volatility_lab/data/upstox/NIFTY_expiries.json
-!volatility_lab/data/upstox/BANKNIFTY_expiries.json
-
-# Ignore ephemeral backtest runs and daily collector logs
-volatility_lab/data/backtest_runs/
-volatility_lab/data/daily_collector/
-volatility_lab/data/audit/
-volatility_lab/data/audit/**
+# Obsolete / duplicate root files guarded against accidental commit
+/LAUNCH_ANY_DEVICE.py
+/MAIN_AUDIT.md
+/app.py
+/apply_volatility_lab_fixes*.py
+/option_math.py
+/smile.py
+/restored_lab.py
+/monitor_ui.py
+/dashboard.py
+/vol_surface_3d.py
+/pricing_inputs.py
+/market_table.py
+/synthetic_future.py
+/forward_test.py
+/strategy_backtest.py
+/backtest_engine.py
+/backtest_signals.py
+/backtest_ui.py
+/backtest_jobs.py
+/backtest_download.py
+/backtest_common.py
+/futures_backtest.py
+/futures_backtest_download.py
+/futures_view_cache.py
+/google_archive_sync.py
+/collector_support.py
+/broker_charges.py
+/trade_review.py
+/term_structure.py
+/relative_value.py
+/expiry_forecast.py
+/forecast.py
+/vol_lib.py
+/ui_theme.py
+/web_server.py
+/market_calendar.py
+/input_provenance.py
+/option_context.py
+/options_context_cache.py
+/refresh_policy.py
+/background_refresh.py

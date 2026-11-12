@@ -3,9 +3,1127 @@
   "version": "forward-test-v19.1-clean",
   "inception_date": "2026-11-11",
   "min_trigger_date": "2026-11-11",
-  "updated_at": "2026-11-10T13:15:00+05:30",
-  "status": "ARMED_WAITING_FOR_NEXT_SESSION",
+  "updated_at": "2026-11-11T15:30:00+05:30",
+  "status": "SESSION_COMPLETED_1515_IST",
   "open_positions": [],
-  "closed_trades": [],
-  "intraday_mtm_series": []
+  "closed_trades": [
+    {
+      "id": "FWD-20261111-NIF-1117-S1",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 6,
+      "strat": "S1",
+      "trigReason": "IV 18.17% \u00b7 HV30 14.45% \u00b7 VRP +3.72 pp",
+      "sig": "IV 18.17% \u00b7 HV30 14.45% \u00b7 VRP +3.72 pp",
+      "legsText": "S 25550CE (176.0\u2192101.7) / S 25150PE (127.0\u2192215.0) / B 25850CE (85.5\u219250.9) / B 24850PE (56.8\u219295.6)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25550,
+          "type": "CE",
+          "entryPx": 176.0,
+          "curPx": 101.65,
+          "exitPx": 101.65
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25150,
+          "type": "PE",
+          "entryPx": 127.05,
+          "curPx": 215.0,
+          "exitPx": 215.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25850,
+          "type": "CE",
+          "entryPx": 85.5,
+          "curPx": 50.9,
+          "exitPx": 50.9
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24850,
+          "type": "PE",
+          "entryPx": 56.8,
+          "curPx": 95.6,
+          "exitPx": 95.6
+        }
+      ],
+      "capital": 28037.0,
+      "maxCredit": 10448.75,
+      "maxLoss": 9051.25,
+      "entryIv": 18.17,
+      "gross": -611.0,
+      "charges": 258.35,
+      "net": -869.35,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 18.17
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 18.17
+        },
+        {
+          "t": "14:28 IST",
+          "gross": -152.75,
+          "iv": 18.17
+        },
+        {
+          "t": "15:15 IST",
+          "gross": -611.0,
+          "iv": 18.17
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-NIF-1117-S3",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 6,
+      "strat": "S3",
+      "trigReason": "ATM IV 18.17% \u00b7 VRP +3.72 pp \u00b7 DTE 6d",
+      "sig": "ATM IV 18.17% \u00b7 VRP +3.72 pp \u00b7 DTE 6d",
+      "legsText": "S 25350CE (266.6\u2192159.3) / S 25350PE (207.1\u2192329.9) / B 25700CE (123.0\u219271.7) / B 25000PE (86.0\u2192146.2)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25350,
+          "type": "CE",
+          "entryPx": 266.65,
+          "curPx": 159.35,
+          "exitPx": 159.35
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25350,
+          "type": "PE",
+          "entryPx": 207.1,
+          "curPx": 329.85,
+          "exitPx": 329.85
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25700,
+          "type": "CE",
+          "entryPx": 122.95,
+          "curPx": 71.7,
+          "exitPx": 71.7
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25000,
+          "type": "PE",
+          "entryPx": 86.0,
+          "curPx": 146.2,
+          "exitPx": 146.2
+        }
+      ],
+      "capital": 28037.0,
+      "maxCredit": 17212.0,
+      "maxLoss": 2288.0,
+      "entryIv": 18.17,
+      "gross": -422.5,
+      "charges": 295.58,
+      "net": -718.08,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 18.17
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 18.17
+        },
+        {
+          "t": "14:28 IST",
+          "gross": -149.5,
+          "iv": 18.17
+        },
+        {
+          "t": "15:15 IST",
+          "gross": -422.5,
+          "iv": 18.17
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-NIF-1117-S5",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 6,
+      "strat": "S5",
+      "trigReason": "IV\u2212HV10 +3.35 pp \u00b7 HV10 14.82% \u00b7 DTE 6d",
+      "sig": "IV\u2212HV10 +3.35 pp \u00b7 HV10 14.82% \u00b7 DTE 6d",
+      "legsText": "S 25350CE (266.6\u2192159.3) / S 25350PE (207.1\u2192329.9) / B 25600CE (156.4\u219290.5) / B 25100PE (111.7\u2192189.8)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25350,
+          "type": "CE",
+          "entryPx": 266.65,
+          "curPx": 159.35,
+          "exitPx": 159.35
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25350,
+          "type": "PE",
+          "entryPx": 207.1,
+          "curPx": 329.85,
+          "exitPx": 329.85
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25600,
+          "type": "CE",
+          "entryPx": 156.45,
+          "curPx": 90.45,
+          "exitPx": 90.45
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25100,
+          "type": "PE",
+          "entryPx": 111.65,
+          "curPx": 189.85,
+          "exitPx": 189.85
+        }
+      ],
+      "capital": 28037.0,
+      "maxCredit": 13367.25,
+      "maxLoss": 6132.75,
+      "entryIv": 18.17,
+      "gross": -211.25,
+      "charges": 305.1,
+      "net": -516.35,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 18.17
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 18.17
+        },
+        {
+          "t": "14:28 IST",
+          "gross": -113.75,
+          "iv": 18.17
+        },
+        {
+          "t": "15:15 IST",
+          "gross": -211.25,
+          "iv": 18.17
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-NIF-1117-S6",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-17",
+      "kind": "Weekly",
+      "dte": 6,
+      "strat": "S6",
+      "trigReason": "Basis +37.0 pts \u00b7 BF25 -0.26 pp",
+      "sig": "Basis +37.0 pts \u00b7 BF25 -0.26 pp",
+      "legsText": "S2 25500CE (196.3\u2192114.2) / B2 25800CE (96.1\u219256.5) / S 25100PE (111.7\u2192189.8) / B 24800PE (49.6\u219281.8)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 25500,
+          "type": "CE",
+          "entryPx": 196.3,
+          "curPx": 114.25,
+          "exitPx": 114.25
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 25800,
+          "type": "CE",
+          "entryPx": 96.1,
+          "curPx": 56.55,
+          "exitPx": 56.55
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25100,
+          "type": "PE",
+          "entryPx": 111.65,
+          "curPx": 189.85,
+          "exitPx": 189.85
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24800,
+          "type": "PE",
+          "entryPx": 49.65,
+          "curPx": 81.8,
+          "exitPx": 81.8
+        }
+      ],
+      "capital": 56074.0,
+      "maxCredit": 17056.0,
+      "maxLoss": 7800.0,
+      "entryIv": 18.17,
+      "gross": 2531.75,
+      "charges": 295.4,
+      "net": 2236.35,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 18.17
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 18.17
+        },
+        {
+          "t": "14:28 IST",
+          "gross": 2034.5,
+          "iv": 18.17
+        },
+        {
+          "t": "15:15 IST",
+          "gross": 2531.75,
+          "iv": 18.17
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-NIF-1123-S1",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 12,
+      "strat": "S1",
+      "trigReason": "IV 16.28% \u00b7 HV30 14.45% \u00b7 VRP +1.83 pp",
+      "sig": "IV 16.28% \u00b7 HV30 14.45% \u00b7 VRP +1.83 pp",
+      "legsText": "S 25550CE (236.9\u2192163.5) / S 25150PE (185.6\u2192281.9) / B 25850CE (132.2\u219295.5) / B 24850PE (108.8\u2192163.4)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25550,
+          "type": "CE",
+          "entryPx": 236.9,
+          "curPx": 163.5,
+          "exitPx": 163.5
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25150,
+          "type": "PE",
+          "entryPx": 185.6,
+          "curPx": 281.85,
+          "exitPx": 281.85
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25850,
+          "type": "CE",
+          "entryPx": 132.2,
+          "curPx": 95.5,
+          "exitPx": 95.5
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24850,
+          "type": "PE",
+          "entryPx": 108.75,
+          "curPx": 163.4,
+          "exitPx": 163.4
+        }
+      ],
+      "capital": 28037.0,
+      "maxCredit": 11800.75,
+      "maxLoss": 7699.25,
+      "entryIv": 16.28,
+      "gross": -318.5,
+      "charges": 293.95,
+      "net": -612.45,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 16.28
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 16.28
+        },
+        {
+          "t": "14:28 IST",
+          "gross": -156.0,
+          "iv": 16.28
+        },
+        {
+          "t": "15:15 IST",
+          "gross": -318.5,
+          "iv": 16.28
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-NIF-1123-S3",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 12,
+      "strat": "S3",
+      "trigReason": "ATM IV 16.28% \u00b7 VRP +1.83 pp \u00b7 DTE 12d",
+      "sig": "ATM IV 16.28% \u00b7 VRP +1.83 pp \u00b7 DTE 12d",
+      "legsText": "S 25350CE (336.6\u2192230.2) / S 25350PE (262.9\u2192392.7) / B 25700CE (179.6\u2192125.0) / B 25000PE (140.9\u2192214.6)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25350,
+          "type": "CE",
+          "entryPx": 336.55,
+          "curPx": 230.2,
+          "exitPx": 230.2
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25350,
+          "type": "PE",
+          "entryPx": 262.95,
+          "curPx": 392.7,
+          "exitPx": 392.7
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25700,
+          "type": "CE",
+          "entryPx": 179.55,
+          "curPx": 124.95,
+          "exitPx": 124.95
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25000,
+          "type": "PE",
+          "entryPx": 140.95,
+          "curPx": 214.6,
+          "exitPx": 214.6
+        }
+      ],
+      "capital": 28037.0,
+      "maxCredit": 18135.0,
+      "maxLoss": 1950.0,
+      "entryIv": 16.28,
+      "gross": -282.75,
+      "charges": 333.64,
+      "net": -616.39,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 16.28
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 16.28
+        },
+        {
+          "t": "14:28 IST",
+          "gross": -146.25,
+          "iv": 16.28
+        },
+        {
+          "t": "15:15 IST",
+          "gross": -282.75,
+          "iv": 16.28
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-NIF-1123-S5",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 12,
+      "strat": "S5",
+      "trigReason": "IV\u2212HV10 +1.46 pp \u00b7 HV10 14.82% \u00b7 DTE 12d",
+      "sig": "IV\u2212HV10 +1.46 pp \u00b7 HV10 14.82% \u00b7 DTE 12d",
+      "legsText": "S 25350CE (336.6\u2192230.2) / S 25350PE (262.9\u2192392.7) / B 25600CE (217.6\u2192149.2) / B 25100PE (169.4\u2192258.8)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25350,
+          "type": "CE",
+          "entryPx": 336.55,
+          "curPx": 230.2,
+          "exitPx": 230.2
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25350,
+          "type": "PE",
+          "entryPx": 262.95,
+          "curPx": 392.7,
+          "exitPx": 392.7
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25600,
+          "type": "CE",
+          "entryPx": 217.6,
+          "curPx": 149.25,
+          "exitPx": 149.25
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 25100,
+          "type": "PE",
+          "entryPx": 169.45,
+          "curPx": 258.75,
+          "exitPx": 258.75
+        }
+      ],
+      "capital": 28037.0,
+      "maxCredit": 13809.25,
+      "maxLoss": 5690.75,
+      "entryIv": 16.28,
+      "gross": -159.25,
+      "charges": 344.13,
+      "net": -503.38,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 16.28
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 16.28
+        },
+        {
+          "t": "14:28 IST",
+          "gross": -123.5,
+          "iv": 16.28
+        },
+        {
+          "t": "15:15 IST",
+          "gross": -159.25,
+          "iv": 16.28
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-NIF-1123-S6",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "NIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 12,
+      "strat": "S6",
+      "trigReason": "Basis +51.1 pts \u00b7 BF25 -0.06 pp",
+      "sig": "Basis +51.1 pts \u00b7 BF25 -0.06 pp",
+      "legsText": "S2 25500CE (260.4\u2192177.7) / B2 25800CE (147.1\u2192104.4) / S 25100PE (169.4\u2192258.8) / B 24800PE (99.2\u2192148.1)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 25500,
+          "type": "CE",
+          "entryPx": 260.4,
+          "curPx": 177.65,
+          "exitPx": 177.65
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 25800,
+          "type": "CE",
+          "entryPx": 147.1,
+          "curPx": 104.4,
+          "exitPx": 104.4
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 25100,
+          "type": "PE",
+          "entryPx": 169.45,
+          "curPx": 258.75,
+          "exitPx": 258.75
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 24800,
+          "type": "PE",
+          "entryPx": 99.2,
+          "curPx": 148.1,
+          "exitPx": 148.1
+        }
+      ],
+      "capital": 56074.0,
+      "maxCredit": 19295.25,
+      "maxLoss": 7800.0,
+      "entryIv": 16.28,
+      "gross": 2580.5,
+      "charges": 349.01,
+      "net": 2231.49,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 16.28
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 16.28
+        },
+        {
+          "t": "14:28 IST",
+          "gross": 1836.25,
+          "iv": 16.28
+        },
+        {
+          "t": "15:15 IST",
+          "gross": 2580.5,
+          "iv": 16.28
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-BAN-1123-S1",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 12,
+      "strat": "S1",
+      "trigReason": "IV 17.44% \u00b7 HV30 15.76% \u00b7 VRP +1.68 pp",
+      "sig": "IV 17.44% \u00b7 HV30 15.76% \u00b7 VRP +1.68 pp",
+      "legsText": "S 61000CE (532.1\u2192617.5) / S 60200PE (632.3\u2192615.5) / B 61600CE (337.2\u2192426.0) / B 59600PE (420.6\u2192410.1)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 61000,
+          "type": "CE",
+          "entryPx": 532.1,
+          "curPx": 617.5,
+          "exitPx": 617.5
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 60200,
+          "type": "PE",
+          "entryPx": 632.3,
+          "curPx": 615.55,
+          "exitPx": 615.55
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 61600,
+          "type": "CE",
+          "entryPx": 337.25,
+          "curPx": 426.0,
+          "exitPx": 426.0
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59600,
+          "type": "PE",
+          "entryPx": 420.6,
+          "curPx": 410.1,
+          "exitPx": 410.1
+        }
+      ],
+      "capital": 26570.0,
+      "maxCredit": 12196.5,
+      "maxLoss": 5803.5,
+      "entryIv": 17.44,
+      "gross": 288.0,
+      "charges": 330.96,
+      "net": -42.96,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 17.44
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 17.44
+        },
+        {
+          "t": "14:28 IST",
+          "gross": -153.0,
+          "iv": 17.44
+        },
+        {
+          "t": "15:15 IST",
+          "gross": 288.0,
+          "iv": 17.44
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-BAN-1123-S2",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 12,
+      "strat": "S2",
+      "trigReason": "IV 17.44% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -0.26 pp",
+      "sig": "IV 17.44% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -0.26 pp",
+      "legsText": "B 60600CE (710.0\u2192794.8) / B 60600PE (816.8\u2192801.2)",
+      "legs": [
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 60600,
+          "type": "CE",
+          "entryPx": 709.95,
+          "curPx": 794.8,
+          "exitPx": 794.8
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 60600,
+          "type": "PE",
+          "entryPx": 816.8,
+          "curPx": 801.2,
+          "exitPx": 801.2
+        }
+      ],
+      "capital": 46718.0,
+      "maxCredit": 29771.62,
+      "maxLoss": 45802.5,
+      "entryIv": 17.44,
+      "gross": 2077.5,
+      "charges": 206.98,
+      "net": 1870.52,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 17.44
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 17.44
+        },
+        {
+          "t": "14:28 IST",
+          "gross": 3936.0,
+          "iv": 17.44
+        },
+        {
+          "t": "15:15 IST",
+          "gross": 2077.5,
+          "iv": 17.44
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-BAN-1123-S3",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 12,
+      "strat": "S3",
+      "trigReason": "ATM IV 17.44% \u00b7 VRP +1.68 pp \u00b7 DTE 12d",
+      "sig": "ATM IV 17.44% \u00b7 VRP +1.68 pp \u00b7 DTE 12d",
+      "legsText": "S 60600CE (710.0\u2192794.8) / S 60600PE (816.8\u2192801.2) / B 61300CE (426.4\u2192514.0) / B 59900PE (516.5\u2192505.2)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 60600,
+          "type": "CE",
+          "entryPx": 709.95,
+          "curPx": 794.8,
+          "exitPx": 794.8
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 60600,
+          "type": "PE",
+          "entryPx": 816.8,
+          "curPx": 801.2,
+          "exitPx": 801.2
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 61300,
+          "type": "CE",
+          "entryPx": 426.45,
+          "curPx": 514.05,
+          "exitPx": 514.05
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59900,
+          "type": "PE",
+          "entryPx": 516.5,
+          "curPx": 505.25,
+          "exitPx": 505.25
+        }
+      ],
+      "capital": 26570.0,
+      "maxCredit": 17514.0,
+      "maxLoss": 900.0,
+      "entryIv": 17.44,
+      "gross": 213.0,
+      "charges": 369.79,
+      "net": -156.79,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 17.44
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 17.44
+        },
+        {
+          "t": "14:28 IST",
+          "gross": 192.0,
+          "iv": 17.44
+        },
+        {
+          "t": "15:15 IST",
+          "gross": 213.0,
+          "iv": 17.44
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-BAN-1123-S6",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 09:20 IST",
+      "triggerTime": "2026-11-11T09:20:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 12,
+      "strat": "S6",
+      "trigReason": "Basis -117.0 pts \u00b7 BF25 -0.18 pp",
+      "sig": "Basis -117.0 pts \u00b7 BF25 -0.18 pp",
+      "legsText": "S2 60900CE (575.8\u2192657.4) / B2 61500CE (362.4\u2192453.9) / S 60100PE (588.4\u2192577.6) / B 59500PE (388.4\u2192383.6)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 2,
+          "strike": 60900,
+          "type": "CE",
+          "entryPx": 575.75,
+          "curPx": 657.35,
+          "exitPx": 657.35
+        },
+        {
+          "side": 1,
+          "mult": 2,
+          "strike": 61500,
+          "type": "CE",
+          "entryPx": 362.4,
+          "curPx": 453.95,
+          "exitPx": 453.95
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 60100,
+          "type": "PE",
+          "entryPx": 588.4,
+          "curPx": 577.65,
+          "exitPx": 577.65
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 59500,
+          "type": "PE",
+          "entryPx": 388.45,
+          "curPx": 383.55,
+          "exitPx": 383.55
+        }
+      ],
+      "capital": 53140.0,
+      "maxCredit": 18799.5,
+      "maxLoss": 9000.0,
+      "entryIv": 17.44,
+      "gross": 772.5,
+      "charges": 404.06,
+      "net": 368.44,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "09:20",
+          "gross": 0.0,
+          "iv": 17.44
+        },
+        {
+          "t": "09:20 IST",
+          "gross": 0.0,
+          "iv": 17.44
+        },
+        {
+          "t": "14:28 IST",
+          "gross": -439.5,
+          "iv": 17.44
+        },
+        {
+          "t": "15:15 IST",
+          "gross": 772.5,
+          "iv": 17.44
+        }
+      ]
+    },
+    {
+      "id": "FWD-20261111-BAN-1123-S5",
+      "date": "2026-11-11",
+      "session_date": "2026-11-11",
+      "entryTime": "11 Nov 14:28 IST",
+      "triggerTime": "2026-11-11T14:28:00+05:30",
+      "exitTime": "15:15 IST",
+      "sym": "BANKNIFTY",
+      "exp": "2026-11-23",
+      "kind": "Monthly",
+      "dte": 12,
+      "strat": "S5",
+      "trigReason": "IV\u2212HV10 +1.20 pp \u00b7 HV10 17.70% \u00b7 DTE 12d",
+      "sig": "IV\u2212HV10 +1.20 pp \u00b7 HV10 17.70% \u00b7 DTE 12d",
+      "legsText": "S 60700CE (855.0\u2192747.9) / S 60700PE (802.2\u2192853.5) / B 61200CE (635.0\u2192545.8) / B 60200PE (586.1\u2192615.5)",
+      "legs": [
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 60700,
+          "type": "CE",
+          "entryPx": 855.0,
+          "curPx": 747.85,
+          "exitPx": 747.85
+        },
+        {
+          "side": -1,
+          "mult": 1,
+          "strike": 60700,
+          "type": "PE",
+          "entryPx": 802.25,
+          "curPx": 853.55,
+          "exitPx": 853.55
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 61200,
+          "type": "CE",
+          "entryPx": 635.0,
+          "curPx": 545.75,
+          "exitPx": 545.75
+        },
+        {
+          "side": 1,
+          "mult": 1,
+          "strike": 60200,
+          "type": "PE",
+          "entryPx": 586.15,
+          "curPx": 615.55,
+          "exitPx": 615.55
+        }
+      ],
+      "capital": 26570.0,
+      "maxCredit": 13083.0,
+      "maxLoss": 4917.0,
+      "entryIv": 18.9,
+      "gross": -120.0,
+      "charges": 389.33,
+      "net": -509.33,
+      "exitReason": "15:15 IST Auto-Close",
+      "mtmPath": [
+        {
+          "t": "14:28",
+          "gross": 0.0,
+          "iv": 18.9
+        },
+        {
+          "t": "14:28 IST",
+          "gross": 0.0,
+          "iv": 18.9
+        },
+        {
+          "t": "15:15 IST",
+          "gross": -120.0,
+          "iv": 18.9
+        }
+      ]
+    }
+  ],
+  "intraday_mtm_series": [
+    {
+      "session_date": "2026-11-11",
+      "t": "09:15",
+      "time_ist": "09:15 IST",
+      "gross_mtm": 0,
+      "net_mtm": 0,
+      "open_count": 0,
+      "closed_count": 0
+    },
+    {
+      "session_date": "2026-11-11",
+      "t": "09:20",
+      "time_ist": "09:20 IST",
+      "gross_mtm": 0.0,
+      "net_mtm": -3761.29,
+      "open_count": 12,
+      "closed_count": 0
+    },
+    {
+      "session_date": "2026-11-11",
+      "t": "14:28",
+      "time_ist": "14:28 IST",
+      "gross_mtm": 6564.5,
+      "net_mtm": 2363.7,
+      "open_count": 13,
+      "closed_count": 0
+    },
+    {
+      "session_date": "2026-11-11",
+      "t": "15:15",
+      "time_ist": "15:15 IST",
+      "gross_mtm": 6338.0,
+      "net_mtm": 2161.72,
+      "open_count": 0,
+      "closed_count": 13
+    },
+    {
+      "session_date": "2026-11-11",
+      "t": "15:30",
+      "time_ist": "15:30 IST",
+      "gross_mtm": 6338.0,
+      "net_mtm": 2161.72,
+      "open_count": 0,
+      "closed_count": 13
+    }
+  ],
+  "gate_blocked": false,
+  "gate_message": "Live Forward Session Active (2026-11-11 \u00b7 11 Nov 15:30 IST)"
 }

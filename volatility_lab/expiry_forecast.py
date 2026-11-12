@@ -10,9 +10,9 @@ try:
 except ImportError:
     from zoneinfo import ZoneInfo
     IST = ZoneInfo('Asia/Kolkata')
-from market_calendar import HOLIDAYS, SPECIAL_SESSIONS, last_trading_day_on_or_before
+from market_calendar import HOLIDAYS, SPECIAL_SESSIONS, SPECIAL_SESSIONS, last_trading_day_on_or_before
 
-VERSION = 'expiry-v5-yz-close-close-nse2026'
+VERSION = 'expiry-v4-session-annualized-nse2026'
 TERM_VERSION = 'term-v1-last-completed-close'
 CALENDAR_SOURCE = 'https://nsearchives.nseindia.com/content/circulars/FAOP71777.pdf'
 SPECIAL = pd.Timestamp('2026-11-08').date()
@@ -33,7 +33,7 @@ def _cached_sessions(start_iso: str, end_iso: str) -> tuple:
         raise ValueError(f'Verified trading calendar currently covers {sorted(supported_years)} only.')
     return tuple(
         d.date() for d in pd.date_range(start_d, end_d)
-        if (d.weekday() < 5 and d.date() not in HOLIDAYS) or d.date() == SPECIAL
+        if (d.weekday() < 5 and d.date() not in HOLIDAYS) or d.date() in SPECIAL_SESSIONS or d.date() == SPECIAL
     )
 
 

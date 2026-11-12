@@ -1,23 +1,16 @@
 """Market table, ATM Black-76 & broker IV extraction, and historical volatility alignment."""
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
-import io
 from pathlib import Path
-import time as clock
 from typing import Any
 import numpy as np
 import pandas as pd
 
-from forecast import fit_garch
-
 try:
-    from market_data import IST, MarketDataError, history_cutoff
+    from market_data import IST
 except ImportError:
     from zoneinfo import ZoneInfo
     IST = ZoneInfo('Asia/Kolkata')
-    from market_data import MarketDataError, history_cutoff
-from market_calendar import last_trading_day_on_or_before
 
 import vol_lib
 from option_math import (
@@ -28,10 +21,7 @@ from option_math import (
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / 'data'
-INDICES = {
-    'NIFTY': 'NIFTY 50',
-    'BANKNIFTY': 'NIFTY BANK',
-}
+INDICES = ('NIFTY', 'BANKNIFTY')
 
 COLUMNS = [
     'Instrument',
@@ -87,134 +77,6 @@ def historical_vol(frame: pd.DataFrame) -> pd.DataFrame:
         'Historical vol 10D': hv10,
         'Historical vol 30D': hv30,
     })
-
-
-class Monitor:
-    """Shared state and broker access for expiry and dated-futures monitors."""
-
-    def __init__(self) -> None:
-        self.master_date = None
-        self.master_provider = None
-        self.master_checked_at = None
-        self.nfo = None
-        self.nse = None
-        self.histories: dict[tuple[str, object], pd.DataFrame] = {}
-        self.paths: dict[tuple[object, ...], np.ndarray] = {}
-        self.last_request = 0.0
-
-    def request(self, client: Any, *args: Any, **kwargs: Any) -> Any:
-        """Issue a broker request with the collector's minimum spacing."""
-        clock.sleep(max(0.0, 1.05 - (clock.monotonic() - self.last_request)))
-        self.last_request = clock.monotonic()
-        return client._request(*args, **kwargs)
-
-    def masters(self, client: Any, now: datetime) -> None:
-        """Refresh NFO/NSE masters at most once per hour for a provider/day."""
-        stale = self.master_checked_at is None or (now - self.master_checked_at).total_seconds() >= 3600
-        if (
-            self.master_provider == getattr(client, 'provider', 'Upstox')
-            and self.master_date == now.date()
-            and not stale
-        ):
-            return
-
-        nfo = pd.read_csv(io.StringIO(self.request(client, '/instruments/NFO', csv_response=True)))
-        nse = pd.read_csv(io.StringIO(self.request(client, '/instruments/NSE', csv_response=True)))
-        nfo['expiry'] = pd.to_datetime(nfo['expiry'], errors='coerce').dt.date
-        from futures_rolling import remember_listed_expiries
-
-        remember_listed_expiries(nfo, now)
-        self.master_provider = getattr(client, 'provider', 'Upstox')
-        self.nfo = nfo
-        self.nse = nse
-        self.master_date = now.date()
-        self.master_checked_at = now
-
-    def history(self, client: Any, symbol: str, now: datetime) -> pd.DataFrame:
-        """Return verified daily history through the latest eligible closing session."""
-        from collector_support import atomic_csv
-
-        cutoff = history_cutoff(now)
-        cache_key = (symbol, cutoff)
-        expected = last_trading_day_on_or_before(cutoff)
-        cached = self.histories.get(cache_key)
-        if cached is not None and not cached.empty and cached.Date.iloc[-1].date() >= expected:
-            return cached
-
-        archive = DATA / 'underlying_history'
-        saved = None
-        files = sorted(archive.glob(symbol.lower() + '_*.csv')) if archive.exists() else []
-        if files:
-            try:
-                saved = vol_lib.validate_ohlc(pd.read_csv(files[-1], parse_dates=['Date'])).reset_index()
-                saved = saved[saved.Date <= pd.Timestamp(cutoff)]
-                view = one_year(saved, cutoff)
-                if len(view) >= 201 and view.Date.iloc[-1].date() >= expected:
-                    atomic_csv(view, DATA / f'{symbol.lower()}_one_year.csv', index=False, date_format='%Y-%m-%d')
-                    self.histories[cache_key] = view
-                    return view
-            except (OSError, ValueError, KeyError):
-                saved = None
-
-        if self.nse is None:
-            raise MarketDataError('Instrument master is unavailable.')
-        matches = self.nse[
-            (self.nse.tradingsymbol == INDICES[symbol])
-            & (self.nse.segment == 'INDICES')
-        ]
-        if len(matches) != 1:
-            raise MarketDataError('Index history instrument could not be resolved.')
-        token = int(matches.instrument_token.iloc[0])
-        if saved is not None and len(saved) >= 201:
-            recent = client.daily_history(token, now, start_date=saved.Date.iloc[-1].date() - timedelta(days=5))
-            frame = pd.concat([saved, recent]).drop_duplicates('Date', keep='last').sort_values('Date').reset_index(drop=True)
-            frame = frame[frame.Date >= pd.Timestamp(cutoff) - pd.Timedelta(days=729)]
-        else:
-            frame = client.daily_history(token, now)
-
-        full_history = frame.copy()
-        view = one_year(frame, cutoff)
-        if len(view) < 201:
-            raise MarketDataError('Fewer than 201 daily candles in the one-year window.')
-        if (now.date() - view.Date.iloc[-1].date()).days > 7:
-            raise MarketDataError('Historical candles are stale.')
-
-        DATA.mkdir(exist_ok=True)
-        archive.mkdir(exist_ok=True)
-        full_history.to_csv(
-            archive / f'{symbol.lower()}_{now.strftime("%Y%m%dT%H%M%S%f")}.csv',
-            index=False,
-            date_format='%Y-%m-%d',
-        )
-        atomic_csv(view, DATA / f'{symbol.lower()}_one_year.csv', index=False, date_format='%Y-%m-%d')
-        self.histories[cache_key] = view
-        return view
-
-    def rv(self, frame: pd.DataFrame, symbol: str, now: datetime, expiry: object, method: str) -> float:
-        """Forecast annualised realised volatility to expiry without elapsed-session variance."""
-        dates = pd.bdate_range(frame.Date.iloc[-1] + pd.Timedelta(days=1), pd.Timestamp(expiry))
-        if not len(dates) or len(dates) > 245:
-            raise MarketDataError('Unsupported forecast tenor.')
-        key = (symbol, frame.Date.iloc[-1].isoformat(), len(frame), method, len(dates))
-        if key not in self.paths:
-            if method == 'GARCH':
-                _, _, path, _ = fit_garch(frame, (len(dates),), min_observations=200)
-                variances = (path['Daily conditional vol %'].to_numpy() / 100.0) ** 2 / 245.0
-            else:
-                returns = np.log(frame.Close / frame.Close.shift()).dropna()
-                variances = np.full(len(dates), returns.tail(30).var())
-            self.paths[key] = variances
-
-        weights = np.array([0.0 if day.date() < now.date() else 1.0 for day in dates])
-        for index, day in enumerate(dates):
-            if day.date() == now.date():
-                opening = datetime.combine(now.date(), time(9, 15), tzinfo=IST)
-                closing = datetime.combine(now.date(), time(15, 40), tzinfo=IST)
-                weights[index] = np.clip((closing - now).total_seconds() / (closing - opening).total_seconds(), 0.0, 1.0)
-        years = (datetime.combine(pd.Timestamp(expiry).date(), time(15, 40), tzinfo=IST) - now).total_seconds() / (365.0 * 86400.0)
-        if years <= 0:
-            raise MarketDataError('Expiry must be after the valuation timestamp.')
-        return float(np.sqrt(np.sum(self.paths[key] * weights) / years) * 100.0)
 
 
 def atm_values(

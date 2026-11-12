@@ -73,7 +73,7 @@ def compute_straddle_greeks(spot, strike, dte, vol_pct, rate=0.065, forward=None
         straddle_p = call_p + put_p
         call_d = float(ce['delta'])
         put_d = float(pe['delta'])
-        gamma = float(ce['gamma'])
+        gamma = float(ce['gamma']) + float(pe['gamma'])
         straddle_vega = float(ce['vega']) + float(pe['vega'])
         straddle_theta = float(ce['theta_daily']) + float(pe['theta_daily'])
     except (ValueError, ZeroDivisionError, OverflowError):

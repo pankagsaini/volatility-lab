@@ -24,18 +24,17 @@ def relative_spread_history(data: pd.DataFrame, session_dates: list[str] | None 
 
 
 def archive_quotes(root: Path, symbol: str, expiry: str, payload: dict[str, Any], config: str | None = None) -> Path:
-    """Persist option quote book snapshot in both root/<symbol>_option_quotes_<expiry>.json and quotes_archive/."""
+    """Persist option quote book snapshot in canonical <root>/<symbol>_option_quotes_<expiry>.json (zero duplicate bloat)."""
     root_path = Path(root)
+    if not root_path.exists() and (root_path.parent / "Volatility Lab" / "data").exists():
+        root_path = root_path.parent / "Volatility Lab" / "data"
     root_path.mkdir(parents=True, exist_ok=True)
     out_obj = dict(payload) if isinstance(payload, dict) else {"records": payload}
     if config is not None and "config" not in out_obj:
         out_obj["config"] = config
     direct_path = root_path / f"{str(symbol).lower()}_option_quotes_{expiry}.json"
-    txt = json.dumps(out_obj, indent=2, sort_keys=True, default=str)
+    txt = json.dumps(out_obj, separators=(",", ":"), sort_keys=True, default=str)
     direct_path.write_text(txt, encoding="utf-8")
-    target_dir = root_path / "quotes_archive" / str(symbol)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    (target_dir / f"{expiry}.json").write_text(txt, encoding="utf-8")
     return direct_path
 
 
@@ -238,22 +237,6 @@ def position_greeks(context: dict[str, Any], position: pd.DataFrame) -> dict[str
         greek: float((position["Position"] * position[greek]).sum() * lot)
         for greek in ("Delta", "Gamma", "Theta", "Vega")
     }
-
-
-def gap_summary(frame: pd.DataFrame, as_of: Any = None) -> pd.DataFrame:
-    """Historical overnight gap distributions for underlying spot."""
-    if frame is None or frame.empty:
-        return pd.DataFrame(columns=["Statistic", "Value"])
-    moves = frame["Close"].pct_change().dropna() if "Close" in frame.columns else pd.Series(dtype=float)
-    if moves.empty:
-        return pd.DataFrame(columns=["Statistic", "Value"])
-    return pd.DataFrame([
-        {"Statistic": "Mean Overnight Move", "Value": f"{moves.mean() * 100:.2f}%"},
-        {"Statistic": "Median Overnight Move", "Value": f"{moves.median() * 100:.2f}%"},
-        {"Statistic": "Max Overnight Gap", "Value": f"{moves.max() * 100:.2f}%"},
-        {"Statistic": "Min Overnight Gap", "Value": f"{moves.min() * 100:.2f}%"},
-        {"Statistic": "Standard Deviation", "Value": f"{moves.std() * 100:.2f}%"},
-    ])
 
 
 class _StressResult(dict):
