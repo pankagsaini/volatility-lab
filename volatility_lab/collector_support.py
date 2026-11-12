@@ -22,26 +22,7 @@ except ImportError:
     fcntl = None
 
 ROOT = Path(__file__).resolve().parent
-
-
-def resolve_data_dir(base: Path | str | None = None) -> Path:
-    """Resolve canonical single-source-of-truth data directory (Volatility Lab/data)."""
-    b = Path(base).resolve() if base is not None else ROOT
-    if b.name == 'data' and b.exists():
-        return b
-    cand = b / 'data'
-    if cand.exists():
-        return cand
-    vl_cand = b / 'Volatility Lab' / 'data'
-    if vl_cand.exists():
-        return vl_cand
-    parent_vl = b.parent / 'Volatility Lab' / 'data'
-    if parent_vl.exists():
-        return parent_vl
-    return cand
-
-
-DATA = resolve_data_dir(ROOT)
+DATA = ROOT / 'data'
 PRIVATE = DATA / 'private'
 STATE = DATA / 'state'
 

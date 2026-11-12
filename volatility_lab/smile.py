@@ -63,8 +63,7 @@ def smile_points(chain, strikes, spot, forward=None, years=None, rate=0.0, use_b
                     strike = min(paired, key=lambda k: (abs(k - ref_px), k))
                     contributors = valid[valid.strike == strike]
                     if len(contributors) >= 2:
-                        _raw_atm = float(contributors.iv.mean())
-                        value = _raw_atm if _raw_atm > 1.5 else _raw_atm * 100.0
+                        value = float(contributors.iv.mean() * 100)
                         method = 'Black-76 parity ATM call/put IV' if use_black76 else 'Same-strike call/put average'
         sources = sorted(set(contributors.source)) if len(contributors) and 'source' in contributors.columns else []
         strike_list = [str(v) for v in sorted(set(contributors.strike))] if len(contributors) and 'strike' in contributors.columns else []

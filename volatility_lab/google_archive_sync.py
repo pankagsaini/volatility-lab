@@ -14,6 +14,7 @@ DATA=ROOT/'data'
 STORE=DATA/'google_archive'
 CONFIG=ROOT/'cloud'/'apps_script'/'sync_config.json'
 STREAM_SETTLE_SECONDS=3.0
+LIVE_QUOTE_MAX_AGE_SECONDS=120.0
 _pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='drive-import')
 _guard=threading.Lock()
 _future=None
@@ -49,17 +50,70 @@ def source_folder():
         if p.is_dir() and p.resolve()!=STORE.resolve():return p
     return None
 
+def _aware_timestamp(value, label):
+    try:
+        stamp=pd.Timestamp(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f'Invalid {label}') from exc
+    if stamp.tzinfo is None:
+        raise ValueError(f'Undated {label}')
+    return stamp.tz_convert('UTC')
+
+
+def validate_report(obj):
+    """Validate a complete cloud report before it can enter research stores."""
+    if not isinstance(obj,dict):raise ValueError('Invalid capture payload')
+    if obj.get('schema')!=1 or obj.get('provider')!='Upstox' or obj.get('mode') not in ('snapshot','eod'):
+        raise ValueError('Unknown capture format')
+    if obj.get('status')!='complete' or obj.get('errors') or obj.get('pending'):
+        raise ValueError('Incomplete capture is not eligible for import')
+    stamp=_aware_timestamp(obj.get('retrieved_at'),'capture timestamp')
+    if not isinstance(obj.get('records'),list) or not obj['records']:
+        raise ValueError('Missing records')
+    labels=set()
+    option_labels=0
+    for rec in obj['records']:
+        if not isinstance(rec,dict) or not isinstance(rec.get('label'),str) or not rec['label']:
+            raise ValueError('Invalid capture record')
+        if rec['label'] in labels:raise ValueError('Duplicate capture record label')
+        labels.add(rec['label'])
+        record_stamp=_aware_timestamp(rec.get('retrieved_at'),'record timestamp')
+        age=(stamp-record_stamp).total_seconds()
+        if age < -30.0 or age > 600.0:raise ValueError('Record timestamp outside capture window')
+        data=rec.get('data')
+        if rec['label']=='quotes':
+            if not isinstance(data,dict) or not all(isinstance(q,dict) for q in data.values()):
+                raise ValueError('Invalid quote record')
+        elif rec['label'].split('|',1)[0] in {'NIFTY','BANKNIFTY'} and '|' in rec['label']:
+            parts=rec['label'].split('|')
+            if len(parts)!=2 or not parts[0] or not parts[1] or not isinstance(data,list) or not data:
+                raise ValueError('Invalid option-chain record')
+            expiry=parts[1]
+            for row in data:
+                if not isinstance(row,dict) or str(row.get('expiry') or '')[:10]!=expiry:
+                    raise ValueError('Option-chain expiry does not match its record label')
+                spot=pd.to_numeric(row.get('underlying_spot_price'),errors='coerce')
+                if not np.isfinite(spot) or float(spot)<=0:
+                    raise ValueError('Option-chain row has no valid underlying spot')
+            option_labels+=1
+        elif not isinstance(data,(list,dict)):
+            raise ValueError('Invalid instrument record')
+    if obj.get('mode')=='snapshot':
+        if obj.get('nfo_session_validated') is not True:raise ValueError('NFO session was not validated')
+        day=str(obj.get('day') or '')[:10]
+        if day != stamp.tz_convert('Asia/Kolkata').strftime('%Y-%m-%d'):
+            raise ValueError('Snapshot day does not match capture timestamp')
+        if 'quotes' not in labels or not option_labels:
+            raise ValueError('Snapshot is missing quotes or option-chain evidence')
+    return obj
+
+
 def validated(raw):
     if len(raw)>20_000_000:raise ValueError('Oversized archive')
     import io
     with gzip.GzipFile(fileobj=io.BytesIO(raw)) as f:body=f.read(40_000_001)
     if len(body)>40_000_000:raise ValueError('Oversized payload')
-    obj=json.loads(body)
-    if obj.get('schema')!=1 or obj.get('provider')!='Upstox' or obj.get('mode') not in ('snapshot','eod','test'):raise ValueError('Unknown capture format')
-    stamp=pd.Timestamp(obj['retrieved_at'])
-    if stamp.tzinfo is None:raise ValueError('Undated capture')
-    if not isinstance(obj.get('records'),list):raise ValueError('Missing records')
-    return obj
+    return validate_report(json.loads(body))
 
 def import_report(obj,rate,dividend,spread):
     from upstox_adapter import provider_timestamp
@@ -71,6 +125,7 @@ def import_report(obj,rate,dividend,spread):
     from option_math import reversal_values
     from snapshot_history import save as save_intraday
     from smile import smile_points,save_smile
+    validate_report(obj)
     stamp=pd.Timestamp(obj['retrieved_at']).tz_convert('Asia/Kolkata')
     config=calculation_key(rate,dividend,spread)
     register(DATA/'monitor.sqlite',rate,dividend,spread)
@@ -87,7 +142,15 @@ def import_report(obj,rate,dividend,spread):
         trade=provider_timestamp(q.get('last_trade_time'))
         if stamp.date() in HOLIDAYS or stamp.weekday()>4 or not 555<=stamp.hour*60+stamp.minute<=940:
             valuation=trade
-        if valuation and (stamp-pd.Timestamp(valuation)).total_seconds()>7*86400:valuation=None
+        if valuation:
+            valuation_stamp=pd.Timestamp(valuation)
+            if valuation_stamp.tzinfo is None:
+                valuation=None
+            else:
+                age_seconds=(stamp-valuation_stamp.tz_convert('Asia/Kolkata')).total_seconds()
+                if obj.get('mode')=='snapshot':
+                    if age_seconds < -30.0 or age_seconds>LIVE_QUOTE_MAX_AGE_SECONDS:valuation=None
+                elif age_seconds < -30.0 or age_seconds>7*86400:valuation=None
         if not valuation:continue
         asof=pd.Timestamp(valuation)
         frame=_cached_one_year_csv(symbol)
@@ -102,10 +165,14 @@ def import_report(obj,rate,dividend,spread):
             chain=chain_from_response(raw,e)
             chain.attrs.clear()
             strikes=sorted({float(r['strike_price']) for r in raw})
-            call,put,iv=atm_values(chain,strikes,spot)
-            align={**base_alignment,'IV-RV Spread':iv-base_alignment['HV30']}
+            # The archived chain does not contain independently verifiable
+            # per-option event timestamps. Never re-solve Black-76 IV from an
+            # LTP in this path; preserve the broker's stated Greeks with a
+            # provenance label instead.
+            call,put,iv=atm_values(chain,strikes,spot,use_black76=False)
+            align={**base_alignment,'IV-RV Spread':iv-base_alignment['HV30'] if np.isfinite(iv) and np.isfinite(base_alignment['HV30']) else np.nan}
             prev=float(q.get('last_price',0))-float(q.get('net_change',0))
-            row={'Provider':'Upstox','Instrument':symbol,'Expiry':e,'Type':'Monthly' if e in monthly else 'Weekly','Price':spot,'% change':100*(spot/prev-1) if prev>0 else None,'Call IV':call,'Put IV':put,'IV':iv,**reversal_values(chain,symbol),**align,'As of':asof.isoformat(),'Retrieved at':rec['retrieved_at'],'Source':'Upstox supplied IV','Timestamp note':'Underlying feed timestamp; broker Greeks have no separate exchange timestamp','IV method':'Lab arithmetic mean of broker ATM call and put IV','Capture source':'Google Drive','Greeks source':'Upstox supplied Greeks'}
+            row={'Provider':'Upstox','Instrument':symbol,'Expiry':e,'Type':'Monthly' if e in monthly else 'Weekly','Price':spot,'% change':100*(spot/prev-1) if prev>0 else None,'Call IV':call,'Put IV':put,'IV':iv,**reversal_values(chain,symbol),**align,'As of':asof.isoformat(),'Retrieved at':rec['retrieved_at'],'Source':'Upstox supplied Greeks','Timestamp note':'Underlying quote timestamp verified against capture; broker Greeks have no per-option event timestamp','IV method':'Arithmetic mean of broker-supplied ATM call and put IV; not independently re-solved from LTP','Capture source':'Google Drive','Greeks source':'Upstox supplied Greeks','Research status':'Broker option IV is usable for hypothesis generation only; per-option event-time validation is unavailable'}
             with closing(sqlite3.connect(DATA/'monitor.sqlite',timeout=30)) as existing_con:
                 existing_con.execute('PRAGMA journal_mode=WAL')
                 existing_con.execute('PRAGMA busy_timeout=30000')
@@ -246,22 +313,29 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
             import requests
             resp = requests.get(web_url, timeout=12, allow_redirects=True)
             if resp.status_code == 200:
-                obj = resp.json()
-                if obj.get('schema') == 1 and obj.get('records'):
-                    retrieved_at = str(obj.get('retrieved_at') or '')
-                    prev_status = read_json(STORE/'status.json', default={}) or {}
-                    if prev_status.get('mode') == 'web_cloud' and prev_status.get('updated') == retrieved_at and retrieved_at:
-                        return 0
-                    with data_lock(timeout=120):
-                        import_report(obj, rate, dividend, spread)
-                    atomic_json(STORE/'status.json',{'status':'ready','mode':'web_cloud','updated':retrieved_at or pd.Timestamp.now(tz='UTC').isoformat(),'total_files':int(prev_status.get('total_files', 0)) + 1,'source':web_url})
-                    return 1
+                try:
+                    obj = validate_report(resp.json())
+                except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                    atomic_json(STORE/'status.json', {
+                        'status': 'partial', 'mode': 'web_cloud',
+                        'message': 'Cloud capture rejected by integrity validation.',
+                        'error': type(exc).__name__, 'source': web_url,
+                    })
+                    return 0
+                retrieved_at = str(obj.get('retrieved_at') or '')
+                prev_status = read_json(STORE/'status.json', default={}) or {}
+                if prev_status.get('mode') == 'web_cloud' and prev_status.get('updated') == retrieved_at and retrieved_at:
+                    return 0
+                with data_lock(timeout=120):
+                    import_report(obj, rate, dividend, spread)
+                atomic_json(STORE/'status.json',{'status':'ready','mode':'web_cloud','updated':retrieved_at or pd.Timestamp.now(tz='UTC').isoformat(),'total_files':int(prev_status.get('total_files', 0)) + 1,'source':web_url})
+                return 1
         except Exception as exc:
             pass
         atomic_json(STORE/'status.json',{'status':'waiting','message':'Sign in to Google Drive desktop to connect the private archive.'});return 0
     manifest=read_json(STORE/'manifest.json', default={}) or {};count=0;errors=[]
     import re
-    pattern=re.compile(r'^\d{4}\-\d{2}\-\d{2}_(snapshot|test|eod)_\d{6}_(complete|partial)\.json\.gz$')
+    pattern=re.compile(r'^\d{4}\-\d{2}\-\d{2}_(snapshot|eod)_\d{6}_complete\.json\.gz$')
     for path in sorted(source.glob('*.json.gz'), reverse=True):
         if not pattern.fullmatch(path.name):continue
         try:

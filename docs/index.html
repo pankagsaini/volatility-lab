@@ -116,7 +116,7 @@
 
   <!-- Toast -->
   <div id="deskToast" class="fixed bottom-5 right-5 z-50 hidden px-4 py-2 rounded-lg bg-[#0d1522] border border-[#38bdf8] text-white text-xs font-semibold shadow-xl items-center gap-2">
-    <span class="text-[#eab308]">❖</span>
+    <span class="text-sky-400">❖</span>
     <span id="deskToastText">Updated</span>
   </div>
 
@@ -125,10 +125,10 @@
     <!-- =================================================================== -->
     <!-- SINGLE COMPACT DESK BAR (With Market-Hours Gate & Status Badge)     -->
     <!-- =================================================================== -->
-    <header class="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#0d1522] border border-[#24344d] border-l-4 border-l-[#eab308] rounded-xl">
+    <header class="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#0d1522] border border-[#24344d] border-l-4 border-l-sky-500 rounded-xl">
       <div class="flex flex-wrap items-center gap-3">
         <div class="flex items-center gap-2">
-          <span class="text-[#eab308] font-bold text-lg">❖</span>
+          <span class="text-sky-400 font-bold text-lg">❖</span>
           <span class="font-extrabold text-base tracking-tight text-white">Volatility Lab</span>
         </div>
 
@@ -151,8 +151,8 @@
 
       <!-- Right: Clean Market Context & Dynamic Market-Hours Gate Pill -->
       <div class="flex items-center gap-3 mono text-xs">
-        <span class="text-slate-300 hidden sm:inline">INDIA VIX: <strong id="headerVixVal" class="text-amber-300">17.39%</strong></span>
-        <span class="text-slate-300 hidden md:inline">Model: <strong class="text-amber-300">Black-76 Forward</strong> · r: <strong class="text-sky-300">6.60%</strong></span>
+        <span class="text-slate-300 hidden sm:inline">INDIA VIX: <strong id="headerVixVal" class="text-sky-300">17.54%</strong></span>
+        <span class="text-slate-300 hidden md:inline">Model: <strong class="text-sky-300">Black-76 Forward</strong> · r: <strong class="text-sky-300">6.60%</strong></span>
         <span id="marketClockPill" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#070b12] border border-[#334155] text-slate-300 font-semibold">
           <span id="livePulseDot" class="hidden w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
           <span id="marketClockText">11 Nov 15:30 IST · MARKET CLOSED</span>
@@ -170,13 +170,13 @@
         <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Spot &amp; Black-76 Parity F</div>
           <div id="kpiSpot" class="text-lg mono font-extrabold text-white mt-0.5">25,255.05</div>
-          <div id="kpiForwardSub" class="text-[11px] mono text-slate-300 mt-0.5">F: 25,013.0 · Fut 25,030.0 (Basis -17.1)</div>
+          <div id="kpiForwardSub" class="text-[11px] mono text-slate-300 mt-0.5">F: 25,191.6 · Fut 25,215.3 (Basis -23.7)</div>
         </div>
 
-        <div class="kpi-card border-t-2 border-t-amber-400">
+        <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Black-76 ATM IV (Parity F)</div>
-          <div id="kpiAtmIv" class="text-lg mono font-extrabold text-amber-300 mt-0.5">17.86%</div>
-          <div id="kpiIvRankSub" class="text-[11px] mono text-slate-300 mt-0.5">B76 CE 17.86% / PE 17.86% · Upstox Ref 16.14 / 19.61 (69th %ile)</div>
+          <div id="kpiAtmIv" class="text-lg mono font-extrabold text-sky-300 mt-0.5">17.86%</div>
+          <div id="kpiIvRankSub" class="text-[11px] mono text-slate-300 mt-0.5">B76 CE 17.86% / PE 17.86% · Ref 16.14 / 19.61 (69th %ile)</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-emerald-400">
@@ -187,20 +187,20 @@
 
         <div class="kpi-card border-t-2 border-t-emerald-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">VRP Spread (IV − HV30)</div>
-          <div id="kpiVrpSpread" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">+2.12 pp</div>
+          <div id="kpiVrpSpread" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">+3.08 pp</div>
           <div id="kpiGarchGapSub" class="text-[11px] mono text-sky-300 mt-0.5">IV − HV10: +2.87 pp · VIX: 17.54%</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-purple-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">1σ Expected Move</div>
-          <div id="kpiExpMove" class="text-lg mono font-extrabold text-white mt-0.5">±614 pts (±2.45%)</div>
-          <div id="kpiSafeBandSub" class="text-[11px] mono text-amber-300 mt-0.5">1σ Band: 24,431 – 25,659</div>
+          <div id="kpiExpMove" class="text-lg mono font-extrabold text-white mt-0.5">±578 pts (±2.29%)</div>
+          <div id="kpiSafeBandSub" class="text-[11px] mono text-violet-300 mt-0.5">1σ Band: 24,677 – 25,833</div>
         </div>
 
-        <div class="kpi-card border-t-2 border-t-[#eab308]">
+        <div class="kpi-card border-t-2 border-t-purple-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">25Δ Skew &amp; Butterfly</div>
-          <div id="kpiSkew25" class="text-lg mono font-extrabold text-amber-300 mt-0.5">+0.18 / +0.27 pp</div>
-          <div id="kpiSkewSub" class="text-[11px] mono text-slate-300 mt-0.5">RR25 (P−C) · BF25 · PCR 1.13</div>
+          <div id="kpiSkew25" class="text-lg mono font-extrabold text-violet-300 mt-0.5">-1.70 / +0.20 pp</div>
+          <div id="kpiSkewSub" class="text-[11px] mono text-slate-300 mt-0.5">RR25 (Put−Call) · BF25 · PCR 0.79</div>
         </div>
       </div>
 
@@ -212,7 +212,7 @@
             <button type="button" data-tab="term" class="res-tab-btn seg-btn">2. Term Structure &amp; Forward Vol</button>
             <button type="button" data-tab="smile" class="res-tab-btn seg-btn">3. Smile, Skew &amp; Strike Surface</button>
             <button type="button" data-tab="straddle" class="res-tab-btn seg-btn">4. Intraday Straddle &amp; Stress Matrix</button>
-            <button type="button" data-tab="trades" class="res-tab-btn seg-btn text-amber-300">5. Trade Identification</button>
+            <button type="button" data-tab="trades" class="res-tab-btn seg-btn text-sky-300">5. Trade Identification</button>
           </div>
 
           <!-- Context Controls for Tab 1 (Clean Metric & Horizon Selectors) -->
@@ -237,14 +237,11 @@
           <div class="bg-[#080d16] border border-[#24344d] rounded-xl p-4">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
               <span id="regimeGraphHeading" class="text-xs font-bold uppercase tracking-wider text-slate-200">
-                NIFTY · Captured Upstox ATM IV (%) vs. 1-Year Daily HV10 (%) &amp; HV30 (%)
+                NIFTY · ATM IV (%) vs. HV10 (%) &amp; HV30 (%)
               </span>
               <span id="regimeLatestSummary" class="text-xs mono text-sky-300 font-semibold">
-                09 Nov Close · IV: 16.95% · HV10: 14.82% · HV30: 14.45% · VRP: +2.50 pp
+                11 Nov Close · IV: 17.86% · HV10: 14.99% · HV30: 14.78% · VRP: +3.08 pp
               </span>
-            </div>
-            <div id="regimeCaptureNote" class="text-[11px] mono text-amber-300/90 mb-2">
-              Note: HV10 &amp; HV30 are computed from all 252 NSE daily OHLC bars (2025-11-04 to 2026-11-09). ATM IV is plotted strictly on sessions with real captured Upstox option-chain snapshots (2026-10-21 to 2026-11-09); earlier dates have no captured option-chain IV (iv = null, zero synthetic back-calculation).
             </div>
             <div class="relative" style="height: 410px;">
               <canvas id="regimeMainCanvas"></canvas>
@@ -255,8 +252,8 @@
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
             <div class="lg:col-span-7 overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
               <div class="px-3.5 py-2 bg-[#111c2d] border-b border-[#24344d] flex justify-between items-center">
-                <span class="text-xs font-bold uppercase text-white">Empirical Distribution (252d OHLC HV &amp; 14 Captured Upstox IV Sessions)</span>
-                <span class="text-[11px] mono text-amber-300">2025-11-04 to 2026-11-09</span>
+                <span class="text-xs font-bold uppercase text-white">Empirical Distribution (HV &amp; ATM IV)</span>
+                <span class="text-[11px] mono text-slate-400">2025-11-04 to 2026-11-09</span>
               </div>
               <table class="w-full text-left border-collapse text-xs mono">
                 <thead>
@@ -276,13 +273,13 @@
             <div class="lg:col-span-5 overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
               <div class="px-3.5 py-2 bg-[#111c2d] border-b border-[#24344d] flex justify-between items-center">
                 <span class="text-xs font-bold uppercase text-white">Realized Volatility Term Windows vs. ATM IV</span>
-                <span class="text-[11px] mono text-sky-300">245-Session Annualized</span>
+                <span class="text-[11px] mono text-sky-300">Annualized</span>
               </div>
               <table class="w-full text-left border-collapse text-xs mono">
                 <thead>
                   <tr class="border-b border-[#24344d] text-slate-300">
                     <th class="py-2 px-3">Window</th>
-                    <th class="py-2 px-3 text-right text-amber-300">Realized HV</th>
+                    <th class="py-2 px-3 text-right text-sky-300">Realized HV</th>
                     <th class="py-2 px-3 text-right text-emerald-300">EWMA Vol</th>
                     <th class="py-2 px-3 text-right text-sky-300">ATM IV</th>
                     <th class="py-2 px-3 text-right">IV − HV Spread</th>
@@ -301,9 +298,9 @@
           <div class="bg-[#080d16] border border-[#24344d] rounded-xl p-4">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
               <span id="termGraphHeading" class="text-xs font-bold uppercase tracking-wider text-slate-200">
-                Listed Expiries · Black-76 Forward ATM IV (%) vs. Implied Forward Vol (σ_fwd), HV10 (%) &amp; HV30 (%)
+                Listed Expiries · ATM IV (%) vs. Implied Forward Vol (σ_fwd), HV10 (%) &amp; HV30 (%)
               </span>
-              <span class="text-xs mono text-purple-300 font-semibold">Forward Variance: σ²_fwd = (σ²₂·T₂ − σ²₁·T₁) / (T₂ − T₁)</span>
+              <span class="text-xs mono text-purple-300 font-semibold">Forward Volatility (σ_fwd)</span>
             </div>
             <div class="relative" style="height: 410px;">
               <canvas id="termMainCanvas"></canvas>
@@ -325,7 +322,7 @@
                   <th class="py-2.5 px-3 text-right text-purple-300">Forward Vol σ_fwd</th>
                   <th class="py-2.5 px-3 text-right text-emerald-300">IV − HV30</th>
                   <th class="py-2.5 px-3 text-right">ATM Straddle (₹)</th>
-                  <th class="py-2.5 px-3 text-right">Variance Check</th>
+                  <th class="py-2.5 px-3 text-right">Term Slope</th>
                 </tr>
               </thead>
               <tbody id="termMainTableBody" class="divide-y divide-[#1a2639]"></tbody>
@@ -339,16 +336,16 @@
         <div id="panel-smile" class="hidden space-y-4">
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-[#080d16] p-3 rounded-xl border border-[#24344d] items-center text-xs mono">
             <div>
-              <div class="text-[11px] text-slate-400">ATM Strike, Parity Forward F &amp; Spot</div>
-              <div id="smileAtmSummary" class="text-sm font-bold text-white mt-0.5">25,050 · F = 25,013.0 (Spot 25,044.65)</div>
+              <div class="text-[11px] text-slate-400">ATM Strike, Forward F &amp; Spot</div>
+              <div id="smileAtmSummary" class="text-sm font-bold text-white mt-0.5">25,250 · F = 25,191.6 (Spot 25,255.05)</div>
             </div>
             <div>
-              <div class="text-[11px] text-slate-400">Black-76 Call / Put IV (Upstox Ref)</div>
-              <div id="smileCpIvSummary" class="text-sm font-bold text-sky-300 mt-0.5">B76: CE 16.95% / PE 16.95% (Upstox: 16.01% / 17.90%)</div>
+              <div class="text-[11px] text-slate-400">Call / Put IV (Ref)</div>
+              <div id="smileCpIvSummary" class="text-sm font-bold text-sky-300 mt-0.5">B76: CE 16.95% / PE 16.95% (Ref: 16.01% / 17.90%)</div>
             </div>
             <div>
               <div class="text-[11px] text-slate-400">25Δ Risk Reversal (Put − Call)</div>
-              <div id="smileRrVal" class="text-sm font-bold text-amber-300 mt-0.5">+2.29 pp</div>
+              <div id="smileRrVal" class="text-sm font-bold text-violet-300 mt-0.5">+2.29 pp</div>
             </div>
             <div>
               <div class="text-[11px] text-slate-400">25Δ Butterfly (Wings − ATM)</div>
@@ -359,9 +356,9 @@
           <div class="bg-[#080d16] border border-[#24344d] rounded-xl p-4">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
               <span class="text-xs font-bold uppercase tracking-wider text-slate-200">
-                Black-76 Forward Model · B76 OTM Smile IV (%), B76 Call IV (%) &amp; B76 Put IV (%) Across Strikes
+                Black-76 Forward Model · OTM Smile IV (%), Call IV (%) &amp; Put IV (%) Across Strikes
               </span>
-              <span class="text-xs mono text-slate-300">Black-76 Forward IV &amp; Δ_B76 + Raw Upstox LTP &amp; OI Reference</span>
+              <span class="text-xs mono text-slate-300">Implied Volatility &amp; Delta Across Strikes</span>
             </div>
             <div class="relative" style="height: 390px;">
               <canvas id="smileMainCanvas"></canvas>
@@ -375,14 +372,14 @@
                   <th class="py-2.5 px-3 text-left">Moneyness / Zone (vs F)</th>
                   <th class="py-2.5 px-3">Call OI (k)</th>
                   <th class="py-2.5 px-3 text-emerald-300">Call LTP (₹)</th>
-                  <th class="py-2.5 px-3">CE Δ (B76)</th>
-                  <th class="py-2.5 px-3 text-sky-300">CE IV (B76) · Upstox Ref IV</th>
+                  <th class="py-2.5 px-3">Call Delta</th>
+                  <th class="py-2.5 px-3 text-sky-300">Call IV % (Ref)</th>
                   <th class="py-2.5 px-3 text-center bg-[#070b12]">Strike</th>
-                  <th class="py-2.5 px-3 text-amber-300">PE IV (B76) · Upstox Ref IV</th>
-                  <th class="py-2.5 px-3">PE Δ (B76)</th>
+                  <th class="py-2.5 px-3 text-violet-300">Put IV % (Ref)</th>
+                  <th class="py-2.5 px-3">Put Delta</th>
                   <th class="py-2.5 px-3 text-sky-300">Put LTP (₹)</th>
                   <th class="py-2.5 px-3">Put OI (k)</th>
-                  <th class="py-2.5 px-3 text-emerald-300">B76 OTM Smile IV %</th>
+                  <th class="py-2.5 px-3 text-emerald-300">OTM Smile IV %</th>
                 </tr>
               </thead>
               <tbody id="smileMainTableBody" class="divide-y divide-[#1a2639]"></tbody>
@@ -398,8 +395,8 @@
             <div class="lg:col-span-7 bg-[#080d16] border border-[#24344d] rounded-xl p-4 space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <div class="seg-group" id="straddleChartModeGroup">
-                  <button type="button" data-scmode="intraday" class="scmode-btn seg-btn active">Real Intraday Straddle &amp; VWAP (27 Captures)</button>
-                  <button type="button" data-scmode="intra_iv" class="scmode-btn seg-btn">Real Intraday ATM IV (%)</button>
+                  <button type="button" data-scmode="intraday" class="scmode-btn seg-btn active">Intraday Straddle &amp; VWAP</button>
+                  <button type="button" data-scmode="intra_iv" class="scmode-btn seg-btn">Intraday ATM IV (%)</button>
                   <button type="button" data-scmode="payoff" class="scmode-btn seg-btn">Multi-Leg Expiry Payoff Curve</button>
                 </div>
                 <span id="straddleSummaryBadge" class="text-xs mono text-emerald-400 font-bold">ATM 25,050 Straddle: ₹492.4</span>
@@ -422,7 +419,7 @@
                   <input id="stressLotsInput" type="number" min="1" max="50" value="1" aria-label="Lots" class="desk-input mono text-xs py-1 w-16 text-center" title="Lots" />
                 </div>
               </div>
-              <p class="text-[11px] text-slate-300">T+1d P&amp;L across Spot shocks (-2% to +2%) and IV shifts (-3 pp to +3 pp), net of Upstox charges:</p>
+              <p class="text-[11px] text-slate-300">T+1d P&amp;L across Spot shocks (-2% to +2%) and IV shifts (-3 pp to +3 pp), net of statutory charges:</p>
               <div class="overflow-x-auto rounded-lg border border-[#24344d]">
                 <table class="w-full text-center border-collapse text-xs mono">
                   <thead>
@@ -449,11 +446,11 @@
         <div id="panel-trades" class="hidden space-y-4">
           <div class="flex flex-wrap items-center justify-between gap-3 bg-[#080d16] p-3.5 rounded-xl border border-[#24344d]">
             <div class="space-y-0.5">
-              <div class="text-xs font-extrabold uppercase tracking-wider text-amber-300">
+              <div class="text-xs font-extrabold uppercase tracking-wider text-sky-300">
                 ❖ Multi-Expiry Quantitative Trade Identification Matrix (S1–S6)
               </div>
               <div id="tradeIdSummarySub" class="text-[11px] mono text-slate-300">
-                Evaluates all active Upstox expiries against S1–S6 quantitative thresholds, exact strikes, SPAN+Exposure capital, breakevens &amp; ROC %.
+                Evaluates all active expiries against S1–S6 quantitative thresholds, exact strikes, capital, breakevens &amp; ROC %.
               </div>
             </div>
 
@@ -492,7 +489,7 @@
                   <th class="py-2.5 px-3">Trigger Metrics (IV / HV / VRP / Skew)</th>
                   <th class="py-2.5 px-3">Exact Strikes (Per Lot)</th>
                   <th class="py-2.5 px-3 text-right">Est. Credit / Debit</th>
-                  <th class="py-2.5 px-3 text-right text-amber-300">Capital Used (₹)</th>
+                  <th class="py-2.5 px-3 text-right text-sky-300">Capital Used (₹)</th>
                   <th class="py-2.5 px-3 text-right">Breakeven Band</th>
                   <th class="py-2.5 px-3 text-right text-emerald-300">Max Profit / Loss (ROC %)</th>
                   <th class="py-2.5 px-3 text-center">Backtest &amp; Auto-Forward</th>
@@ -554,9 +551,9 @@
         </div>
 
         <!-- 1-Line Hypothesis & Trigger Rule -->
-        <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[#080d16] border border-[#24344d] border-l-4 border-l-[#eab308] text-xs">
+        <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[#080d16] border border-[#24344d] border-l-4 border-l-sky-500 text-xs">
           <span id="btHypothesisLine" class="text-slate-100">
-            <b class="text-[#eab308]">Hypothesis:</b> Capture post-open ATM IV mean-reversion when weekly ATM IV spikes above 15.5% with ±350 pt protective wings.
+            <b class="text-sky-300">Hypothesis:</b> Capture post-open ATM IV mean-reversion when weekly ATM IV spikes above 15.5% with ±350 pt protective wings.
           </span>
           <span id="btTriggerBadge" class="mono text-sky-300 font-semibold">09:20 IST Entry → 15:15 IST Exit · Upstox STT+GST Included</span>
         </div>
@@ -569,9 +566,9 @@
           <div id="resNetPnl" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">+₹65,640</div>
           <div id="resNetSub" class="text-[11px] mono text-slate-300 mt-0.5">Gross: +₹73,572</div>
         </div>
-        <div class="kpi-card border-t-2 border-t-amber-400">
+        <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Capital Used (₹)</div>
-          <div id="resCapitalUsed" class="text-lg mono font-extrabold text-amber-300 mt-0.5">₹62,000</div>
+          <div id="resCapitalUsed" class="text-lg mono font-extrabold text-sky-300 mt-0.5">₹62,000</div>
           <div id="resCapitalSub" class="text-[11px] mono text-slate-300 mt-0.5">SPAN + Exposure (1 Lot)</div>
         </div>
         <div class="kpi-card border-t-2 border-t-emerald-400">
@@ -594,9 +591,9 @@
           <div id="resMaxDd" class="text-lg mono font-extrabold text-rose-400 mt-0.5">-₹4,735</div>
           <div id="resMaxDdSub" class="text-[11px] mono text-slate-300 mt-0.5">-7.6% of Capital</div>
         </div>
-        <div class="kpi-card border-t-2 border-t-amber-400">
+        <div class="kpi-card border-t-2 border-t-slate-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Upstox Costs &amp; Slip</div>
-          <div id="resCharges" class="text-lg mono font-extrabold text-amber-300 mt-0.5">₹7,932</div>
+          <div id="resCharges" class="text-lg mono font-extrabold text-slate-300 mt-0.5">₹7,932</div>
           <div class="text-[11px] mono text-slate-300 mt-0.5">STT + Exchange + 18% GST</div>
         </div>
       </div>
@@ -619,7 +616,7 @@
         <div class="lg:col-span-5 desk-panel space-y-2.5">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold uppercase text-white">6-Strategy Empirical Comparison (Net vs. Capital)</span>
-            <span class="text-[11px] mono text-emerald-400">6 Real Captured Upstox Sessions (02–09 Nov 2026)</span>
+            <span class="text-[11px] mono text-emerald-400">6 Sessions (02–09 Nov 2026)</span>
           </div>
           <div class="relative" style="height: 330px;">
             <canvas id="btCompareCanvas"></canvas>
@@ -631,7 +628,7 @@
       <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#0d1522]">
         <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
           <span class="text-xs font-bold uppercase text-white">6-Strategy Empirical Scorecard (Scaled by Selected Index &amp; Lots)</span>
-          <span class="text-[11px] mono text-amber-300">Click any strategy row to inspect its trade ledger</span>
+          <span class="text-[11px] mono text-sky-300">Click any strategy row to inspect its trade ledger</span>
         </div>
         <table class="w-full text-left border-collapse text-xs mono">
           <thead>
@@ -642,7 +639,7 @@
               <th class="py-2.5 px-3 text-right">Gross P&amp;L</th>
               <th class="py-2.5 px-3 text-right">Charges &amp; Slip</th>
               <th class="py-2.5 px-3 text-right text-emerald-300">Net P&amp;L (₹)</th>
-              <th class="py-2.5 px-3 text-right text-amber-300">Capital Used (₹)</th>
+              <th class="py-2.5 px-3 text-right text-sky-300">Capital Used (₹)</th>
               <th class="py-2.5 px-3 text-right text-sky-300">ROC %</th>
               <th class="py-2.5 px-3 text-right text-rose-300">Max DD</th>
               <th class="py-2.5 px-3 text-right">Profit Factor</th>
@@ -656,7 +653,7 @@
       <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#0d1522]">
         <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
           <span class="text-xs font-bold uppercase text-white">Audited Historical Trade Log (Point-in-Time AvailableAt &le; 09:20 IST)</span>
-          <span class="text-[11px] mono text-slate-300">100% Real Captured Upstox Option Chains (02, 03, 04, 05, 06 &amp; 09 Nov 2026 · 09:20 Entry → 15:15 Exit)</span>
+          <span class="text-[11px] mono text-slate-300">Audited Sessions (02, 03, 04, 05, 06 &amp; 09 Nov 2026 · 09:20 Entry → 15:15 Exit)</span>
         </div>
         <table class="w-full text-left border-collapse text-xs mono">
           <thead>
@@ -665,7 +662,7 @@
               <th class="py-2.5 px-3">Strategy</th>
               <th class="py-2.5 px-3">Entry Trigger Metric (09:20 IST)</th>
               <th class="py-2.5 px-3">Structure &amp; Strikes</th>
-              <th class="py-2.5 px-3 text-right text-amber-300">Capital Used (₹)</th>
+              <th class="py-2.5 px-3 text-right text-sky-300">Capital Used (₹)</th>
               <th class="py-2.5 px-3 text-right">Gross P&amp;L</th>
               <th class="py-2.5 px-3 text-right">Charges &amp; Slip</th>
               <th class="py-2.5 px-3 text-right text-emerald-300">Net P&amp;L (₹)</th>
@@ -687,23 +684,24 @@
       <div class="desk-panel space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#1e2d42]">
           <div class="flex flex-wrap items-center gap-2.5">
-            <span class="px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-400/40 text-amber-300 font-extrabold text-xs mono">
-              ⚡ AUTO PAPER-TRADING ENGINE (S1–S6)
+            <span class="px-2.5 py-1 rounded-md bg-sky-500/15 border border-sky-400/40 text-sky-300 font-extrabold text-xs mono">
+              ☁ CLOUD-AUTHORITATIVE FORWARD-TEST LEDGER (S1–S6)
             </span>
             <button type="button" id="fwdAutoModeToggle" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-bold text-xs mono transition hover:bg-emerald-900/80">
               <span id="fwdAutoPulseDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span id="fwdAutoModeLabel">CLOUD LEDGER · SYNCED (11 NOV 15:30 IST)</span>
+              <span id="fwdAutoModeLabel">CLOUD LEDGER · AWAITING VALIDATED SNAPSHOT</span>
             </button>
             <span id="fwdLastMarkedBadge" class="text-[11px] mono text-slate-300">
-              Status: <strong class="text-emerald-300">CLOUD LEDGER · SYNCED (11 NOV 15:30 IST) · 13 Auto-Triggered Session Trades</strong>
+              Status: <strong class="text-emerald-300">ARMED_WAITING_FOR_NEXT_SESSION · Inception 2026-11-11 (09:20 IST)</strong>
             </span>
+            <span id="liveCaptureIntegrity" class="text-[11px] mono text-sky-300">Live data: awaiting validated cloud snapshot</span>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <button type="button" id="fwdScanNowBtn" class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs transition">
-              Scan &amp; Trigger Qualified Setups Now
+              Refresh Cloud Ledger
             </button>
-            <button type="button" id="fwdResetSeedBtn" class="px-2.5 py-1.5 rounded-lg bg-[#090f1a] hover:bg-slate-800 text-rose-300 font-semibold text-xs border border-rose-500/40">
-              Reset / Clear Ledger
+            <button type="button" id="fwdResetSeedBtn" disabled title="The cloud ledger is authoritative and cannot be reset in the browser." class="px-2.5 py-1.5 rounded-lg bg-[#090f1a] text-slate-500 font-semibold text-xs border border-slate-700 cursor-not-allowed">
+              Cloud Ledger Reset Disabled
             </button>
             <button type="button" id="fwdExportCsvBtn" class="px-3 py-1.5 rounded-lg bg-[#090f1a] hover:bg-slate-800 text-sky-300 font-bold text-xs border border-sky-500/40">
               Export Forward Ledger CSV
@@ -740,24 +738,19 @@
             </select>
           </div>
           <div>
-            <label for="fwdLotsInput" class="block text-xs font-bold text-slate-200 mb-1">Lots per Trade</label>
-            <input id="fwdLotsInput" type="number" min="1" max="20" value="1" class="desk-input mono w-full" />
+            <label for="fwdLotsInput" class="block text-xs font-bold text-slate-200 mb-1">Cloud-recorded Lots</label>
+            <input id="fwdLotsInput" type="number" value="1" disabled title="Position size is recorded by the cloud ledger; browser scaling is disabled." class="desk-input mono w-full cursor-not-allowed opacity-60" />
           </div>
           <div>
-            <label for="fwdStopLossRule" class="block text-xs font-bold text-slate-200 mb-1">Stop-Loss Rule</label>
-            <select id="fwdStopLossRule" class="desk-select mono w-full text-rose-300">
-              <option value="NONE" selected>None / Hold to 15:15</option>
-              <option value="SL_25_CAP">-25% of Capital</option>
-              <option value="SL_50_MAXLOSS">-50% of Max Loss</option>
-              <option value="SL_30_IV">+30%IV Spike</option>
+            <label for="fwdStopLossRule" class="block text-xs font-bold text-slate-200 mb-1">Cloud Exit Rule</label>
+            <select id="fwdStopLossRule" disabled title="Exit rules are recorded and applied only by the cloud ledger." class="desk-select mono w-full text-rose-300 cursor-not-allowed opacity-60">
+              <option value="CLOUD" selected>Cloud-controlled / recorded</option>
             </select>
           </div>
           <div>
-            <label for="fwdProfitTargetRule" class="block text-xs font-bold text-slate-200 mb-1">Profit Target Rule</label>
-            <select id="fwdProfitTargetRule" class="desk-select mono w-full text-emerald-300">
-              <option value="NONE" selected>None / Hold to 15:15</option>
-              <option value="TP_50_30">+50% of Max Credit / +30% Debit</option>
-              <option value="TP_75">+75% of Max Credit</option>
+            <label for="fwdProfitTargetRule" class="block text-xs font-bold text-slate-200 mb-1">Cloud Target Rule</label>
+            <select id="fwdProfitTargetRule" disabled title="Exit rules are recorded and applied only by the cloud ledger." class="desk-select mono w-full text-emerald-300 cursor-not-allowed opacity-60">
+              <option value="CLOUD" selected>Cloud-controlled / recorded</option>
             </select>
           </div>
         </div>
@@ -780,9 +773,9 @@
           <div id="fwdKpiClosedNet" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">₹0</div>
           <div id="fwdKpiClosedNetSub" class="text-[11px] mono text-slate-300 mt-0.5">0 Auto-Triggered · Gross: ₹0</div>
         </div>
-        <div class="kpi-card border-t-2 border-t-amber-400">
+        <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">4. Total Capital Deployed (₹)</div>
-          <div id="fwdKpiCapital" class="text-lg mono font-extrabold text-amber-300 mt-0.5">₹0</div>
+          <div id="fwdKpiCapital" class="text-lg mono font-extrabold text-sky-300 mt-0.5">₹0</div>
           <div id="fwdKpiCapitalSub" class="text-[11px] mono text-slate-300 mt-0.5">SPAN+Exp (0 Pos) · Unit Cap: ₹56,074</div>
         </div>
         <div class="kpi-card border-t-2 border-t-sky-400">
@@ -790,10 +783,10 @@
           <div id="fwdKpiRoc" class="text-lg mono font-extrabold text-emerald-300 mt-0.5">0.00%</div>
           <div id="fwdKpiRocSub" class="text-[11px] mono text-slate-300 mt-0.5">Total Net (₹0) / Unit Cap</div>
         </div>
-        <div class="kpi-card border-t-2 border-t-amber-400">
+        <div class="kpi-card border-t-2 border-t-purple-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">6. Trigger Hit Rate &amp; PF</div>
           <div id="fwdKpiWinPf" class="text-lg mono font-extrabold text-white mt-0.5">0.0% · PF 0.00</div>
-          <div id="fwdKpiChargesSub" class="text-[11px] mono text-amber-300 mt-0.5">Upstox Statutory Costs: ₹0</div>
+          <div id="fwdKpiChargesSub" class="text-[11px] mono text-slate-300 mt-0.5">Upstox Statutory Costs: ₹0</div>
         </div>
       </div>
 
@@ -819,7 +812,7 @@
               <th class="py-2.5 px-2.5">Trigger Condition Met</th>
               <th class="py-2.5 px-2.5">Exact Option Legs &amp; Entry LTP (₹)</th>
               <th class="py-2.5 px-2.5">Current Leg LTP (₹)</th>
-              <th class="py-2.5 px-2.5 text-right text-amber-300">Capital Used (₹)</th>
+              <th class="py-2.5 px-2.5 text-right text-sky-300">Capital Used (₹)</th>
               <th class="py-2.5 px-2.5 text-right">Gross MTM (₹)</th>
               <th class="py-2.5 px-2.5 text-right">Upstox Charges (₹)</th>
               <th class="py-2.5 px-2.5 text-right text-emerald-300">Net MTM P&amp;L (₹) &amp; ROC %</th>
@@ -861,7 +854,7 @@
       <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#0d1522]">
         <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
           <span class="text-xs font-bold uppercase text-white">6-Strategy Forward-Test Scorecard Table (Auto-Triggered Setups · 11 Nov 2026 Onwards)</span>
-          <span class="text-[11px] mono text-amber-300">Click any strategy row to filter Open &amp; Closed Forward Ledgers</span>
+          <span class="text-[11px] mono text-sky-300">Click any strategy row to filter Open &amp; Closed Forward Ledgers</span>
         </div>
         <table class="w-full text-left border-collapse text-xs mono">
           <thead>
@@ -875,7 +868,7 @@
               <th class="py-2.5 px-3 text-right">Upstox Charges</th>
               <th class="py-2.5 px-3 text-right text-emerald-300">Closed Net P&amp;L (₹)</th>
               <th class="py-2.5 px-3 text-right text-sky-300">Total Forward Net (₹)</th>
-              <th class="py-2.5 px-3 text-right text-amber-300">Unit Capital (₹)</th>
+              <th class="py-2.5 px-3 text-right text-sky-300">Unit Capital (₹)</th>
               <th class="py-2.5 px-3 text-right text-emerald-300">Forward ROC %</th>
               <th class="py-2.5 px-3 text-right">Status / PF</th>
             </tr>
@@ -899,7 +892,7 @@
               <th class="py-2.5 px-2.5">09:20 IST Trigger Condition Met</th>
               <th class="py-2.5 px-2.5">Exact Option Legs (Entry LTP → Exit LTP)</th>
               <th class="py-2.5 px-2.5 text-center">Exit Reason / SL-TP</th>
-              <th class="py-2.5 px-2.5 text-right text-amber-300">Capital Used (₹)</th>
+              <th class="py-2.5 px-2.5 text-right text-sky-300">Capital Used (₹)</th>
               <th class="py-2.5 px-2.5 text-right">Gross P&amp;L (₹)</th>
               <th class="py-2.5 px-2.5 text-right">Upstox Charges (₹)</th>
               <th class="py-2.5 px-2.5 text-right text-emerald-300">Net P&amp;L (₹) &amp; ROC %</th>
@@ -910,12 +903,6 @@
       </div>
 
     </main>
-
-    <!-- Single Clean Methodology Footer (No Repeated Clutter on Cards) -->
-    <footer class="px-4 py-3 rounded-xl bg-[#0d1522] border border-[#24344d] text-[11px] mono text-slate-400 flex flex-wrap items-center justify-between gap-2">
-      <span>Methodology: Options &amp; Greeks are priced via Fischer Black (1976) Forward Model (Black-76 · F = K + e^{rT}(C − P)); HV10, HV20 &amp; HV30 use the 245-session Yang-Zhang estimator.</span>
-      <span>Live Feed: Google Apps Script Upstox Archive (Paused automatically outside 09:15–15:30 IST NSE sessions).</span>
-    </footer>
 
   </div>
 
@@ -1011,7 +998,7 @@
               ticks: {
                 color: '#ffffff',
                 font: { family: 'JetBrains Mono', size: 11.5, weight: '600' },
-                callback: function(v) { return unit === '₹' ? '₹' + Math.round(v).toLocaleString('en-IN') : v + (unit || ''); }
+                callback: function(v) { if (unit === '₹') return '₹' + Math.round(v).toLocaleString('en-IN'); var num = Number(v); var formatted = isFinite(num) ? (Math.abs(num - Math.round(num)) < 1e-4 ? String(Math.round(num)) : num.toFixed(2)) : String(v); return formatted + (unit || ''); }
               },
               grid: {
                 color: function(c) {
@@ -1026,7 +1013,6 @@
 
       // --- In-Place Chart Updater (Zero Top-to-Bottom Sweep / Zero Canvas Flash) ---
       function updateOrCreateChart(currentInst, ctx, type, dataObj, optsObj) {
-        if (typeof Chart === 'undefined' || !ctx) return null;
         if (currentInst && currentInst.config && currentInst.config.type === type && currentInst.data.datasets.length === dataObj.datasets.length) {
           currentInst.data.labels = dataObj.labels;
           for (var i = 0; i < dataObj.datasets.length; i++) {
@@ -1064,16 +1050,12 @@
       // REQUIREMENT 1: MARKET-HOURS GATE (IST 09:15-15:30 + Special Sessions)
       // ===================================================================
       var NSE_HOLIDAYS = {
-        '2026-01-15': true, '2026-01-26': true, '2026-03-03': true, '2026-03-26': true, '2026-03-31': true,
-        '2026-04-03': true, '2026-04-14': true, '2026-05-01': true, '2026-05-28': true, '2026-06-26': true,
-        '2026-09-14': true, '2026-10-02': true, '2026-10-20': true, '2026-11-10': true, '2026-11-24': true, '2026-12-25': true,
-        '2027-01-26': true, '2027-03-10': true, '2027-03-22': true, '2027-03-26': true, '2027-04-14': true,
-        '2027-04-15': true, '2027-04-19': true, '2027-05-17': true, '2027-06-15': true, '2027-10-11': true,
-        '2027-10-29': true, '2027-11-01': true,
-        '2028-01-26': true, '2028-02-23': true, '2028-03-13': true, '2028-03-27': true, '2028-04-04': true,
-        '2028-04-07': true, '2028-04-14': true, '2028-05-01': true, '2028-05-05': true, '2028-08-15': true,
-        '2028-08-23': true, '2028-09-27': true, '2028-10-02': true, '2028-10-17': true, '2028-10-18': true,
-        '2028-11-02': true, '2028-12-25': true
+        '2026-01-26': true, '2026-03-03': true, '2026-03-26': true, '2026-03-31': true,
+        '2026-04-03': true, '2026-04-14': true, '2026-05-01': true, '2026-05-28': true,
+        '2026-06-26': true, '2026-09-14': true, '2026-10-02': true, '2026-10-20': true,
+        '2026-11-10': true, '2026-11-24': true, '2026-12-25': true,
+        '2027-01-26': true, '2027-03-17': true, '2027-03-26': true, '2027-04-14': true,
+        '2027-04-15': true, '2027-08-15': true, '2027-10-02': true, '2027-12-25': true
       };
 
       var SPECIAL_SESSIONS = {
@@ -1082,10 +1064,10 @@
         '2028-10-17': { startMins: 18 * 60, endMins: 19 * 60 + 30, label: 'MUHURAT' }
       };
 
-      var latestAsOfLabel = '11 Nov 15:30 IST';
-      var lastSyncedRetrievedAt = '2026-11-11T10:00:42.763Z';
+      var latestAsOfLabel = '09 Nov 15:30 IST';
+      var lastSyncedRetrievedAt = '2026-11-09T10:18:42.334Z';
 
-      var latestSnapshotDay = '2026-11-11';
+      var latestSnapshotDay = '2026-11-09';
 
       function getMarketSessionState(nowDate) {
         var raw = nowDate !== undefined ? nowDate : (window._simulatedNowIST !== undefined ? window._simulatedNowIST : new Date());
@@ -1144,9 +1126,9 @@
             dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
           }
         } else if (st.status === 'PRE-OPEN') {
-          pill.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-950/60 border border-amber-500/50 text-amber-300 font-semibold';
+          pill.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-950/60 border border-sky-500/50 text-sky-300 font-semibold';
           if (dot) {
-            dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+            dot.className = 'w-2 h-2 rounded-full bg-sky-400';
           }
         } else {
           pill.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#070b12] border border-[#334155] text-slate-300 font-semibold';
@@ -1210,13 +1192,16 @@
 
       function black76Greeks(F, K, T, r, sigma, isCall) {
         var fwd = Number(F), strike = Number(K), years = Number(T), rate = (r !== undefined && r !== null) ? Number(r) : B76_RISK_FREE_RATE, vol = Number(sigma);
-        if (!isFinite(fwd) || fwd <= 0 || !isFinite(strike) || strike <= 0 || !isFinite(vol) || vol <= 0 || !isFinite(years)) {
+        if (!isFinite(fwd) || fwd <= 0 || !isFinite(strike) || strike <= 0 || !isFinite(vol) || vol < 0 || !isFinite(years) || !isFinite(rate)) {
           return { price: NaN, delta: NaN, fwdDelta: NaN, forwardDelta: NaN, gamma: NaN, vega: NaN, thetaDaily: NaN };
         }
         if (years <= 0) {
           var intr = isCall ? Math.max(0.0, fwd - strike) : Math.max(0.0, strike - fwd);
           var detD = isCall ? (fwd > strike ? 1.0 : (fwd === strike ? 0.5 : 0.0)) : (fwd < strike ? -1.0 : (fwd === strike ? -0.5 : 0.0));
           return { price: intr, delta: detD, fwdDelta: detD, forwardDelta: detD, gamma: 0.0, vega: 0.0, thetaDaily: 0.0 };
+        }
+        if (vol === 0) {
+          return { price: NaN, delta: NaN, fwdDelta: NaN, forwardDelta: NaN, gamma: NaN, vega: NaN, thetaDaily: NaN };
         }
         var D = Math.exp(-rate * years);
         var sqrtT = Math.sqrt(years);
@@ -1291,22 +1276,58 @@
       function enrichItemWithBlack76(item) {
         if (!item || !Array.isArray(item.chain) || !item.chain.length) return item;
         var K_atm = Number(item.atm || 0);
-        var T = Math.max(0.2, Number(item.dte || 1)) / 365.0;
+        var dte = Number(item.dte);
+        // Date-only zero DTE lacks the intraday expiry timestamp required to price safely.
+        var T = isFinite(dte) && dte > 0 ? dte / 365.0 : NaN;
         var atmNode = item.chain.find(function(x) { return Number(x.k) === K_atm; }) || item.chain[Math.floor(item.chain.length / 2)];
         if (!atmNode) return item;
-        var cLtp = Number(atmNode.cLtp || 0);
-        var pLtp = Number(atmNode.pLtp || 0);
-        var F = (cLtp > 0 && pLtp > 0) ? Number(computeBlack76ParityForward(K_atm, cLtp, pLtp, T, B76_RISK_FREE_RATE).toFixed(2)) : Number(item.syn || item.spot);
+        // Cloud snapshots currently expose broker Greeks but not independently
+        // verifiable per-option event times.  LTPs must never be promoted into
+        // a synthetic forward or Black-76 IV without that provenance.
+        if (item.quoteIntegrity !== 'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK') {
+          if (item.b76AtmIv === undefined && item.b76CallIv === undefined) {
+            item.syn = NaN;
+            item.pricingModel = 'Broker-supplied IV only · Black-76 withheld pending validated bid/ask event timestamps';
+            item.b76CallIv = null;
+            item.b76PutIv = null;
+            item.b76AtmIv = null;
+            item.chain.forEach(function(node) {
+              if (node.uCallIv === undefined) node.uCallIv = Number(node.cIv || 0);
+              if (node.uPutIv === undefined) node.uPutIv = Number(node.pIv || 0);
+              node.b76CallIv = null;
+              node.b76PutIv = null;
+              node.b76CallDelta = null;
+              node.b76PutDelta = null;
+              node.b76CallFwdDelta = null;
+              node.b76PutFwdDelta = null;
+              node.b76OtmIv = null;
+            });
+            return item;
+          }
+          if (item.b76CallIv === null) {
+            item.syn = NaN;
+            item.pricingModel = 'Broker-supplied IV only · Black-76 withheld pending validated bid/ask event timestamps';
+            return item;
+          }
+          return item;
+        }
+        var cLtp = 0.5 * (Number(atmNode.cBid || 0) + Number(atmNode.cAsk || 0));
+        var pLtp = 0.5 * (Number(atmNode.pBid || 0) + Number(atmNode.pAsk || 0));
+        var F = NaN;
+        if (isFinite(T) && cLtp > 0 && pLtp > 0) {
+          var parityForward = computeBlack76ParityForward(K_atm, cLtp, pLtp, T, B76_RISK_FREE_RATE);
+          if (isFinite(parityForward) && parityForward > 0) F = Number(parityForward.toFixed(2));
+        }
         item.syn = F;
-        item.pricingModel = 'Black-76 Forward Model · F = K + e^{rT}(C − P)';
+        item.pricingModel = 'Black-76 Forward Model';
         if (item.upstoxCallIv === undefined) item.upstoxCallIv = Number(atmNode.uCallIv || item.cIv || item.iv);
         if (item.upstoxPutIv === undefined) item.upstoxPutIv = Number(atmNode.uPutIv || item.pIv || item.iv);
         var atmCIv = black76Iv(cLtp, F, K_atm, T, B76_RISK_FREE_RATE, true);
         var atmPIv = black76Iv(pLtp, F, K_atm, T, B76_RISK_FREE_RATE, false);
+        item.b76CallIv = isFinite(atmCIv) ? atmCIv : null;
+        item.b76PutIv = isFinite(atmPIv) ? atmPIv : null;
+        item.b76AtmIv = isFinite(atmCIv) && isFinite(atmPIv) ? Number((0.5 * (atmCIv + atmPIv)).toFixed(2)) : null;
         if (isFinite(atmCIv) && isFinite(atmPIv)) {
-          item.b76CallIv = atmCIv;
-          item.b76PutIv = atmPIv;
-          item.b76AtmIv = Number((0.5 * (atmCIv + atmPIv)).toFixed(2));
           item.cIv = item.b76CallIv;
           item.pIv = item.b76PutIv;
           item.iv = item.b76AtmIv;
@@ -1317,19 +1338,21 @@
           if (node.uPutIv === undefined) node.uPutIv = Number(node.pIv || 0);
           if (node.uCallDelta === undefined) node.uCallDelta = Number(node.cDelta || 0);
           if (node.uPutDelta === undefined) node.uPutDelta = Number(node.pDelta || 0);
-          var cSolved = black76IvDec(node.cLtp, F, k, T, B76_RISK_FREE_RATE, true);
-          var pSolved = black76IvDec(node.pLtp, F, k, T, B76_RISK_FREE_RATE, false);
-          var cSig = isFinite(cSolved) ? cSolved : (node.uCallIv > 0 ? node.uCallIv / 100.0 : 0.16);
-          var pSig = isFinite(pSolved) ? pSolved : (node.uPutIv > 0 ? node.uPutIv / 100.0 : 0.16);
+          var cMid = 0.5 * (Number(node.cBid || 0) + Number(node.cAsk || 0));
+          var pMid = 0.5 * (Number(node.pBid || 0) + Number(node.pAsk || 0));
+          var cSolved = black76IvDec(cMid, F, k, T, B76_RISK_FREE_RATE, true);
+          var pSolved = black76IvDec(pMid, F, k, T, B76_RISK_FREE_RATE, false);
+          var cSig = isFinite(cSolved) ? cSolved : NaN;
+          var pSig = isFinite(pSolved) ? pSolved : NaN;
           var cG = black76Greeks(F, k, T, B76_RISK_FREE_RATE, cSig, true);
           var pG = black76Greeks(F, k, T, B76_RISK_FREE_RATE, pSig, false);
-          node.b76CallIv = Number((cSig * 100.0).toFixed(2));
-          node.b76PutIv = Number((pSig * 100.0).toFixed(2));
-          node.b76CallDelta = Number(cG.delta.toFixed(3));
-          node.b76PutDelta = Number(pG.delta.toFixed(3));
-          node.b76CallFwdDelta = Number(cG.fwdDelta.toFixed(3));
-          node.b76PutFwdDelta = Number(pG.fwdDelta.toFixed(3));
-          node.b76OtmIv = k < F ? node.b76PutIv : (k > F ? node.b76CallIv : Number((0.5 * (node.b76CallIv + node.b76PutIv)).toFixed(2)));
+          node.b76CallIv = isFinite(cSig) ? Number((cSig * 100.0).toFixed(2)) : null;
+          node.b76PutIv = isFinite(pSig) ? Number((pSig * 100.0).toFixed(2)) : null;
+          node.b76CallDelta = isFinite(cG.delta) ? Number(cG.delta.toFixed(3)) : null;
+          node.b76PutDelta = isFinite(pG.delta) ? Number(pG.delta.toFixed(3)) : null;
+          node.b76CallFwdDelta = isFinite(cG.fwdDelta) ? Number(cG.fwdDelta.toFixed(3)) : null;
+          node.b76PutFwdDelta = isFinite(pG.fwdDelta) ? Number(pG.fwdDelta.toFixed(3)) : null;
+          node.b76OtmIv = k < F ? node.b76PutIv : (k > F ? node.b76CallIv : (node.b76CallIv !== null && node.b76PutIv !== null && isFinite(node.b76CallIv) && isFinite(node.b76PutIv) ? Number((0.5 * (node.b76CallIv + node.b76PutIv)).toFixed(2)) : null));
           node.cIv = node.b76CallIv;
           node.pIv = node.b76PutIv;
           node.mktIv = node.b76OtmIv;
@@ -1373,9 +1396,15 @@
       // ===================================================================
       // REQUIREMENT 2 & 6: PURE QUANT KPI STRIP (Card #6 = 25D Skew & BF)
       // ===================================================================
+      function formatIv(value) {
+        var iv = Number(value);
+        return value !== null && value !== undefined && isFinite(iv) && iv > 0 ? iv.toFixed(2) + '%' : '—';
+      }
+
       function renderTopKpiStrip() {
         var r = currentRow();
         if (!r) return;
+        enrichItemWithBlack76(r);
         var basis = r.syn - r.fut;
         var vrp30 = r.iv - r.hv30;
         var vrp10 = r.iv - r.hv10;
@@ -1384,18 +1413,16 @@
         var low = Math.round(r.spot - movePts);
         var high = Math.round(r.spot + movePts);
 
-        if (!isFinite(r.b76AtmIv) || !isFinite(r.b76CallIv) || !isFinite(r.b76PutIv)) {
-          enrichItemWithBlack76(r);
-        }
-        var atmIvVal = isFinite(Number(r.b76AtmIv)) && Number(r.b76AtmIv) > 0 ? Number(r.b76AtmIv) : (isFinite(Number(r.iv)) && Number(r.iv) > 0 ? Number(r.iv) : 17.86);
-        var b76C = isFinite(Number(r.b76CallIv)) && Number(r.b76CallIv) > 0 ? Number(r.b76CallIv) : (isFinite(Number(r.cIv)) && Number(r.cIv) > 0 ? Number(r.cIv) : atmIvVal);
-        var b76P = isFinite(Number(r.b76PutIv)) && Number(r.b76PutIv) > 0 ? Number(r.b76PutIv) : (isFinite(Number(r.pIv)) && Number(r.pIv) > 0 ? Number(r.pIv) : atmIvVal);
-        var uC = isFinite(Number(r.upstoxCallIv)) && Number(r.upstoxCallIv) > 0 ? Number(r.upstoxCallIv) : b76C;
-        var uP = isFinite(Number(r.upstoxPutIv)) && Number(r.upstoxPutIv) > 0 ? Number(r.upstoxPutIv) : b76P;
+        var b76C = (r.b76CallIv != null && r.b76CallIv > 0 ? r.b76CallIv : null);
+        var b76P = (r.b76PutIv != null && r.b76PutIv > 0 ? r.b76PutIv : null);
+        var uC = (r.upstoxCallIv != null && r.upstoxCallIv > 0 ? r.upstoxCallIv : (r.cIv || null));
+        var uP = (r.upstoxPutIv != null && r.upstoxPutIv > 0 ? r.upstoxPutIv : (r.pIv || null));
+        var atmIvVal = (r.b76AtmIv != null && r.b76AtmIv > 0) ? r.b76AtmIv : r.iv;
+        var dispFwd = isFinite(r.syn) && r.syn > 0 ? r.syn : (isFinite(r.fut) && r.fut > 0 ? r.fut : null);
         document.getElementById('kpiSpot').textContent = r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        document.getElementById('kpiForwardSub').textContent = 'F: ' + r.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' · Fut ' + r.fut.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' (Basis ' + (basis >= 0 ? '+' : '') + basis.toFixed(1) + ')';
-        document.getElementById('kpiAtmIv').textContent = atmIvVal.toFixed(2) + '%';
-        document.getElementById('kpiIvRankSub').textContent = 'B76 CE ' + b76C.toFixed(2) + '% / PE ' + b76P.toFixed(2) + '% · Upstox Ref ' + uC.toFixed(2) + ' / ' + uP.toFixed(2) + ' (' + (r.ivPct || 69) + 'th %ile)';
+        document.getElementById('kpiForwardSub').textContent = 'F: ' + (dispFwd ? dispFwd.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—') + ' · Fut ' + r.fut.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' (Basis ' + (isFinite(basis) ? (basis >= 0 ? '+' : '') + basis.toFixed(1) : '—') + ')';
+        document.getElementById('kpiAtmIv').textContent = formatIv(atmIvVal);
+        document.getElementById('kpiIvRankSub').textContent = (b76C && b76P ? ('B76 CE ' + formatIv(b76C) + ' / PE ' + formatIv(b76P) + ' · ') : '') + 'Ref ' + formatIv(uC) + ' / ' + formatIv(uP) + ' (' + r.ivPct + 'th %ile)';
         document.getElementById('kpiHvGarch').textContent = r.hv10.toFixed(2) + '% / ' + r.hv30.toFixed(2) + '%';
         document.getElementById('kpiHv10Sub').textContent = 'HV20: ' + r.hv20.toFixed(2) + '% · EWMA: ' + r.ewma.toFixed(2) + '%';
         document.getElementById('kpiVrpSpread').textContent = (vrp30 >= 0 ? '+' : '') + vrp30.toFixed(2) + ' pp';
@@ -1464,12 +1491,12 @@
         var labelStep = Math.max(2, Math.floor(totalLabels / 7));
 
         if (activeMetric === 'spread') {
-          document.getElementById('regimeGraphHeading').textContent = activeSymbol + ' · Captured VRP Spread: (IV − HV30) & (IV − HV10) (pp) — Real Upstox Captures Only';
+          document.getElementById('regimeGraphHeading').textContent = activeSymbol + ' · VRP Spread: (IV − HV30) & (IV − HV10) (pp)';
           var spreadData = {
             labels: labels,
             datasets: [
               {
-                label: 'VRP Spread: IV − HV30 (pp, Captured Dates)',
+                label: 'VRP Spread: IV − HV30 (pp)',
                 data: spread30Arr,
                 borderColor: '#10b981',
                 backgroundColor: 'rgba(16, 185, 129, 0.14)',
@@ -1484,7 +1511,7 @@
                 tension: 0.2
               },
               {
-                label: 'Short-Window Spread: IV − HV10 (pp, Captured Dates)',
+                label: 'Spread: IV − HV10 (pp)',
                 data: spread10Arr,
                 borderColor: '#f59e0b',
                 borderDash: [5, 4],
@@ -1509,12 +1536,12 @@
           };
           regimeChart = updateOrCreateChart(regimeChart, ctx, 'line', spreadData, chartOpts(' pp', true, xTickCallback));
         } else {
-          document.getElementById('regimeGraphHeading').textContent = activeSymbol + ' · Captured Upstox ATM IV (%) vs. 1Y Daily HV10 (%) & HV30 (%) — Zero Synthetic IV';
+          document.getElementById('regimeGraphHeading').textContent = activeSymbol + ' · ATM IV (%) vs. HV10 (%) & HV30 (%)';
           var levelsData = {
             labels: labels,
             datasets: [
               {
-                label: 'Captured Upstox ATM IV (%) [Oct–Nov 2026]',
+                label: 'ATM IV (%)',
                 data: ivArr,
                 borderColor: '#38bdf8',
                 backgroundColor: 'rgba(56, 189, 248, 0.10)',
@@ -1529,7 +1556,7 @@
                 tension: 0.22
               },
               {
-                label: 'HV10 (%) [Full 1Y NSE Daily OHLC]',
+                label: 'HV10 (%)',
                 data: hv10Arr,
                 borderColor: '#f59e0b',
                 borderWidth: 2.3,
@@ -1539,7 +1566,7 @@
                 tension: 0.22
               },
               {
-                label: 'HV30 (%) [Full 1Y NSE Daily OHLC]',
+                label: 'HV30 (%)',
                 data: hv30Arr,
                 borderColor: '#10b981',
                 borderWidth: 2.4,
@@ -1585,17 +1612,17 @@
         var stVrp = calcStats(allVrp, r.iv - r.hv30, ' pp', true);
 
         document.getElementById('regimeRankTableBody').innerHTML = [
-          { m: 'Captured Upstox ATM IV (%) [' + allIv.length + 'd]', s: stIv },
-          { m: 'HV10 (10-Session Realized) [252d]', s: stH10 },
-          { m: 'HV30 (30-Session Realized) [252d]', s: stH30 },
-          { m: 'VRP Spread (IV − HV30) [' + allVrp.length + 'd]', s: stVrp }
+          { m: 'ATM IV (%)', s: stIv },
+          { m: 'HV10 (10-Day Realized)', s: stH10 },
+          { m: 'HV30 (30-Day Realized)', s: stH30 },
+          { m: 'VRP Spread (IV − HV30)', s: stVrp }
         ].map(function(row) {
           return '<tr class="hover:bg-[#111c2d]">' +
             '<td class="py-2 px-3 font-bold text-white">' + row.m + '</td>' +
             '<td class="py-2 px-3 text-right font-bold text-sky-300">' + row.s.c + '</td>' +
             '<td class="py-2 px-3 text-right text-slate-300">' + row.s.med + '</td>' +
             '<td class="py-2 px-3 text-right text-slate-300">' + row.s.mean + '</td>' +
-            '<td class="py-2 px-3 text-right font-bold text-amber-300">' + row.s.p + '</td>' +
+            '<td class="py-2 px-3 text-right font-bold text-sky-300">' + row.s.p + '</td>' +
             '<td class="py-2 px-3 text-right text-emerald-300">' + row.s.z + '</td>' +
           '</tr>';
         }).join('');
@@ -1605,17 +1632,17 @@
         var hv1yMean = Number((allH30.reduce(function(a, b) { return a + b; }, 0) / Math.max(1, allH30.length)).toFixed(2));
 
         var windows = [
-          { w: '10 Sessions (HV10)', hv: r.hv10, ew: r.ewma },
-          { w: '20 Sessions (HV20)', hv: r.hv20, ew: r.ewma },
-          { w: '30 Sessions (HV30)', hv: r.hv30, ew: r.ewma },
-          { w: '60 Sessions (60d Mean RV)', hv: hv60Mean, ew: r.ewma },
-          { w: '252 Sessions (1Y Mean RV)', hv: hv1yMean, ew: r.ewma }
+          { w: 'HV10 (10-Day)', hv: r.hv10, ew: r.ewma },
+          { w: 'HV20 (20-Day)', hv: r.hv20, ew: r.ewma },
+          { w: 'HV30 (30-Day)', hv: r.hv30, ew: r.ewma },
+          { w: 'HV60 (60-Day Mean)', hv: hv60Mean, ew: r.ewma },
+          { w: 'HV252 (1-Year Mean)', hv: hv1yMean, ew: r.ewma }
         ];
         document.getElementById('regimeHorizonTableBody').innerHTML = windows.map(function(item) {
           var spr = r.iv - item.hv;
           return '<tr class="hover:bg-[#111c2d]">' +
             '<td class="py-2 px-3 font-semibold text-white">' + item.w + '</td>' +
-            '<td class="py-2 px-3 text-right text-amber-300">' + item.hv.toFixed(2) + '%</td>' +
+            '<td class="py-2 px-3 text-right text-sky-300">' + item.hv.toFixed(2) + '%</td>' +
             '<td class="py-2 px-3 text-right text-emerald-300">' + item.ew.toFixed(2) + '%</td>' +
             '<td class="py-2 px-3 text-right text-sky-300">' + r.iv.toFixed(2) + '%</td>' +
             '<td class="py-2 px-3 text-right font-bold ' + (spr >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + (spr >= 0 ? '+' : '') + spr.toFixed(2) + ' pp</td>' +
@@ -1655,12 +1682,12 @@
           fwdArr.push(fwd);
 
           var vrp = item.iv - item.hv30;
-          var basis = item.syn - item.fut;
+          var basis = (isFinite(item.syn) && isFinite(item.fut)) ? item.syn - item.fut : NaN;
           var strad = item.strad;
           var stradPct = (strad / item.spot) * 100.0;
           var varStatus = arbFlag
-            ? '<span class="text-rose-400 font-bold">Calendar Inversion</span>'
-            : '<span class="text-emerald-400">Monotone (+Var)</span>';
+            ? '<span class="text-rose-400 font-bold">Inversion (-Slope)</span>'
+            : '<span class="text-emerald-400">Normal (+Slope)</span>';
           var fwdText = fwd !== null ? (fwd.toFixed(2) + '%') : '— (Inversion)';
 
           rowsHtml +=
@@ -1669,9 +1696,9 @@
               '<td class="py-2.5 px-3 text-slate-300">' + item.kind + '</td>' +
               '<td class="py-2.5 px-3 text-right text-white">' + item.dte.toFixed(0) + '</td>' +
               '<td class="py-2.5 px-3 text-right text-slate-200">' + item.atm.toLocaleString('en-IN') + '</td>' +
-              '<td class="py-2.5 px-3 text-right text-slate-200">' + item.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '</td>' +
+              '<td class="py-2.5 px-3 text-right text-slate-200">' + (isFinite(item.syn) ? item.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—') + '</td>' +
               '<td class="py-2.5 px-3 text-right text-slate-300">' + item.fut.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '</td>' +
-              '<td class="py-2.5 px-3 text-right ' + (Math.abs(basis) > 25 ? 'text-amber-300 font-bold' : 'text-slate-300') + '">' + (basis >= 0 ? '+' : '') + basis.toFixed(1) + '</td>' +
+              '<td class="py-2.5 px-3 text-right ' + (Math.abs(basis) > 25 ? 'text-sky-300 font-bold' : 'text-slate-300') + '">' + (isFinite(basis) ? (basis >= 0 ? '+' : '') + basis.toFixed(1) : '—') + '</td>' +
               '<td class="py-2.5 px-3 text-right font-bold text-sky-300">' + item.iv.toFixed(2) + '%</td>' +
               '<td class="py-2.5 px-3 text-right font-bold text-purple-300">' + fwdText + '</td>' +
               '<td class="py-2.5 px-3 text-right font-bold ' + (vrp >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + (vrp >= 0 ? '+' : '') + vrp.toFixed(2) + ' pp</td>' +
@@ -1745,15 +1772,15 @@
         if (!r) return;
         enrichItemWithBlack76(r);
 
-        var b76C = (r.b76CallIv !== undefined ? r.b76CallIv : (r.cIv || r.iv));
-        var b76P = (r.b76PutIv !== undefined ? r.b76PutIv : (r.pIv || r.iv));
-        var uC = (r.upstoxCallIv !== undefined ? r.upstoxCallIv : b76C);
-        var uP = (r.upstoxPutIv !== undefined ? r.upstoxPutIv : b76P);
+        var b76C = (r.b76CallIv !== undefined ? r.b76CallIv : null);
+        var b76P = (r.b76PutIv !== undefined ? r.b76PutIv : null);
+        var uC = (r.upstoxCallIv !== undefined ? r.upstoxCallIv : null);
+        var uP = (r.upstoxPutIv !== undefined ? r.upstoxPutIv : null);
 
         var atmEl = document.getElementById('smileAtmSummary');
-        if (atmEl) atmEl.textContent = r.atm.toLocaleString('en-IN') + ' · F = ' + r.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' (Spot ' + r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ')';
+        if (atmEl) atmEl.textContent = r.atm.toLocaleString('en-IN') + ' · F = ' + (isFinite(r.syn) ? r.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—') + ' (Spot ' + r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ')';
         var cpEl = document.getElementById('smileCpIvSummary');
-        if (cpEl) cpEl.textContent = 'B76: CE ' + b76C.toFixed(2) + '% / PE ' + b76P.toFixed(2) + '% (Upstox Ref: ' + uC.toFixed(2) + '% / ' + uP.toFixed(2) + '%)';
+        if (cpEl) cpEl.textContent = 'B76: CE ' + formatIv(b76C) + ' / PE ' + formatIv(b76P) + ' (Upstox Ref: ' + formatIv(uC) + ' / ' + formatIv(uP) + ')';
         var rrEl = document.getElementById('smileRrVal');
         if (rrEl) rrEl.textContent = (r.rev25 >= 0 ? '+' : '') + r.rev25.toFixed(2) + ' pp';
         var bfEl = document.getElementById('smileBfVal');
@@ -1764,46 +1791,49 @@
         var tbody = document.getElementById('smileMainTableBody');
         var rowsHtml = '';
 
+        var dispF = isFinite(r.syn) && r.syn > 0 ? r.syn : (isFinite(r.fut) && r.fut > 0 ? r.fut : r.spot);
         for (var idx = 0; idx < chain.length; idx++) {
           var node = chain[idx];
           var k = node.k;
-          var cIv = Number(node.b76CallIv !== undefined ? node.b76CallIv : (node.cIv || 0));
-          var pIv = Number(node.b76PutIv !== undefined ? node.b76PutIv : (node.pIv || 0));
-          var uCallIv = Number(node.uCallIv !== undefined ? node.uCallIv : cIv);
-          var uPutIv = Number(node.uPutIv !== undefined ? node.uPutIv : pIv);
-          var otmIv = Number(node.b76OtmIv !== undefined ? node.b76OtmIv : (node.mktIv || 0));
+          var cIv = Number((node.b76CallIv != null && node.b76CallIv > 0) ? node.b76CallIv : (node.cIv || node.uCallIv || 0));
+          var pIv = Number((node.b76PutIv != null && node.b76PutIv > 0) ? node.b76PutIv : (node.pIv || node.uPutIv || 0));
+          var uCallIv = Number(node.uCallIv != null && node.uCallIv > 0 ? node.uCallIv : cIv);
+          var uPutIv = Number(node.uPutIv != null && node.uPutIv > 0 ? node.uPutIv : pIv);
+          var otmIv = Number((node.b76OtmIv != null && node.b76OtmIv > 0) ? node.b76OtmIv : (node.mktIv || (k < dispF ? pIv : cIv) || 0));
           var cLtp = Number(node.cLtp || 0);
           var pLtp = Number(node.pLtp || 0);
-          var cDel = Number(node.b76CallDelta !== undefined ? node.b76CallDelta : (node.cDelta || 0));
-          var pDel = Number(node.b76PutDelta !== undefined ? node.b76PutDelta : (node.pDelta || 0));
+          var cDel = Number(node.b76CallDelta != null ? node.b76CallDelta : (node.cDelta || node.uCallDelta || 0));
+          var pDel = Number(node.b76PutDelta != null ? node.b76PutDelta : (node.pDelta || node.uPutDelta || 0));
 
           strikes.push(k.toString());
           otmArr.push(otmIv > 0 ? Number(otmIv.toFixed(2)) : null);
           callIvArr.push(cIv > 0 ? Number(cIv.toFixed(2)) : null);
           putIvArr.push(pIv > 0 ? Number(pIv.toFixed(2)) : null);
 
-          var moneynessPct = ((k / r.syn - 1.0) * 100.0);
-          var zone = k === r.atm
+          var moneynessPct = isFinite(r.syn) && r.syn > 0 ? ((k / r.syn - 1.0) * 100.0) : NaN;
+          var zone = !isFinite(moneynessPct)
+            ? 'Forward unavailable'
+            : (k === r.atm
             ? 'ATM Parity (' + (moneynessPct >= 0 ? '+' : '') + moneynessPct.toFixed(2) + '% vs F)'
-            : (k < r.syn ? 'OTM Put (' + moneynessPct.toFixed(1) + '% vs F)' : 'OTM Call (+' + moneynessPct.toFixed(1) + '% vs F)');
+            : (k < r.syn ? 'OTM Put (' + moneynessPct.toFixed(1) + '% vs F)' : 'OTM Call (+' + moneynessPct.toFixed(1) + '% vs F)'));
 
           var cLtpTxt = cLtp > 0 ? ('₹' + cLtp.toFixed(2)) : '—';
           var pLtpTxt = pLtp > 0 ? ('₹' + pLtp.toFixed(2)) : '—';
-          var cDelTxt = (cIv > 0 && cLtp > 0) ? cDel.toFixed(3) : '—';
-          var pDelTxt = (pIv > 0 && pLtp > 0) ? pDel.toFixed(3) : '—';
-          var cIvTxt = cIv > 0 ? (cIv.toFixed(2) + '% <span class="text-[10px] text-slate-400">(' + uCallIv.toFixed(2) + ')</span>') : '—';
-          var pIvTxt = pIv > 0 ? (pIv.toFixed(2) + '% <span class="text-[10px] text-slate-400">(' + uPutIv.toFixed(2) + ')</span>') : '—';
+          var cDelTxt = (cDel !== 0) ? cDel.toFixed(3) : ((cIv > 0 && cLtp > 0) ? cDel.toFixed(3) : '—');
+          var pDelTxt = (pDel !== 0) ? pDel.toFixed(3) : ((pIv > 0 && pLtp > 0) ? pDel.toFixed(3) : '—');
+          var cIvTxt = cIv > 0 ? (cIv.toFixed(2) + '% <span class="text-[10px] text-slate-400">(' + (uCallIv > 0 ? uCallIv.toFixed(2) : '—') + ')</span>') : '—';
+          var pIvTxt = pIv > 0 ? (pIv.toFixed(2) + '% <span class="text-[10px] text-slate-400">(' + (uPutIv > 0 ? uPutIv.toFixed(2) : '—') + ')</span>') : '—';
           var otmIvTxt = otmIv > 0 ? (otmIv.toFixed(2) + '%') : '—';
 
           rowsHtml +=
-            '<tr class="' + (k === r.atm ? 'bg-amber-500/15 font-bold' : 'hover:bg-[#111c2d]') + '">' +
+            '<tr class="' + (k === r.atm ? 'bg-sky-500/15 font-bold' : 'hover:bg-[#111c2d]') + '">' +
               '<td class="py-2 px-3 text-left text-white">' + zone + '</td>' +
               '<td class="py-2 px-3 text-slate-300">' + (node.cOi || 0).toLocaleString('en-IN') + 'k</td>' +
               '<td class="py-2 px-3 text-emerald-300">' + cLtpTxt + '</td>' +
               '<td class="py-2 px-3 text-slate-200">' + cDelTxt + '</td>' +
               '<td class="py-2 px-3 text-sky-300">' + cIvTxt + '</td>' +
               '<td class="py-2 px-3 text-center bg-[#070b12] text-white font-bold">' + k.toLocaleString('en-IN') + '</td>' +
-              '<td class="py-2 px-3 text-amber-300">' + pIvTxt + '</td>' +
+              '<td class="py-2 px-3 text-violet-300">' + pIvTxt + '</td>' +
               '<td class="py-2 px-3 text-slate-200">' + pDelTxt + '</td>' +
               '<td class="py-2 px-3 text-sky-300">' + pLtpTxt + '</td>' +
               '<td class="py-2 px-3 text-slate-300">' + (node.pOi || 0).toLocaleString('en-IN') + 'k</td>' +
@@ -1817,7 +1847,7 @@
           labels: strikes,
           datasets: [
             {
-              label: 'Black-76 OTM Smile IV (%) [F = K + e^{rT}(C − P)]',
+              label: 'OTM Smile IV (%)',
               data: otmArr,
               borderColor: '#10b981',
               borderWidth: 2.8,
@@ -1944,7 +1974,7 @@
             labels: timesIv,
             datasets: [
               {
-                label: 'Captured Intraday ATM IV (%) [2026-11-09]',
+                label: 'Intraday ATM IV (%)',
                 data: ivSeries,
                 borderColor: '#38bdf8',
                 backgroundColor: 'rgba(56, 189, 248, 0.14)',
@@ -1970,7 +2000,7 @@
             labels: times,
             datasets: [
               {
-                label: 'Captured ATM Straddle Price (₹) [2026-11-09]',
+                label: 'ATM Straddle Price (₹)',
                 data: sPrices,
                 borderColor: '#10b981',
                 backgroundColor: 'rgba(16, 185, 129, 0.14)',
@@ -2017,9 +2047,9 @@
 
         document.getElementById('stressGreeksStrip').innerHTML =
           '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Max Credit</div><div class="text-xs mono font-bold text-emerald-400">+₹' + Math.round(creditPts * lotUnits).toLocaleString('en-IN') + '</div></div>' +
-          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Theta / Day</div><div class="text-xs mono font-bold text-amber-300">+₹' + dailyTheta.toLocaleString('en-IN') + '</div></div>' +
+          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Theta / Day</div><div class="text-xs mono font-bold text-emerald-400">+₹' + dailyTheta.toLocaleString('en-IN') + '</div></div>' +
           '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Vega / 1% IV</div><div class="text-xs mono font-bold text-sky-300">-₹' + (1580 * lots).toLocaleString('en-IN') + '</div></div>' +
-          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Upstox Cost</div><div class="text-xs mono font-bold text-rose-300">₹' + (285 * lots).toLocaleString('en-IN') + '</div></div>';
+          '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-300">Statutory Charges</div><div class="text-xs mono font-bold text-rose-300">₹' + (285 * lots).toLocaleString('en-IN') + '</div></div>';
       }
 
       // ===================================================================
@@ -2036,7 +2066,7 @@
         var K = item.atm || (Math.round(item.spot / step) * step);
         var vrp30 = item.iv - item.hv30;
         var vrp10 = item.iv - item.hv10;
-        var basis = item.syn - item.fut;
+        var basis = (isFinite(item.syn) && isFinite(item.fut)) ? item.syn - item.fut : NaN;
         var stradPts = item.strad;
         var capMap = STRATEGY_CAPITAL_PER_LOT[sym] || STRATEGY_CAPITAL_PER_LOT.NIFTY;
 
@@ -2089,7 +2119,7 @@
         var s5Cap = capMap.S5 * lots;
 
         var basisThresh = sym === 'NIFTY' ? 10.0 : 35.0;
-        var s6Trig = (Math.abs(basis) >= basisThresh || Math.abs(item.bfly25) >= 0.25);
+        var s6Trig = ((isFinite(basis) && Math.abs(basis) >= basisThresh) || Math.abs(item.bfly25) >= 0.25);
         var s6CredPts = Number((stradPts * 0.36).toFixed(1));
         var s6CredInr = Math.round(s6CredPts * lotSize);
         var s6MaxLossInr = Math.round(Math.max(30, (wLong - wShort) - s6CredPts) * lotSize);
@@ -2178,7 +2208,7 @@
             code: 'S6',
             name: 'S6 · Synthetic Basis Skewed Condor',
             triggered: s6Trig,
-            metrics: 'Basis ' + (basis >= 0 ? '+' : '') + basis.toFixed(1) + ' pts · BF25 ' + (item.bfly25 >= 0 ? '+' : '') + item.bfly25.toFixed(2) + ' pp',
+            metrics: 'Basis ' + (isFinite(basis) ? (basis >= 0 ? '+' : '') + basis.toFixed(1) + ' pts' : 'unavailable') + ' · BF25 ' + (item.bfly25 >= 0 ? '+' : '') + item.bfly25.toFixed(2) + ' pp',
             strikes: 'Sell 2x ' + (K + (sym === 'NIFTY' ? 150 : 300)) + ' CE / Buy 2x ' + (K + (sym === 'NIFTY' ? 450 : 900)) + ' CE · Put Spread',
             premText: '+' + s6CredPts + ' pts (+₹' + s6CredInr.toLocaleString('en-IN') + ' Cr)',
             capital: s6Cap,
@@ -2239,7 +2269,7 @@
                   '<td class="py-2.5 px-3 text-slate-200">' + s.metrics + '</td>' +
                   '<td class="py-2.5 px-3 text-white">' + s.strikes + '</td>' +
                   '<td class="py-2.5 px-3 text-right font-bold ' + (s.code === 'S2' ? 'text-sky-300' : 'text-emerald-300') + ' whitespace-nowrap">' + s.premText + '</td>' +
-                  '<td class="py-2.5 px-3 text-right font-bold text-amber-300 whitespace-nowrap">₹' + s.capital.toLocaleString('en-IN') + '</td>' +
+                  '<td class="py-2.5 px-3 text-right font-bold text-sky-300 whitespace-nowrap">₹' + s.capital.toLocaleString('en-IN') + '</td>' +
                   '<td class="py-2.5 px-3 text-right text-slate-200 whitespace-nowrap">' + s.beText + '</td>' +
                   '<td class="py-2.5 px-3 text-right whitespace-nowrap"><span class="text-emerald-400 font-bold">+₹' + s.maxProf.toLocaleString('en-IN') + '</span> / <span class="text-rose-400">-₹' + s.maxLoss.toLocaleString('en-IN') + '</span> <span class="text-sky-300 font-bold">(+' + s.rocPct.toFixed(1) + '% ROC)</span></td>' +
                   '<td class="py-2.5 px-3 text-center whitespace-nowrap space-x-1.5">' +
@@ -2395,7 +2425,7 @@
 
         if (!overridePreset) {
           document.getElementById('btHypothesisLine').innerHTML =
-            '<b class="text-[#eab308]">Hypothesis:</b> ' + (presetMeta[preset] || presetMeta.S3);
+            '<b class="text-sky-300">Hypothesis:</b> ' + (presetMeta[preset] || presetMeta.S3);
         }
 
         return tradeArchive.filter(function(t) {
@@ -2558,9 +2588,9 @@
               '<td class="py-2 px-3 text-right text-slate-300">' + st.trades + '</td>' +
               '<td class="py-2 px-3 text-right text-white">' + st.wr.toFixed(1) + '%</td>' +
               '<td class="py-2 px-3 text-right ' + (st.totG >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + fmtInr(st.totG, true) + '</td>' +
-              '<td class="py-2 px-3 text-right text-amber-300">-' + fmtInr(st.totC, false) + '</td>' +
+              '<td class="py-2 px-3 text-right text-slate-300">-' + fmtInr(st.totC, false) + '</td>' +
               '<td class="py-2 px-3 text-right font-extrabold ' + (st.totN >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(st.totN, true) + '</td>' +
-              '<td class="py-2 px-3 text-right font-bold text-amber-300">' + fmtInr(st.cap, false) + '</td>' +
+              '<td class="py-2 px-3 text-right font-bold text-sky-300">' + fmtInr(st.cap, false) + '</td>' +
               '<td class="py-2 px-3 text-right font-extrabold ' + (st.roc >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + (st.roc >= 0 ? '+' : '') + st.roc.toFixed(2) + '%</td>' +
               '<td class="py-2 px-3 text-right text-rose-400">' + fmtInr(st.maxDd, false) + '</td>' +
               '<td class="py-2 px-3 text-right text-emerald-300">' + st.pf.toFixed(2) + '</td>' +
@@ -2590,12 +2620,12 @@
         document.getElementById('btLedgerBody').innerHTML = rows.map(function(r) {
           return '<tr class="hover:bg-[#111c2d]">' +
             '<td class="py-2 px-3 text-white font-semibold whitespace-nowrap">' + r.date + ' <span class="text-slate-400 font-normal">(' + r.exp.slice(5) + ')</span></td>' +
-            '<td class="py-2 px-3 font-bold text-amber-300">' + r.strat + '</td>' +
+            '<td class="py-2 px-3 font-bold text-sky-300">' + r.strat + '</td>' +
             '<td class="py-2 px-3 text-slate-200">' + r.sig + '</td>' +
             '<td class="py-2 px-3 text-slate-300">' + r.legs + '</td>' +
-            '<td class="py-2 px-3 text-right font-bold text-amber-300">' + fmtInr(r.capital, false) + '</td>' +
+            '<td class="py-2 px-3 text-right font-bold text-sky-300">' + fmtInr(r.capital, false) + '</td>' +
             '<td class="py-2 px-3 text-right ' + (r.gross >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + fmtInr(r.gross, true) + '</td>' +
-            '<td class="py-2 px-3 text-right text-amber-300">-' + fmtInr(r.cost, false) + '</td>' +
+            '<td class="py-2 px-3 text-right text-slate-300">-' + fmtInr(r.cost, false) + '</td>' +
             '<td class="py-2 px-3 text-right font-extrabold ' + (r.net >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(r.net, true) + '</td>' +
             '<td class="py-2 px-3 text-right font-bold ' + (r.roc >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + (r.roc >= 0 ? '+' : '') + r.roc.toFixed(2) + '%</td>' +
           '</tr>';
@@ -2604,27 +2634,32 @@
 
 
       // ===================================================================
-      // v19.1 CLEAN-SLATE AUTOMATED FORWARD TESTING ENGINE (S1–S6)
+      // v20.1 CLOUD-AUTHORITATIVE FORWARD TESTING DISPLAY (S1–S6)
       // Strict Forward-Only Gate: snapshotDay >= '2026-11-11' & 09:15–15:30 IST
       // ===================================================================
       const MIN_FORWARD_DATE = '2026-11-11';
-      const FWD_STORAGE_KEY = 'vl_forward_ledger_v19_clean';
+      const FWD_STORAGE_KEY = 'vl_forward_ledger_cache_v21';
       const LEGACY_FWD_STORAGE_KEY = 'vl_forward_ledger_v19';
       const ARMED_TOAST_MSG = 'Forward Test is armed for tomorrow (11 Nov 2026 09:20 IST) — waiting for live market open to place first trade.';
       const ARMED_ROW_MSG = '0 trades placed yet · Forward Test Engine is ARMED for first trade tomorrow (11 Nov 2026 · 09:20 IST) when live Upstox option-chain captures begin.';
 
-      const DEFAULT_FORWARD_LEDGER = {"schema":1,"version":"forward-test-v19.1-clean","inception_date":"2026-11-11","min_trigger_date":"2026-11-11","updated_at":"2026-11-11T15:30:00+05:30","status":"SESSION_COMPLETED_1515_IST","open_positions":[],"closed_trades":[{"id":"FWD-20261111-NIF-1117-S1","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"NIFTY","exp":"2026-11-17","kind":"Weekly","dte":6,"strat":"S1","trigReason":"IV 18.17% \u00b7 HV30 14.45% \u00b7 VRP +3.72 pp","sig":"IV 18.17% \u00b7 HV30 14.45% \u00b7 VRP +3.72 pp","legsText":"S 25550CE (176.0\u2192101.7) / S 25150PE (127.0\u2192215.0) / B 25850CE (85.5\u219250.9) / B 24850PE (56.8\u219295.6)","legs":[{"side":-1,"mult":1,"strike":25550,"type":"CE","entryPx":176.0,"curPx":101.65,"exitPx":101.65},{"side":-1,"mult":1,"strike":25150,"type":"PE","entryPx":127.05,"curPx":215.0,"exitPx":215.0},{"side":1,"mult":1,"strike":25850,"type":"CE","entryPx":85.5,"curPx":50.9,"exitPx":50.9},{"side":1,"mult":1,"strike":24850,"type":"PE","entryPx":56.8,"curPx":95.6,"exitPx":95.6}],"capital":28037.0,"maxCredit":10448.75,"maxLoss":9051.25,"entryIv":18.17,"gross":-611.0,"charges":258.35,"net":-869.35,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":18.17},{"t":"09:20 IST","gross":0.0,"iv":18.17},{"t":"14:28 IST","gross":-152.75,"iv":18.17},{"t":"15:15 IST","gross":-611.0,"iv":18.17}]},{"id":"FWD-20261111-NIF-1117-S3","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"NIFTY","exp":"2026-11-17","kind":"Weekly","dte":6,"strat":"S3","trigReason":"ATM IV 18.17% \u00b7 VRP +3.72 pp \u00b7 DTE 6d","sig":"ATM IV 18.17% \u00b7 VRP +3.72 pp \u00b7 DTE 6d","legsText":"S 25350CE (266.6\u2192159.3) / S 25350PE (207.1\u2192329.9) / B 25700CE (123.0\u219271.7) / B 25000PE (86.0\u2192146.2)","legs":[{"side":-1,"mult":1,"strike":25350,"type":"CE","entryPx":266.65,"curPx":159.35,"exitPx":159.35},{"side":-1,"mult":1,"strike":25350,"type":"PE","entryPx":207.1,"curPx":329.85,"exitPx":329.85},{"side":1,"mult":1,"strike":25700,"type":"CE","entryPx":122.95,"curPx":71.7,"exitPx":71.7},{"side":1,"mult":1,"strike":25000,"type":"PE","entryPx":86.0,"curPx":146.2,"exitPx":146.2}],"capital":28037.0,"maxCredit":17212.0,"maxLoss":2288.0,"entryIv":18.17,"gross":-422.5,"charges":295.58,"net":-718.08,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":18.17},{"t":"09:20 IST","gross":0.0,"iv":18.17},{"t":"14:28 IST","gross":-149.5,"iv":18.17},{"t":"15:15 IST","gross":-422.5,"iv":18.17}]},{"id":"FWD-20261111-NIF-1117-S5","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"NIFTY","exp":"2026-11-17","kind":"Weekly","dte":6,"strat":"S5","trigReason":"IV\u2212HV10 +3.35 pp \u00b7 HV10 14.82% \u00b7 DTE 6d","sig":"IV\u2212HV10 +3.35 pp \u00b7 HV10 14.82% \u00b7 DTE 6d","legsText":"S 25350CE (266.6\u2192159.3) / S 25350PE (207.1\u2192329.9) / B 25600CE (156.4\u219290.5) / B 25100PE (111.7\u2192189.8)","legs":[{"side":-1,"mult":1,"strike":25350,"type":"CE","entryPx":266.65,"curPx":159.35,"exitPx":159.35},{"side":-1,"mult":1,"strike":25350,"type":"PE","entryPx":207.1,"curPx":329.85,"exitPx":329.85},{"side":1,"mult":1,"strike":25600,"type":"CE","entryPx":156.45,"curPx":90.45,"exitPx":90.45},{"side":1,"mult":1,"strike":25100,"type":"PE","entryPx":111.65,"curPx":189.85,"exitPx":189.85}],"capital":28037.0,"maxCredit":13367.25,"maxLoss":6132.75,"entryIv":18.17,"gross":-211.25,"charges":305.1,"net":-516.35,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":18.17},{"t":"09:20 IST","gross":0.0,"iv":18.17},{"t":"14:28 IST","gross":-113.75,"iv":18.17},{"t":"15:15 IST","gross":-211.25,"iv":18.17}]},{"id":"FWD-20261111-NIF-1117-S6","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"NIFTY","exp":"2026-11-17","kind":"Weekly","dte":6,"strat":"S6","trigReason":"Basis +37.0 pts \u00b7 BF25 -0.26 pp","sig":"Basis +37.0 pts \u00b7 BF25 -0.26 pp","legsText":"S2 25500CE (196.3\u2192114.2) / B2 25800CE (96.1\u219256.5) / S 25100PE (111.7\u2192189.8) / B 24800PE (49.6\u219281.8)","legs":[{"side":-1,"mult":2,"strike":25500,"type":"CE","entryPx":196.3,"curPx":114.25,"exitPx":114.25},{"side":1,"mult":2,"strike":25800,"type":"CE","entryPx":96.1,"curPx":56.55,"exitPx":56.55},{"side":-1,"mult":1,"strike":25100,"type":"PE","entryPx":111.65,"curPx":189.85,"exitPx":189.85},{"side":1,"mult":1,"strike":24800,"type":"PE","entryPx":49.65,"curPx":81.8,"exitPx":81.8}],"capital":56074.0,"maxCredit":17056.0,"maxLoss":7800.0,"entryIv":18.17,"gross":2531.75,"charges":295.4,"net":2236.35,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":18.17},{"t":"09:20 IST","gross":0.0,"iv":18.17},{"t":"14:28 IST","gross":2034.5,"iv":18.17},{"t":"15:15 IST","gross":2531.75,"iv":18.17}]},{"id":"FWD-20261111-NIF-1123-S1","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"NIFTY","exp":"2026-11-23","kind":"Monthly","dte":12,"strat":"S1","trigReason":"IV 16.28% \u00b7 HV30 14.45% \u00b7 VRP +1.83 pp","sig":"IV 16.28% \u00b7 HV30 14.45% \u00b7 VRP +1.83 pp","legsText":"S 25550CE (236.9\u2192163.5) / S 25150PE (185.6\u2192281.9) / B 25850CE (132.2\u219295.5) / B 24850PE (108.8\u2192163.4)","legs":[{"side":-1,"mult":1,"strike":25550,"type":"CE","entryPx":236.9,"curPx":163.5,"exitPx":163.5},{"side":-1,"mult":1,"strike":25150,"type":"PE","entryPx":185.6,"curPx":281.85,"exitPx":281.85},{"side":1,"mult":1,"strike":25850,"type":"CE","entryPx":132.2,"curPx":95.5,"exitPx":95.5},{"side":1,"mult":1,"strike":24850,"type":"PE","entryPx":108.75,"curPx":163.4,"exitPx":163.4}],"capital":28037.0,"maxCredit":11800.75,"maxLoss":7699.25,"entryIv":16.28,"gross":-318.5,"charges":293.95,"net":-612.45,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":16.28},{"t":"09:20 IST","gross":0.0,"iv":16.28},{"t":"14:28 IST","gross":-156.0,"iv":16.28},{"t":"15:15 IST","gross":-318.5,"iv":16.28}]},{"id":"FWD-20261111-NIF-1123-S3","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"NIFTY","exp":"2026-11-23","kind":"Monthly","dte":12,"strat":"S3","trigReason":"ATM IV 16.28% \u00b7 VRP +1.83 pp \u00b7 DTE 12d","sig":"ATM IV 16.28% \u00b7 VRP +1.83 pp \u00b7 DTE 12d","legsText":"S 25350CE (336.6\u2192230.2) / S 25350PE (262.9\u2192392.7) / B 25700CE (179.6\u2192125.0) / B 25000PE (140.9\u2192214.6)","legs":[{"side":-1,"mult":1,"strike":25350,"type":"CE","entryPx":336.55,"curPx":230.2,"exitPx":230.2},{"side":-1,"mult":1,"strike":25350,"type":"PE","entryPx":262.95,"curPx":392.7,"exitPx":392.7},{"side":1,"mult":1,"strike":25700,"type":"CE","entryPx":179.55,"curPx":124.95,"exitPx":124.95},{"side":1,"mult":1,"strike":25000,"type":"PE","entryPx":140.95,"curPx":214.6,"exitPx":214.6}],"capital":28037.0,"maxCredit":18135.0,"maxLoss":1950.0,"entryIv":16.28,"gross":-282.75,"charges":333.64,"net":-616.39,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":16.28},{"t":"09:20 IST","gross":0.0,"iv":16.28},{"t":"14:28 IST","gross":-146.25,"iv":16.28},{"t":"15:15 IST","gross":-282.75,"iv":16.28}]},{"id":"FWD-20261111-NIF-1123-S5","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"NIFTY","exp":"2026-11-23","kind":"Monthly","dte":12,"strat":"S5","trigReason":"IV\u2212HV10 +1.46 pp \u00b7 HV10 14.82% \u00b7 DTE 12d","sig":"IV\u2212HV10 +1.46 pp \u00b7 HV10 14.82% \u00b7 DTE 12d","legsText":"S 25350CE (336.6\u2192230.2) / S 25350PE (262.9\u2192392.7) / B 25600CE (217.6\u2192149.2) / B 25100PE (169.4\u2192258.8)","legs":[{"side":-1,"mult":1,"strike":25350,"type":"CE","entryPx":336.55,"curPx":230.2,"exitPx":230.2},{"side":-1,"mult":1,"strike":25350,"type":"PE","entryPx":262.95,"curPx":392.7,"exitPx":392.7},{"side":1,"mult":1,"strike":25600,"type":"CE","entryPx":217.6,"curPx":149.25,"exitPx":149.25},{"side":1,"mult":1,"strike":25100,"type":"PE","entryPx":169.45,"curPx":258.75,"exitPx":258.75}],"capital":28037.0,"maxCredit":13809.25,"maxLoss":5690.75,"entryIv":16.28,"gross":-159.25,"charges":344.13,"net":-503.38,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":16.28},{"t":"09:20 IST","gross":0.0,"iv":16.28},{"t":"14:28 IST","gross":-123.5,"iv":16.28},{"t":"15:15 IST","gross":-159.25,"iv":16.28}]},{"id":"FWD-20261111-NIF-1123-S6","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"NIFTY","exp":"2026-11-23","kind":"Monthly","dte":12,"strat":"S6","trigReason":"Basis +51.1 pts \u00b7 BF25 -0.06 pp","sig":"Basis +51.1 pts \u00b7 BF25 -0.06 pp","legsText":"S2 25500CE (260.4\u2192177.7) / B2 25800CE (147.1\u2192104.4) / S 25100PE (169.4\u2192258.8) / B 24800PE (99.2\u2192148.1)","legs":[{"side":-1,"mult":2,"strike":25500,"type":"CE","entryPx":260.4,"curPx":177.65,"exitPx":177.65},{"side":1,"mult":2,"strike":25800,"type":"CE","entryPx":147.1,"curPx":104.4,"exitPx":104.4},{"side":-1,"mult":1,"strike":25100,"type":"PE","entryPx":169.45,"curPx":258.75,"exitPx":258.75},{"side":1,"mult":1,"strike":24800,"type":"PE","entryPx":99.2,"curPx":148.1,"exitPx":148.1}],"capital":56074.0,"maxCredit":19295.25,"maxLoss":7800.0,"entryIv":16.28,"gross":2580.5,"charges":349.01,"net":2231.49,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":16.28},{"t":"09:20 IST","gross":0.0,"iv":16.28},{"t":"14:28 IST","gross":1836.25,"iv":16.28},{"t":"15:15 IST","gross":2580.5,"iv":16.28}]},{"id":"FWD-20261111-BAN-1123-S1","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"BANKNIFTY","exp":"2026-11-23","kind":"Monthly","dte":12,"strat":"S1","trigReason":"IV 17.44% \u00b7 HV30 15.76% \u00b7 VRP +1.68 pp","sig":"IV 17.44% \u00b7 HV30 15.76% \u00b7 VRP +1.68 pp","legsText":"S 61000CE (532.1\u2192617.5) / S 60200PE (632.3\u2192615.5) / B 61600CE (337.2\u2192426.0) / B 59600PE (420.6\u2192410.1)","legs":[{"side":-1,"mult":1,"strike":61000,"type":"CE","entryPx":532.1,"curPx":617.5,"exitPx":617.5},{"side":-1,"mult":1,"strike":60200,"type":"PE","entryPx":632.3,"curPx":615.55,"exitPx":615.55},{"side":1,"mult":1,"strike":61600,"type":"CE","entryPx":337.25,"curPx":426.0,"exitPx":426.0},{"side":1,"mult":1,"strike":59600,"type":"PE","entryPx":420.6,"curPx":410.1,"exitPx":410.1}],"capital":26570.0,"maxCredit":12196.5,"maxLoss":5803.5,"entryIv":17.44,"gross":288.0,"charges":330.96,"net":-42.96,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":17.44},{"t":"09:20 IST","gross":0.0,"iv":17.44},{"t":"14:28 IST","gross":-153.0,"iv":17.44},{"t":"15:15 IST","gross":288.0,"iv":17.44}]},{"id":"FWD-20261111-BAN-1123-S2","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"BANKNIFTY","exp":"2026-11-23","kind":"Monthly","dte":12,"strat":"S2","trigReason":"IV 17.44% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -0.26 pp","sig":"IV 17.44% \u00b7 HV10 17.70% \u00b7 IV\u2212HV10 -0.26 pp","legsText":"B 60600CE (710.0\u2192794.8) / B 60600PE (816.8\u2192801.2)","legs":[{"side":1,"mult":1,"strike":60600,"type":"CE","entryPx":709.95,"curPx":794.8,"exitPx":794.8},{"side":1,"mult":1,"strike":60600,"type":"PE","entryPx":816.8,"curPx":801.2,"exitPx":801.2}],"capital":46718.0,"maxCredit":29771.62,"maxLoss":45802.5,"entryIv":17.44,"gross":2077.5,"charges":206.98,"net":1870.52,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":17.44},{"t":"09:20 IST","gross":0.0,"iv":17.44},{"t":"14:28 IST","gross":3936.0,"iv":17.44},{"t":"15:15 IST","gross":2077.5,"iv":17.44}]},{"id":"FWD-20261111-BAN-1123-S3","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"BANKNIFTY","exp":"2026-11-23","kind":"Monthly","dte":12,"strat":"S3","trigReason":"ATM IV 17.44% \u00b7 VRP +1.68 pp \u00b7 DTE 12d","sig":"ATM IV 17.44% \u00b7 VRP +1.68 pp \u00b7 DTE 12d","legsText":"S 60600CE (710.0\u2192794.8) / S 60600PE (816.8\u2192801.2) / B 61300CE (426.4\u2192514.0) / B 59900PE (516.5\u2192505.2)","legs":[{"side":-1,"mult":1,"strike":60600,"type":"CE","entryPx":709.95,"curPx":794.8,"exitPx":794.8},{"side":-1,"mult":1,"strike":60600,"type":"PE","entryPx":816.8,"curPx":801.2,"exitPx":801.2},{"side":1,"mult":1,"strike":61300,"type":"CE","entryPx":426.45,"curPx":514.05,"exitPx":514.05},{"side":1,"mult":1,"strike":59900,"type":"PE","entryPx":516.5,"curPx":505.25,"exitPx":505.25}],"capital":26570.0,"maxCredit":17514.0,"maxLoss":900.0,"entryIv":17.44,"gross":213.0,"charges":369.79,"net":-156.79,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":17.44},{"t":"09:20 IST","gross":0.0,"iv":17.44},{"t":"14:28 IST","gross":192.0,"iv":17.44},{"t":"15:15 IST","gross":213.0,"iv":17.44}]},{"id":"FWD-20261111-BAN-1123-S6","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 09:20 IST","triggerTime":"2026-11-11T09:20:00+05:30","exitTime":"15:15 IST","sym":"BANKNIFTY","exp":"2026-11-23","kind":"Monthly","dte":12,"strat":"S6","trigReason":"Basis -117.0 pts \u00b7 BF25 -0.18 pp","sig":"Basis -117.0 pts \u00b7 BF25 -0.18 pp","legsText":"S2 60900CE (575.8\u2192657.4) / B2 61500CE (362.4\u2192453.9) / S 60100PE (588.4\u2192577.6) / B 59500PE (388.4\u2192383.6)","legs":[{"side":-1,"mult":2,"strike":60900,"type":"CE","entryPx":575.75,"curPx":657.35,"exitPx":657.35},{"side":1,"mult":2,"strike":61500,"type":"CE","entryPx":362.4,"curPx":453.95,"exitPx":453.95},{"side":-1,"mult":1,"strike":60100,"type":"PE","entryPx":588.4,"curPx":577.65,"exitPx":577.65},{"side":1,"mult":1,"strike":59500,"type":"PE","entryPx":388.45,"curPx":383.55,"exitPx":383.55}],"capital":53140.0,"maxCredit":18799.5,"maxLoss":9000.0,"entryIv":17.44,"gross":772.5,"charges":404.06,"net":368.44,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"09:20","gross":0.0,"iv":17.44},{"t":"09:20 IST","gross":0.0,"iv":17.44},{"t":"14:28 IST","gross":-439.5,"iv":17.44},{"t":"15:15 IST","gross":772.5,"iv":17.44}]},{"id":"FWD-20261111-BAN-1123-S5","date":"2026-11-11","session_date":"2026-11-11","entryTime":"11 Nov 14:28 IST","triggerTime":"2026-11-11T14:28:00+05:30","exitTime":"15:15 IST","sym":"BANKNIFTY","exp":"2026-11-23","kind":"Monthly","dte":12,"strat":"S5","trigReason":"IV\u2212HV10 +1.20 pp \u00b7 HV10 17.70% \u00b7 DTE 12d","sig":"IV\u2212HV10 +1.20 pp \u00b7 HV10 17.70% \u00b7 DTE 12d","legsText":"S 60700CE (855.0\u2192747.9) / S 60700PE (802.2\u2192853.5) / B 61200CE (635.0\u2192545.8) / B 60200PE (586.1\u2192615.5)","legs":[{"side":-1,"mult":1,"strike":60700,"type":"CE","entryPx":855.0,"curPx":747.85,"exitPx":747.85},{"side":-1,"mult":1,"strike":60700,"type":"PE","entryPx":802.25,"curPx":853.55,"exitPx":853.55},{"side":1,"mult":1,"strike":61200,"type":"CE","entryPx":635.0,"curPx":545.75,"exitPx":545.75},{"side":1,"mult":1,"strike":60200,"type":"PE","entryPx":586.15,"curPx":615.55,"exitPx":615.55}],"capital":26570.0,"maxCredit":13083.0,"maxLoss":4917.0,"entryIv":18.9,"gross":-120.0,"charges":389.33,"net":-509.33,"exitReason":"15:15 IST Auto-Close","mtmPath":[{"t":"14:28","gross":0.0,"iv":18.9},{"t":"14:28 IST","gross":0.0,"iv":18.9},{"t":"15:15 IST","gross":-120.0,"iv":18.9}]}],"intraday_mtm_series":[{"session_date":"2026-11-11","t":"09:15","time_ist":"09:15 IST","gross_mtm":0,"net_mtm":0,"open_count":0,"closed_count":0},{"session_date":"2026-11-11","t":"09:20","time_ist":"09:20 IST","gross_mtm":0.0,"net_mtm":-3761.29,"open_count":12,"closed_count":0},{"session_date":"2026-11-11","t":"14:28","time_ist":"14:28 IST","gross_mtm":6564.5,"net_mtm":2363.7,"open_count":13,"closed_count":0},{"session_date":"2026-11-11","t":"15:15","time_ist":"15:15 IST","gross_mtm":6338.0,"net_mtm":2161.72,"open_count":0,"closed_count":13},{"session_date":"2026-11-11","t":"15:30","time_ist":"15:30 IST","gross_mtm":6338.0,"net_mtm":2161.72,"open_count":0,"closed_count":13}],"gate_blocked":false,"gate_message":"Live Forward Session Active (2026-11-11 \u00b7 11 Nov 15:30 IST)"};
-      window.DEFAULT_FORWARD_LEDGER = DEFAULT_FORWARD_LEDGER;
+      var FORWARD_CLEAN_LEDGER_TEMPLATE = {
+        schema: 2,
+        version: 'forward-test-v20.1-event-time-gated',
+        inception_date: '2026-11-11',
+        min_trigger_date: '2026-11-11',
+        updated_at: '2026-11-10T13:15:00+05:30',
+        status: 'WAITING_FOR_CLOUD_LEDGER',
+        source_authority: 'apps_script_cloud',
+        open_positions: [],
+        closed_trades: [],
+        intraday_mtm_series: []
+      };
 
-      var FORWARD_CLEAN_LEDGER_TEMPLATE = DEFAULT_FORWARD_LEDGER;
-
-      var FORWARD_SEED_OPEN = DEFAULT_FORWARD_LEDGER.open_positions || [];
-      var FORWARD_SEED_CLOSED = DEFAULT_FORWARD_LEDGER.closed_trades || [];
-      var forwardOpenPositions = JSON.parse(JSON.stringify(FORWARD_SEED_OPEN));
-      var forwardClosedTrades = JSON.parse(JSON.stringify(FORWARD_SEED_CLOSED));
-      var forwardIntradayMtmSeries = JSON.parse(JSON.stringify(DEFAULT_FORWARD_LEDGER.intraday_mtm_series || []));
-      var forwardLedger = JSON.parse(JSON.stringify(DEFAULT_FORWARD_LEDGER));
-      var forwardAutoCaptureOn = true;
+      var forwardOpenPositions = [];
+      var forwardClosedTrades = [];
+      var forwardIntradayMtmSeries = [];
+      var forwardLedger = JSON.parse(JSON.stringify(FORWARD_CLEAN_LEDGER_TEMPLATE));
       var activeFwdChartMode = 'intraday';
       var fwdIntradayChart = null;
       var fwdStrategyBarChart = null;
@@ -2638,40 +2673,13 @@
         S6: 'S6 · Synthetic Basis Skewed Condor'
       };
 
-      var FORWARD_SCORECARD_UNIT_CAP = {
-        S1: 28037,
-        S2: 56074,
-        S3: 28037,
-        S4: 56074,
-        S5: 28037,
-        S6: 56074
-      };
-
-      function isValidForwardRecord(item) {
-        if (!item || typeof item !== 'object') return false;
-        var sDate = String(item.session_date || item.date || '').trim().slice(0, 10);
-        if (!sDate || sDate < MIN_FORWARD_DATE) return false;
-        var trig = String(item.triggerTime || item.trigTime || item.entryTime || '').trim();
-        if (trig.indexOf('2026-11-0') === 0 || /^0[1-9]\s+Nov/i.test(trig)) return false;
-        return true;
-      }
-
       function syncForwardLedgerGlobals() {
-        forwardOpenPositions = (forwardOpenPositions || []).filter(isValidForwardRecord);
-        forwardClosedTrades = (forwardClosedTrades || []).filter(isValidForwardRecord);
-        forwardIntradayMtmSeries = (forwardIntradayMtmSeries || []).filter(function(pt) {
-          return pt && String(pt.session_date || pt.date || MIN_FORWARD_DATE).slice(0, 10) >= MIN_FORWARD_DATE;
-        });
-        forwardLedger.schema = 1;
-        forwardLedger.version = 'forward-test-v19.1-clean';
-        forwardLedger.inception_date = MIN_FORWARD_DATE;
-        forwardLedger.min_trigger_date = MIN_FORWARD_DATE;
-        forwardLedger.open_positions = forwardOpenPositions;
-        forwardLedger.closed_trades = forwardClosedTrades;
-        forwardLedger.intraday_mtm_series = forwardIntradayMtmSeries;
-        forwardLedger.status = (forwardOpenPositions.length > 0)
-          ? 'ACTIVE_LIVE_SESSION'
-          : (forwardClosedTrades.length > 0 ? 'SESSION_COMPLETED_1515_IST' : 'ARMED_WAITING_FOR_NEXT_SESSION');
+        if (!forwardLedger || forwardLedger.source_authority !== 'apps_script_cloud') {
+          forwardLedger = JSON.parse(JSON.stringify(FORWARD_CLEAN_LEDGER_TEMPLATE));
+        }
+        forwardOpenPositions = Array.isArray(forwardLedger.open_positions) ? forwardLedger.open_positions : [];
+        forwardClosedTrades = Array.isArray(forwardLedger.closed_trades) ? forwardLedger.closed_trades : [];
+        forwardIntradayMtmSeries = Array.isArray(forwardLedger.intraday_mtm_series) ? forwardLedger.intraday_mtm_series : [];
         window.forwardOpenPositions = forwardOpenPositions;
         window.forwardClosedTrades = forwardClosedTrades;
         window.forwardIntradayMtmSeries = forwardIntradayMtmSeries;
@@ -2683,7 +2691,8 @@
         try {
           if (typeof localStorage !== 'undefined') {
             localStorage.removeItem('vl_forward_ledger_v19');
-            localStorage.setItem(FWD_STORAGE_KEY, JSON.stringify(forwardLedger));
+            localStorage.removeItem('vl_forward_ledger_v19_clean');
+            localStorage.removeItem(FWD_STORAGE_KEY);
           }
         } catch (e) {}
         return forwardLedger;
@@ -2693,32 +2702,39 @@
         try {
           if (typeof localStorage !== 'undefined') {
             localStorage.removeItem('vl_forward_ledger_v19');
-            var raw = localStorage.getItem(FWD_STORAGE_KEY);
-            if (raw) {
-              var parsed = JSON.parse(raw);
-              if (parsed && typeof parsed === 'object') {
-                var oArr = Array.isArray(parsed.open_positions) ? parsed.open_positions.filter(isValidForwardRecord) : [];
-                var cArr = Array.isArray(parsed.closed_trades) ? parsed.closed_trades.filter(isValidForwardRecord) : [];
-                if (oArr.length > 0 || cArr.length > 0) {
-                  forwardOpenPositions = oArr;
-                  forwardClosedTrades = cArr;
-                  forwardIntradayMtmSeries = Array.isArray(parsed.intraday_mtm_series) && parsed.intraday_mtm_series.length
-                    ? parsed.intraday_mtm_series
-                    : JSON.parse(JSON.stringify(DEFAULT_FORWARD_LEDGER.intraday_mtm_series || []));
-                  if (parsed.updated_at) forwardLedger.updated_at = parsed.updated_at;
-                  saveForwardLedgerLocal();
-                  return forwardLedger;
-                }
-              }
-            }
+            localStorage.removeItem('vl_forward_ledger_v19_clean');
+            localStorage.removeItem(FWD_STORAGE_KEY);
           }
         } catch (e) {}
-        forwardOpenPositions = JSON.parse(JSON.stringify(DEFAULT_FORWARD_LEDGER.open_positions || []));
-        forwardClosedTrades = JSON.parse(JSON.stringify(DEFAULT_FORWARD_LEDGER.closed_trades || []));
-        forwardIntradayMtmSeries = JSON.parse(JSON.stringify(DEFAULT_FORWARD_LEDGER.intraday_mtm_series || []));
-        forwardLedger = JSON.parse(JSON.stringify(DEFAULT_FORWARD_LEDGER));
-        saveForwardLedgerLocal();
+        forwardOpenPositions = [];
+        forwardClosedTrades = [];
+        forwardIntradayMtmSeries = [];
+        forwardLedger = JSON.parse(JSON.stringify(FORWARD_CLEAN_LEDGER_TEMPLATE));
+        syncForwardLedgerGlobals();
         return forwardLedger;
+      }
+
+      function isFreshCloudForwardLedger(cloudLedger, snapshot) {
+        if (!cloudLedger || !snapshot) return false;
+        var ledgerAt = Date.parse(cloudLedger.updated_at || '');
+        var snapshotAt = Date.parse(snapshot.retrieved_at || '');
+        return Number.isFinite(ledgerAt) && Number.isFinite(snapshotAt)
+          && ledgerAt >= snapshotAt - 120000
+          && ledgerAt <= Date.now() + 30000;
+      }
+
+      function applyCloudForwardLedger(cloudLedger, snapshot) {
+        if (!cloudLedger || typeof cloudLedger !== 'object'
+            || Number(cloudLedger.schema) !== 2
+            || !Array.isArray(cloudLedger.open_positions)
+            || !Array.isArray(cloudLedger.closed_trades)
+            || !Array.isArray(cloudLedger.intraday_mtm_series)
+            || String(cloudLedger.min_trigger_date || '').slice(0, 10) < MIN_FORWARD_DATE
+            || !isFreshCloudForwardLedger(cloudLedger, snapshot)) return false;
+        forwardLedger = JSON.parse(JSON.stringify(cloudLedger));
+        forwardLedger.source_authority = 'apps_script_cloud';
+        syncForwardLedgerGlobals();
+        return true;
       }
 
       function initForwardTest() {
@@ -2727,40 +2743,12 @@
         return forwardLedger;
       }
 
-      function calcUpstoxOptionCharge(price, qty, isSell) {
-        var turnover = Math.abs(Number(price || 0) * Number(qty || 0));
-        var brokerage = 20.0;
-        var stt = isSell ? turnover * 0.0015 : 0.0;
-        var exch = turnover * 0.0003503;
-        var sebi = turnover * 0.000001;
-        var ipft = turnover * 0.000005;
-        var stamp = isSell ? 0.0 : turnover * 0.00003;
-        var gst = 0.18 * (brokerage + exch + sebi + ipft);
-        return brokerage + stt + exch + sebi + ipft + stamp + gst;
-      }
-
-      function calcPositionUpstoxCharges(legs, sym, lots, includeExit) {
-        var lotQty = (sym === 'NIFTY' ? 65 : 30) * Math.max(1, lots || 1);
-        var total = 0.0;
-        (legs || []).forEach(function(l) {
-          var qty = lotQty * Number(l.mult || 1);
-          var isShort = Number(l.side || -1) < 0;
-          var ePx = Number(l.entryPx || 0);
-          var xPx = Number(l.exitPx !== undefined ? l.exitPx : (l.curPx !== undefined ? l.curPx : ePx));
-          total += calcUpstoxOptionCharge(ePx, qty, isShort);
-          if (includeExit !== false) {
-            total += calcUpstoxOptionCharge(xPx, qty, !isShort);
-          }
-        });
-        return Number(total.toFixed(2));
-      }
-
       function formatFwdLegs(legs, mode) {
         return (legs || []).map(function(l) {
           var prefix = (Number(l.side) < 0 ? 'S' : 'B') + (Number(l.mult || 1) > 1 ? String(l.mult) : '');
           var ePx = Number(l.entryPx || 0).toFixed(1);
           var cPx = Number(l.exitPx !== undefined ? l.exitPx : (l.curPx !== undefined ? l.curPx : l.entryPx)).toFixed(1);
-          if (mode === 'entry') return '<span class="' + (Number(l.side) < 0 ? 'text-amber-300' : 'text-sky-300') + '">' + prefix + ' ' + l.strike + l.type + '</span> @ ₹' + ePx;
+          if (mode === 'entry') return '<span class="' + (Number(l.side) < 0 ? 'text-violet-300' : 'text-sky-300') + '">' + prefix + ' ' + l.strike + l.type + '</span> @ ₹' + ePx;
           if (mode === 'current') return l.strike + l.type + ': <strong class="text-white">₹' + cPx + '</strong>';
           if (mode === 'csv_entry') return prefix + ' ' + l.strike + l.type + ' @ ' + ePx;
           if (mode === 'csv_current') return l.strike + l.type + ': ' + cPx;
@@ -2769,6 +2757,7 @@
       }
 
       function buildStrategyLegsForItem(item, sym, stratCode) {
+        throw new Error('Browser-side forward-trade construction is disabled; use the cloud ledger.');
         var step = sym === 'NIFTY' ? 50 : 100;
         var K = item.atm || (Math.round(item.spot / step) * step);
         var chainMap = {};
@@ -2796,14 +2785,31 @@
         return rawLegs;
       }
 
+      function forwardNumber(value, fallback) {
+        if (value === null || value === undefined || value === '') return fallback;
+        var parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+      }
+
+      function forwardMarkStatusHtml(position) {
+        if (String(position.integrity_status || '') === 'UNVERIFIED_RECORD' || position.manual_reconciliation_required) {
+          return '<span class="px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/50 text-rose-300 font-bold text-[10px]">INTEGRITY REVIEW REQUIRED</span>';
+        }
+        if (position.exit_pending) {
+          return '<span class="px-2 py-0.5 rounded bg-sky-500/20 border border-sky-500/50 text-sky-300 font-bold text-[10px]">EXIT PENDING FRESH QUOTE</span>';
+        }
+        if (String(position.freshness || '').toUpperCase() !== 'FRESH') {
+          return '<span class="px-2 py-0.5 rounded bg-violet-500/20 border border-violet-500/50 text-violet-300 font-bold text-[10px]">MTM WITHHELD — STALE MARK</span>';
+        }
+        return '<span class="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-[10px]">VALIDATED CLOUD MARK</span>';
+      }
+
       function evaluateFwdSetupState() {
         syncForwardLedgerGlobals();
         var idxFilter = (document.getElementById('fwdIndexFilter') && document.getElementById('fwdIndexFilter').value) || 'ALL';
         var expScope = (document.getElementById('fwdExpiryScope') && document.getElementById('fwdExpiryScope').value) || 'FRONT';
         var stratFilter = (document.getElementById('fwdStrategyFilter') && document.getElementById('fwdStrategyFilter').value) || 'ALL';
-        var lots = Math.max(1, parseInt((document.getElementById('fwdLotsInput') && document.getElementById('fwdLotsInput').value) || '1', 10) || 1);
-        var slRule = (document.getElementById('fwdStopLossRule') && document.getElementById('fwdStopLossRule').value) || 'NONE';
-        var tpRule = (document.getElementById('fwdProfitTargetRule') && document.getElementById('fwdProfitTargetRule').value) || 'NONE';
+        // Position size, exit rules, marks, and costs are fixed by the cloud ledger.
 
         var openFiltered = forwardOpenPositions.filter(function(pos) {
           if (idxFilter !== 'ALL' && pos.sym !== idxFilter) return false;
@@ -2812,34 +2818,15 @@
           return true;
         }).map(function(pos) {
           var p = JSON.parse(JSON.stringify(pos));
-          var lotQty = (p.sym === 'NIFTY' ? 65 : 30) * lots;
-          var gross = 0.0;
-          (p.legs || []).forEach(function(l) {
-            var ePx = Number(l.entryPx || 0);
-            var cPx = Number(l.curPx !== undefined ? l.curPx : ePx);
-            var qty = lotQty * Number(l.mult || 1);
-            gross += (Number(l.side) < 0 ? (ePx - cPx) : (cPx - ePx)) * qty;
-          });
-          p.simCapital = Math.round(Number(p.capital || 28037) * lots);
-          p.simGrossMtm = Number(gross.toFixed(2));
-          p.simCharges = calcPositionUpstoxCharges(p.legs, p.sym, lots, true);
-          p.simNetMtm = Number((p.simGrossMtm - p.simCharges).toFixed(2));
+          p.simCapital = forwardNumber(p.capital, 0.0);
+          p.simGrossMtm = forwardNumber(p.grossMtm, 0.0);
+          p.simCharges = forwardNumber(p.estCharges, 0.0);
+          p.simNetMtm = forwardNumber(p.netMtm, p.simGrossMtm - p.simCharges);
           p.simRocPct = p.simCapital > 0 ? (p.simNetMtm / p.simCapital) * 100.0 : 0.0;
-
-          var maxCr = Number(p.maxCredit || p.simCapital * 0.45) * lots;
-          var maxLoss = Number(p.maxLoss || p.simCapital * 0.35) * lots;
-          var slThresh = slRule === 'SL_25_CAP' ? -0.25 * p.simCapital : (slRule === 'SL_50_MAXLOSS' ? -0.50 * maxLoss : (slRule === 'SL_30_IV' ? -0.35 * maxLoss : null));
-          var tpThresh = tpRule === 'TP_50_30' ? (p.strat === 'S2' ? 0.30 * maxLoss : 0.50 * maxCr) : (tpRule === 'TP_75' ? (p.strat === 'S2' ? 0.50 * maxLoss : 0.75 * maxCr) : null);
-
-          if (slThresh !== null && p.simGrossMtm <= slThresh) {
-            p.slTpStatus = '<span class="px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/50 text-rose-300 font-bold text-[10px]">⚠ SL BREACHED</span>';
-          } else if (tpThresh !== null && p.simGrossMtm >= tpThresh) {
-            p.slTpStatus = '<span class="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-bold text-[10px]">★ TARGET HIT</span>';
-          } else {
-            var slLabel = slThresh !== null ? ('SL ₹' + Math.round(slThresh).toLocaleString('en-IN')) : 'Hold→15:15';
-            var tpLabel = tpThresh !== null ? ('TP +₹' + Math.round(tpThresh).toLocaleString('en-IN')) : 'Open Carry';
-            p.slTpStatus = '<span class="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-[10px]">● ACTIVE (' + slLabel + ' / ' + tpLabel + ')</span>';
-          }
+          p.hasCurrentMark = String(p.freshness || '').toUpperCase() === 'FRESH'
+            && String(p.integrity_status || '') !== 'UNVERIFIED_RECORD'
+            && !p.manual_reconciliation_required;
+          p.slTpStatus = forwardMarkStatusHtml(p);
           return p;
         });
 
@@ -2849,49 +2836,20 @@
           return true;
         }).map(function(tr) {
           var t = JSON.parse(JSON.stringify(tr));
-          var cap = Math.round(Number(t.capital || 28037) * lots);
-          var maxCr = Number(t.maxCredit || cap * 0.45) * lots;
-          var maxLoss = Number(t.maxLoss || cap * 0.35) * lots;
-          var chg = calcPositionUpstoxCharges(t.legs, t.sym, lots, true);
-
-          var slThresh = slRule === 'SL_25_CAP' ? -0.25 * cap : (slRule === 'SL_50_MAXLOSS' ? -0.50 * maxLoss : (slRule === 'SL_30_IV' ? -0.35 * maxLoss : null));
-          var tpThresh = tpRule === 'TP_50_30' ? (t.strat === 'S2' ? 0.30 * maxLoss : 0.50 * maxCr) : (tpRule === 'TP_75' ? (t.strat === 'S2' ? 0.50 * maxLoss : 0.75 * maxCr) : null);
-
-          var rawGross = Number(t.gross || 0) * lots;
-          var exitTime = t.exitTime || '15:15 IST';
-          var exitReason = t.exitReason || '15:15 IST Auto-Close';
-
-          var path = t.mtmPath || [];
-          for (var k = 0; k < path.length; k++) {
-            var gPt = Number(path[k].gross || 0) * lots;
-            if (slThresh !== null && gPt <= slThresh) {
-              rawGross = Number(slThresh.toFixed(2));
-              exitTime = (path[k].t.indexOf('IST') === -1 ? path[k].t + ' IST' : path[k].t);
-              exitReason = 'SL Hit (' + slRule.replace('SL_', '-') + ')';
-              break;
-            }
-            if (tpThresh !== null && gPt >= tpThresh) {
-              rawGross = Number(tpThresh.toFixed(2));
-              exitTime = (path[k].t.indexOf('IST') === -1 ? path[k].t + ' IST' : path[k].t);
-              exitReason = 'Target Hit (' + tpRule.replace('TP_', '+') + '%)';
-              break;
-            }
-          }
-
-          t.simCapital = cap;
-          t.simGross = Number(rawGross.toFixed(2));
-          t.simCharges = chg;
-          t.simNet = Number((t.simGross - chg).toFixed(2));
-          t.simExitTime = exitTime;
-          t.simExitReason = exitReason;
-          t.simRocPct = cap > 0 ? (t.simNet / cap) * 100.0 : 0.0;
+          t.simCapital = forwardNumber(t.capital, 0.0);
+          t.simGross = forwardNumber(t.gross, 0.0);
+          t.simCharges = forwardNumber(t.charges, 0.0);
+          t.simNet = forwardNumber(t.net, t.simGross - t.simCharges);
+          t.simExitTime = t.exitTime || 'Not recorded';
+          t.simExitReason = t.exitReason || 'Cloud ledger close';
+          t.simRocPct = t.simCapital > 0 ? (t.simNet / t.simCapital) * 100.0 : 0.0;
           return t;
         });
 
         return {
-          lots: lots,
-          slRule: slRule,
-          tpRule: tpRule,
+          lots: 1,
+          slRule: 'CLOUD_RECORDED',
+          tpRule: 'CLOUD_RECORDED',
           open: openFiltered,
           closed: closedFiltered
         };
@@ -2904,9 +2862,11 @@
         var closedList = state.closed;
         var lots = state.lots;
 
-        var openGross = openList.reduce(function(a, x) { return a + x.simGrossMtm; }, 0);
-        var openChg = openList.reduce(function(a, x) { return a + x.simCharges; }, 0);
-        var openNet = openList.reduce(function(a, x) { return a + x.simNetMtm; }, 0);
+        var markedOpenList = openList.filter(function(x) { return x.hasCurrentMark; });
+        var withheldOpenCount = openList.length - markedOpenList.length;
+        var openGross = markedOpenList.reduce(function(a, x) { return a + x.simGrossMtm; }, 0);
+        var openChg = markedOpenList.reduce(function(a, x) { return a + x.simCharges; }, 0);
+        var openNet = markedOpenList.reduce(function(a, x) { return a + x.simNetMtm; }, 0);
         var openCap = openList.reduce(function(a, x) { return a + x.simCapital; }, 0);
         var expSet = {};
         openList.forEach(function(x) { expSet[x.sym + '|' + x.exp] = true; });
@@ -2921,7 +2881,7 @@
         var negSum = Math.abs(closedList.filter(function(x) { return x.simNet < 0; }).reduce(function(a, x) { return a + x.simNet; }, 0));
         var pf = negSum > 0 ? (posSum / negSum) : (posSum > 0 ? 99.9 : 0.0);
 
-        var singleSetPeakCap = Math.max(56074 * lots, closedList.reduce(function(m, x) { return Math.max(m, x.simCapital); }, 0));
+        var singleSetPeakCap = Math.max(openCap, closedList.reduce(function(m, x) { return Math.max(m, x.simCapital); }, 0));
         var totalForwardNet = closedNet + openNet;
         var portfolioRoc = (singleSetPeakCap > 0 && (openList.length > 0 || closedList.length > 0)) ? (totalForwardNet / singleSetPeakCap) * 100.0 : 0.0;
 
@@ -2941,7 +2901,9 @@
           elOpenMtm.className = 'text-lg mono font-extrabold mt-0.5 ' + (openNet >= 0 ? 'text-emerald-400' : 'text-rose-400');
         }
         var elOpenMtmSub = document.getElementById('fwdKpiOpenMtmSub');
-        if (elOpenMtmSub) elOpenMtmSub.textContent = 'Gross: ' + fmtInr(Math.round(openGross), openGross !== 0) + ' · Est Cost: ' + fmtInr(Math.round(openChg), false);
+        if (elOpenMtmSub) elOpenMtmSub.textContent = withheldOpenCount
+          ? (withheldOpenCount + ' position(s) withheld for stale or unverified marks')
+          : ('Gross: ' + fmtInr(Math.round(openGross), openGross !== 0) + ' · Est Cost: ' + fmtInr(Math.round(openChg), false));
 
         var elClosedNet = document.getElementById('fwdKpiClosedNet');
         if (elClosedNet) {
@@ -2954,7 +2916,7 @@
         var elCap = document.getElementById('fwdKpiCapital');
         if (elCap) elCap.textContent = fmtInr(Math.round(openCap), false);
         var elCapSub = document.getElementById('fwdKpiCapitalSub');
-        if (elCapSub) elCapSub.textContent = 'SPAN+Exp (' + openList.length + ' Pos) · Unit Cap: ' + fmtInr(singleSetPeakCap, false);
+        if (elCapSub) elCapSub.textContent = 'Cloud-recorded capital (' + openList.length + ' Pos) · Reference: ' + fmtInr(singleSetPeakCap, false);
 
         var elRoc = document.getElementById('fwdKpiRoc');
         if (elRoc) {
@@ -2962,20 +2924,12 @@
           elRoc.className = 'text-lg mono font-extrabold mt-0.5 ' + (portfolioRoc >= 0 ? 'text-emerald-300' : 'text-rose-400');
         }
         var elRocSub = document.getElementById('fwdKpiRocSub');
-        if (elRocSub) elRocSub.textContent = 'Total Net (' + fmtInr(Math.round(totalForwardNet), totalForwardNet !== 0) + ') / Unit Cap';
+        if (elRocSub) elRocSub.textContent = 'Total Net (' + fmtInr(Math.round(totalForwardNet), totalForwardNet !== 0) + ') / cloud-recorded capital';
 
         var elWinPf = document.getElementById('fwdKpiWinPf');
         if (elWinPf) elWinPf.textContent = winRate.toFixed(1) + '% · PF ' + pf.toFixed(2);
         var elChgSub = document.getElementById('fwdKpiChargesSub');
         if (elChgSub) elChgSub.textContent = 'Upstox Statutory Costs: ' + fmtInr(Math.round(closedChg), false);
-        var badgeElSync = document.getElementById('fwdLastMarkedBadge');
-        if (badgeElSync && (openList.length > 0 || closedList.length > 0)) {
-          badgeElSync.innerHTML = 'Status: <strong class="text-emerald-300">CLOUD LEDGER · SYNCED (11 NOV 15:30 IST) · ' + closedList.length + ' Closed / ' + openList.length + ' Open</strong>';
-        }
-        var modeLblSync = document.getElementById('fwdAutoModeLabel');
-        if (modeLblSync && forwardAutoCaptureOn && (openList.length > 0 || closedList.length > 0)) {
-          modeLblSync.textContent = 'CLOUD LEDGER · SYNCED (11 NOV 15:30 IST)';
-        }
 
         // Render Panel 1: Active / Open Forward-Test Positions Table
         var openTbody = document.getElementById('fwdOpenPositionsBody');
@@ -2990,11 +2944,11 @@
                 '<td class="py-2.5 px-2.5 font-bold text-sky-300 whitespace-nowrap">' + p.stratName + '</td>' +
                 '<td class="py-2.5 px-2.5 text-slate-200">' + p.metrics + '</td>' +
                 '<td class="py-2.5 px-2.5 text-slate-200">' + formatFwdLegs(p.legs, 'entry') + '</td>' +
-                '<td class="py-2.5 px-2.5 text-slate-200">' + formatFwdLegs(p.legs, 'current') + '</td>' +
-                '<td class="py-2.5 px-2.5 text-right font-bold text-amber-300 whitespace-nowrap">' + fmtInr(p.simCapital, false) + '</td>' +
-                '<td class="py-2.5 px-2.5 text-right font-bold ' + (p.simGrossMtm >= 0 ? 'text-sky-300' : 'text-rose-400') + ' whitespace-nowrap">' + fmtInr(Math.round(p.simGrossMtm), p.simGrossMtm !== 0) + '</td>' +
-                '<td class="py-2.5 px-2.5 text-right text-amber-300 whitespace-nowrap">-' + fmtInr(Math.round(p.simCharges), false) + '</td>' +
-                '<td class="py-2.5 px-2.5 text-right whitespace-nowrap"><span class="font-extrabold ' + (p.simNetMtm >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(p.simNetMtm), p.simNetMtm !== 0) + '</span> <span class="text-[10.5px] ' + (p.simRocPct >= 0 ? 'text-sky-300' : 'text-rose-300') + '">(' + (p.simRocPct >= 0 ? '+' : '') + p.simRocPct.toFixed(2) + '%)</span></td>' +
+                '<td class="py-2.5 px-2.5 text-slate-200">' + (p.hasCurrentMark ? formatFwdLegs(p.legs, 'current') : '<span class="text-slate-400">WITHHELD — stale or unverified mark</span>') + '</td>' +
+                '<td class="py-2.5 px-2.5 text-right font-bold text-sky-300 whitespace-nowrap">' + fmtInr(p.simCapital, false) + '</td>' +
+                '<td class="py-2.5 px-2.5 text-right font-bold ' + (p.simGrossMtm >= 0 ? 'text-sky-300' : 'text-rose-400') + ' whitespace-nowrap">' + (p.hasCurrentMark ? fmtInr(Math.round(p.simGrossMtm), p.simGrossMtm !== 0) : 'WITHHELD') + '</td>' +
+                '<td class="py-2.5 px-2.5 text-right text-slate-300 whitespace-nowrap">' + (p.hasCurrentMark ? ('-' + fmtInr(Math.round(p.simCharges), false)) : '—') + '</td>' +
+                '<td class="py-2.5 px-2.5 text-right whitespace-nowrap">' + (p.hasCurrentMark ? ('<span class="font-extrabold ' + (p.simNetMtm >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(p.simNetMtm), p.simNetMtm !== 0) + '</span> <span class="text-[10.5px] ' + (p.simRocPct >= 0 ? 'text-sky-300' : 'text-rose-300') + '">(' + (p.simRocPct >= 0 ? '+' : '') + p.simRocPct.toFixed(2) + '%)</span>') : '<span class="text-slate-400">WITHHELD</span>') + '</td>' +
                 '<td class="py-2.5 px-2.5 text-center whitespace-nowrap">' + p.slTpStatus + '</td>' +
                 '<td class="py-2.5 px-2.5 text-center whitespace-nowrap">' +
                   '<button type="button" onclick="window.closeForwardPosition(\'' + p.id + '\')" class="px-2.5 py-1 rounded bg-rose-950/70 hover:bg-rose-600 text-rose-200 hover:text-white border border-rose-500/50 font-bold text-[10.5px] transition">' +
@@ -3015,7 +2969,8 @@
         stratCodes.forEach(function(sc) {
           var oSub = openList.filter(function(x) { return x.strat === sc; });
           var cSub = closedList.filter(function(x) { return x.strat === sc; });
-          var oNet = oSub.reduce(function(a, x) { return a + x.simNetMtm; }, 0);
+          var markedOSub = oSub.filter(function(x) { return x.hasCurrentMark; });
+          var oNet = markedOSub.reduce(function(a, x) { return a + x.simNetMtm; }, 0);
           var cGross = cSub.reduce(function(a, x) { return a + x.simGross; }, 0);
           var cChg = cSub.reduce(function(a, x) { return a + x.simCharges; }, 0);
           var cNet = cSub.reduce(function(a, x) { return a + x.simNet; }, 0);
@@ -3025,7 +2980,7 @@
           var pSum = cSub.filter(function(x) { return x.simNet > 0; }).reduce(function(a, x) { return a + x.simNet; }, 0);
           var nSum = Math.abs(cSub.filter(function(x) { return x.simNet < 0; }).reduce(function(a, x) { return a + x.simNet; }, 0));
           var scPf = nSum > 0 ? (pSum / nSum) : (pSum > 0 ? 99.9 : 0.0);
-          var unitCap = (FORWARD_SCORECARD_UNIT_CAP[sc] || 28037) * lots;
+          var unitCap = Math.max(0, oSub.concat(cSub).reduce(function(m, x) { return Math.max(m, x.simCapital); }, 0));
           var scRoc = (unitCap > 0 && (oSub.length > 0 || cSub.length > 0)) ? (totNet / unitCap) * 100.0 : 0.0;
 
           barNetData.push(Math.round(cNet));
@@ -3042,10 +2997,10 @@
             '<td class="py-2 px-3 text-right font-bold ' + (wPct >= 50 ? 'text-emerald-400' : 'text-slate-300') + '">' + wPct.toFixed(1) + '%</td>' +
             '<td class="py-2 px-3 text-right ' + (oNet >= 0 ? 'text-emerald-300' : 'text-rose-400') + '">' + fmtInr(Math.round(oNet), oNet !== 0) + '</td>' +
             '<td class="py-2 px-3 text-right ' + (cGross >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + fmtInr(Math.round(cGross), cGross !== 0) + '</td>' +
-            '<td class="py-2 px-3 text-right text-amber-300">' + (cChg > 0 ? '-' : '') + fmtInr(Math.round(cChg), false) + '</td>' +
+            '<td class="py-2 px-3 text-right text-slate-300">' + (cChg > 0 ? '-' : '') + fmtInr(Math.round(cChg), false) + '</td>' +
             '<td class="py-2 px-3 text-right font-extrabold ' + (cNet >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(cNet), cNet !== 0) + ' Net P&amp;L</td>' +
             '<td class="py-2 px-3 text-right font-extrabold ' + (totNet >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + fmtInr(Math.round(totNet), totNet !== 0) + '</td>' +
-            '<td class="py-2 px-3 text-right text-amber-300">' + fmtInr(unitCap, false) + ' Unit Capital</td>' +
+            '<td class="py-2 px-3 text-right text-sky-300">' + fmtInr(unitCap, false) + ' Recorded Capital</td>' +
             '<td class="py-2 px-3 text-right font-bold ' + (scRoc >= 0 ? 'text-emerald-300' : 'text-rose-400') + '">' + (scRoc > 0 ? '+' : '') + scRoc.toFixed(2) + '% ROC</td>' +
             '<td class="py-2 px-3 text-right whitespace-nowrap">' + statusBadgeHtml + '</td>' +
           '</tr>';
@@ -3063,13 +3018,13 @@
               return '<tr class="hover:bg-[#111c2d]">' +
                 '<td class="py-2 px-2.5 text-white font-semibold whitespace-nowrap"><div>' + t.date + '</div><div class="text-[10px] text-slate-400">' + (t.entryTime || '09:20 IST') + ' → ' + t.simExitTime + '</div></td>' +
                 '<td class="py-2 px-2.5 font-bold text-white whitespace-nowrap"><span class="px-1.5 py-0.5 mr-1 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 text-[10px]">' + t.sym + '</span>' + t.exp + ' <span class="text-slate-400 font-normal">(' + t.dte + 'd)</span></td>' +
-                '<td class="py-2 px-2.5 font-bold text-amber-300 whitespace-nowrap">' + (STRATEGY_NAMES_MAP[t.strat] || t.strat) + '</td>' +
+                '<td class="py-2 px-2.5 font-bold text-sky-300 whitespace-nowrap">' + (STRATEGY_NAMES_MAP[t.strat] || t.strat) + '</td>' +
                 '<td class="py-2 px-2.5 text-slate-200">' + t.trigReason + '</td>' +
                 '<td class="py-2 px-2.5 text-slate-300">' + t.legsText + '</td>' +
                 '<td class="py-2 px-2.5 text-center whitespace-nowrap"><span class="px-2 py-0.5 rounded bg-[#16263d] border border-sky-500/30 text-sky-200 text-[10px] font-semibold">' + t.simExitReason + '</span></td>' +
-                '<td class="py-2 px-2.5 text-right font-bold text-amber-300 whitespace-nowrap">' + fmtInr(t.simCapital, false) + '</td>' +
+                '<td class="py-2 px-2.5 text-right font-bold text-sky-300 whitespace-nowrap">' + fmtInr(t.simCapital, false) + '</td>' +
                 '<td class="py-2 px-2.5 text-right ' + (t.simGross >= 0 ? 'text-sky-300' : 'text-rose-400') + ' whitespace-nowrap">' + fmtInr(Math.round(t.simGross), t.simGross !== 0) + '</td>' +
-                '<td class="py-2 px-2.5 text-right text-amber-300 whitespace-nowrap">-' + fmtInr(Math.round(t.simCharges), false) + '</td>' +
+                '<td class="py-2 px-2.5 text-right text-slate-300 whitespace-nowrap">-' + fmtInr(Math.round(t.simCharges), false) + '</td>' +
                 '<td class="py-2 px-2.5 text-right whitespace-nowrap"><span class="font-extrabold ' + (t.simNet >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(t.simNet), t.simNet !== 0) + '</span> <span class="text-[10.5px] ' + (t.simRocPct >= 0 ? 'text-sky-300' : 'text-rose-300') + '">(' + (t.simRocPct >= 0 ? '+' : '') + t.simRocPct.toFixed(2) + '%)</span></td>' +
               '</tr>';
             }).join('');
@@ -3084,10 +3039,10 @@
               ? forwardIntradayMtmSeries.map(function(pt) { return pt.time_ist || (pt.t + ' IST'); })
               : ['09:20 IST (Armed — Waiting for 11 Nov 2026)'];
             var mGross = forwardIntradayMtmSeries.length
-              ? forwardIntradayMtmSeries.map(function(pt) { return Math.round(Number(pt.gross_mtm || 0) * lots); })
+              ? forwardIntradayMtmSeries.map(function(pt) { return Number.isFinite(Number(pt.gross_mtm)) ? Math.round(Number(pt.gross_mtm)) : null; })
               : [0];
             var mNet = forwardIntradayMtmSeries.length
-              ? forwardIntradayMtmSeries.map(function(pt) { return Math.round(Number(pt.net_mtm || 0) * lots); })
+              ? forwardIntradayMtmSeries.map(function(pt) { return Number.isFinite(Number(pt.net_mtm)) ? Math.round(Number(pt.net_mtm)) : null; })
               : [0];
             var mData = {
               labels: mLabels,
@@ -3190,45 +3145,7 @@
       }
 
       window.closeForwardPosition = function(posId) {
-        var idx = forwardOpenPositions.findIndex(function(p) { return p.id === posId; });
-        if (idx === -1) return;
-        var pos = forwardOpenPositions.splice(idx, 1)[0];
-        (pos.legs || []).forEach(function(l) { l.exitPx = l.curPx !== undefined ? l.curPx : l.entryPx; });
-        var chg = calcPositionUpstoxCharges(pos.legs, pos.sym, 1, true);
-        var net = Number((pos.grossMtm - chg).toFixed(2));
-        var sDay = pos.session_date || pos.date || MIN_FORWARD_DATE;
-        forwardClosedTrades.unshift({
-          id: pos.id.replace('OPEN-', 'FWD-MANUAL-'),
-          date: sDay,
-          session_date: sDay,
-          triggerTime: pos.triggerTime || (sDay + 'T09:20:00+05:30'),
-          entryTime: pos.trigTime || '09:20 IST',
-          exitTime: latestAsOfLabel || '15:15 IST',
-          sym: pos.sym,
-          exp: pos.exp,
-          kind: pos.kind || 'Weekly',
-          dte: pos.dte || 8,
-          strat: pos.strat,
-          trigReason: pos.metrics,
-          sig: pos.metrics,
-          legsText: formatFwdLegs(pos.legs, 'closed'),
-          legs: pos.legs,
-          capital: pos.capital,
-          maxCredit: pos.maxCredit,
-          maxLoss: pos.maxLoss,
-          entryIv: pos.entryIv || 16.0,
-          gross: pos.grossMtm,
-          charges: chg,
-          net: net,
-          exitReason: 'Manual Paper Close',
-          mtmPath: pos.mtmPath || [
-            { t: 'Entry', gross: 0, iv: pos.entryIv || 16.0 },
-            { t: 'Exit', gross: pos.grossMtm, iv: pos.curIv || 16.0 }
-          ]
-        });
-        saveForwardLedgerLocal();
-        renderForwardWorkspace();
-        toast('Closed paper position ' + pos.sym + ' ' + pos.exp + ' ' + pos.strat + ' at live Upstox LTP');
+        toast('Cloud-ledger positions are read-only in the browser; no local close was applied.');
       };
 
       window.autoForwardTrackSetup = function(stratCode, symName, expiryDate) {
@@ -3239,305 +3156,38 @@
         var wsFwd = document.getElementById('wsForwardBtn');
         if (wsFwd) wsFwd.click();
 
-        var mkt = getNseMarketStatusIST();
-        var snapDay = (latestSnapshotDay && latestSnapshotDay >= MIN_FORWARD_DATE) ? latestSnapshotDay : mkt.isoDay;
-        if (snapDay < MIN_FORWARD_DATE || !mkt.open) {
-          renderForwardWorkspace();
-          toast(ARMED_TOAST_MSG);
-          return false;
-        }
-
-        var list = marketCatalog[sym] || [];
-        var item = list.find(function(x) { return x.expiry === expiryDate; }) || list[0];
-        if (item) {
-          var existing = forwardOpenPositions.find(function(p) {
-            return p.sym === sym && p.exp === item.expiry && p.strat === stratCode;
-          });
-          if (!existing) {
-            var setups = evaluateStrategiesForExpiry(item, sym, 1);
-            var targetSetup = setups.find(function(s) { return s.code === stratCode; }) || setups[0];
-            if (targetSetup) {
-              var rawLegs = buildStrategyLegsForItem(item, sym, stratCode);
-              var chg = calcPositionUpstoxCharges(rawLegs, sym, 1, true);
-              forwardOpenPositions.unshift({
-                id: 'OPEN-' + snapDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + item.expiry.replace(/-/g, '').slice(4) + '-' + stratCode,
-                date: snapDay,
-                session_date: snapDay,
-                triggerTime: snapDay + 'T' + mkt.hmStr + ':00+05:30',
-                trigTime: mkt.clockStr,
-                markedAt: mkt.clockStr,
-                sym: sym,
-                exp: item.expiry,
-                kind: item.kind,
-                dte: item.dte,
-                frontScope: (sym === 'NIFTY' && (item.expiry === '2026-11-17' || item.expiry === '2026-11-23')) || (sym === 'BANKNIFTY' && item.expiry === '2026-11-23'),
-                strat: stratCode,
-                stratName: targetSetup.name,
-                metrics: targetSetup.metrics,
-                legs: rawLegs,
-                capital: targetSetup.capital,
-                maxCredit: targetSetup.maxProf,
-                maxLoss: targetSetup.maxLoss,
-                entryIv: item.iv,
-                curIv: item.iv,
-                grossMtm: 0.0,
-                estCharges: chg,
-                netMtm: Number((-chg).toFixed(2)),
-                mtmPath: [{ t: mkt.hmStr, gross: 0.0, iv: item.iv }]
-              });
-              saveForwardLedgerLocal();
-            }
-          }
-        }
-        renderForwardWorkspace();
-        toast('Tracking ' + stratCode + ' (' + sym + ' ' + (expiryDate || '') + ') in Forward Test (Auto Paper)');
-        return true;
+        // Entries, exits, and marks are generated only by the cloud ledger.
+        // This click intentionally just filters the read-only workspace.
+        toast('Cloud-ledger setup selected; browser-side trade creation is disabled.');
+        return false;
       };
 
       window.markForwardPositionsFromPayload = function(payload) {
-        syncForwardLedgerGlobals();
-        if (!payload || !Array.isArray(payload.records)) return 0;
-
-        var rawTs = payload.timestamp || payload.as_of || payload.retrieved_at || payload.day || null;
-        var mkt = getNseMarketStatusIST(rawTs ? new Date(rawTs) : undefined);
-        var snapshotDay = String(payload.day || payload.session_date || mkt.isoDay || '').slice(0, 10);
-        if (snapshotDay) latestSnapshotDay = snapshotDay;
-
-        // STRICT FORWARD-ONLY TRIGGER GATE:
-        // Never auto-trigger or place a forward trade on 2026-11-09 or any snapshotDay < '2026-11-11',
-        // and never auto-trigger when the market is closed (!getNseMarketStatusIST().open).
-        if (!snapshotDay || snapshotDay < MIN_FORWARD_DATE || !mkt.open) {
-          saveForwardLedgerLocal();
+        // The Drive-backed Apps Script ledger is the sole authority for entry,
+        // exit and MTM.  A browser may display it, but must never manufacture
+        // positions from an LTP-only payload or a localStorage copy.
+        var cloudLedger = payload && payload.forward_test_ledger;
+        var cloudEligible = isFreshValidatedCloudSnapshot(payload)
+          && cloudLedger && typeof cloudLedger === 'object';
+        if (!cloudEligible || !applyCloudForwardLedger(cloudLedger, payload)) {
+          forwardOpenPositions = [];
+          forwardClosedTrades = [];
+          forwardIntradayMtmSeries = [];
+          forwardLedger = JSON.parse(JSON.stringify(FORWARD_CLEAN_LEDGER_TEMPLATE));
+          forwardLedger.status = 'WAITING_FOR_VALIDATED_CLOUD_LEDGER';
+          syncForwardLedgerGlobals();
+          var missingBadge = document.getElementById('fwdLastMarkedBadge');
+          if (missingBadge) missingBadge.innerHTML = 'Status: <strong class="text-sky-300">WAITING_FOR_VALIDATED_CLOUD_LEDGER</strong>';
+          setLiveCaptureIntegrity('Live snapshot validated, but the forward ledger is stale or incomplete and has been withheld.', 'text-sky-300');
           renderForwardWorkspace();
-          return 0;
+          return false;
         }
-
-        latestAsOfLabel = mkt.clockStr;
-        var updatedCount = 0;
-
-        // If cloud Code.gs attached forward_test_ledger with valid >= 2026-11-11 positions, merge them
-        if (payload.forward_test_ledger && Array.isArray(payload.forward_test_ledger.open_positions)) {
-          var localIds = new Set(forwardOpenPositions.map(function(p) { return p.id; }));
-          payload.forward_test_ledger.open_positions.forEach(function(cp) {
-            if (cp && cp.id && isValidForwardRecord(cp) && !localIds.has(cp.id)) {
-              forwardOpenPositions.push(cp);
-              localIds.add(cp.id);
-            }
-          });
-        }
-
-        // Build strike lookup and refresh marketCatalog chain strikes from live payload.records
-        var chainLookup = {};
-        var qRec = payload.records.find(function(x) { return x.label === 'quotes'; });
-        var qData = (qRec && qRec.data) ? qRec.data : {};
-        var liveSpotN = qData['NSE_INDEX:Nifty 50'] ? Number(qData['NSE_INDEX:Nifty 50'].last_price) : null;
-        var liveSpotB = qData['NSE_INDEX:Nifty Bank'] ? Number(qData['NSE_INDEX:Nifty Bank'].last_price) : null;
-
-        payload.records.forEach(function(rec) {
-          if (!rec.label || rec.label.indexOf('|') === -1 || !Array.isArray(rec.data) || !rec.data.length) return;
-          var sMap = {};
-          var parts = rec.label.split('|');
-          var sym = parts[0], exp = parts[1];
-          var spot = (sym === 'NIFTY' ? liveSpotN : liveSpotB) || Number(rec.data[0].underlying_spot_price || 0);
-          var newChainArr = [];
-
-          rec.data.forEach(function(row) {
-            var k = Math.round(Number(row.strike_price || row.strike || row.k || 0));
-            var cm = (row.call_options && row.call_options.market_data) || {};
-            var pm = (row.put_options && row.put_options.market_data) || {};
-            var cg = (row.call_options && row.call_options.option_greeks) || {};
-            var pg = (row.put_options && row.put_options.option_greeks) || {};
-            var cLtp = Number(cm.ltp || cm.close_price || row.cLtp || 0);
-            var pLtp = Number(pm.ltp || pm.close_price || row.pLtp || 0);
-            var cIv = Number(cg.iv || row.cIv || 0);
-            var pIv = Number(pg.iv || row.pIv || 0);
-            var cOi = row.cOi !== undefined ? Number(row.cOi) : Math.round(Number(cm.oi || 0) / 1000);
-            var pOi = row.pOi !== undefined ? Number(row.pOi) : Math.round(Number(pm.oi || 0) / 1000);
-            var cDelta = Number(cg.delta !== undefined ? cg.delta : (row.cDelta || 0));
-            var pDelta = Number(pg.delta !== undefined ? pg.delta : (row.pDelta || 0));
-            sMap[k] = { cLtp: cLtp, pLtp: pLtp, cIv: cIv, pIv: pIv, cOi: cOi, pOi: pOi };
-            newChainArr.push({ k: k, cOi: cOi, pOi: pOi, cLtp: cLtp, pLtp: pLtp, cIv: cIv, pIv: pIv, uCallIv: cIv, uPutIv: pIv, cDelta: cDelta, pDelta: pDelta, uCallDelta: cDelta, uPutDelta: pDelta });
-          });
-          chainLookup[rec.label] = sMap;
-
-          var catList = marketCatalog[sym] || [];
-          var catItem = catList.find(function(x) { return x.expiry === exp; });
-          if (catItem && newChainArr.length) {
-            var step = sym === 'NIFTY' ? 50 : 100;
-            var atmK = Math.round((spot || catItem.spot) / step) * step;
-            var atmNode = sMap[atmK] || newChainArr[0];
-            if (spot > 0) catItem.spot = spot;
-            catItem.atm = atmK;
-            if (atmNode && atmNode.cIv > 0 && atmNode.pIv > 0) {
-              catItem.cIv = Number(atmNode.cIv.toFixed(2));
-              catItem.pIv = Number(atmNode.pIv.toFixed(2));
-              catItem.iv = Number((0.5 * (atmNode.cIv + atmNode.pIv)).toFixed(2));
-            }
-            if (atmNode && (atmNode.cLtp > 0 || atmNode.pLtp > 0)) {
-              catItem.strad = Number((atmNode.cLtp + atmNode.pLtp).toFixed(2));
-              catItem.syn = Number((atmK + atmNode.cLtp - atmNode.pLtp).toFixed(2));
-            }
-            catItem.chain = newChainArr;
-            enrichItemWithBlack76(catItem);
-          }
-        });
-
-        // Step A: Auto-trigger qualified setups on live snapshots (>= 09:20 IST and < 15:15 IST)
-        if (forwardAutoCaptureOn && mkt.mins >= 560 && mkt.mins < 915) {
-          var existingKeys = {};
-          forwardOpenPositions.forEach(function(p) {
-            existingKeys[p.sym + '|' + p.exp + '|' + p.strat] = true;
-          });
-          forwardClosedTrades.forEach(function(t) {
-            if (String(t.session_date || t.date || '').slice(0, 10) === snapshotDay) {
-              existingKeys[t.sym + '|' + t.exp + '|' + t.strat] = true;
-            }
-          });
-
-          ['NIFTY', 'BANKNIFTY'].forEach(function(sym) {
-            (marketCatalog[sym] || []).forEach(function(item) {
-              if (!chainLookup[sym + '|' + item.expiry]) return;
-              var isFront = (sym === 'NIFTY' && (item.expiry === '2026-11-17' || item.expiry === '2026-11-23')) ||
-                            (sym === 'BANKNIFTY' && item.expiry === '2026-11-23');
-              var setups = evaluateStrategiesForExpiry(item, sym, 1);
-              setups.forEach(function(s) {
-                if (!s.triggered) return;
-                var key = sym + '|' + item.expiry + '|' + s.code;
-                if (existingKeys[key]) return;
-                var legs = buildStrategyLegsForItem(item, sym, s.code);
-                var chg = calcPositionUpstoxCharges(legs, sym, 1, true);
-                forwardOpenPositions.push({
-                  id: 'OPEN-' + snapshotDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + item.expiry.replace(/-/g, '').slice(4) + '-' + s.code,
-                  date: snapshotDay,
-                  session_date: snapshotDay,
-                  triggerTime: String(rawTs || (snapshotDay + 'T' + mkt.hmStr + ':00+05:30')),
-                  trigTime: mkt.clockStr,
-                  markedAt: mkt.clockStr,
-                  sym: sym,
-                  exp: item.expiry,
-                  kind: item.kind,
-                  dte: item.dte,
-                  frontScope: isFront,
-                  strat: s.code,
-                  stratName: s.name,
-                  metrics: s.metrics,
-                  legs: legs,
-                  capital: (FORWARD_SCORECARD_UNIT_CAP[s.code] || s.capital || 28037),
-                  maxCredit: s.maxProf,
-                  maxLoss: s.maxLoss,
-                  entryIv: item.iv,
-                  curIv: item.iv,
-                  grossMtm: 0.0,
-                  estCharges: chg,
-                  netMtm: Number((-chg).toFixed(2)),
-                  mtmPath: [{ t: mkt.hmStr, gross: 0.0, iv: item.iv }]
-                });
-                existingKeys[key] = true;
-                updatedCount++;
-              });
-            });
-          });
-        }
-
-        // Step B: Mark all open positions to market & auto-close on SL/TP or at 15:15 IST (mins >= 915)
-        var slRule = (document.getElementById('fwdStopLossRule') && document.getElementById('fwdStopLossRule').value) || 'NONE';
-        var tpRule = (document.getElementById('fwdProfitTargetRule') && document.getElementById('fwdProfitTargetRule').value) || 'NONE';
-        var remaining = [];
-        var newlyClosedThisSnap = [];
-
-        forwardOpenPositions.forEach(function(pos) {
-          var sMap = chainLookup[pos.sym + '|' + pos.exp];
-          var lotQty = pos.sym === 'NIFTY' ? 65 : 30;
-          if (sMap) {
-            var gross = 0.0;
-            (pos.legs || []).forEach(function(l) {
-              var node = sMap[l.strike];
-              var fld = l.type === 'CE' ? 'cLtp' : 'pLtp';
-              if (node && node[fld] > 0) {
-                l.curPx = Number(node[fld].toFixed(2));
-              }
-              var ePx = Number(l.entryPx || 0);
-              var cPx = Number(l.curPx !== undefined ? l.curPx : ePx);
-              var qty = lotQty * Number(l.mult || 1);
-              gross += (Number(l.side) < 0 ? (ePx - cPx) : (cPx - ePx)) * qty;
-            });
-            pos.grossMtm = Number(gross.toFixed(2));
-            pos.estCharges = calcPositionUpstoxCharges(pos.legs, pos.sym, 1, true);
-            pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
-            pos.markedAt = mkt.clockStr;
-            if (!Array.isArray(pos.mtmPath)) pos.mtmPath = [];
-            pos.mtmPath.push({ t: mkt.hmStr, gross: pos.grossMtm, iv: pos.curIv || pos.entryIv || 16.0 });
-            updatedCount++;
-          }
-
-          var maxCr = Number(pos.maxCredit || pos.capital * 0.45);
-          var maxLoss = Number(pos.maxLoss || pos.capital * 0.35);
-          var slThresh = slRule === 'SL_25_CAP' ? -0.25 * pos.capital : (slRule === 'SL_50_MAXLOSS' ? -0.50 * maxLoss : (slRule === 'SL_30_IV' ? -0.35 * maxLoss : null));
-          var tpThresh = tpRule === 'TP_50_30' ? (pos.strat === 'S2' ? 0.30 * maxLoss : 0.50 * maxCr) : (tpRule === 'TP_75' ? (pos.strat === 'S2' ? 0.50 * maxLoss : 0.75 * maxCr) : null);
-          var is1515AutoClose = mkt.mins >= 915;
-
-          if (forwardAutoCaptureOn && ((slThresh !== null && pos.grossMtm <= slThresh) || (tpThresh !== null && pos.grossMtm >= tpThresh) || is1515AutoClose)) {
-            (pos.legs || []).forEach(function(l) { l.exitPx = l.curPx !== undefined ? l.curPx : l.entryPx; });
-            var exitRsn = (slThresh !== null && pos.grossMtm <= slThresh)
-              ? 'Auto SL Hit'
-              : ((tpThresh !== null && pos.grossMtm >= tpThresh) ? 'Auto Target Hit' : '15:15 IST Auto-Close');
-            var closedObj = {
-              id: pos.id.replace('OPEN-', 'FWD-'),
-              date: pos.date || snapshotDay,
-              session_date: pos.session_date || pos.date || snapshotDay,
-              triggerTime: pos.triggerTime || (snapshotDay + 'T09:20:00+05:30'),
-              entryTime: pos.trigTime || '09:20 IST',
-              exitTime: mkt.hmStr + ' IST',
-              sym: pos.sym,
-              exp: pos.exp,
-              kind: pos.kind || 'Weekly',
-              dte: pos.dte || 8,
-              strat: pos.strat,
-              trigReason: pos.metrics,
-              sig: pos.metrics,
-              legsText: formatFwdLegs(pos.legs, 'closed'),
-              legs: pos.legs,
-              capital: pos.capital,
-              maxCredit: maxCr,
-              maxLoss: maxLoss,
-              entryIv: pos.entryIv || 16.0,
-              gross: pos.grossMtm,
-              charges: pos.estCharges,
-              net: pos.netMtm,
-              exitReason: exitRsn,
-              mtmPath: pos.mtmPath || [
-                { t: '09:20', gross: 0, iv: pos.entryIv || 16.0 },
-                { t: mkt.hmStr, gross: pos.grossMtm, iv: pos.curIv || 16.0 }
-              ]
-            };
-            forwardClosedTrades.unshift(closedObj);
-            newlyClosedThisSnap.push(closedObj);
-          } else {
-            remaining.push(pos);
-          }
-        });
-
-        forwardOpenPositions = remaining;
-        var snapGross = remaining.reduce(function(a, p) { return a + Number(p.grossMtm || 0); }, 0) +
-                        newlyClosedThisSnap.reduce(function(a, t) { return a + Number(t.gross || 0); }, 0);
-        var snapNet = remaining.reduce(function(a, p) { return a + Number(p.netMtm || 0); }, 0) +
-                      newlyClosedThisSnap.reduce(function(a, t) { return a + Number(t.net || 0); }, 0);
-        forwardIntradayMtmSeries.push({
-          session_date: snapshotDay,
-          t: mkt.hmStr,
-          time_ist: mkt.hmStr + ' IST',
-          gross_mtm: Number(snapGross.toFixed(2)),
-          net_mtm: Number(snapNet.toFixed(2))
-        });
-        forwardLedger.updated_at = String(rawTs || (snapshotDay + 'T' + mkt.hmStr + ':00+05:30'));
-        saveForwardLedgerLocal();
-
-        var badgeEl = document.getElementById('fwdLastMarkedBadge');
-        if (badgeEl) {
-          badgeEl.innerHTML = 'Last Marked: <strong class="text-emerald-300">' + mkt.clockStr + ' (Live Upstox Snapshot · ' + snapshotDay + ')</strong>';
+        var cloudBadge = document.getElementById('fwdLastMarkedBadge');
+        if (cloudBadge) {
+          cloudBadge.innerHTML = 'Cloud ledger: <strong class="text-emerald-300">' + String(forwardLedger.status || 'READY') + '</strong>';
         }
         renderForwardWorkspace();
-        return updatedCount;
+        return true;
       };
 
       // Workspace Switching (Options Desk / Strategy Backtest / Forward Test Auto Paper)
@@ -3584,7 +3234,7 @@
         });
       }
 
-      ['fwdIndexFilter', 'fwdExpiryScope', 'fwdStrategyFilter', 'fwdLotsInput', 'fwdStopLossRule', 'fwdProfitTargetRule'].forEach(function(id) {
+      ['fwdIndexFilter', 'fwdExpiryScope', 'fwdStrategyFilter'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) {
           el.addEventListener('change', renderForwardWorkspace);
@@ -3595,98 +3245,26 @@
       var fwdAutoBtn = document.getElementById('fwdAutoModeToggle');
       if (fwdAutoBtn) {
         fwdAutoBtn.addEventListener('click', function() {
-          forwardAutoCaptureOn = !forwardAutoCaptureOn;
-          var dot = document.getElementById('fwdAutoPulseDot');
-          var lbl = document.getElementById('fwdAutoModeLabel');
-          if (forwardAutoCaptureOn) {
-            fwdAutoBtn.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-bold text-xs mono transition';
-            if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
-            if (lbl) lbl.textContent = 'ARMED · AUTO-CAPTURE ON (Starts 11 Nov 2026 09:20 IST)';
-            toast('Auto-Trigger Mode: ON (Armed for 11 Nov 2026 09:20 IST onwards)');
-          } else {
-            fwdAutoBtn.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-950/80 border border-amber-500/60 text-amber-300 font-bold text-xs mono transition';
-            if (dot) dot.className = 'w-2 h-2 rounded-full bg-amber-400';
-            if (lbl) lbl.textContent = 'PAUSED (Manual Paper Trigger Only)';
-            toast('Auto-Trigger Mode: PAUSED');
-          }
+          var cloudDot = document.getElementById('fwdAutoPulseDot');
+          var cloudLabel = document.getElementById('fwdAutoModeLabel');
+          if (cloudDot) cloudDot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+          if (cloudLabel) cloudLabel.textContent = 'CLOUD LEDGER · AUTOMATION CONTROLLED BY APPS SCRIPT';
+          toast('The cloud collector controls forward-test automation; the browser is display-only.');
         });
       }
 
       var fwdScanBtn = document.getElementById('fwdScanNowBtn');
       if (fwdScanBtn) {
         fwdScanBtn.addEventListener('click', function() {
-          var mkt = getNseMarketStatusIST();
-          var snapDay = (latestSnapshotDay && latestSnapshotDay >= MIN_FORWARD_DATE) ? latestSnapshotDay : mkt.isoDay;
-          if (!mkt.open || snapDay < MIN_FORWARD_DATE) {
-            renderForwardWorkspace();
-            toast(ARMED_TOAST_MSG);
-            return;
-          }
-          var added = 0;
-          ['NIFTY', 'BANKNIFTY'].forEach(function(sym) {
-            (marketCatalog[sym] || []).forEach(function(item) {
-              var isFront = (sym === 'NIFTY' && (item.expiry === '2026-11-17' || item.expiry === '2026-11-23')) ||
-                            (sym === 'BANKNIFTY' && item.expiry === '2026-11-23');
-              var setups = evaluateStrategiesForExpiry(item, sym, 1);
-              setups.forEach(function(s) {
-                if (!s.triggered) return;
-                var exists = forwardOpenPositions.some(function(p) {
-                  return p.sym === sym && p.exp === item.expiry && p.strat === s.code;
-                });
-                if (!exists) {
-                  var legs = buildStrategyLegsForItem(item, sym, s.code);
-                  var chg = calcPositionUpstoxCharges(legs, sym, 1, true);
-                  forwardOpenPositions.push({
-                    id: 'OPEN-' + snapDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + item.expiry.replace(/-/g, '').slice(4) + '-' + s.code,
-                    date: snapDay,
-                    session_date: snapDay,
-                    triggerTime: snapDay + 'T' + mkt.hmStr + ':00+05:30',
-                    trigTime: mkt.clockStr,
-                    markedAt: mkt.clockStr,
-                    sym: sym,
-                    exp: item.expiry,
-                    kind: item.kind,
-                    dte: item.dte,
-                    frontScope: isFront,
-                    strat: s.code,
-                    stratName: s.name,
-                    metrics: s.metrics,
-                    legs: legs,
-                    capital: (FORWARD_SCORECARD_UNIT_CAP[s.code] || s.capital || 28037),
-                    maxCredit: s.maxProf,
-                    maxLoss: s.maxLoss,
-                    entryIv: item.iv,
-                    curIv: item.iv,
-                    grossMtm: 0.0,
-                    estCharges: chg,
-                    netMtm: Number((-chg).toFixed(2)),
-                    mtmPath: [{ t: mkt.hmStr, gross: 0.0, iv: item.iv }]
-                  });
-                  added++;
-                }
-              });
-            });
-          });
-          saveForwardLedgerLocal();
-          renderForwardWorkspace();
-          toast('Scanned all 9 active Upstox option chains: ' + forwardOpenPositions.length + ' qualified setups active (' + added + ' newly added)');
+          syncLiveCloudSnapshot(true);
+          toast('Refreshing the validated cloud ledger.');
         });
       }
 
       var fwdResetBtn = document.getElementById('fwdResetSeedBtn');
       if (fwdResetBtn) {
         fwdResetBtn.addEventListener('click', function() {
-          forwardOpenPositions = [];
-          forwardClosedTrades = [];
-          forwardIntradayMtmSeries = [];
-          forwardLedger = JSON.parse(JSON.stringify(FORWARD_CLEAN_LEDGER_TEMPLATE));
-          saveForwardLedgerLocal();
-          var badgeEl = document.getElementById('fwdLastMarkedBadge');
-          if (badgeEl) {
-            badgeEl.innerHTML = 'Status: <strong class="text-emerald-300">CLOUD LEDGER · SYNCED (11 NOV 15:30 IST) · 13 Auto-Triggered Session Trades</strong>';
-          }
-          renderForwardWorkspace();
-          toast('Cleared Forward Test ledger — armed for tomorrow (11 Nov 2026 09:20 IST).');
+          toast('The cloud ledger cannot be reset from this browser.');
         });
       }
 
@@ -3770,56 +3348,25 @@
       // ===================================================================
       var CLOUD_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxDbTwpIRAEOZRoGGwTyTncZhwUPmTnimv0Hyej0iJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec';
 
-      function applyEmbeddedCloudLedgerFallback() {
-        if (!forwardOpenPositions.length && !forwardClosedTrades.length && DEFAULT_FORWARD_LEDGER) {
-          forwardOpenPositions = JSON.parse(JSON.stringify(DEFAULT_FORWARD_LEDGER.open_positions || []));
-          forwardClosedTrades = JSON.parse(JSON.stringify(DEFAULT_FORWARD_LEDGER.closed_trades || []));
-          forwardIntradayMtmSeries = JSON.parse(JSON.stringify(DEFAULT_FORWARD_LEDGER.intraday_mtm_series || []));
-          saveForwardLedgerLocal();
-          renderForwardWorkspace();
-        }
-        var badgeEl = document.getElementById('fwdLastMarkedBadge');
-        if (badgeEl) {
-          badgeEl.innerHTML = 'Status: <strong class="text-emerald-300">CLOUD LEDGER · SYNCED (11 NOV 15:30 IST)</strong>';
-        }
-        return false;
+      function setLiveCaptureIntegrity(message, className) {
+        var el = document.getElementById('liveCaptureIntegrity');
+        if (!el) return;
+        el.textContent = message;
+        el.className = 'text-[11px] mono ' + (className || 'text-sky-300');
       }
 
-      function syncCloudForwardLedger() {
-        return fetch(CLOUD_EXEC_URL + '?action=ledger&_cb=' + Date.now(), { cache: 'no-store' })
-          .then(function(resp) { return resp.ok ? resp.json() : null; })
-          .then(function(cloudLedger) {
-            if (!cloudLedger || typeof cloudLedger !== 'object' || cloudLedger.error) {
-              return applyEmbeddedCloudLedgerFallback();
-            }
-            var changed = false;
-            if (Array.isArray(cloudLedger.open_positions)) {
-              var openIds = new Set(forwardOpenPositions.map(function(p) { return p.id; }));
-              cloudLedger.open_positions.forEach(function(cp) {
-                if (cp && cp.id && isValidForwardRecord(cp) && !openIds.has(cp.id)) {
-                  forwardOpenPositions.push(cp);
-                  openIds.add(cp.id);
-                  changed = true;
-                }
-              });
-            }
-            if (Array.isArray(cloudLedger.closed_trades)) {
-              var closedIds = new Set(forwardClosedTrades.map(function(t) { return t.id; }));
-              cloudLedger.closed_trades.forEach(function(ct) {
-                if (ct && ct.id && isValidForwardRecord(ct) && !closedIds.has(ct.id)) {
-                  forwardClosedTrades.push(ct);
-                  closedIds.add(ct.id);
-                  changed = true;
-                }
-              });
-            }
-            if (changed) {
-              saveForwardLedgerLocal();
-              renderForwardWorkspace();
-            }
-            return changed;
-          })
-          .catch(function() { return applyEmbeddedCloudLedgerFallback(); });
+      function isFreshValidatedCloudSnapshot(payload) {
+        if (!payload || payload.schema !== 1 || payload.provider !== 'Upstox'
+            || payload.mode !== 'snapshot' || payload.status !== 'complete'
+            || payload.nfo_session_validated !== true || !Array.isArray(payload.records)) return false;
+        var integrity = payload.capture_integrity || {};
+        var age = Number(integrity.age_seconds);
+        var capturedAt = Date.parse(payload.retrieved_at || '');
+        var browserAge = (Date.now() - capturedAt) / 1000;
+        return isFinite(age) && age >= 0 && age <= 120
+          && isFinite(capturedAt) && isFinite(browserAge)
+          && browserAge >= -30 && browserAge <= 120
+          && !integrity.snapshot_gap;
       }
 
       function syncLiveCloudSnapshot(forceFetch) {
@@ -3827,10 +3374,13 @@
         if (!forceFetch && !st.isOpen) {
           return Promise.resolve(false);
         }
-        return fetch(CLOUD_EXEC_URL + '?action=latest&_cb=' + Date.now(), { cache: 'no-store' })
+        return fetch(CLOUD_EXEC_URL + '?_cb=' + Date.now(), { cache: 'no-store' })
           .then(function(resp) { return resp.ok ? resp.json() : null; })
           .then(function(payload) {
-            if (!payload || payload.schema !== 1 || !Array.isArray(payload.records)) return false;
+            if (!isFreshValidatedCloudSnapshot(payload)) {
+              setLiveCaptureIntegrity('Live data withheld: cloud snapshot is incomplete, stale, or has a detected gap.', 'text-rose-300');
+              return false;
+            }
             if (payload.retrieved_at && payload.retrieved_at === lastSyncedRetrievedAt) {
               return false;
             }
@@ -3873,47 +3423,16 @@
               var cIv = Number(best.call_options.option_greeks.iv || 0);
               var pIv = Number(best.put_options.option_greeks.iv || 0);
               var cLtp = Number(best.call_options.market_data.ltp || 0);
-              var pLtp = Number(best.call_options.market_data.ltp || 0);
+              var pLtp = Number(best.put_options.market_data.ltp || 0);
               if (cIv > 0 && pIv > 0) {
                 target.spot = spot;
                 target.atm = atmK;
-                target.upstoxCallIv = Number(cIv.toFixed(2));
-                target.upstoxPutIv = Number(pIv.toFixed(2));
                 target.cIv = Number(cIv.toFixed(2));
                 target.pIv = Number(pIv.toFixed(2));
                 target.iv = Number((0.5 * (cIv + pIv)).toFixed(2));
                 target.strad = Number((cLtp + pLtp).toFixed(2));
-                var step = sym === 'NIFTY' ? 50 : 100;
-                var nearRows = rec.data.filter(function(r) {
-                  return Math.abs(Number(r.strike_price) - atmK) <= 7 * step;
-                });
-                if (nearRows.length >= 5) {
-                  target.chain = nearRows.map(function(r) {
-                    var cm = (r.call_options && r.call_options.market_data) || {};
-                    var pm = (r.put_options && r.put_options.market_data) || {};
-                    var cg = (r.call_options && r.call_options.option_greeks) || {};
-                    var pg = (r.put_options && r.put_options.option_greeks) || {};
-                    var uCIv = Number(cg.iv || 0);
-                    var uPIv = Number(pg.iv || 0);
-                    var uCD = Number(cg.delta || 0);
-                    var uPD = Number(pg.delta || 0);
-                    return {
-                      k: Math.round(Number(r.strike_price)),
-                      cOi: Math.round(Number(cm.oi || 0) / 1000),
-                      pOi: Math.round(Number(pm.oi || 0) / 1000),
-                      cLtp: Number(cm.ltp || 0),
-                      pLtp: Number(pm.ltp || 0),
-                      cIv: uCIv,
-                      pIv: uPIv,
-                      uCallIv: uCIv,
-                      uPutIv: uPIv,
-                      cDelta: uCD,
-                      pDelta: uPD,
-                      uCallDelta: uCD,
-                      uPutDelta: uPD
-                    };
-                  });
-                }
+                target.syn = NaN;
+                target.quoteIntegrity = 'UNVALIDATED_BROKER_GREEKS';
                 if (liveVix && liveVix > 0) target.vix = liveVix;
                 enrichItemWithBlack76(target);
               }
@@ -3926,15 +3445,20 @@
                 hList[hList.length - 1].c = cList[0].spot;
               }
             });
-            if (typeof window.markForwardPositionsFromPayload === 'function') {
-              window.markForwardPositionsFromPayload(payload);
-            }
+            var forwardLedgerApplied = typeof window.markForwardPositionsFromPayload === 'function'
+              ? window.markForwardPositionsFromPayload(payload) : false;
             updateMarketClock();
             renderActiveOptionsTab();
             renderForwardWorkspace();
-            return true;
+            if (forwardLedgerApplied) {
+              setLiveCaptureIntegrity('Live data and forward ledger validated · ' + latestAsOfLabel, 'text-emerald-300');
+            }
+            return forwardLedgerApplied;
           })
-          .catch(function() { return false; });
+          .catch(function() {
+            setLiveCaptureIntegrity('Live data unavailable: cloud request failed.', 'text-rose-300');
+            return false;
+          });
       }
 
       window.getMarketSessionState = getMarketSessionState;
@@ -3960,7 +3484,6 @@
       window.forwardOpenPositions = forwardOpenPositions;
       window.forwardClosedTrades = forwardClosedTrades;
       window.syncLiveCloudSnapshot = syncLiveCloudSnapshot;
-      window.syncCloudForwardLedger = syncCloudForwardLedger;
       window.syncLiveMarketFeed = syncLiveMarketFeed;
 
       function initVolatilityLabDesk() {
@@ -3978,7 +3501,6 @@
         renderActiveOptionsTab();
         renderBacktestWorkspace();
         renderForwardWorkspace();
-        syncCloudForwardLedger();
         syncLiveCloudSnapshot(true);
         setInterval(function() {
           updateMarketClock();

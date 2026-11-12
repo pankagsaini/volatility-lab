@@ -1,27 +1,30 @@
 /**
  * ==============================================================================
- * VOLATILITY LAB — CLOUD ARCHIVE, BLACK-76 FORWARD TEST & QUOTA-OPTIMIZED ENGINE (v20.0)
+ * VOLATILITY LAB — CLOUD ARCHIVE, BLACK-76 FORWARD TEST & INTEGRITY ENGINE (v21.0)
  * ==============================================================================
  * Private, read-only automated data pipeline for Upstox NSE Market Feeds.
  *
  * v20.0 Upgrades:
  * 1. Tightened Regular Market Hours (09:15–15:31 IST, mins 555..931) — saves 45
  *    wasted snapshots/day while capturing the full NSE F&O session + closing print.
- * 2. Zero Off-Hours PropertiesService Writes — skips PropertiesService writes
- *    when the exchange is closed or outside active capture windows.
+ * 2. Skips capture/status writes outside active windows; bounded scheduler state
+ *    records trigger runtime for the free-tier execution quota.
  * 3. 55-Second CacheService Layer on doGet(e) — serves frequent web/Streamlit
  *    polls from in-memory CacheService without repeated Drive/Gzip reads.
  * 4. 30-Day Cap on COMPLETED_EOD_DAYS (capCompletedEodDays_(map, 30)) — prevents
  *    ScriptProperties 9 KB per-key / 500 KB total storage exhaustion.
- * 5. 7-Day Rolling Retention of Raw 1-Minute Snapshots (pruneOldMinuteSnapshots_(7)) —
- *    automatically prunes raw 1-minute *_snapshot_*.json.gz files older than 7 days
- *    once consolidated so the 15 GB free-tier Google Drive never fills up.
+ * 5. Raw minute snapshots are retained indefinitely. Capture health is surfaced instead
+ *    of silently deleting research evidence.
  * 6. Black-76 Put-Call Parity Forward F = K + exp(r*T)*(C - P) in evaluateForwardTest_.
  * ==============================================================================
  */
 
 const MAX_COMPLETED_EOD_DAYS = 30;
-const SNAPSHOT_RETENTION_DAYS = 7;
+// A zero value means raw minute archives are retained indefinitely.  Do not
+// convert this to a truthy fallback: historical snapshots are research evidence.
+const SNAPSHOT_RETENTION_DAYS = 0;
+const RUNTIME_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
+const CAPTURE_SAFE_DEADLINE_MS = 180000;
 
 const CONFIG = {
   timeZone: 'Asia/Kolkata',
@@ -31,7 +34,7 @@ const CONFIG = {
   eodStartMins: 18 * 60,         // 18:00 IST (1080)
   eodEndMins: 22 * 60,           // 22:00 IST (1320)
   completedEodMaxDays: 30,
-  snapshotRetentionDays: 7,
+  snapshotRetentionDays: SNAPSHOT_RETENTION_DAYS,
   doGetCacheSeconds: 55,
   indices: {
     NIFTY: 'NSE_INDEX|Nifty 50',
@@ -90,6 +93,47 @@ function props_() {
   return PropertiesService.getScriptProperties();
 }
 
+function readJsonProperty_(properties, key, fallback) {
+  const raw = properties.getProperty(key);
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    properties.setProperty('COLLECTOR_STATUS', 'Invalid saved state for ' + key + '; safe defaults applied');
+    return fallback;
+  }
+}
+
+function readRuntimeBudget_(properties, key, nowMs) {
+  const stored = readJsonProperty_(properties, key, {});
+  const startMs = Number(stored.windowStartMs);
+  const endMs = Number(stored.windowEndMs);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+    // Preserve the prior calendar-day counter during migration to the rolling window.
+    return {
+      windowStartMs: nowMs,
+      windowEndMs: nowMs + RUNTIME_BUDGET_WINDOW_MS,
+      ms: Math.max(0, Number(stored.ms) || 0)
+    };
+  }
+  if (startMs > nowMs || endMs <= nowMs) {
+    return { windowStartMs: nowMs, windowEndMs: nowMs + RUNTIME_BUDGET_WINDOW_MS, ms: 0 };
+  }
+  return {
+    windowStartMs: startMs,
+    windowEndMs: endMs,
+    ms: Math.max(0, Number(stored.ms) || 0)
+  };
+}
+
+function addRuntimeBudget_(properties, key, elapsedMs) {
+  const ended = Date.now();
+  const budget = readRuntimeBudget_(properties, key, ended);
+  budget.ms += Math.max(0, Number(elapsedMs) || 0);
+  properties.setProperty(key, JSON.stringify(budget));
+  return budget;
+}
+
 function scriptCache_() {
   try {
     if (typeof CacheService !== 'undefined' && CacheService && typeof CacheService.getScriptCache === 'function') {
@@ -145,49 +189,64 @@ function capCompletedEodDays_(completedMap, maxDays) {
 }
 
 /**
- * 7-day rolling retention of raw 1-minute *_snapshot_*.json.gz files once consolidated.
- * Preserves all *_eod_*, *_1minute_indices_*, and forward_test_ledger.json files permanently
- * so the 15 GB free-tier Google Drive never fills up.
+ * Legacy retention hook.  Raw minute archives are deliberately never pruned by
+ * this project because they are the source evidence for the displayed research.
  */
-function pruneOldMinuteSnapshots_(retentionDays) {
-  const daysKeep = Number(retentionDays || CONFIG.snapshotRetentionDays || 7);
-  const now = new Date();
-  const cutoffDate = new Date(now.getTime() - daysKeep * 86400000);
-  const cutoffDay = day_(cutoffDate);
+function pruneOldMinuteSnapshots_(_retentionDays) {
+  return { pruned: 0, retention: 'indefinite', disabled: true };
+}
+
+function listDriveFilesPage_(folderId, pageToken, orderBy) {
+  const query = "'" + folderId + "' in parents and trashed = false";
+  const params = {
+    q: query,
+    orderBy: orderBy || 'name',
+    pageSize: '1000',
+    fields: 'nextPageToken,files(id,name)'
+  };
+  if (pageToken) params.pageToken = pageToken;
+  const queryString = Object.keys(params)
+    .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(params[key]))
+    .join('&');
+  const response = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files?' + queryString, {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true,
+    timeoutSeconds: 30
+  });
+  if (response.getResponseCode() !== 200) {
+    throw new Error('Drive file listing failed with HTTP ' + response.getResponseCode());
+  }
+  return JSON.parse(response.getContentText());
+}
+
+const EOD_PENDING_PREFIX_ = 'EOD_PENDING_DAY_';
+
+function loadPendingEod_() {
   const properties = props_();
-  const today = day_(now);
+  const all = properties.getProperties();
+  const pending = readJsonProperty_(properties, 'EOD_PENDING', {});
+  Object.keys(all).forEach(key => {
+    const match = /^EOD_PENDING_DAY_(\d{4}-\d{2}-\d{2})$/.exec(key);
+    if (match) pending[match[1]] = all[key];
+  });
+  if (Object.prototype.hasOwnProperty.call(all, 'EOD_PENDING')) savePendingEod_(pending);
+  return pending;
+}
 
-  // Run at most once per calendar day to conserve Drive API quota
-  if (properties.getProperty('LAST_SNAPSHOT_PRUNE_DAY') === today && retentionDays === undefined) {
-    return { pruned: 0, cutoff_day: cutoffDay, skipped: true };
-  }
-
-  const completedEod = JSON.parse(properties.getProperty('COMPLETED_EOD_DAYS') || '{}');
-  const pendingEod = JSON.parse(properties.getProperty('EOD_PENDING') || '{}');
-  const folder = folder_();
-  const files = folder.getFiles();
-  const snapPattern = /^(\d{4}-\d{2}-\d{2})_snapshot_\d{6}_(complete|partial)\.json\.gz$/;
-  let pruned = 0;
-  let scanned = 0;
-
-  while (files.hasNext() && scanned < 400 && pruned < 150) {
-    const file = files.next();
-    scanned++;
-    const name = file.getName();
-    const match = snapPattern.exec(name);
-    if (!match) continue;
-    const fileDay = match[1];
-    // Only prune raw 1-minute snapshots strictly older than cutoffDay that are not pending EOD reconciliation
-    if (fileDay < cutoffDay && !pendingEod[fileDay] && (completedEod[fileDay] || fileDay < cutoffDay)) {
-      try {
-        file.setTrashed(true);
-        pruned++;
-      } catch (e) {}
+function savePendingEod_(pending) {
+  const properties = props_();
+  const all = properties.getProperties();
+  Object.keys(all).forEach(key => {
+    const match = /^EOD_PENDING_DAY_(\d{4}-\d{2}-\d{2})$/.exec(key);
+    if (match && !Object.prototype.hasOwnProperty.call(pending, match[1])) {
+      properties.deleteProperty(key);
     }
-  }
-
-  properties.setProperty('LAST_SNAPSHOT_PRUNE_DAY', today);
-  return { pruned: pruned, scanned: scanned, cutoff_day: cutoffDay };
+  });
+  Object.keys(pending).forEach(day => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !pending[day]) return;
+    properties.setProperty(EOD_PENDING_PREFIX_ + day, String(pending[day]));
+  });
+  properties.deleteProperty('EOD_PENDING');
 }
 
 function api_(path, params) {
@@ -215,7 +274,8 @@ function api_(path, params) {
         'User-Agent': 'VolatilityLab/20.0 (read-only market-data client)'
       },
       muteHttpExceptions: true,
-      followRedirects: false
+      followRedirects: false,
+      timeoutSeconds: 15
     });
     const statusCode = response.getResponseCode();
     if (statusCode === 200) {
@@ -264,7 +324,8 @@ function apiAll_(requests) {
           'User-Agent': 'VolatilityLab/20.0 (read-only market-data client)'
         },
         muteHttpExceptions: true,
-        followRedirects: false
+        followRedirects: false,
+        timeoutSeconds: 60
       };
     });
     const responses = UrlFetchApp.fetchAll(payloads);
@@ -284,7 +345,11 @@ function apiAll_(requests) {
       return { label: req.label, path: req.path, params: req.params, error: 'Broker HTTP ' + statusCode };
     });
   }
+  const fallbackStarted = Date.now();
   return requests.map(req => {
+    if (Date.now() - fallbackStarted >= 60000) {
+      return { label: req.label, path: req.path, params: req.params, error: 'API fallback time budget exhausted' };
+    }
     try {
       const data = api_(req.path, req.params);
       return { label: req.label, path: req.path, params: req.params, data: data };
@@ -305,19 +370,19 @@ function save_(name, value) {
 function catalogue_(now) {
   const properties = props_();
   const today = day_(now);
-  const cached = properties.getProperty('CATALOGUE');
+  const cached = readJsonProperty_(properties, 'CATALOGUE', null);
   if (cached) {
-    const parsed = JSON.parse(cached);
+    const parsed = cached;
     if (parsed.day === today) {
       return parsed;
     }
   }
   const response = UrlFetchApp.fetch(
     'https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz',
-    { muteHttpExceptions: true, followRedirects: false }
+    { muteHttpExceptions: true, followRedirects: false, timeoutSeconds: 30 }
   );
   if (response.getResponseCode() !== 200) {
-    if (cached) return JSON.parse(cached);
+    if (cached) return cached;
     throw new Error('Instrument master unavailable');
   }
   const master = JSON.parse(Utilities.ungzip(response.getBlob()).getDataAsString());
@@ -391,8 +456,8 @@ function marketWindow_(dateObj) {
     return { closed: true, special: false, label: 'Weekend' };
   }
 
-  let calendar = JSON.parse(properties.getProperty('MARKET_CALENDAR') || 'null');
-  const todayStr = day_(new Date());
+  let calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
+  const todayStr = targetDay;
   if (!calendar || calendar.checked !== todayStr) {
     try {
       const response = UrlFetchApp.fetch('https://api.upstox.com/v2/market/holidays', {
@@ -401,7 +466,8 @@ function marketWindow_(dateObj) {
           Authorization: 'Bearer ' + properties.getProperty('UPSTOX_TOKEN')
         },
         muteHttpExceptions: true,
-        followRedirects: false
+        followRedirects: false,
+        timeoutSeconds: 8
       });
       if (response.getResponseCode() === 200) {
         const body = JSON.parse(response.getContentText());
@@ -424,7 +490,11 @@ function marketWindow_(dateObj) {
     } catch (err) {}
   }
 
-  if (calendar && Array.isArray(calendar.closed) && calendar.closed.includes(targetDay)) {
+  if (!calendar || !Array.isArray(calendar.closed)) {
+    return { closed: true, special: false, label: 'Market calendar unavailable' };
+  }
+
+  if (calendar.closed.includes(targetDay)) {
     return { closed: true, special: false, label: 'Trading Holiday' };
   }
 
@@ -443,10 +513,14 @@ function marketClosed_(now) {
   const properties = props_();
   const today = day_(now);
   const year = today.slice(0, 4);
-  if (SPECIAL_SESSIONS[today]) {
+  let customSpecial = {};
+  try {
+    customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
+  } catch (e) {}
+  if (customSpecial[today] || SPECIAL_SESSIONS[today]) {
     return false;
   }
-  let calendar = JSON.parse(properties.getProperty('MARKET_CALENDAR') || 'null');
+  let calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
   if (!calendar || calendar.checked !== today) {
     try {
       const response = UrlFetchApp.fetch('https://api.upstox.com/v2/market/holidays', {
@@ -455,7 +529,8 @@ function marketClosed_(now) {
           Authorization: 'Bearer ' + properties.getProperty('UPSTOX_TOKEN')
         },
         muteHttpExceptions: true,
-        followRedirects: false
+        followRedirects: false,
+        timeoutSeconds: 8
       });
       if (response.getResponseCode() !== 200) {
         throw new Error('Calendar unavailable');
@@ -484,6 +559,9 @@ function marketClosed_(now) {
       }
     }
   }
+  if (!calendar || !Array.isArray(calendar.closed)) {
+    throw new Error('Market calendar unavailable; retry next trigger');
+  }
   return calendar.closed.includes(today);
 }
 
@@ -507,6 +585,10 @@ function capture_(mode, recovery) {
   };
 
   try {
+    if (mode === 'snapshot') {
+      if (marketClosed_(now)) throw new Error('NFO session is closed');
+      report.nfo_session_validated = true;
+    }
     const catalogue = recovery ? recovery.catalogue : catalogue_(now);
     report.catalogue = catalogue;
     const targetDay = recovery ? recovery.target_day : today;
@@ -550,43 +632,47 @@ function capture_(mode, recovery) {
 
     const responses = apiAll_(requests);
     for (const res of responses) {
-      if (Date.now() - started > 240000) {
+      if (Date.now() - started > CAPTURE_SAFE_DEADLINE_MS) {
         report.errors.push({ item: res.label, reason: 'Runtime budget exhausted' });
         continue;
       }
 
       let data = res.data;
       if (res.error) {
-        if (res.error === 'Broker HTTP 401' || res.error === 'Broker HTTP 403') {
+        if (res.error === 'Broker HTTP 401' || res.error === 'Broker HTTP 403' || res.error === 'API fallback time budget exhausted') {
           report.errors.push({ item: res.label, reason: res.error });
+          continue;
+        }
+        // api_ can spend up to about 31 seconds retrying.  Do not start a
+        // fallback retry late in the run and risk Apps Script's 6-minute cap.
+        if (Date.now() - started > CAPTURE_SAFE_DEADLINE_MS - 35000) {
+          report.errors.push({ item: res.label, reason: 'Retry budget exhausted' });
           continue;
         }
         try {
           data = api_(res.path, res.params);
         } catch (retryErr) {
-          if (res.path && res.path.indexOf('/v3/historical-candle/') === 0 && res.path.indexOf('/days/1/') !== -1) {
-            try {
-              const v2Path = res.path.replace('/v3/historical-candle/', '/v2/historical-candle/').replace('/days/1/', '/day/');
-              data = api_(v2Path, res.params);
-            } catch (v2Err) {
-              report.errors.push({ item: res.label, reason: safeError_(retryErr) });
-              continue;
-            }
-          } else {
-            report.errors.push({ item: res.label, reason: safeError_(retryErr) });
-            continue;
-          }
+          report.errors.push({ item: res.label, reason: safeError_(retryErr) });
+          continue;
         }
       }
 
       try {
         if (res.label === 'quotes') {
+          if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            throw new Error('Invalid quote response');
+          }
           const returnedTokens = new Set(Object.values(data).map(q => q.instrument_token));
           if (keys.some(k => !returnedTokens.has(k))) {
             throw new Error('Incomplete quote response');
           }
-        } else if (res.path === '/v2/option/chain' && data.some(r => r.expiry !== res.params.expiry_date)) {
-          throw new Error('Wrong option expiry');
+        } else if (res.path === '/v2/option/chain') {
+          if (!Array.isArray(data) || !data.length) {
+            throw new Error('Invalid option-chain response');
+          }
+          if (data.some(r => !r || r.expiry !== res.params.expiry_date || !Number.isFinite(Number(r.underlying_spot_price)) || Number(r.underlying_spot_price) <= 0)) {
+            throw new Error('Wrong option expiry');
+          }
         }
 
         report.records.push({
@@ -612,9 +698,25 @@ function capture_(mode, recovery) {
   }
 
   report.fetch_seconds = (Date.now() - started) / 1000;
+  // Session gates use the completed capture time; per-instrument event times
+  // remain separate and are validated before entry or MTM.
+  report.retrieved_at = new Date().toISOString();
 
-  if (mode === 'snapshot' && report.records && report.records.length) {
-    try { evaluateForwardTest_(report); } catch (fwdErr) { console.log('Forward test warning: ' + fwdErr); }
+  if (mode === 'snapshot' && report.status !== 'complete') {
+    // A partial capture may omit an expiry, a leg, or the index quote.  It is
+    // retained for diagnostics but cannot create or mark a forward-test trade.
+    report.forward_test_status = 'withheld_incomplete_snapshot';
+  } else if (mode === 'snapshot' && report.records && report.records.length) {
+    try {
+      const forwardLedger = evaluateForwardTest_(report);
+      if (!forwardLedger) throw new Error('Forward evaluator returned no ledger');
+      report.forward_test_status = 'complete';
+    } catch (fwdErr) {
+      report.forward_test_status = 'failed';
+      report.errors.push({ item: 'forward_test', reason: safeError_(fwdErr) });
+      report.status = 'partial';
+      console.log('Forward test failed; snapshot marked partial: ' + safeError_(fwdErr));
+    }
   }
 
   const fileName = (report.target_day || today) + '_' + mode + '_' + Utilities.formatDate(now, CONFIG.timeZone, 'HHmmss') + '_' + report.status;
@@ -635,19 +737,18 @@ function capture_(mode, recovery) {
   }));
 
   if (mode === 'eod') {
-    const pending = JSON.parse(properties.getProperty('EOD_PENDING') || '{}');
+    const pending = loadPendingEod_();
     const target = report.target_day || today;
     if (report.status === 'complete') {
       delete pending[target];
-      let completedMap = JSON.parse(properties.getProperty('COMPLETED_EOD_DAYS') || '{}');
+      let completedMap = readJsonProperty_(properties, 'COMPLETED_EOD_DAYS', {});
       completedMap[target] = fileId;
       completedMap = capCompletedEodDays_(completedMap, CONFIG.completedEodMaxDays);
       properties.setProperty('COMPLETED_EOD_DAYS', JSON.stringify(completedMap));
-      try { pruneOldMinuteSnapshots_(CONFIG.snapshotRetentionDays); } catch (pruneErr) {}
     } else if (report.catalogue) {
       pending[target] = fileId;
     }
-    properties.setProperty('EOD_PENDING', JSON.stringify(pending));
+    savePendingEod_(pending);
   }
 
   if (report.status === 'complete' && !recovery) {
@@ -728,7 +829,7 @@ function installIntradaySchedule() {
   folder_();
 
   ScriptApp.getProjectTriggers()
-    .filter(t => t.getHandlerFunction() === 'scheduledCapture' || t.getHandlerFunction() === 'weeklyCleanup')
+    .filter(t => ['scheduledCapture', 'scheduledWatchdog', 'weeklyCleanup'].includes(t.getHandlerFunction()))
     .forEach(t => ScriptApp.deleteTrigger(t));
 
   ScriptApp.newTrigger('scheduledCapture')
@@ -736,10 +837,39 @@ function installIntradaySchedule() {
     .everyMinutes(1)
     .create();
 
+  ScriptApp.newTrigger('scheduledWatchdog')
+    .timeBased()
+    .everyHours(1)
+    .create();
+
   properties.setProperty('INTERVAL_MINUTES', '1');
   properties.setProperty('SCHEDULE_MODE', 'intraday');
 
-  console.log('Enabled: one-minute snapshots, weekdays 09:15-15:31 IST; EOD retries 18:00-22:00 IST; 7-day raw snapshot pruning.');
+  console.log('Enabled: one-minute snapshots, weekdays 09:15-15:31 IST; EOD retries 18:00-22:00 IST; raw snapshots retained indefinitely; watchdog enabled.');
+}
+
+/**
+ * Re-create a deleted minute trigger and surface stale capture state.  It is a
+ * best-effort recovery mechanism; upstream platform and market-data outages are
+ * still reported rather than fabricated as successful data.
+ */
+function scheduledWatchdog() {
+  const properties = props_();
+  if (properties.getProperty('SCHEDULE_MODE') !== 'intraday') return;
+  const handlers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+  if (!handlers.includes('scheduledCapture')) {
+    ScriptApp.newTrigger('scheduledCapture').timeBased().everyMinutes(1).create();
+    properties.setProperty('COLLECTOR_STATUS', 'recovered missing scheduledCapture trigger ' + new Date().toISOString());
+  }
+  const last = readJsonProperty_(properties, 'LAST_SNAPSHOT', null);
+  const now = new Date();
+  if (!last || !last.day || last.day !== day_(now)) return;
+  const at = Number(properties.getProperty('LAST_SNAPSHOT_AT_MS') || 0);
+  const session = marketWindow_(now);
+  if (at > 0 && !session.closed && minute_(now) >= session.startMins && minute_(now) <= session.endMins
+      && now.getTime() - at > 3 * 60000) {
+    properties.setProperty('COLLECTOR_STATUS', 'stale snapshot health alert ' + new Date().toISOString());
+  }
 }
 
 /**
@@ -759,9 +889,15 @@ function scheduledCapture() {
     return;
   }
 
+  let customSpecial = {};
+  try {
+    customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
+  } catch (e) {}
+  const sp = customSpecial[today] || SPECIAL_SESSIONS[today];
+
   // Skip weekends (Saturday=6, Sunday=7) before any reconciliation or capture (unless special session)
   if (weekday > 5) {
-    if (!SPECIAL_SESSIONS[today]) return;
+    if (!sp) return;
   }
 
   // Pre-market reconciliation & 7-day snapshot pruning window: 07:00 - 09:00 IST (minutes 420 to 540)
@@ -770,7 +906,6 @@ function scheduledCapture() {
     return;
   }
 
-  const sp = SPECIAL_SESSIONS[today];
   const snapStart = sp ? sp.startMins : CONFIG.regularStartMins; // 555 (09:15 IST)
   const snapEnd = sp ? sp.endMins : CONFIG.regularEndMins;       // 931 (15:31 IST)
   const eodStart = sp ? sp.eodStartMins : CONFIG.eodStartMins;   // 1080 (18:00 IST)
@@ -789,25 +924,35 @@ function scheduledCapture() {
     return;
   }
 
+  let budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now());
+  if (budget.ms >= 75 * 60000) {
+    properties.setProperty('RUNTIME_BUDGET', JSON.stringify(budget));
+    properties.setProperty('COLLECTOR_STATUS', 'Rolling 24-hour runtime safety limit reached. ' + today);
+    return;
+  }
+
+  const started = Date.now();
   let closed;
   try {
     closed = marketClosed_(now);
   } catch (err) {
+    addRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now() - started);
     throw err;
   }
 
-  // Skip PropertiesService writes on closed holidays if status is already recorded for today
+  // Avoid capture work and status writes on known closed holidays.
   if (closed) {
+    addRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now() - started);
     return;
   }
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(100)) {
+    properties.setProperty('COLLECTOR_STATUS', 'capture overlap; retrying next minute ' + new Date().toISOString());
+    addRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now() - started);
     return;
   }
 
-  const started = Date.now();
-  let attempted = false;
   let failureMessage = null;
 
   try {
@@ -817,6 +962,22 @@ function scheduledCapture() {
       properties.setProperty('INTERVAL_MINUTES', '1');
     }
     const slot = today + '|' + Math.floor((mins - snapStart) / interval);
+
+    if (mode === 'snapshot') {
+      const previousSlot = String(properties.getProperty('LAST_SNAPSHOT_SLOT') || '');
+      const previousParts = previousSlot.split('|');
+      const currentSlotNumber = Number(slot.split('|')[1]);
+      const previousSlotNumber = Number(previousParts[1]);
+      if (previousParts[0] !== today) {
+        properties.deleteProperty('SNAPSHOT_GAP');
+        properties.deleteProperty('SNAPSHOT_GAP_DAY');
+      }
+      if (previousParts[0] === today && Number.isFinite(previousSlotNumber)
+          && Number.isFinite(currentSlotNumber) && currentSlotNumber > previousSlotNumber + 1) {
+        properties.setProperty('SNAPSHOT_GAP', previousSlot + ' to ' + slot + ' detected ' + new Date().toISOString());
+        properties.setProperty('SNAPSHOT_GAP_DAY', today);
+      }
+    }
 
     if (mode === 'snapshot' && properties.getProperty('LAST_SNAPSHOT_SLOT') === slot) {
       return;
@@ -830,23 +991,20 @@ function scheduledCapture() {
       }
     }
 
-    let budget = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
-    if (budget.day !== today) {
-      budget = { day: today, ms: 0 };
-    }
+    budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now());
     if (budget.ms >= 75 * 60000) {
-      const message = 'Daily runtime safety limit reached.';
+      const message = 'Rolling 24-hour runtime safety limit reached.';
       properties.setProperty('COLLECTOR_STATUS', message + ' ' + today);
       return;
     }
 
-    attempted = true;
     properties.setProperty('ATTEMPT_' + mode, String(now.getTime()));
 
     const result = capture_(mode);
 
     if (mode === 'snapshot' && result.status === 'complete') {
       properties.setProperty('LAST_SNAPSHOT_SLOT', slot);
+      properties.setProperty('LAST_SNAPSHOT_AT_MS', String(Date.now()));
       if (result.file_id) {
         properties.setProperty('LATEST_SNAPSHOT_FILE_ID', result.file_id);
       }
@@ -869,21 +1027,16 @@ function scheduledCapture() {
     properties.setProperty('COLLECTOR_STATUS', 'failed ' + mode + ' ' + new Date().toISOString() + ' · ' + message);
     throw err;
   } finally {
-    if (attempted) {
-      let b = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
-      if (b.day !== today) {
-        b = { day: today, ms: 0 };
-      }
-      b.ms += Date.now() - started;
-      properties.setProperty('RUNTIME_BUDGET', JSON.stringify(b));
-    }
+    const ended = Date.now();
+    const b = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', ended);
+    b.ms += ended - started;
+    properties.setProperty('RUNTIME_BUDGET', JSON.stringify(b));
     lock.releaseLock();
   }
 }
 
 /**
- * Reconcile prior session partial EOD captures and run 7-day rolling minute-snapshot pruning
- * between 07:00 and 09:00 IST.
+ * Reconcile prior-session partial EOD captures between 07:00 and 09:00 IST.
  */
 function reconcilePriorSession() {
   const properties = props_();
@@ -899,21 +1052,23 @@ function reconcilePriorSession() {
   let attempted = false;
 
   try {
-    // Run daily 7-day rolling retention pruning of consolidated 1-minute snapshots
+    // Deliberately a no-op: raw minute archives are retained indefinitely.
+    attempted = true;
     try { pruneOldMinuteSnapshots_(CONFIG.snapshotRetentionDays); } catch (pruneErr) {}
+    if (Date.now() - started > 60000) return;
 
-    let pending = JSON.parse(properties.getProperty('EOD_PENDING') || '{}');
+    let pending = loadPendingEod_();
     let completedMap = capCompletedEodDays_(
-      JSON.parse(properties.getProperty('COMPLETED_EOD_DAYS') || '{}'),
+      readJsonProperty_(properties, 'COMPLETED_EOD_DAYS', {}),
       CONFIG.completedEodMaxDays
     );
 
     if (!properties.getProperty('RECONCILIATION_MIGRATED')) {
-      const last = JSON.parse(properties.getProperty('LAST_EOD') || 'null');
+      const last = readJsonProperty_(properties, 'LAST_EOD', null);
       if (last && last.status !== 'complete' && last.file_id) {
         pending[last.day] = last.file_id;
       }
-      properties.setProperty('EOD_PENDING', JSON.stringify(pending));
+      savePendingEod_(pending);
       properties.setProperty('RECONCILIATION_MIGRATED', '1');
     }
 
@@ -927,14 +1082,8 @@ function reconcilePriorSession() {
       return;
     }
 
-    let budget = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
-    if (budget.day !== today) {
-      budget = { day: today, ms: 0 };
-    }
-    let reconciliationBudget = JSON.parse(properties.getProperty('RECONCILIATION_BUDGET') || '{}');
-    if (reconciliationBudget.day !== today) {
-      reconciliationBudget = { day: today, ms: 0 };
-    }
+    let budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', now.getTime());
+    let reconciliationBudget = readRuntimeBudget_(properties, 'RECONCILIATION_BUDGET', now.getTime());
 
     if (budget.ms >= 55 * 60000 || reconciliationBudget.ms >= 8 * 60000) {
       return;
@@ -950,6 +1099,7 @@ function reconcilePriorSession() {
     if (!oldReport.catalogue || oldReport.mode !== 'eod') {
       throw new Error('Invalid reconciliation archive');
     }
+    if (Date.now() - started > 60000) return;
 
     const result = capture_('eod', { target_day: targetDay, catalogue: oldReport.catalogue });
     if (result.status === 'complete') {
@@ -965,11 +1115,9 @@ function reconcilePriorSession() {
   } finally {
     if (attempted) {
       for (const key of ['RUNTIME_BUDGET', 'RECONCILIATION_BUDGET']) {
-        let b = JSON.parse(properties.getProperty(key) || '{}');
-        if (b.day !== today) {
-          b = { day: today, ms: 0 };
-        }
-        b.ms += Date.now() - started;
+        const ended = Date.now();
+        const b = readRuntimeBudget_(properties, key, ended);
+        b.ms += ended - started;
         properties.setProperty(key, JSON.stringify(b));
       }
     }
@@ -988,8 +1136,8 @@ function auditStatus() {
     snapshot_retention_days: CONFIG.snapshotRetentionDays,
     completed_eod_cap_days: CONFIG.completedEodMaxDays,
     status: properties.getProperty('COLLECTOR_STATUS'),
-    last_snapshot: JSON.parse(properties.getProperty('LAST_SNAPSHOT') || 'null'),
-    last_eod: JSON.parse(properties.getProperty('LAST_EOD') || 'null')
+    last_snapshot: readJsonProperty_(properties, 'LAST_SNAPSHOT', null),
+    last_eod: readJsonProperty_(properties, 'LAST_EOD', null)
   }));
 }
 
@@ -1029,7 +1177,10 @@ function doGet(e) {
         regular_window_ist: '09:15-15:31',
         triggers: triggers,
         calendar: properties.getProperty('MARKET_CALENDAR'),
-        budget: properties.getProperty('RUNTIME_BUDGET')
+        budget: properties.getProperty('RUNTIME_BUDGET'),
+        last_snapshot_at_ms: properties.getProperty('LAST_SNAPSHOT_AT_MS'),
+        snapshot_gap: properties.getProperty('SNAPSHOT_GAP'),
+        raw_snapshot_retention: 'indefinite'
       });
       if (cache) {
         try { cache.put('DOGET_STATUS_JSON', statusJson, CONFIG.doGetCacheSeconds); } catch (e) {}
@@ -1037,7 +1188,7 @@ function doGet(e) {
       return ContentService.createTextOutput(statusJson).setMimeType(ContentService.MimeType.JSON);
     }
 
-    if (action === 'forward_ledger' || action === 'ledger') {
+    if (action === 'forward_ledger') {
       if (cache) {
         const cachedLedger = cache.get('DOGET_FWD_LEDGER_JSON');
         if (cachedLedger) {
@@ -1070,22 +1221,13 @@ function doGet(e) {
     }
 
     if (!file) {
-      const folder = folder_();
-      const files = folder.getFiles();
-      let latestTime = 0;
-      let count = 0;
-      while (files.hasNext() && count < 60) {
-        const f = files.next();
-        count++;
-        const name = f.getName();
-        if (name.endsWith('_complete.json.gz')) {
-          const time = f.getLastUpdated().getTime();
-          if (time > latestTime) {
-            latestTime = time;
-            file = f;
-          }
-        }
-      }
+      // A lost file-id must not make recovery dependent on Drive's arbitrary
+      // iterator order or a small prefix of an indefinitely retained archive.
+      const page = listDriveFilesPage_(folder_().getId(), '', 'modifiedTime desc');
+      const latest = (page.files || []).find(f =>
+        /^\d{4}-\d{2}-\d{2}_snapshot_\d{6}_complete\.json\.gz$/.test(f.name)
+      );
+      if (latest && latest.id) file = DriveApp.getFileById(latest.id);
     }
 
     if (!file) {
@@ -1095,6 +1237,21 @@ function doGet(e) {
 
     const uncompressed = Utilities.ungzip(file.getBlob());
     const payload = JSON.parse(uncompressed.getDataAsString());
+    if (payload.schema !== 1 || payload.provider !== 'Upstox' || payload.mode !== 'snapshot'
+        || payload.status !== 'complete' || payload.nfo_session_validated !== true
+        || !Array.isArray(payload.records) || !payload.records.length) {
+      throw new Error('Latest archived snapshot is incomplete or invalid');
+    }
+    const capturedAt = timestampMillis_(payload.retrieved_at);
+    payload.capture_integrity = {
+      status: properties.getProperty('COLLECTOR_STATUS'),
+      captured_at: payload.retrieved_at || null,
+      age_seconds: Number.isFinite(capturedAt) ? Math.max(0, (Date.now() - capturedAt) / 1000) : null,
+      snapshot_gap: properties.getProperty('SNAPSHOT_GAP_DAY') === String(payload.day || '').slice(0, 10)
+        ? (properties.getProperty('SNAPSHOT_GAP') || 'Detected snapshot gap')
+        : null,
+      raw_snapshot_retention: 'indefinite'
+    };
     try { payload.forward_test_ledger = loadForwardLedger_(); } catch (fwdErr) {}
     const outStr = JSON.stringify(payload);
     if (cache && outStr.length < 95000) {
@@ -1112,7 +1269,7 @@ function doGet(e) {
 // v20.0 AUTOMATED 24/7 CLOUD FORWARD TESTING ENGINE (BLACK-76 PARITY FORWARD)
 // ============================================================================
 const STRATEGY_CAPITAL_PER_LOT = {
-  NIFTY: { S1: 28037, S2: 37590, S3: 28037, S4: 56074, S5: 28037, S6: 56074 },
+  NIFTY: { S1: 28037, S2: 56074, S3: 28037, S4: 56074, S5: 28037, S6: 56074 },
   BANKNIFTY: { S1: 26570, S2: 46718, S3: 26570, S4: 53140, S5: 26570, S6: 53140 }
 };
 
@@ -1129,11 +1286,12 @@ function upstoxOptionCharge_(price, qty, isSell) {
   const turnover = Math.abs(Number(price || 0) * Number(qty || 0));
   const brokerage = 20.0;
   const stt = isSell ? turnover * 0.0015 : 0.0;
-  const exch = turnover * 0.0003503;
+  // NSE equity-options transaction charge plus IPFT effective 2026-03-01.
+  const exch = turnover * 0.0003553;
   const sebi = turnover * 0.000001;
   const ipft = turnover * 0.000005;
   const stamp = isSell ? 0.0 : turnover * 0.00003;
-  const gst = 0.18 * (brokerage + exch + sebi + ipft);
+  const gst = 0.18 * (brokerage + exch + ipft);
   return brokerage + stt + exch + sebi + ipft + stamp + gst;
 }
 
@@ -1208,6 +1366,60 @@ function buildStrategyLegs_(sym, K, stratCode) {
 }
 
 const MIN_FORWARD_DATE = '2026-11-11';
+const MAX_FORWARD_QUOTE_AGE_MS = 120000;
+
+function timestampMillis_(timestamp) {
+  if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
+    return timestamp > 1e11 ? timestamp : timestamp * 1000;
+  }
+  const value = String(timestamp || '').trim();
+  if (/^\d{13}$/.test(value)) return Number(value);
+  if (/^\d{10}$/.test(value)) return Number(value) * 1000;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function forwardQuoteTimestamp_(marketData) {
+  if (!marketData || typeof marketData !== 'object') return null;
+  for (const key of ['quote_timestamp', 'feed_timestamp', 'currentTs', 'ts']) {
+    if (marketData[key] !== undefined && marketData[key] !== null) return marketData[key];
+  }
+  return null;
+}
+
+function forwardIvPercent_(value) {
+  const iv = Number(value);
+  if (!Number.isFinite(iv) || iv <= 0 || iv > 500) return NaN;
+  if (iv <= 1) return iv * 100;
+  if (iv < 5) return NaN; // Unit cannot be inferred safely in this interval.
+  return iv;
+}
+
+function forwardQuoteFresh_(timestamp, referenceTimestamp) {
+  const observed = timestampMillis_(timestamp);
+  const reference = referenceTimestamp === undefined ? Date.now() : timestampMillis_(referenceTimestamp);
+  if (!Number.isFinite(observed) || !Number.isFinite(reference)) return false;
+  const age = reference - observed;
+  return age >= -30000 && age <= MAX_FORWARD_QUOTE_AGE_MS;
+}
+
+function executableQuote_(node, type, side, quantity, isExit, referenceTimestamp) {
+  if (!node) return 0;
+  const prefix = type === 'CE' ? 'c' : 'p';
+  if (!forwardQuoteFresh_(node[prefix + 'QuoteAt'], referenceTimestamp)) return 0;
+  const bid = Number(node[prefix + 'Bid'] || 0);
+  const ask = Number(node[prefix + 'Ask'] || 0);
+  const bidQty = Number(node[prefix + 'BidQty'] || 0);
+  const askQty = Number(node[prefix + 'AskQty'] || 0);
+  if (![bid, ask, bidQty, askQty].every(Number.isFinite)) return 0;
+  if (!(bid > 0 && ask >= bid && ask > 0)) return 0;
+  const buy = isExit ? Number(side) < 0 : Number(side) > 0;
+  const depth = buy ? askQty : bidQty;
+  if (!Number.isFinite(depth) || depth < quantity) return 0;
+  return buy ? ask : bid;
+}
+
+const FORWARD_SESSION_WINDOWS_ = {};
 
 function getNseMarketStatusIST(nowOpt) {
   const d = nowOpt instanceof Date ? nowOpt : (nowOpt ? new Date(nowOpt) : new Date());
@@ -1215,32 +1427,69 @@ function getNseMarketStatusIST(nowOpt) {
   const mins = minute_(d);
   const hmLabel = Utilities.formatDate(d, CONFIG.timeZone, 'HH:mm');
   const timeIstLabel = Utilities.formatDate(d, CONFIG.timeZone, 'dd MMM HH:mm') + ' IST';
-  if (SPECIAL_SESSIONS[isoDay]) {
-    const sp = SPECIAL_SESSIONS[isoDay];
-    const openSp = mins >= sp.startMins && mins <= sp.endMins;
-    return { open: openSp, isOpen: openSp, isoDay: isoDay, mins: mins, hmLabel: hmLabel, timeIstLabel: timeIstLabel };
+  let session = FORWARD_SESSION_WINDOWS_[isoDay];
+  if (!session || session.label === 'Market calendar unavailable') {
+    session = marketWindow_(d);
+    FORWARD_SESSION_WINDOWS_[isoDay] = session;
   }
-  const dow = Number(Utilities.formatDate(d, CONFIG.timeZone, 'u'));
-  const isWeekend = dow >= 6;
-  const closedToday = (isoDay === '2026-11-10') || isWeekend;
-  const inHours = mins >= CONFIG.regularStartMins && mins <= CONFIG.regularEndMins;
-  const isOpen = !closedToday && inHours;
-  return { open: isOpen, isOpen: isOpen, isoDay: isoDay, mins: mins, hmLabel: hmLabel, timeIstLabel: timeIstLabel };
+  const isOpen = !session.closed && mins >= session.startMins && mins <= session.endMins;
+  return {
+    open: isOpen, isOpen: isOpen, isoDay: isoDay, mins: mins,
+    hmLabel: hmLabel, timeIstLabel: timeIstLabel,
+    reason: isOpen ? (session.label || 'OPEN') : (session.label || 'CLOSED')
+  };
 }
 
 function isValidForwardRecord_(rec) {
   if (!rec || typeof rec !== 'object') return false;
   const sDate = String(rec.session_date || rec.date || '').slice(0, 10);
-  if (!sDate || sDate < MIN_FORWARD_DATE) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(sDate) || sDate < MIN_FORWARD_DATE) return false;
   const trig = String(rec.triggerTime || rec.trigTime || rec.entryTime || '');
-  if (trig.indexOf('2026-11-0') === 0 || /^0[1-9]\s+Nov/i.test(trig)) return false;
-  return true;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(trig) && !/(Z|[+-]\d{2}:\d{2})$/i.test(trig)) return false;
+  const parsed = timestampMillis_(trig);
+  let triggerDate = '';
+  let triggerMins = NaN;
+  if (Number.isFinite(parsed)) {
+    const date = new Date(parsed);
+    triggerDate = day_(date);
+    triggerMins = minute_(date);
+  } else {
+    const hm = trig.match(/(?:^|\D)(\d{1,2}):(\d{2})(?:\s*IST)?\b/i);
+    if (!hm) return false;
+    triggerDate = sDate;
+    triggerMins = Number(hm[1]) * 60 + Number(hm[2]);
+    const monthDay = trig.match(/\b(\d{1,2})\s+([A-Za-z]{3})\b/i);
+    if (monthDay) {
+      const parsedDay = new Date(Date.parse(monthDay[1] + ' ' + monthDay[2] + ' ' + sDate.slice(0, 4) + ' 00:00:00 UTC'));
+      if (!Number.isFinite(parsedDay.getTime()) || day_(parsedDay) !== sDate) return false;
+    }
+  }
+  return triggerDate === sDate && triggerMins >= 560 && triggerMins < 915;
+}
+
+function inScopeForwardRecord_(rec) {
+  const sDate = String((rec && (rec.session_date || rec.date)) || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(sDate) && sDate >= MIN_FORWARD_DATE;
+}
+
+function retainForwardRecords_(items, isOpenPosition) {
+  if (!Array.isArray(items)) return [];
+  return items.filter(inScopeForwardRecord_).map(item => {
+    const saved = JSON.parse(JSON.stringify(item));
+    if (!isValidForwardRecord_(saved)) {
+      saved.integrity_status = 'UNVERIFIED_RECORD';
+      saved.freshness = 'STALE';
+      saved.staleReason = 'Forward record lacks a verifiable in-session trigger timestamp; automatic marking and exit are withheld.';
+      if (isOpenPosition) saved.manual_reconciliation_required = true;
+    }
+    return saved;
+  });
 }
 
 function cleanSlateForwardLedger_() {
   return {
-    schema: 1,
-    version: 'forward-test-v19.1-clean',
+    schema: 2,
+    version: 'forward-test-v20.1-event-time-gated',
     pricing_model: 'Black-76',
     inception_date: MIN_FORWARD_DATE,
     min_trigger_date: MIN_FORWARD_DATE,
@@ -1255,15 +1504,17 @@ function cleanSlateForwardLedger_() {
 function sanitizeForwardLedger_(raw) {
   const base = cleanSlateForwardLedger_();
   if (!raw || typeof raw !== 'object') return base;
-  base.open_positions = Array.isArray(raw.open_positions) ? raw.open_positions.filter(isValidForwardRecord_) : [];
-  base.closed_trades = Array.isArray(raw.closed_trades) ? raw.closed_trades.filter(isValidForwardRecord_) : [];
+  base.open_positions = retainForwardRecords_(raw.open_positions, true);
+  base.closed_trades = retainForwardRecords_(raw.closed_trades, false);
   base.intraday_mtm_series = Array.isArray(raw.intraday_mtm_series)
     ? raw.intraday_mtm_series.filter(pt => pt && String(pt.session_date || pt.date || MIN_FORWARD_DATE).slice(0, 10) >= MIN_FORWARD_DATE)
     : [];
   if (raw.updated_at) base.updated_at = raw.updated_at;
-  base.status = (base.open_positions.length || base.closed_trades.length)
-    ? (raw.status || 'ACTIVE_FORWARD_TESTING')
-    : 'ARMED_WAITING_FOR_NEXT_SESSION';
+  base.status = base.open_positions.some(pos => pos.manual_reconciliation_required)
+    ? 'INTEGRITY_REVIEW_REQUIRED'
+    : ((base.open_positions.length || base.closed_trades.length)
+      ? (raw.status || 'ACTIVE_FORWARD_TESTING')
+      : 'ARMED_WAITING_FOR_NEXT_SESSION');
   return base;
 }
 
@@ -1325,16 +1576,38 @@ function saveForwardLedger_(ledger) {
   return file.getId();
 }
 
+function forwardRiskMetrics_(report, sym, snapshotDay) {
+  const all = report && report.risk_metrics;
+  const item = all && all[sym];
+  if (!item || typeof item !== 'object') return { hv10: NaN, hv30: NaN, item: null };
+  const asOf = String(item.as_of || '').slice(0, 10);
+  const asOfMs = Date.parse(asOf + 'T00:00:00Z');
+  const sessionMs = Date.parse(snapshotDay + 'T00:00:00Z');
+  const ageDays = (sessionMs - asOfMs) / 86400000;
+  if (!Number.isFinite(ageDays) || ageDays < 0 || ageDays > 5) {
+    return { hv10: NaN, hv30: NaN, item: null };
+  }
+  return {
+    hv10: forwardIvPercent_(item.hv10),
+    hv30: forwardIvPercent_(item.hv30),
+    item: item
+  };
+}
+
 /**
  * Evaluates all active expiries against S1–S6 during capture_('snapshot'),
  * using Black-76 Put-Call Parity Forward F = K + exp(r*T)*(C - P) and
  * strictly enforcing MIN_FORWARD_DATE = '2026-11-11' AND live market hours (09:15-15:31 IST).
  */
 function evaluateForwardTest_(report) {
-  if (!report || !Array.isArray(report.records) || !report.records.length) return null;
+  if (!report || !Array.isArray(report.records)) return null;
+  if (report.status !== 'complete') throw new Error('Forward test requires a complete snapshot');
+  if (report.nfo_session_validated !== true) throw new Error('NFO trading session was not validated');
   const snapDate = report.retrieved_at ? new Date(report.retrieved_at) : new Date();
+  if (!Number.isFinite(snapDate.getTime())) throw new Error('Invalid snapshot timestamp');
   const mkt = getNseMarketStatusIST(snapDate);
   const snapshotDay = String(report.day || mkt.isoDay).slice(0, 10);
+  if (snapshotDay !== mkt.isoDay) throw new Error('Snapshot day does not match its timestamp');
   const mins = mkt.mins;
   const timeIstLabel = mkt.timeIstLabel;
   const hmLabel = mkt.hmLabel;
@@ -1342,6 +1615,30 @@ function evaluateForwardTest_(report) {
   const ledger = loadForwardLedger_();
 
   if (snapshotDay < MIN_FORWARD_DATE || !mkt.open) {
+    report.forward_test_ledger = ledger;
+    return ledger;
+  }
+
+  if (!report.records.length) {
+    ledger.open_positions.forEach(pos => {
+      pos.freshness = 'STALE';
+      pos.staleReason = 'No live option-chain records in snapshot';
+      if (mins >= 915) pos.exit_pending = true;
+    });
+    ledger.intraday_mtm_series = (Array.isArray(ledger.intraday_mtm_series) ? ledger.intraday_mtm_series : [])
+      .filter(point => !(String(point.session_date || point.date || '').slice(0, 10) === snapshotDay && String(point.t || '') === hmLabel));
+    ledger.intraday_mtm_series.push({
+      session_date: snapshotDay,
+      t: hmLabel,
+      time_ist: timeIstLabel,
+      gross_mtm: null,
+      net_mtm: null,
+      open_count: ledger.open_positions.length,
+      closed_count: ledger.closed_trades.filter(trade => String(trade.session_date || trade.date || '').slice(0, 10) === snapshotDay).length,
+      integrity_status: 'WITHHELD_NO_LIVE_OPTION_CHAIN'
+    });
+    ledger.updated_at = snapDate.toISOString();
+    saveForwardLedger_(ledger);
     report.forward_test_ledger = ledger;
     return ledger;
   }
@@ -1358,13 +1655,30 @@ function evaluateForwardTest_(report) {
       const cg = (row.call_options && row.call_options.option_greeks) || {};
       const pg = (row.put_options && row.put_options.option_greeks) || {};
       strikes[k] = {
-        cLtp: Number(cm.ltp || cm.close_price || 0),
-        pLtp: Number(pm.ltp || pm.close_price || 0),
-        cIv: Number(cg.iv || 0),
-        pIv: Number(pg.iv || 0)
+        cLtp: Number(cm.ltp || 0),
+        pLtp: Number(pm.ltp || 0),
+        cBid: Number(cm.bid_price || 0),
+        cAsk: Number(cm.ask_price || 0),
+        cBidQty: Number(cm.bid_qty || 0),
+        cAskQty: Number(cm.ask_qty || 0),
+        pBid: Number(pm.bid_price || 0),
+        pAsk: Number(pm.ask_price || 0),
+        pBidQty: Number(pm.bid_qty || 0),
+        pAskQty: Number(pm.ask_qty || 0),
+        cIv: forwardIvPercent_(cg.iv),
+        pIv: forwardIvPercent_(pg.iv),
+        cQuoteAt: forwardQuoteTimestamp_(cm),
+        pQuoteAt: forwardQuoteTimestamp_(pm)
       };
     });
-    chainMap[rec.label] = { spot: spot, strikes: strikes };
+    const recTime = rec.retrieved_at || null;
+    chainMap[rec.label] = {
+      spot: spot,
+      strikes: strikes,
+      retrievedAt: recTime,
+      mkt: recTime ? getNseMarketStatusIST(new Date(recTime)) : null,
+      fresh: Boolean(recTime) && forwardQuoteFresh_(recTime)
+    };
   });
 
   const existingKeys = new Set(
@@ -1380,61 +1694,88 @@ function evaluateForwardTest_(report) {
       const parts = key.split('|');
       const sym = parts[0], exp = parts[1];
       const ch = chainMap[key];
-      if (!ch || !ch.spot) return;
+      const chainMkt = ch && ch.mkt;
+      if (!ch || !Number.isFinite(ch.spot) || ch.spot <= 0 || !ch.fresh || !chainMkt
+          || chainMkt.isoDay !== snapshotDay || !chainMkt.open
+          || chainMkt.mins < 560 || chainMkt.mins >= 915) return;
       const step = sym === 'NIFTY' ? 50 : 100;
       const lotQty = sym === 'NIFTY' ? 65 : 30;
       const K = Math.round(ch.spot / step) * step;
       const atmNode = ch.strikes[K];
-      if (!atmNode || !atmNode.cIv || !atmNode.pIv) return;
+      if (!atmNode || !(Number.isFinite(atmNode.cIv) && atmNode.cIv > 0)
+          || !(Number.isFinite(atmNode.pIv) && atmNode.pIv > 0)
+          || !forwardQuoteFresh_(atmNode.cQuoteAt, ch.retrievedAt)
+          || !forwardQuoteFresh_(atmNode.pQuoteAt, ch.retrievedAt)) return;
 
-      const dte = Math.max(1, Math.round((Date.parse(exp + 'T15:30:00+05:30') - snapDate.getTime()) / 86400000));
-      const years = dte / 365.0;
+      const expiryMs = Date.parse(exp + 'T15:30:00+05:30');
+      const secondsToExpiry = (expiryMs - new Date(ch.retrievedAt).getTime()) / 1000.0;
+      if (!Number.isFinite(secondsToExpiry) || secondsToExpiry <= 0) return;
+      const dte = Math.ceil(secondsToExpiry / 86400.0);
+      const years = secondsToExpiry / (365.0 * 86400.0);
       const iv = Number((0.5 * (atmNode.cIv + atmNode.pIv)).toFixed(2));
-      const hv10 = sym === 'NIFTY' ? 14.82 : 17.70;
-      const hv30 = sym === 'NIFTY' ? 14.45 : 15.76;
-      const vrp30 = Number((iv - hv30).toFixed(2));
-      const vrp10 = Number((iv - hv10).toFixed(2));
+      const riskMetrics = forwardRiskMetrics_(report, sym, snapshotDay);
+      const hv10 = riskMetrics.hv10;
+      const hv30 = riskMetrics.hv30;
+      const hv10Valid = Number.isFinite(hv10) && hv10 > 0;
+      const hv30Valid = Number.isFinite(hv30) && hv30 > 0;
+      const vrp30 = hv30Valid ? Number((iv - hv30).toFixed(2)) : NaN;
+      const vrp10 = hv10Valid ? Number((iv - hv10).toFixed(2)) : NaN;
       const wShort = sym === 'NIFTY' ? 200 : 400;
-      const p25Node = ch.strikes[K - wShort] || atmNode;
-      const c25Node = ch.strikes[K + wShort] || atmNode;
-      const rev25 = Number(((p25Node.pIv || iv) - (c25Node.cIv || iv)).toFixed(2));
-      const bfly25 = Number((0.5 * ((p25Node.pIv || iv) + (c25Node.cIv || iv)) - iv).toFixed(2));
-      // Black-76 Put-Call Parity Implied Forward F = K + exp(r * T) * (C - P)
-      const syn = Number((K + Math.exp(CONFIG.riskFreeRate * years) * (atmNode.cLtp - atmNode.pLtp)).toFixed(2));
-      const basis = Number((syn - ch.spot).toFixed(1));
+      const p25Node = ch.strikes[K - wShort];
+      const c25Node = ch.strikes[K + wShort];
+      const wingsFresh = Boolean(p25Node && c25Node
+        && Number.isFinite(p25Node.pIv) && p25Node.pIv > 0
+        && Number.isFinite(c25Node.cIv) && c25Node.cIv > 0
+        && forwardQuoteFresh_(p25Node.pQuoteAt, ch.retrievedAt)
+        && forwardQuoteFresh_(c25Node.cQuoteAt, ch.retrievedAt));
+      const rev25 = wingsFresh ? Number((p25Node.pIv - c25Node.cIv).toFixed(2)) : NaN;
+      const bfly25 = wingsFresh ? Number((0.5 * (p25Node.pIv + c25Node.cIv) - iv).toFixed(2)) : NaN;
+      const metricsItem = riskMetrics.item;
+      const basisExpiry = metricsItem ? String(metricsItem.forward_basis_expiry || '').slice(0, 10) : '';
+      const basisTime = metricsItem ? metricsItem.forward_basis_timestamp : null;
+      const basis = metricsItem && basisExpiry === exp && forwardQuoteFresh_(basisTime, ch.retrievedAt)
+        ? Number(metricsItem.forward_basis) : NaN;
+      const basisValid = Number.isFinite(basis);
 
       const trigs = [
-        ['S1', vrp30 >= 1.50 && hv30 <= 16.5 && dte >= 2 && dte <= 35, 'IV ' + iv + '% · HV30 ' + hv30 + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp'],
-        ['S2', vrp30 <= -0.25 || iv < hv10, 'IV ' + iv + '% · HV10 ' + hv10 + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp'],
-        ['S3', iv >= 15.2 && vrp30 >= 1.0 && dte <= 22, 'ATM IV ' + iv + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp · DTE ' + dte + 'd'],
-        ['S4', rev25 >= 1.50 && dte >= 5, 'RR25 ' + (rev25 >= 0 ? '+' : '') + rev25 + ' pp · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp'],
-        ['S5', vrp10 >= 0.80 && dte <= 16, 'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp · HV10 ' + hv10 + '% · DTE ' + dte + 'd'],
-        ['S6', Math.abs(basis) >= (sym === 'NIFTY' ? 10.0 : 35.0) || Math.abs(bfly25) >= 0.25, 'Basis ' + (basis >= 0 ? '+' : '') + basis + ' pts · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp']
+        ['S1', hv30Valid && vrp30 >= 1.50 && hv30 <= 16.5 && dte >= 2 && dte <= 35, hv30Valid ? 'IV ' + iv + '% · HV30 ' + hv30 + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp' : 'HV30 unavailable'],
+        ['S2', hv10Valid && hv30Valid && (vrp30 <= -0.25 || iv < hv10), hv10Valid && hv30Valid ? 'IV ' + iv + '% · HV10 ' + hv10 + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp' : 'IV/HV inputs unavailable'],
+        ['S3', hv30Valid && iv >= 15.2 && vrp30 >= 1.0 && dte <= 22, hv30Valid ? 'ATM IV ' + iv + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp · DTE ' + dte + 'd' : 'HV30 unavailable'],
+        ['S4', wingsFresh && rev25 >= 1.50 && dte >= 5, wingsFresh ? 'RR25 ' + (rev25 >= 0 ? '+' : '') + rev25 + ' pp · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp' : '25-delta wing IV unavailable'],
+        ['S5', hv10Valid && vrp10 >= 0.80 && dte <= 16, hv10Valid ? 'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp · HV10 ' + hv10 + '% · DTE ' + dte + 'd' : 'HV10 unavailable'],
+        ['S6', (basisValid && Math.abs(basis) >= (sym === 'NIFTY' ? 10.0 : 35.0)) || (wingsFresh && Math.abs(bfly25) >= 0.25), basisValid ? 'Forward basis ' + (basis >= 0 ? '+' : '') + basis + ' pts · BF25 ' + (Number.isFinite(bfly25) ? (bfly25 >= 0 ? '+' : '') + bfly25 : 'unavailable') + ' pp' : (wingsFresh ? 'BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp' : 'Validated forward basis and wing IV unavailable')]
       ];
 
       trigs.forEach(item => {
         const sCode = item[0], isTrig = item[1], metricsTxt = item[2];
         if (!isTrig || existingKeys.has(sym + '|' + exp + '|' + sCode)) return;
         const legs = buildStrategyLegs_(sym, K, sCode);
+        let invalidQuote = false;
         legs.forEach(l => {
-          const node = ch.strikes[l.strike] || atmNode;
-          const px = Number((l.type === 'CE' ? node.cLtp : node.pLtp) || 25.0);
+          const node = ch.strikes[l.strike];
+          const px = executableQuote_(node, l.type, l.side, lotQty * Number(l.mult || 1), false, ch.retrievedAt);
+          if (!(Number.isFinite(px) && px > 0)) {
+            invalidQuote = true;
+            return;
+          }
           l.entryPx = Number(px.toFixed(2));
           l.curPx = Number(px.toFixed(2));
         });
+        if (invalidQuote) return;
         const cap = (STRATEGY_CAPITAL_PER_LOT[sym] || STRATEGY_CAPITAL_PER_LOT.NIFTY)[sCode];
         const credPts = Math.max(15.0, legs.reduce((acc, l) => acc + (-l.side) * l.mult * l.entryPx, 0));
-        const maxCr = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty * 0.65) : Math.round(credPts * lotQty);
-        const maxLoss = sCode === 'S2' ? Math.round((atmNode.cLtp + atmNode.pLtp) * lotQty) : Math.round((sym === 'NIFTY' ? 120 : 300) * lotQty);
+        const debitInr = Math.round(legs.reduce((acc, l) => acc + l.entryPx * lotQty * l.mult, 0));
+        const maxCr = sCode === 'S2' ? Math.round(debitInr * 0.65) : Math.round(credPts * lotQty);
+        const maxLoss = sCode === 'S2' ? debitInr : Math.round((sym === 'NIFTY' ? 120 : 300) * lotQty);
         const chg = positionCharges_(legs, sym, true);
 
         ledger.open_positions.push({
           id: 'OPEN-' + snapshotDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + exp.replace(/-/g, '').slice(4) + '-' + sCode,
           date: snapshotDay,
           session_date: snapshotDay,
-          triggerTime: snapshotDay + 'T' + hmLabel + ':00+05:30',
-          trigTime: timeIstLabel,
-          markedAt: timeIstLabel,
+          triggerTime: snapshotDay + 'T' + chainMkt.hmLabel + ':00+05:30',
+          trigTime: chainMkt.timeIstLabel,
+          markedAt: chainMkt.timeIstLabel,
           sym: sym,
           exp: exp,
           kind: dte <= 10 ? 'Weekly' : 'Monthly',
@@ -1460,36 +1801,58 @@ function evaluateForwardTest_(report) {
 
   const stillOpen = [];
   ledger.open_positions.forEach(pos => {
+    if (!isValidForwardRecord_(pos)) {
+      pos.freshness = 'STALE';
+      pos.integrity_status = 'UNVERIFIED_RECORD';
+      pos.manual_reconciliation_required = true;
+      pos.staleReason = 'Forward record lacks a verifiable in-session trigger timestamp; automatic marking and exit are withheld.';
+      stillOpen.push(pos);
+      return;
+    }
     const key = pos.sym + '|' + pos.exp;
     const ch = chainMap[key];
+    const positionMkt = ch && ch.mkt ? ch.mkt : mkt;
     const lotQty = pos.sym === 'NIFTY' ? 65 : 30;
-    if (ch && ch.strikes) {
-      let gross = 0.0;
-      (pos.legs || []).forEach(l => {
-        const node = ch.strikes[l.strike];
-        const fld = l.type === 'CE' ? 'cLtp' : 'pLtp';
-        if (node && node[fld] > 0) {
-          l.curPx = Number(node[fld].toFixed(2));
-        }
-        const curPx = Number(l.curPx !== undefined ? l.curPx : l.entryPx);
-        const ePx = Number(l.entryPx || 0);
-        const qty = lotQty * Number(l.mult || 1);
-        gross += (Number(l.side) < 0 ? (ePx - curPx) : (curPx - ePx)) * qty;
-      });
-      pos.grossMtm = Number(gross.toFixed(2));
-      pos.estCharges = positionCharges_(pos.legs, pos.sym, true);
-      pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
-      pos.markedAt = timeIstLabel;
+    const legs = Array.isArray(pos.legs) ? pos.legs : [];
+    let allLegsFresh = Boolean(ch && ch.fresh && legs.length);
+    let gross = 0.0;
+    legs.forEach(l => {
+      const node = ch && ch.strikes ? ch.strikes[l.strike] : null;
+      const qty = lotQty * Number(l.mult || 1);
+      const px = executableQuote_(node, l.type, l.side, qty, true, ch && ch.retrievedAt);
+      if (!(Number.isFinite(px) && px > 0)) {
+        allLegsFresh = false;
+        return;
+      }
+      l.curPx = Number(px.toFixed(2));
+      const ePx = Number(l.entryPx || 0);
+      gross += (Number(l.side) < 0 ? (ePx - px) : (px - ePx)) * qty;
+    });
+
+    if (!allLegsFresh) {
+      pos.freshness = 'STALE';
+      pos.staleReason = !ch || !ch.fresh ? 'Missing or stale option-chain timestamp' : 'Missing or insufficient executable bid/ask depth';
+      if (positionMkt.mins >= 915 || pos.exit_pending) pos.exit_pending = true;
+      stillOpen.push(pos);
+      return;
     }
+
+    pos.freshness = 'FRESH';
+    delete pos.staleReason;
+    pos.integrity_status = 'VALIDATED_FRESH_EXECUTABLE_MARK';
+    pos.grossMtm = Number(gross.toFixed(2));
+    pos.estCharges = positionCharges_(pos.legs, pos.sym, true);
+    pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
+    pos.markedAt = positionMkt.timeIstLabel;
 
     const slThresh = -0.50 * Number(pos.maxLoss || 9000);
     const tpThresh = pos.strat === 'S2' ? 0.30 * Number(pos.maxLoss || 37590) : 0.50 * Number(pos.maxCredit || 12000);
-    const isIntradayExit = mins >= 915;
+    const isIntradayExit = positionMkt.mins >= 915 || Boolean(pos.exit_pending);
 
     if (pos.grossMtm <= slThresh || pos.grossMtm >= tpThresh || isIntradayExit) {
       const reason = pos.grossMtm <= slThresh
         ? 'Stop-Loss Hit (-50% MaxLoss)'
-        : (pos.grossMtm >= tpThresh ? 'Profit Target Hit (+50% Cr)' : '15:15 IST Auto-Close');
+        : (pos.grossMtm >= tpThresh ? 'Profit Target Hit (+50% Cr)' : (pos.exit_pending ? '15:15 IST Auto-Close (delayed until fresh quote)' : '15:15 IST Auto-Close (fresh quote)'));
       (pos.legs || []).forEach(l => { l.exitPx = l.curPx; });
       ledger.closed_trades.unshift({
         id: String(pos.id || '').replace('OPEN-', 'FWD-'),
@@ -1497,7 +1860,7 @@ function evaluateForwardTest_(report) {
         session_date: pos.session_date || pos.date || snapshotDay,
         triggerTime: pos.triggerTime || (snapshotDay + 'T09:20:00+05:30'),
         entryTime: pos.trigTime || '09:20 IST',
-        exitTime: hmLabel + ' IST',
+        exitTime: positionMkt.hmLabel + ' IST',
         sym: pos.sym,
         exp: pos.exp,
         kind: pos.kind || 'Weekly',
@@ -1521,7 +1884,45 @@ function evaluateForwardTest_(report) {
     }
   });
   ledger.open_positions = stillOpen;
-  ledger.status = stillOpen.length ? 'ACTIVE_LIVE_SESSION' : (ledger.closed_trades.length ? 'SESSION_COMPLETED_1515_IST' : 'ARMED_WAITING_FOR_NEXT_SESSION');
+  // Do not carry a prior aggregate MTM forward across a missing or
+  // unverified position mark.  The series explicitly withholds the point so
+  // display consumers cannot mistake an old total for a current valuation.
+  const sessionClosed = ledger.closed_trades.filter(trade =>
+    String(trade.session_date || trade.date || '').slice(0, 10) === snapshotDay
+  );
+  const marksWithheld = stillOpen.some(pos =>
+    String(pos.freshness || '').toUpperCase() !== 'FRESH'
+    || String(pos.integrity_status || '') === 'UNVERIFIED_RECORD'
+    || Boolean(pos.manual_reconciliation_required)
+  );
+  const mtmPoint = {
+    session_date: snapshotDay,
+    t: hmLabel,
+    time_ist: timeIstLabel,
+    open_count: stillOpen.length,
+    closed_count: sessionClosed.length
+  };
+  if (marksWithheld) {
+    mtmPoint.gross_mtm = null;
+    mtmPoint.net_mtm = null;
+    mtmPoint.integrity_status = 'WITHHELD_STALE_OR_UNVERIFIED_POSITION';
+  } else {
+    mtmPoint.gross_mtm = Number((
+      stillOpen.reduce((sum, pos) => sum + Number(pos.grossMtm || 0), 0)
+      + sessionClosed.reduce((sum, trade) => sum + Number(trade.gross || 0), 0)
+    ).toFixed(2));
+    mtmPoint.net_mtm = Number((
+      stillOpen.reduce((sum, pos) => sum + Number(pos.netMtm || 0), 0)
+      + sessionClosed.reduce((sum, trade) => sum + Number(trade.net || 0), 0)
+    ).toFixed(2));
+    mtmPoint.integrity_status = 'VALIDATED_FRESH_EXECUTABLE_MARKS';
+  }
+  ledger.intraday_mtm_series = (Array.isArray(ledger.intraday_mtm_series) ? ledger.intraday_mtm_series : [])
+    .filter(point => !(String(point.session_date || point.date || '').slice(0, 10) === snapshotDay && String(point.t || '') === hmLabel));
+  ledger.intraday_mtm_series.push(mtmPoint);
+  ledger.status = stillOpen.some(pos => pos.manual_reconciliation_required)
+    ? 'INTEGRITY_REVIEW_REQUIRED'
+    : (stillOpen.length ? 'ACTIVE_LIVE_SESSION' : (ledger.closed_trades.length ? 'SESSION_COMPLETED_1515_IST' : 'ARMED_WAITING_FOR_NEXT_SESSION'));
 
   saveForwardLedger_(ledger);
   report.forward_test_ledger = ledger;

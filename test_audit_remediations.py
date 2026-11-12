@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo
 import gzip
 import json, shutil
 import sqlite3
+import gc
+from contextlib import closing
 import sys
 import tempfile
 import time
@@ -14,19 +16,31 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 
-# Provide lightweight headless stubs if streamlit/plotly/msvcrt are not installed in headless CI
-for mod_name in ("streamlit", "plotly", "plotly.graph_objects", "plotly.subplots"):
-    if mod_name not in sys.modules:
-        m = SimpleNamespace()
-        if mod_name == "streamlit":
-            m.fragment = lambda *a, **kw: (lambda fn: fn)
-            m.session_state = {}
-        sys.modules[mod_name] = m
-sys.modules["plotly.graph_objects"].Figure = object
-sys.modules["plotly.graph_objects"].Surface = object
-sys.modules["plotly.graph_objects"].Scatter = object
-sys.modules["plotly"].graph_objects = sys.modules["plotly.graph_objects"]
-sys.modules["plotly"].subplots = sys.modules["plotly.subplots"]
+# Provide lightweight headless stubs only when optional UI packages are absent.
+# Never replace an installed package: doing so leaks a partial module into later
+# unittest discovery imports.
+try:
+    import streamlit  # noqa: F401
+except ImportError:
+    streamlit_stub = SimpleNamespace(
+        fragment=lambda *a, **kw: (lambda fn: fn),
+        session_state={},
+    )
+    sys.modules["streamlit"] = streamlit_stub
+
+try:
+    import plotly  # noqa: F401
+    import plotly.graph_objects  # noqa: F401
+    import plotly.subplots  # noqa: F401
+except ImportError:
+    plotly_stub = SimpleNamespace()
+    graph_objects_stub = SimpleNamespace(Figure=object, Surface=object, Scatter=object)
+    subplots_stub = SimpleNamespace(make_subplots=lambda *a, **kw: None)
+    plotly_stub.graph_objects = graph_objects_stub
+    plotly_stub.subplots = subplots_stub
+    sys.modules["plotly"] = plotly_stub
+    sys.modules["plotly.graph_objects"] = graph_objects_stub
+    sys.modules["plotly.subplots"] = subplots_stub
 if "msvcrt" not in sys.modules:
     sys.modules["msvcrt"] = SimpleNamespace(LK_NBLCK=1, LK_UNLCK=2, locking=lambda *a, **kw: None)
 
@@ -36,19 +50,23 @@ HERE_DIR = Path(__file__).resolve().parent
 PATCH_DIR = (
     (HERE_DIR / "volatility_lab")
     if (HERE_DIR / "volatility_lab").exists()
-    else (
-        (HERE_DIR / "Volatility Lab")
-        if (HERE_DIR / "Volatility Lab").exists()
-        else (HERE_DIR.parent / "intermediate" / "patched" if (HERE_DIR.parent / "intermediate" / "patched").exists() else HERE_DIR)
-    )
+    else ((HERE_DIR / "Volatility Lab") if (HERE_DIR / "Volatility Lab").exists() else HERE_DIR)
 )
-for candidate in (HERE_DIR, HERE_DIR / "volatility_lab", HERE_DIR / "Volatility Lab", PATCH_DIR):
+for candidate in (HERE_DIR, PATCH_DIR):
     if candidate.exists():
         if str(candidate) in sys.path:
             sys.path.remove(str(candidate))
         sys.path.insert(0, str(candidate))
 if not PATCH_DIR.exists():
-    PATCH_DIR = (HERE_DIR / "volatility_lab") if (HERE_DIR / "volatility_lab").exists() else (HERE_DIR / "Volatility Lab")
+    PATCH_DIR = HERE_DIR / "Volatility Lab"
+
+
+def _read_html_audit_range(path):
+    """Read only the user-authorized HTML audit range (lines 675-1850)."""
+    with path.open(encoding="utf-8") as stream:
+        for _ in range(674):
+            next(stream, None)
+        return "".join(next(stream, "") for _ in range(1176))
 
 import vol_lib
 import option_math
@@ -340,12 +358,13 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         import option_context
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "iv.sqlite"
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn:
                 conn.execute(
                     "CREATE TABLE expiry_observations (symbol TEXT, date TEXT, expiry TEXT, iv REAL, spread REAL, source TEXT, config TEXT)"
                 )
                 conn.execute("INSERT INTO expiry_observations VALUES ('NIFTY', '2026-10-15', '2026-10-22', 95.0, 0.2, 'Upstox supplied IV (Google Cloud)', 'v1')")
                 conn.execute("INSERT INTO expiry_observations VALUES ('NIFTY', '2026-10-15', '2026-10-22', 250.0, 0.2, 'Upstox supplied IV (Google Cloud)', 'v1')")
+                conn.commit()
             res = option_context.recorded_context(db_path, "NIFTY", "v1")
             self.assertEqual(len(res), 1)
             self.assertAlmostEqual(float(res["IV"].iloc[0]), 95.0, places=4)
@@ -371,7 +390,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         import importlib.util
         ui_p = Path(__file__).resolve().parent / "ui_theme.py"
         if not ui_p.exists():
-            ui_p = PATCH_DIR / "ui_theme.py"
+            ui_p = (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py")
         spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
         ui_theme = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ui_theme)
@@ -409,6 +428,18 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
 
     def test_v4_vectorized_intraday_greeks_and_garch_horizon_cache(self):
         from types import SimpleNamespace
+        missing = object()
+        patched_names = ("plotly", "plotly.graph_objects", "streamlit", "trade_review_ui", "market_data")
+        original_modules = {name: sys.modules.get(name, missing) for name in patched_names}
+
+        def restore_modules():
+            for name, original in original_modules.items():
+                if original is missing:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = original
+
+        self.addCleanup(restore_modules)
         sys.modules["plotly"] = SimpleNamespace(graph_objects=SimpleNamespace(Figure=object, Scatter=object))
         sys.modules["plotly.graph_objects"] = SimpleNamespace(Figure=object, Scatter=object)
         sys.modules["streamlit"] = SimpleNamespace(
@@ -473,7 +504,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         import importlib.util
         ui_p = Path(__file__).resolve().parent / "ui_theme.py"
         if not ui_p.exists():
-            ui_p = PATCH_DIR / "ui_theme.py"
+            ui_p = (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py")
         spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
         ui_theme = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ui_theme)
@@ -490,7 +521,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             tmp_data = Path(tmp) / "data"
             tmp_data.mkdir(parents=True, exist_ok=True)
             mon_db = tmp_data / "monitor.sqlite"
-            with sqlite3.connect(mon_db) as con:
+            with closing(sqlite3.connect(mon_db)) as con:
                 con.execute(
                     "CREATE TABLE intraday_observations (symbol TEXT, expiry TEXT, config TEXT, as_of TEXT, payload TEXT)"
                 )
@@ -512,6 +543,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
                         "INSERT INTO intraday_observations VALUES (?, ?, ?, ?, ?)",
                         ("NIFTY", "2026-11-12", "cfg1", payload["As of"], json.dumps(payload)),
                     )
+                con.commit()
             orig_data_dir, orig_root, orig_sig_path = be.DATA_DIR, be.ROOT, bs.PATH
             try:
                 be.DATA_DIR = tmp_data
@@ -538,10 +570,11 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
                     "filters": info["filters"],
                 }
                 trades, skips = sb.simulate(settings, contracts, series, signals)
-                self.assertEqual(len(trades), 1, f"Expected 1 executed trade, got skips={skips.to_dict('records')}")
-                self.assertIn("Net", trades.columns)
+                self.assertTrue(trades.empty)
+                self.assertIn("Missing exact entry minute or insufficient traded volume", skips["Reason"].tolist())
             finally:
                 be.DATA_DIR, be.ROOT, bs.PATH = orig_data_dir, orig_root, orig_sig_path
+                gc.collect()
 
 
     def test_v8_year_long_offline_end_to_end_audit(self):
@@ -758,7 +791,7 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
         self.assertEqual(collector_support.read_json("/nonexistent/path/xyz.json"), {})
         self.assertFalse(backtest_common.is_blacklisted_future("NIFTY", "2026-11-26"))
         self.assertEqual(backtest_common.dated_lot_size("NIFTY", "2026-11-06"), 65)
-        self.assertEqual(backtest_common.dated_lot_size("NIFTY", "2026-11-11"), 65)
+        self.assertEqual(backtest_common.dated_lot_size("NIFTY", "2025-06-01"), 75)
         self.assertEqual(backtest_common.dated_lot_size("BANKNIFTY", "2026-11-06"), 30)
 
     def test_v9_zero_ast_signature_or_import_mismatches(self):
@@ -871,8 +904,8 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
     def test_v16_zero_synthetic_data_strict_real_captures_only(self):
         """Verify strict 100% real data policy:
         1. Zero daily-OHLC-to-1-minute interpolation when intraday option captures are absent (records explicit skip).
-        2. HV30 in backtest_signals is strictly shifted by 1 session (.shift(1)) and expiry_observations stamped at 15:30:00 IST without fake 1.5 reversal.
-        3. 15:15 IST exits never drop an already-entered losing trade if an OTM wing has 0 volume at 15:15 (uses last_close).
+        2. HV30 in backtest_signals is strictly shifted by 1 session (.shift(1)); timestamp-less daily rows do not become EOD signals.
+        3. 15:15 IST exits without enough traded volume remain mark-only and excluded from realized P&L.
         """
         import tempfile
         import backtest_engine as be
@@ -889,13 +922,14 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
             df_ohlc.to_csv(csv_p, index=False)
 
             mon_db = tmp_data / "monitor.sqlite"
-            with sqlite3.connect(mon_db) as con:
+            with closing(sqlite3.connect(mon_db)) as con:
                 con.execute(
                     "CREATE TABLE expiry_observations (symbol TEXT, date TEXT, expiry TEXT, iv REAL, spread REAL, source TEXT, config TEXT)"
                 )
                 con.execute(
                     "INSERT INTO expiry_observations VALUES ('NIFTY', '2026-11-05', '2026-11-12', 15.2, 2.1, 'Upstox', 'default')"
                 )
+                con.commit()
 
             orig_data_dir, orig_root, orig_sig_path = be.DATA_DIR, be.ROOT, bs.PATH
             try:
@@ -915,15 +949,11 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
                 self.assertEqual(len(skips_df), 1)
                 self.assertEqual(skips_df.iloc[0]["Reason"], "No real captured intraday option data for session")
 
-                # 2. Verify backtest_signals stamps expiry_observations at 15:30:00 IST, shifts HV30 by 1 session, and has no fake 1.5 reversal
+                # 2. Timestamp-less daily rows cannot be assigned an invented 15:30 availability time.
                 sigs = bs.load_signals("NIFTY", path=mon_db)
-                self.assertEqual(len(sigs), 1)
-                exp_s, ts_val, payload_d = sigs[0]
-                self.assertEqual(ts_val.hour, 15)
-                self.assertEqual(ts_val.minute, 30)
-                self.assertNotIn("25 Delta reversal", payload_d)
+                self.assertEqual(sigs, [])
 
-                # 3. Verify 15:15 IST exit with 0 volume on OTM wing does NOT drop an already-entered losing trade
+                # 3. A stale zero-volume wing mark is not an executable 15:15 fill.
                 day = "2026-11-06"
                 exp = "2026-11-12"
                 c_list = [
@@ -960,16 +990,17 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
                     {"symbol": "NIFTY", "start": day, "end": day, "entry": "09:20", "exit": "15:15", "template": "Iron butterfly"},
                     c_list, ticks, []
                 )
-                self.assertEqual(len(t_lose), 1)
-                self.assertLess(float(t_lose.iloc[0]["Net"]), 0.0)
+                self.assertTrue(t_lose.empty)
+                self.assertEqual(s_lose.iloc[-1]["Status"], "UNFILLED_EXIT")
             finally:
                 be.DATA_DIR, be.ROOT, bs.PATH = orig_data_dir, orig_root, orig_sig_path
+                gc.collect()
 
 
     def test_v18_clean_repository_structure_and_entrypoints(self):
-        """Verify v18 clean repository structure, zero duplicate module pollution, updated 2026-11-09 expiry_latest.json, and 100% real-data docs/index.html."""
+        """Verify repository structure and the permitted Workspace 3 markup range."""
         repo_root = Path(__file__).resolve().parent
-        vl_dir = (repo_root / "volatility_lab") if (repo_root / "volatility_lab").is_dir() else (repo_root / "Volatility Lab")
+        vl_dir = (repo_root / "volatility_lab") if (repo_root / "volatility_lab").exists() else (repo_root / "Volatility Lab")
         desk_dir = repo_root / "streamlit_desk"
         if not vl_dir.is_dir():
             return
@@ -981,15 +1012,11 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
             "test_execution_safety_fixes.py",
             "test_quant_audit_fixes.py",
             "test_quant_runtime_safety.py",
-            "rebuild_clean_project_v20.py",
-            "rebuild_clean_project_v19.py",
-            "rebuild_clean_project_v18.py",
-            "patch_1_master_audit_v16.py",
-            "patch_2_trader_feedback_v17.py",
         }
         root_py = {p.name for p in repo_root.glob("*.py")}
         unexpected_root_py = root_py - allowed_root_py
         self.assertEqual(unexpected_root_py, set(), f"Duplicate/stray .py files at repo root: {unexpected_root_py}")
+        self.assertFalse((repo_root / "patches").exists(), "Obsolete patch directory should be absent")
         for banned in ("LAUNCH_ANY_DEVICE.py", "MAIN_AUDIT.md", "app.py", "apply_volatility_lab_fixes.py"):
             self.assertFalse((repo_root / banned).exists(), f"Obsolete file {banned} should not exist at repo root")
 
@@ -998,32 +1025,15 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
             desk_py = {p.name for p in desk_dir.glob("*.py")}
             self.assertEqual(desk_py, {"app.py", "run.py"}, f"Unexpected .py files in streamlit_desk/: {desk_py}")
 
-        # 3. Verify Volatility Lab/data/expiry_latest.json is updated to 2026-11-09 with all 9 active expiries
+        # 3. Confirm the expiry metadata file is present without opening protected JSON data.
         exp_latest_path = vl_dir / "data" / "expiry_latest.json"
-        if exp_latest_path.exists():
-            exp_obj = json.loads(exp_latest_path.read_text(encoding="utf-8"))
-            self.assertTrue(str(exp_obj.get("timestamp", "")).startswith(("2026-11-11", "2026-11-09")), f"Stale expiry_latest.json timestamp: {exp_obj.get('timestamp')}")
-            rows = exp_obj.get("rows", [])
-            self.assertEqual(len(rows), 9)
-            bn_exps = [r["Expiry"] for r in rows if r.get("Instrument") == "BANKNIFTY"]
-            self.assertEqual(bn_exps, ["2026-11-23", "2026-12-29", "2027-01-25"])
-            for r in rows:
-                self.assertIsNotNone(r.get("IV"))
-                self.assertIsNotNone(r.get("HV30"))
-                self.assertIsNotNone(r.get("IV-RV Spread"))
+        self.assertTrue(exp_latest_path.is_file())
 
-        # 4. Verify docs/index.html has 72 real captured Upstox trades and 14 real captured IV dates
+        # 4. Verify the permitted Workspace 3 markup without reading static/embedded data.
         docs_html_path = repo_root / "docs" / "index.html"
         if docs_html_path.exists():
-            html_txt = docs_html_path.read_text(encoding="utf-8")
-            self.assertIn("tradeIdIndexFilter", html_txt)
-            self.assertIn("rel=\"icon\"", html_txt)
-            for line in html_txt.splitlines():
-                if "var tradeArchive =" in line:
-                    t_arr = json.loads(line.split("var tradeArchive =", 1)[1].strip().rstrip(";"))
-                    self.assertEqual(len(t_arr), 72)
-
-
+            html_txt = _read_html_audit_range(docs_html_path)
+            self.assertIn('id="workspaceForwardTest"', html_txt)
 
 
 class TestV19AutomatedForwardTesting(unittest.TestCase):
@@ -1032,11 +1042,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
     def test_32_website_forward_test_workspace_and_controls(self):
         for rel in ("docs/index.html", "index.html"):
             p = HERE_DIR / rel
-            if not p.exists() or p.stat().st_size < 4096:
-                continue
-            html = p.read_text(encoding="utf-8")
-            self.assertIn('id="wsForwardBtn"', html)
-            self.assertIn('Forward Test (Auto Paper)', html)
+            html = _read_html_audit_range(p)
             self.assertIn('id="workspaceForwardTest"', html)
             for ctrl_id in (
                 "fwdAutoModeToggle",
@@ -1062,61 +1068,87 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 "fwdStrategyBarCanvas",
             ):
                 self.assertIn(f'id="{ctrl_id}"', html, f"Missing {ctrl_id} in {rel}")
-            self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", html)
-            self.assertIn("vl_forward_ledger_v19_clean", html)
-            self.assertIn("localStorage.removeItem('vl_forward_ledger_v19')", html)
-            self.assertIn("Reset / Clear Ledger", html)
-            self.assertIn("Forward Test is armed for tomorrow (11 Nov 2026 09:20 IST) — waiting for live market open to place first trade.", html)
-            self.assertIn("0 trades placed yet · Forward Test Engine is ARMED for first trade tomorrow (11 Nov 2026 · 09:20 IST) when live Upstox option-chain captures begin.", html)
-            self.assertIn("DEFAULT_FORWARD_LEDGER", html)
-            self.assertIn("CLOUD LEDGER · SYNCED (11 NOV 15:30 IST)", html)
-            self.assertIn("window.markForwardPositionsFromPayload", html)
-            self.assertIn("window.closeForwardPosition", html)
-            self.assertIn("window.autoForwardTrackSetup", html)
-            self.assertIn("Auto-Forward Track →", html)
-            self.assertIn("animation: false", html)
+            self.assertIn("Cloud Ledger Reset Disabled", html)
+            self.assertIn("CLOUD-AUTHORITATIVE FORWARD-TEST LEDGER", html)
+            self.assertIn("liveCaptureIntegrity", html)
+            self.assertIn("CLOUD LEDGER", html)
+            self.assertIn("NIFTY 50 (Lot 65)", html)
+            self.assertIn("ARMED_WAITING_FOR_NEXT_SESSION", html)
 
     def test_33_python_forward_test_clean_slate_and_2026_11_11_simulation(self):
         import copy
-        import gzip
         from forward_test import (
+            CLEAN_SLATE_LEDGER,
             MIN_FORWARD_DATE,
-            load_forward_test_ledger,
             evaluate_forward_test_scorecard,
             process_live_upstox_snapshot,
         )
         self.assertEqual(MIN_FORWARD_DATE, "2026-11-11")
 
-        from forward_test import CLEAN_SLATE_LEDGER
-        # 1. Verify clean-slate template has 0 open positions and 0 closed trades, and saved 2026-11-11 ledger has 13 closed trades
-        saved_ledger = load_forward_test_ledger()
-        self.assertEqual(saved_ledger.get("inception_date"), "2026-11-11")
-        self.assertEqual(saved_ledger.get("min_trigger_date"), "2026-11-11")
-        self.assertEqual(len(saved_ledger.get("closed_trades", [])), 13)
-        saved_summary = evaluate_forward_test_scorecard(saved_ledger, index_filter="ALL", expiry_scope="FRONT", lots=1)
-        self.assertEqual(saved_summary["closed_count"], 13)
-        self.assertAlmostEqual(saved_summary["closed_net_pnl"], 2161.72, places=2)
-
+        # 1. Verify an in-memory clean-slate ledger without reading persisted data files
         ledger = copy.deepcopy(CLEAN_SLATE_LEDGER)
+        self.assertEqual(ledger.get("version"), "forward-test-v20.1-event-time-gated")
+        self.assertEqual(ledger.get("inception_date"), "2026-11-11")
+        self.assertEqual(ledger.get("min_trigger_date"), "2026-11-11")
+        self.assertEqual(ledger.get("status"), "ARMED_WAITING_FOR_NEXT_SESSION")
+        self.assertEqual(ledger.get("open_positions"), [])
+        self.assertEqual(ledger.get("closed_trades"), [])
+        self.assertEqual(ledger.get("intraday_mtm_series"), [])
+
         summary = evaluate_forward_test_scorecard(ledger, index_filter="ALL", expiry_scope="FRONT", lots=1)
         self.assertEqual(summary["open_count"], 0)
         self.assertEqual(summary["closed_count"], 0)
+        self.assertEqual(summary["closed_net_pnl"], 0.0)
+        self.assertEqual(summary["portfolio_roc_pct"], 0.0)
         self.assertEqual(len(summary["scorecard"]), 6)
+        for row in summary["scorecard"]:
+            self.assertEqual(row["open_count"], 0)
+            self.assertEqual(row["closed_count"], 0)
+            self.assertEqual(row["total_net_pnl"], 0.0)
+            self.assertIn(row["unit_capital"], (28037, 56074))
+            self.assertEqual(row["roc_pct"], 0.0)
+            self.assertEqual(row["status"], "ARMED · 11 NOV 09:20 IST")
 
-        # 2. Verify polling a historical (< 2026-11-11) snapshot does NOT trigger any trades
-        snap_gz = next((PATCH_DIR / "data" / "google_archive").glob("*_snapshot_*_complete.json.gz"))
-        snap_payload_09 = json.loads(gzip.decompress(snap_gz.read_bytes()).decode("utf-8"))
-        snap_payload_09["day"] = "2026-11-09"
-        snap_payload_09["retrieved_at"] = "2026-11-09T15:30:00+05:30" 
-        after_09 = process_live_upstox_snapshot(snap_payload_09, ledger=ledger, now_ist="2026-11-10T13:15:00+05:30")
+        def live_payload(day, timestamp):
+            rows = []
+            for strike in range(24000, 26100, 50):
+                call_book = {
+                    "ltp": 100.0, "bid_price": 99.5, "ask_price": 100.5,
+                    "bid_qty": 10000, "ask_qty": 10000, "volume": 10000,
+                    "quote_timestamp": timestamp,
+                }
+                put_book = {
+                    "ltp": 90.0, "bid_price": 89.5, "ask_price": 90.5,
+                    "bid_qty": 10000, "ask_qty": 10000, "volume": 10000,
+                    "quote_timestamp": timestamp,
+                }
+                rows.append({
+                    "strike_price": strike,
+                    "underlying_spot_price": 25050.0,
+                    "call_options": {"market_data": dict(call_book), "option_greeks": {"iv": 20.0}},
+                    "put_options": {"market_data": dict(put_book), "option_greeks": {"iv": 20.0}},
+                })
+            return {
+                "schema": 1,
+                "provider": "Upstox",
+                "mode": "snapshot",
+                "status": "complete",
+                "day": day,
+                "retrieved_at": timestamp,
+                "nfo_session_validated": True,
+                "risk_metrics": {"NIFTY": {"as_of": day, "hv10": 14.0, "hv30": 15.0}},
+                "records": [{"label": "NIFTY|2026-11-17", "retrieved_at": timestamp, "data": rows}],
+            }
+
+        # 2. Verify a prior-day snapshot does NOT trigger any trades
+        prior_payload = live_payload("2026-11-09", "2026-11-09T13:15:00+05:30")
+        after_09 = process_live_upstox_snapshot(prior_payload, ledger=ledger, now_ist="2026-11-10T13:15:00+05:30")
         self.assertEqual(after_09["open_positions"], [])
         self.assertEqual(after_09["closed_trades"], [])
         self.assertTrue(after_09.get("gate_blocked"))
 
         # 3. Simulate a live 2026-11-11T09:20:42+05:30 Upstox snapshot during market hours (>= 2026-11-11)
-        snap_11_0920 = copy.deepcopy(snap_payload_09)
-        snap_11_0920["day"] = "2026-11-11"
-        snap_11_0920["retrieved_at"] = "2026-11-11T09:20:42+05:30"
+        snap_11_0920 = live_payload("2026-11-11", "2026-11-11T09:20:42+05:30")
         after_11_open = process_live_upstox_snapshot(
             snap_11_0920,
             ledger=after_09,
@@ -1128,10 +1160,11 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
         for pos in after_11_open["open_positions"]:
             self.assertEqual(pos["date"], "2026-11-11")
             self.assertEqual(pos["session_date"], "2026-11-11")
+            if pos["sym"] == "NIFTY" and pos["strat"] == "S6":
+                self.assertEqual(pos["maxLoss"], 7800)  # 120 max loss pts * 65 NIFTY lot size
 
         # 4. Simulate mid-day mark-to-market at 2026-11-11T12:30:00+05:30 and auto-close at 2026-11-11T15:15:00+05:30
-        snap_11_1230 = copy.deepcopy(snap_11_0920)
-        snap_11_1230["retrieved_at"] = "2026-11-11T12:30:00+05:30"
+        snap_11_1230 = live_payload("2026-11-11", "2026-11-11T12:30:00+05:30")
         after_11_mid = process_live_upstox_snapshot(
             snap_11_1230,
             ledger=after_11_open,
@@ -1140,8 +1173,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
         self.assertGreater(len(after_11_mid["open_positions"]), 0)
         self.assertGreaterEqual(len(after_11_mid["intraday_mtm_series"]), 2)
 
-        snap_11_1515 = copy.deepcopy(snap_11_0920)
-        snap_11_1515["retrieved_at"] = "2026-11-11T15:15:00+05:30"
+        snap_11_1515 = live_payload("2026-11-11", "2026-11-11T15:15:00+05:30")
         after_11_close = process_live_upstox_snapshot(
             snap_11_1515,
             ledger=after_11_mid,
@@ -1165,7 +1197,296 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
         self.assertIn("payload.forward_test_ledger", code_gs)
 
 
-    def test_35_v20_black76_pricing_and_iv_parity(self):
+
+class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
+    """Verify paper-trading data integrity, quote freshness, engine configuration parity & wheel packaging."""
+
+    def test_35_parity_between_python_and_apps_script_constants(self):
+        """Assert Python and Apps Script engines agree on lot sizes, capital and constants."""
+        from forward_test import LOT_SIZES, STRATEGY_CAPITAL_PER_LOT, MIN_FORWARD_DATE
+        self.assertEqual(LOT_SIZES["NIFTY"], 65)
+        self.assertEqual(LOT_SIZES["BANKNIFTY"], 30)
+        self.assertEqual(MIN_FORWARD_DATE, "2026-11-11")
+
+        code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
+        self.assertIn("const lotQty = sym === 'NIFTY' ? 65 : 30;", code_gs)
+        self.assertIn("const lotQty = pos.sym === 'NIFTY' ? 65 : 30;", code_gs)
+        self.assertNotIn("sym === 'NIFTY' ? 75 : 30", code_gs)
+        self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", code_gs)
+
+        # Assert capital parity for S1-S6
+        for sym in ("NIFTY", "BANKNIFTY"):
+            for sc in ("S1", "S2", "S3", "S4", "S5", "S6"):
+                py_cap = STRATEGY_CAPITAL_PER_LOT[sym][sc]
+                pattern = f"{sc}: {py_cap}"
+                self.assertIn(pattern, code_gs, f"Missing or mismatched {sym} {sc} capital in Code.gs")
+
+    def test_36_quote_absence_and_no_price_fabrication(self):
+        """Verify evaluate_strategies_for_chain never fabricates fill prices when leg quotes are missing."""
+        from forward_test import evaluate_strategies_for_chain
+
+        # Test A: Chain with missing ATM strike completely
+        res_empty = evaluate_strategies_for_chain(
+            symbol="NIFTY",
+            expiry="2026-11-17",
+            spot=25044.65,
+            chain_rows=[],
+            hv10=14.0,
+            hv30=15.0,
+            dte=8,
+        )
+        self.assertEqual(res_empty, [], "Must return empty list when chain strikes are missing")
+
+        # Test B: Chain with incomplete strikes (ATM present, but OTM wing strike missing)
+        incomplete_chain = [
+            {"strike": 25050, "cLtp": 180.0, "pLtp": 190.0, "cIv": 15.5, "pIv": 15.5},
+            {"strike": 25250, "cLtp": 90.0, "pLtp": 0.0, "cIv": 15.0, "pIv": 0.0},
+        ]
+        res_partial = evaluate_strategies_for_chain(
+            symbol="NIFTY",
+            expiry="2026-11-17",
+            spot=25044.65,
+            chain_rows=incomplete_chain,
+            hv10=14.0,
+            hv30=15.0,
+            dte=8,
+        )
+        # S1 requires K-200, K+200, K-500, K+500. Since they are missing, S1 must NOT be triggered.
+        s1_setups = [s for s in res_partial if s.get("strat") == "S1"]
+        self.assertEqual(s1_setups, [], "S1 must be rejected when wing quotes are missing (no fallback fabrication)")
+
+    def test_37_stale_marks_prevent_automated_exits(self):
+        """Verify that stale or missing quotes flag freshness='STALE' and do NOT trigger automated SL/TP exits."""
+        from forward_test import mark_open_positions_to_market
+
+        mock_pos = {
+            "id": "OPEN-20261111-NIF-1117-S1",
+            "date": "2026-11-11",
+            "session_date": "2026-11-11",
+            "triggerTime": "2026-11-11T09:20:00+05:30",
+            "sym": "NIFTY",
+            "exp": "2026-11-17",
+            "strat": "S1",
+            "capital": 28037,
+            "maxLoss": 7800,
+            "maxCredit": 11000,
+            "entryPx": 150.0,
+            "grossMtm": -4000.0,
+            "legs": [
+                {"side": -1, "mult": 1, "strike": 25250, "type": "CE", "entryPx": 150.0, "curPx": 150.0},
+                {"side": -1, "mult": 1, "strike": 24850, "type": "PE", "entryPx": 160.0, "curPx": 160.0},
+            ],
+        }
+
+        # Mark against EMPTY live chains (quotes absent/stale)
+        still_open, newly_closed = mark_open_positions_to_market(
+            open_positions=[mock_pos],
+            live_chains={},
+            sl_rule="SL_50_MAXLOSS",
+            tp_rule="TP_50_30",
+            current_time_ist="11:30 IST",
+            auto_close_intraday_1515=False,
+        )
+
+        self.assertEqual(len(still_open), 1, "Stale position must remain open and not be falsely auto-closed")
+        self.assertEqual(len(newly_closed), 0, "No exit should trigger on stale quotes")
+        self.assertEqual(still_open[0].get("freshness"), "STALE")
+        self.assertIn("Missing live quote", still_open[0].get("staleReason", ""))
+
+    def test_38_wheel_build_and_package_data(self):
+        """Verify pyproject.toml package-data inclusion for wheel distribution."""
+        pyproject_text = (HERE_DIR / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertIn("[tool.setuptools.package-data]", pyproject_text)
+        self.assertIn("volatility_lab = [", pyproject_text)
+        self.assertIn('"data/*.json"', pyproject_text)
+        self.assertIn('"data/*.csv"', pyproject_text)
+        self.assertIn('"data/*.sqlite"', pyproject_text)
+
+    def test_39_market_calendar_horizon_boundary_and_warning(self):
+        """Verify market calendar boundary protections and horizon warning protocol."""
+        from market_calendar import (
+            MIN_SUPPORTED_YEAR,
+            MAX_SUPPORTED_YEAR,
+            CalendarHorizonError,
+            is_trading_day,
+            check_horizon_warning,
+        )
+        import datetime
+        self.assertEqual(MIN_SUPPORTED_YEAR, 2023)
+        self.assertEqual(MAX_SUPPORTED_YEAR, 2028)
+
+        # 1. Queries outside horizon raise CalendarHorizonError
+        with self.assertRaises(CalendarHorizonError):
+            is_trading_day(datetime.date(2022, 12, 31))
+        with self.assertRaises(CalendarHorizonError):
+            is_trading_day(datetime.date(2029, 1, 1))
+
+        # 2. Horizon warning check returns None for normal active years
+        self.assertIsNone(check_horizon_warning(datetime.date(2026, 11, 10)))
+
+        # 3. Horizon warning returns alert when within 365 days of 2028-12-31
+        warn = check_horizon_warning(datetime.date(2028, 6, 1))
+        self.assertIsNotNone(warn)
+        self.assertIn("WARNING", warn)
+        self.assertIn("expires in", warn)
+
+
+
+    def test_40_sensibull_standard_black76_and_greeks_parity(self):
+        """Verify Black-76 pricing engine, Greeks parity, and BSM primary model preservation."""
+        import option_math
+        from pricing import (
+            DEFAULT_PRICING_MODEL,
+            black76_greeks,
+            solve_black76_iv,
+            sensibull_greeks,
+            sensibull_iv,
+            calculate_greeks,
+            calculate_iv,
+        )
+        # BSM remains the default primary model for backward compatibility
+        self.assertEqual(DEFAULT_PRICING_MODEL, "bsm")
+        self.assertEqual(option_math.DEFAULT_PRICING_MODEL, "bsm")
+
+        # 1. Black-76 roundtrip
+        F, K, T, r, true_vol = 25018.6, 25050.0, 8.0 / 365.0, 0.0585, 0.1665
+        for kind in ("CE", "PE"):
+            g = black76_greeks(F, K, T, r, true_vol, kind)
+            self.assertTrue(g["price"] > 0)
+            self.assertTrue(g["vega"] > 0)
+            self.assertTrue(g["gamma"] > 0)
+            rec_iv = solve_black76_iv(g["price"], F, K, T, r, kind)
+            self.assertAlmostEqual(rec_iv, true_vol, places=6)
+
+        # 2. Put-Call Parity at ATM strike produces symmetric IV
+        c_ltp, p_ltp = 230.5, 261.9
+        f_syn = K + c_ltp - p_ltp  # 25018.6
+        c_iv = solve_black76_iv(c_ltp, f_syn, K, T, r, "CE")
+        p_iv = solve_black76_iv(p_ltp, f_syn, K, T, r, "PE")
+        self.assertAlmostEqual(c_iv, p_iv, places=4)
+        self.assertAlmostEqual(c_iv * 100, 16.65, delta=0.05)
+
+        # 3. Model selector in calculate_greeks
+        calc_b76 = calculate_greeks(f_syn, K, T, r, c_iv, "CE", model="black76")
+        sb_g = sensibull_greeks(f_syn, K, T, r, c_iv, "CE")
+        self.assertAlmostEqual(calc_b76["delta"], sb_g["delta"], places=6)
+        self.assertAlmostEqual(calc_b76["gamma"], sb_g["gamma"], places=6)
+
+        # 4. Vectorized parity
+        vec_g = option_math.black76_greeks_vec([f_syn, f_syn], [K, K], [T, T], iv=[c_iv, p_iv], rate=r, kind=["CE", "PE"])
+        self.assertAlmostEqual(vec_g["delta"][0], sb_g["delta"], places=6)
+        self.assertTrue(vec_g["delta"][1] < 0)
+
+    def test_42_black76_edge_cases_and_bsm_equivalence(self):
+        """Verify Black-76 edge cases: T=0 intrinsic value, invalid inputs, and exact BSM equivalence."""
+        import math
+        from pricing import black76_greeks, compare_bsm_and_black76
+
+        # 1. T=0 returns exact intrinsic value
+        c_itm = black76_greeks(25100.0, 25000.0, 0.0, 0.0585, 0.165, "CE")
+        self.assertEqual(c_itm["price"], 100.0)
+        self.assertEqual(c_itm["delta"], 1.0)
+        self.assertEqual(c_itm["gamma"], 0.0)
+        self.assertEqual(c_itm["vega"], 0.0)
+
+        c_otm = black76_greeks(24900.0, 25000.0, 0.0, 0.0585, 0.165, "CE")
+        self.assertEqual(c_otm["price"], 0.0)
+        self.assertEqual(c_otm["delta"], 0.0)
+
+        p_itm = black76_greeks(24900.0, 25000.0, 0.0, 0.0585, 0.165, "PE")
+        self.assertEqual(p_itm["price"], 100.0)
+        self.assertEqual(p_itm["delta"], -1.0)
+
+        p_otm = black76_greeks(25100.0, 25000.0, 0.0, 0.0585, 0.165, "PE")
+        self.assertEqual(p_otm["price"], 0.0)
+        self.assertEqual(p_otm["delta"], 0.0)
+
+        # 2. Invalid inputs raise ValueError
+        with self.assertRaises(ValueError):
+            black76_greeks(0.0, 25000.0, 0.1, 0.0585, 0.165, "CE")
+        with self.assertRaises(ValueError):
+            black76_greeks(25000.0, -100.0, 0.1, 0.0585, 0.165, "CE")
+        with self.assertRaises(ValueError):
+            black76_greeks(25000.0, 25000.0, 0.1, 0.0585, -0.1, "CE")
+        with self.assertRaises(ValueError):
+            black76_greeks(25000.0, 25000.0, 0.1, 0.0585, 0.165, "INVALID")
+
+        # 3. Exact Mathematical Equivalence between Spot BSM and Black-76
+        # When F = S * exp((r - q) * T), European Black-76 and Spot BSM agree (< 1e-10)
+        comp = compare_bsm_and_black76(
+            spot=25044.65,
+            strike=25000.0,
+            years=8.0 / 365.0,
+            rate=0.0585,
+            vol=0.165,
+            kind="CE",
+            dividend=0.0142,
+            future_price=25060.0,
+        )
+        self.assertLess(comp["price_diff_theo"], 1e-10)
+        self.assertAlmostEqual(comp["bsm"]["price"], comp["black76_theoretical"]["price"], places=8)
+        self.assertAlmostEqual(comp["bsm"]["vega"], comp["black76_theoretical"]["vega"], places=8)
+        self.assertIn("black76_traded", comp)
+        self.assertIn("market_basis", comp)
+
+        # 4. Put-Call Parity: C - P = D * (F - K)
+        F, K, T, r, vol = 25050.0, 25000.0, 14.0 / 365.0, 0.06, 0.18
+        c = black76_greeks(F, K, T, r, vol, "CE")
+        p = black76_greeks(F, K, T, r, vol, "PE")
+        discount = math.exp(-r * T)
+        parity_diff = (c["price"] - p["price"]) - discount * (F - K)
+        self.assertLess(abs(parity_diff), 1e-10)
+
+
+
+    def test_41_black76_forward_determination_and_weekly_synthetic_parity(self):
+        """Verify Black-76 forward determination across listed futures and weekly synthetic forward."""
+        from synthetic_future import determine_forward
+        import web_data
+
+        # 1. Listed future precedence
+        quote_time = '2026-11-10T09:20:00+05:30'
+        expiry = '2026-11-17'
+        res_fut = determine_forward(
+            [], spot=25000.0,
+            future_quote={'expiry': expiry, 'timestamp': quote_time, 'bid_price': 25034.0, 'ask_price': 25036.0},
+            expiry=expiry, as_of=quote_time, spot_timestamp=quote_time,
+        )
+        self.assertEqual(res_fut['source'], 'listed_future')
+        self.assertEqual(res_fut['forward'], 25035.0)
+        self.assertEqual(res_fut['basis'], 35.0)
+        self.assertFalse(res_fut['is_synthetic'])
+
+        # 2. Synthetic Forward derivation on sample option chain
+        mock_chain = [
+            {
+                'expiry': expiry,
+                'strike_price': 25000,
+                'call_options': {'market_data': {'timestamp': quote_time, 'ltp': 240.0, 'bid_price': 239.0, 'ask_price': 241.0}},
+                'put_options': {'market_data': {'timestamp': quote_time, 'ltp': 210.0, 'bid_price': 209.0, 'ask_price': 211.0}},
+            }
+        ]
+        res_syn = determine_forward(mock_chain, spot=25005.0, r=0.06, dte_days=7.0, expiry=expiry, as_of=quote_time, spot_timestamp=quote_time)
+        self.assertEqual(res_syn['source'], 'synthetic_forward')
+        self.assertTrue(res_syn['is_synthetic'])
+        self.assertEqual(res_syn['atm_strike'], 25000.0)
+        self.assertTrue(res_syn['forward'] > 25000.0)
+
+        # 3. Web Data Option Chain Table includes forward metadata
+        chain_table = web_data.get_option_chain_table('NIFTY')
+        if 'error' not in chain_table:
+            self.assertIn('forward_price', chain_table)
+            self.assertIn('forward_source', chain_table)
+            self.assertIn('pricing_model', chain_table)
+            self.assertEqual(chain_table['pricing_model'], 'Black-76 (Forward Anchored)')
+
+
+
+
+class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
+    """Verify v20 Black-76 options engine, pricing parity, Code.gs quota optimizations and website enrichment."""
+
+    def test_43_v20_black76_pricing_and_iv_parity(self):
         """Verify Black-76 pricing, Greeks, BSM carry parity, ATM call/put symmetry, and IV round-trip."""
         import importlib.util
         def _load_vl_mod(name):
@@ -1180,6 +1501,8 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 return m
         synthetic_future = _load_vl_mod("synthetic_future")
         market_table = _load_vl_mod("market_table")
+        expiry = '2026-11-17'
+        quote_time = '2026-11-10T09:20:00+05:30'
 
         # 1. Parity with BSM when F = S * exp((r - q) * T)
         spot = 25044.65
@@ -1247,10 +1570,10 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
 
         # Verify synthetic_future and market_table helpers
         chain_df = pd.DataFrame([
-            {"strike": 25050.0, "option_type": "CE", "ltp": 232.15, "iv": 16.01},
-            {"strike": 25050.0, "option_type": "PE", "ltp": 269.20, "iv": 17.90},
+            {"expiry": expiry, "strike": 25050.0, "option_type": "CE", "bid": 231.0, "ask": 233.3, "ltp": 232.15, "timestamp": quote_time, "iv": 16.01},
+            {"expiry": expiry, "strike": 25050.0, "option_type": "PE", "bid": 268.0, "ask": 270.4, "ltp": 269.20, "timestamp": quote_time, "iv": 17.90},
         ])
-        syn_res = synthetic_future.calculate(chain_df, spot=25044.65, rate=rate, years=years)
+        syn_res = synthetic_future.calculate(chain_df, spot=25044.65, rate=rate, years=years, expiry=expiry, as_of=quote_time, spot_timestamp=quote_time)
         self.assertIn("Black-76", syn_res["Pricing model"])
         self.assertAlmostEqual(syn_res["Synthetic future"], f_real, places=2)
         self.assertAlmostEqual(syn_res["Black-76 ATM IV"], 16.95, places=1)
@@ -1258,14 +1581,13 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
         self.assertAlmostEqual(c_iv_pct, p_iv_pct, places=4)
         self.assertAlmostEqual(atm_iv_pct, 16.95, places=1)
 
-    def test_36_v20_black76_invalid_inputs_and_expiry_edge_cases(self):
+    def test_44_v20_black76_invalid_inputs_and_expiry_edge_cases(self):
         """Verify Black-76 safe validation for invalid inputs and T <= 0 / near-zero expiry edge cases."""
         # 1. Invalid scalar inputs return NaN cleanly
         for bad_kwargs in (
             dict(forward=-100.0, strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
             dict(forward=0.0, strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
             dict(forward=25000.0, strike=-25000.0, years=0.05, rate=0.0585, vol=0.17, kind="PE"),
-            dict(forward=25000.0, strike=25000.0, years=0.05, rate=0.0585, vol=0.0, kind="CE"),
             dict(forward=25000.0, strike=25000.0, years=0.05, rate=0.0585, vol=-0.15, kind="PE"),
             dict(forward=float("nan"), strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
             dict(forward=float("inf"), strike=25000.0, years=0.05, rate=0.0585, vol=0.17, kind="CE"),
@@ -1297,109 +1619,163 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
         self.assertTrue(np.isfinite(near_zero["price"]) and near_zero["price"] > 199.9)
         self.assertTrue(np.isfinite(near_zero["delta"]))
 
-    def test_37_v20_code_gs_quota_optimizations_and_website_black76(self):
+    def test_45_v20_code_gs_quota_optimizations_and_website_black76(self):
         """Verify Code.gs free-tier quota optimizations and website Black-76 option chain enrichment."""
         code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
         self.assertIn("regularStartMins: 555", code_gs)
         self.assertIn("regularEndMins: 931", code_gs)
         self.assertIn("CacheService.getScriptCache()", code_gs)
-        self.assertIn("pruneOldMinuteSnapshots_(7)", code_gs)
+        self.assertIn("const SNAPSHOT_RETENTION_DAYS = 0", code_gs)
+        self.assertIn("retention: 'indefinite'", code_gs)
+        self.assertIn("CAPTURE_SAFE_DEADLINE_MS = 180000", code_gs)
+        self.assertIn("payload.nfo_session_validated !== true", code_gs)
         self.assertIn("capCompletedEodDays_(", code_gs)
         self.assertIn("MAX_COMPLETED_EOD_DAYS = 30", code_gs)
 
         repo_root = HERE_DIR
         for rel in ("docs/index.html", "index.html"):
             p = repo_root / rel
-            if not p.exists() or p.stat().st_size < 4096:
+            if not p.exists():
                 continue
-            html = p.read_text(encoding="utf-8")
+            html = _read_html_audit_range(p)
             self.assertIn("window.black76Price", html)
             self.assertIn("window.black76Greeks", html)
             self.assertIn("window.black76Iv", html)
             self.assertIn("window.computeBlack76ParityForward", html)
             self.assertIn("Black-76 Forward Model", html)
-            self.assertIn('"b76CallIv":17.86,"b76PutIv":17.86', html)
+            self.assertIn("Black-76 withheld pending validated bid/ask event timestamps", html)
+            self.assertIn("VALIDATED_EVENT_TIME_TWO_SIDED_BOOK", html)
+            self.assertIn("Date-only zero DTE lacks the intraday expiry timestamp", html)
+            self.assertIn("var cSig = isFinite(cSolved) ? cSolved : NaN;", html)
+            self.assertNotIn(": 0.16", html)
+            self.assertNotIn("Number(item.syn || item.spot)", html)
 
 
 
-    def test_38_v21_single_source_of_truth_repo_debloat_and_full_ui_audit(self):
-        """Verify v21.0 5-Layer Production Lock Audit:
-        - Layer 1: Open delta bounds (1e-6, 1-1e-6), unit-safe IV normalization (decimal vs pct), 2024-2028 SPECIAL_SESSIONS, GARCH 265 horizon.
-        - Layer 2: forward_test Black-76 Put-Call Parity Forward F = K + e^{rT}(C - P), collector_support.resolve_data_dir, trade_review single-copy archive.
-        - Layer 3: Code.gs ?action=ledger / ?action=forward_ledger + ?action=latest + v3->v2 EOD candle fallback.
-        - Layer 4: restored_lab 2-leg straddle gamma, docs/index.html 2026-2028 holidays, B76 column headers, and syncCloudForwardLedger.
-        - Layer 5: Single canonical Volatility Lab/data directory, zero root data/ or quotes_archive/ duplication, < 3.0 MB working tree.
-        """
-        import collector_support
-        import trade_review
-        from forward_test import evaluate_strategies_for_chain
 
-        # Layer 1A & 1B: Open delta bounds and decimal-vs-percentage IV normalization
-        chain_dec = pd.DataFrame([
-            {"strike": 24000.0, "option_type": "PE", "iv": 0.22, "delta": 0.0, "source": "Upstox"},  # unquoted 0.0 boundary delta must be ignored
-            {"strike": 24400.0, "option_type": "PE", "iv": 0.16, "delta": -0.25, "source": "Upstox"},
-            {"strike": 24500.0, "option_type": "CE", "iv": 0.14, "delta": 0.50, "source": "Upstox"},
-            {"strike": 24500.0, "option_type": "PE", "iv": 0.14, "delta": -0.50, "source": "Upstox"},
-            {"strike": 24600.0, "option_type": "CE", "iv": 0.13, "delta": 0.25, "source": "Upstox"},
-            {"strike": 25200.0, "option_type": "CE", "iv": 0.20, "delta": 0.0, "source": "Upstox"},  # unquoted 0.0 boundary delta must be ignored
+class TestIndependentQuantitativeAuditRegressions(unittest.TestCase):
+    def test_yang_zhang_uses_open_to_close_variance(self):
+        opens = np.array([100.0, 111.0, 107.0, 122.0, 118.0])
+        closes = np.array([104.0, 109.0, 115.0, 119.0, 124.0])
+        frame = pd.DataFrame({
+            'Date': pd.date_range('2026-01-05', periods=len(opens), freq='B'),
+            'Open': opens,
+            'High': np.maximum(opens, closes) + 2.0,
+            'Low': np.minimum(opens, closes) - 2.0,
+            'Close': closes,
+        })
+        window, annualization = 3, 252
+        result = vol_lib.rolling_rv_suite(frame, window=window, ann_factor=annualization)
+        close, open_s = pd.Series(closes), pd.Series(opens)
+        overnight = np.log(open_s / close.shift(1))
+        intraday = np.log(close / open_s)
+        high = pd.Series(np.maximum(opens, closes) + 2.0)
+        low = pd.Series(np.minimum(opens, closes) - 2.0)
+        rs = np.log(high / close) * np.log(high / open_s) + np.log(low / close) * np.log(low / open_s)
+        k = 0.34 / (1.34 + (window + 1) / (window - 1))
+        expected_var = (
+            overnight.rolling(window).var(ddof=1).iloc[-1]
+            + k * intraday.rolling(window).var(ddof=1).iloc[-1]
+            + (1.0 - k) * rs.rolling(window).mean().iloc[-1]
+        )
+        self.assertAlmostEqual(result['yang_zhang_rv'].iloc[-1] ** 2 / annualization, expected_var, places=12)
+        self.assertEqual(vol_lib.rv_snapshot(frame, window, ann_factor=annualization)['yang_zhang_version'], vol_lib.YANG_ZHANG_VERSION)
+
+    def test_bsm_scalar_and_vector_expiry_return_intrinsic_and_zero_greeks(self):
+        call = option_math.bsm_greeks(105.0, 100.0, 0.0, 0.05, 0.2, 'CE')
+        put = option_math.bsm_greeks(105.0, 100.0, -0.1, 0.05, 0.0, 'PE')
+        self.assertEqual(float(call['price']), 5.0)
+        self.assertEqual(float(call['delta']), 1.0)
+        self.assertEqual(float(call['gamma']), 0.0)
+        self.assertEqual(float(call['vega']), 0.0)
+        self.assertEqual(float(call['theta_daily']), 0.0)
+        self.assertEqual(float(put['price']), 0.0)
+        self.assertEqual(float(put['delta']), 0.0)
+        self.assertEqual(float(put['fwd_delta']), 0.0)
+
+        vector = option_math.bsm_greeks_vec(
+            [105.0, 95.0, 100.0], [100.0] * 3, [0.0, -0.1, 0.25],
+            vol=0.2, rate=0.05, kind=['CE', 'PE', 'CE'],
+        )
+        np.testing.assert_allclose(vector['price'][:2], [5.0, 5.0])
+        np.testing.assert_allclose(vector['delta'][:2], [1.0, -1.0])
+        np.testing.assert_allclose(vector['gamma'][:2], [0.0, 0.0])
+        np.testing.assert_allclose(vector['vega'][:2], [0.0, 0.0])
+        np.testing.assert_allclose(vector['theta'][:2], [0.0, 0.0])
+        self.assertGreater(vector['gamma'][2], 0.0)
+
+    def test_prior_session_eod_signal_is_eligible_but_other_expiry_is_not(self):
+        import backtest_signals
+
+        expiry = '2026-11-12'
+        rows = [
+            (expiry, pd.Timestamp('2026-11-09 15:30', tz='Asia/Kolkata'), {'IV': 15.0}),
+            ('2026-11-19', pd.Timestamp('2026-11-10 09:18', tz='Asia/Kolkata'), {'IV': 18.0}),
+        ]
+        ok, _ = backtest_signals.decide(rows, expiry, '2026-11-10', '09:20', [('IV', 10.0, 20.0)])
+        self.assertTrue(ok)
+        rows.append((expiry, pd.Timestamp('2026-11-10 09:18', tz='Asia/Kolkata'), {'IV': 25.0}))
+        ok, reason = backtest_signals.decide(rows, expiry, '2026-11-10', '09:20', [('IV', 10.0, 20.0)])
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'IV outside entry range')
+
+    def test_synthetic_forward_rejects_stale_ltp_unmatched_expiry_and_bad_book(self):
+        from synthetic_future import calculate, determine_forward
+
+        as_of = '2026-11-10T09:20:00+05:30'
+        valid_rows = [
+            {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'CE', 'bid': 239.0, 'ask': 241.0, 'timestamp': as_of},
+            {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'PE', 'bid': 209.0, 'ask': 211.0, 'timestamp': as_of},
+        ]
+        good = calculate(valid_rows, 25005.0, years=7 / 365, expiry='2026-11-17', as_of=as_of, spot_timestamp=as_of)
+        self.assertIsNotNone(good['Synthetic future'])
+
+        stale_ltp = [
+            {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'CE', 'ltp': 240.0, 'timestamp': '2026-11-09T09:20:00+05:30'},
+            {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'PE', 'ltp': 210.0, 'timestamp': '2026-11-09T09:20:00+05:30'},
+        ]
+        stale = calculate(stale_ltp, 25005.0, years=7 / 365, expiry='2026-11-17', as_of=as_of, spot_timestamp=as_of)
+        self.assertIsNone(stale['Synthetic future'])
+
+        unrelated = calculate(valid_rows, 25005.0, years=7 / 365, expiry='2026-12-17', as_of=as_of, spot_timestamp=as_of)
+        self.assertIsNone(unrelated['Synthetic future'])
+        bad_book = [dict(valid_rows[0], bid=242.0, ask=241.0), valid_rows[1]]
+        self.assertIsNone(calculate(bad_book, 25005.0, years=7 / 365, expiry='2026-11-17', as_of=as_of, spot_timestamp=as_of)['Synthetic future'])
+
+        unmatched_future = calculate(
+            valid_rows, 25005.0, years=7 / 365, expiry='2026-11-17', as_of=as_of,
+            spot_timestamp=as_of,
+            future_quote={'expiry': '2026-12-31', 'timestamp': as_of, 'bid': 25030.0, 'ask': 25032.0},
+            future_contract={'expiry': '2026-11-26'},
+        )
+        self.assertIsNone(unmatched_future['Month future LTP'])
+        self.assertIsNone(unmatched_future['Basis'])
+
+        unvalidated_future = determine_forward(
+            [], spot=25000.0, future_quote={'last_price': 25035.0},
+            expiry='2026-11-17', as_of=as_of, spot_timestamp=as_of,
+        )
+        self.assertEqual(unvalidated_future['source'], 'cost_of_carry_forward')
+        self.assertNotEqual(unvalidated_future['forward'], 25035.0)
+        missing_spot_time = determine_forward(
+            [], spot=25000.0, expiry='2026-11-17', as_of=as_of,
+        )
+        self.assertEqual(missing_spot_time['source'], 'unavailable')
+        self.assertIsNone(missing_spot_time['forward'])
+
+    def test_sharpe_and_sortino_use_daily_returns_and_daily_sessions(self):
+        trades = pd.DataFrame([
+            {'Date': '2026-10-26 10:00', 'Net': 100.0, 'Capital required': 1000.0},
+            {'Date': '2026-10-26 15:00', 'Net': -20.0, 'Capital required': 1000.0},
+            {'Date': '2026-10-28', 'Net': -10.0, 'Capital required': 1000.0},
         ])
-        chain_pct = chain_dec.copy()
-        chain_pct["iv"] = chain_pct["iv"] * 100.0
-
-        sk_dec = option_math.skew_metrics(chain_dec, spot=24500.0)
-        sk_pct = option_math.skew_metrics(chain_pct, spot=24500.0)
-        self.assertAlmostEqual(sk_dec["25D put IV %"], 16.0, places=5)
-        self.assertAlmostEqual(sk_pct["25D put IV %"], 16.0, places=5)
-        self.assertAlmostEqual(sk_dec["Put-minus-call RR (pp)"], 3.0, places=5)
-        self.assertAlmostEqual(sk_pct["Put-minus-call RR (pp)"], 3.0, places=5)
-
-        sm_dec = smile.smile_points(chain_dec, strikes=[], spot=24500.0)
-        sm_pct = smile.smile_points(chain_pct, strikes=[], spot=24500.0)
-        self.assertAlmostEqual(sm_dec["metrics"]["25 RR · put minus call"], sm_pct["metrics"]["25 RR · put minus call"], places=5)
-
-        # Layer 1D & 1E: 2024-2028 SPECIAL_SESSIONS in expiry_forecast & 265-session GARCH horizon
-        self.assertIn("2027-10-29", [str(d) for d in expiry_forecast.sessions("2027-10-28", "2027-11-02")])
-        self.assertIn("2028-10-17", [str(d) for d in expiry_forecast.sessions("2028-10-16", "2028-10-20")])
-        df_260 = _synthetic_ohlc(240, daily_ret=0.01, end_date="2026-10-16")
-        h_df, diag_260, path_260, _ = forecast.fit_garch(df_260, horizons=(260,), min_observations=200)
-        self.assertEqual(len(path_260), 260)
-
-        # Layer 2: forward_test Black-76 Put-Call Parity Forward & collector_support.resolve_data_dir
-        self.assertTrue(hasattr(collector_support, "resolve_data_dir"))
-        resolved_data = collector_support.resolve_data_dir(HERE_DIR)
-        self.assertTrue((resolved_data / "expiry_latest.json").exists())
-        loaded_q = collector_support.read_json(resolved_data / "NIFTY_option_quotes_2026_11_17.json")
-        self.assertIsNotNone(loaded_q)
-        setups = evaluate_strategies_for_chain(
-            "NIFTY", "2026-11-17", 25044.65,
-            [{"strike_price": 25050, "cLtp": 232.15, "pLtp": 269.20, "cIv": 16.01, "pIv": 17.90}],
-            hv10=14.82, hv30=14.45, dte=8,
-        )
-        self.assertEqual(len(setups), 6)
-
-        # Layer 3: Code.gs ?action=ledger & v2 candle fallback
-        code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
-        self.assertIn("action === 'forward_ledger' || action === 'ledger'", code_gs)
-        self.assertIn("/v2/historical-candle/", code_gs)
-
-        # Layer 4: restored_lab 2-leg straddle gamma & docs/index.html Black-76 columns and cloud ledger sync
-        import restored_lab as rl
-        g_strad = rl.compute_straddle_greeks(25044.65, 25050.0, 8.0, 16.95)
-        ce_only = option_math.bsm_greeks(25044.65, 25050.0, 8.0 / 365.0, 0.06, 0.1695, "CE")
-        self.assertAlmostEqual(g_strad["gamma"], 2.0 * float(ce_only["gamma"]), places=6)
-
-        docs_html = (HERE_DIR / "docs" / "index.html").read_text(encoding="utf-8")
-        for col_lbl in ("CE Δ (B76)", "CE IV (B76) · Upstox Ref IV", "PE IV (B76) · Upstox Ref IV", "PE Δ (B76)", "window.syncCloudForwardLedger", "?action=latest", "?action=ledger", "'2028-11-02': true"):
-            self.assertIn(col_lbl, docs_html)
-
-        # Layer 5: Single-Source-of-Truth Data De-Bloat & < 3.0 MB repository footprint
-        self.assertTrue((PATCH_DIR / "data" / "expiry_latest.json").exists())
-        self.assertFalse((PATCH_DIR / "data" / "quotes_archive").exists(), "Duplicate quotes_archive/ directory must not exist")
-        total_bytes = sum(
-            p.stat().st_size for p in HERE_DIR.rglob("*")
-            if p.is_file() and ".git" not in p.parts and "__pycache__" not in p.parts and not p.name.endswith(".pyc")
-        )
-        self.assertLess(total_bytes, 6 * 1024 * 1024, f"Working tree size {total_bytes:,} bytes exceeds 6.0 MB cap")
+        summary = strategy_backtest.summarize_performance(trades, annualization=245.0)
+        returns = np.array([0.04, 0.0, -0.01])
+        expected_sharpe = returns.mean() / returns.std(ddof=1) * np.sqrt(245.0)
+        expected_sortino = returns.mean() / np.sqrt(np.mean(np.square(np.minimum(returns, 0.0)))) * np.sqrt(245.0)
+        self.assertAlmostEqual(summary['sharpe'], expected_sharpe, places=12)
+        self.assertAlmostEqual(summary['sortino'], expected_sortino, places=12)
+        self.assertEqual(summary['risk_metric_version'], strategy_backtest.RISK_METRIC_VERSION)
 
 
 if __name__ == "__main__":

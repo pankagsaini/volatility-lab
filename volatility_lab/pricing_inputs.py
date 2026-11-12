@@ -43,13 +43,10 @@ def ensure_refresh():
 
 
 def _read(name):
-    for cand in (_ROOT / name, _ROOT.parent / "Volatility Lab" / "data" / name, _ROOT.parent.parent / "Volatility Lab" / "data" / name):
-        if cand.is_file():
-            try:
-                return json.loads(cand.read_text(encoding='utf-8'))
-            except (OSError, ValueError):
-                pass
-    return {}
+    try:
+        return json.loads((_ROOT / name).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
 
 
 def get_rate():

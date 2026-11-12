@@ -1,24 +1,26 @@
-"""Root Streamlit entrypoint supporting both volatility_lab/ and Volatility Lab/ package layouts."""
-from __future__ import annotations
+"""Root Streamlit Entrypoint delegating to organized streamlit_desk package.
 
-import gc
-import importlib.util
-import os
-import sys
+Maintains full backward compatibility for Streamlit Cloud and local CLI (`streamlit run streamlit_app.py`)
+while keeping all Streamlit setup code neatly organized in `streamlit_desk/` and `volatility_lab/`.
+"""
 from pathlib import Path
+import os
+import runpy
+import sys
 
-os.environ.setdefault("MALLOC_ARENA_MAX", "2")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("MALLOC_TRIM_THRESHOLD_", "65536")
 
-REPO_ROOT = Path(__file__).resolve().parent
-VL_DIR = (REPO_ROOT / "volatility_lab") if (REPO_ROOT / "volatility_lab").is_dir() else (REPO_ROOT / "Volatility Lab")
-if str(VL_DIR) not in sys.path:
-    sys.path.insert(0, str(VL_DIR))
+ROOT = Path(__file__).resolve().parent
+LAB_DIR = (ROOT / "volatility_lab") if (ROOT / "volatility_lab").exists() else (ROOT / "Volatility Lab")
+if str(LAB_DIR) in sys.path:
+    sys.path.remove(str(LAB_DIR))
+sys.path.insert(0, str(LAB_DIR))
 
-DASHBOARD_PATH = VL_DIR / "dashboard.py"
-spec = importlib.util.spec_from_file_location("vl_dashboard_main", DASHBOARD_PATH)
-if spec is None or spec.loader is None:
-    raise RuntimeError(f"Unable to locate canonical dashboard entrypoint at {DASHBOARD_PATH}")
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
-gc.collect()
+DESK_ENTRY = ROOT / "streamlit_desk" / "app.py"
+if DESK_ENTRY.exists():
+    runpy.run_path(str(DESK_ENTRY), run_name="__main__")
+else:
+    runpy.run_path(str(LAB_DIR / "dashboard.py"), run_name="__main__")

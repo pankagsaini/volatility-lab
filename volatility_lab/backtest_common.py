@@ -54,4 +54,6 @@ def dated_lot_size(symbol: str, day_or_expiry: str = '') -> int:
         return 50
     if d and d < '2024-11-20':
         return 25
+    if d and d < '2025-12-31':
+        return 75
     return 65

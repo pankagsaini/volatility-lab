@@ -1,11 +1,14 @@
-"""Multi-leg options strategy backtest engine with SOM margin floor, quiet-minute carry-forward, and 6 Trade Scenario Presets."""
+"""Multi-leg options strategy backtest using explicit fills and marked-only missing-minute carry-forward."""
 from datetime import datetime, timedelta
 import json
 import math
 import numpy as np
 import pandas as pd
 from backtest_common import record_skip, dated_lot_size
-from broker_charges import charge
+from broker_charges import CHARGE_MODEL_VERSION, charge
+
+EXECUTION_ASSUMPTION_VERSION = 'minute-bar-uniform-bps-proxy-v2'
+MARGIN_ASSUMPTION_VERSION = 'scenario-margin-proxy-v2'
 
 TEMPLATES = {
     'Short straddle': [
@@ -189,6 +192,16 @@ def _positive_int(value, label: str = "Value") -> int:
     return ivalue
 
 
+def _finite_nonnegative(value, label: str) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{label} must be finite and non-negative") from exc
+    if not math.isfinite(number) or number < 0.0:
+        raise ValueError(f"{label} must be finite and non-negative")
+    return number
+
+
 def sizing(s: dict) -> tuple[str, int]:
     mode = s.get("sizing_mode", "broker_lot_size" if "lots" in s else "fixed_units")
     if mode not in ("fixed_units", "broker_lot_size"):
@@ -226,13 +239,22 @@ def validate(settings: dict) -> bool:
         raise ValueError('Entry time must be earlier than Exit time.')
     if int(settings.get('lots', 1)) < 1:
         raise ValueError('Strategy lots must be at least 1.')
+    _finite_nonnegative(settings.get('slip_bps', 5.0), 'Slippage (bps)')
+    _finite_nonnegative(settings.get('order_fee', 20.0), 'Order fee')
+    _finite_nonnegative(settings.get('margin_per_lot', 0.0) or 0.0, 'Margin per lot')
+    for key, label, default in (
+        ('short_option_floor_rate', 'Short option floor rate', 0.05),
+        ('exposure_add_rate', 'Exposure add rate', 0.02),
+        ('spread_floor_rate', 'Spread floor rate', 0.015),
+    ):
+        _finite_nonnegative(settings.get(key, default), label)
     dte = settings.get('dte', (1, 35))
     if isinstance(dte, (list, tuple)) and len(dte) == 2 and dte[0] > dte[1]:
         raise ValueError('Minimum DTE cannot exceed maximum DTE.')
     return True
 
 
-def valid_price(bar, index=0, fill=False):
+def valid_price(bar, index=0, fill=False, quantity=None):
     if bar is None or len(bar) <= max(index, 4):
         return False
     try:
@@ -240,13 +262,25 @@ def valid_price(bar, index=0, fill=False):
         vol = float(bar[4])
         if not (math.isfinite(px) and px > 0 and math.isfinite(vol) and vol >= 0):
             return False
-        return vol > 0 if fill else True
+        if not fill:
+            return True
+        return vol > 0 if quantity is None else vol >= float(quantity)
     except (TypeError, ValueError):
         return False
 
 
-def estimate_exchange_margin(legs, spot_price, symbol='NIFTY'):
-    """Scenario stress loss + NSE Short Option Minimum (5% SOM) and defined-risk spread floor."""
+def estimate_exchange_margin(
+    legs, spot_price, symbol='NIFTY', *, short_option_floor_rate=0.05,
+    exposure_add_rate=0.02, spread_floor_rate=0.015,
+):
+    """Return a scenario capital proxy; default rates are hypotheses, not exchange margin rules."""
+    rates = tuple(_finite_nonnegative(rate, 'Margin proxy rate') for rate in (
+        short_option_floor_rate, exposure_add_rate, spread_floor_rate
+    ))
+    if not math.isfinite(float(spot_price)) or float(spot_price) <= 0:
+        raise ValueError('Spot and margin proxy rates must be finite and non-negative')
+    short_option_floor_rate, exposure_add_rate, spread_floor_rate = rates
+    spot_price = float(spot_price)
     psr = 0.08 if symbol == 'NIFTY' else 0.10
     shifts = [-0.15, -psr, -psr / 2.0, 0.0, psr / 2.0, psr, 0.15]
     test_spots = {spot_price * (1.0 + s) for s in shifts} | {float(leg['strike']) for leg in legs}
@@ -268,29 +302,32 @@ def estimate_exchange_margin(legs, spot_price, symbol='NIFTY'):
         0,
     )
     if net_calls < 0 or net_puts < 0:
-        # Undefined-risk naked short option: apply 5% Short Option Minimum (SOM) floor
-        som_floor = 0.05 * spot_price * short_qty
-        exposure_add = 0.02 * spot_price * short_qty
+        # Calibration defaults only; actual clearing requirements are not calculated here.
+        som_floor = float(short_option_floor_rate) * spot_price * short_qty
+        exposure_add = float(exposure_add_rate) * spot_price * short_qty
         return float(max(worst_loss + exposure_add, som_floor))
     if short_qty == 0:
         # Pure long option structure: capital required is the net entry debit paid
         return float(max(0.0, -net_credit))
-    # Defined-risk spread: apply 1.5% spread margin floor alongside max intrinsic loss
-    spread_floor = 0.015 * spot_price * short_qty
+    # Calibration default only; actual clearing requirements are not calculated here.
+    spread_floor = float(spread_floor_rate) * spot_price * short_qty
     return float(max(worst_loss, spread_floor))
 
 
 def simulate(s, contracts, ticks, signals=None, callback=None):
-    """Simulate multi-leg options strategy with last_valid_close monitoring carry-forward and O(1) loop fee tracking."""
+    """Simulate options with marked-only carry-forward; slippage and margin defaults are calibration hypotheses."""
     symbol = s.get('symbol', 'NIFTY')
     spot_key = s.get('spot_key', 'NSE_INDEX|Nifty 50' if symbol == 'NIFTY' else 'NSE_INDEX|Nifty Bank')
     entry_time = s.get('entry', '09:20')
     exit_time = s.get('exit', '15:15')
-    slip_bps = float(s.get('slip_bps', 5.0))
+    slip_bps = _finite_nonnegative(s.get('slip_bps', 5.0), 'Slippage (bps)')
+    slippage_model = str(s.get('slippage_model', 'uniform_bps_proxy_v1'))
+    if slippage_model != 'uniform_bps_proxy_v1':
+        raise ValueError('Unsupported slippage_model; only the documented uniform_bps_proxy_v1 is available')
     stop_loss = s.get('stop') if s.get('stop') and float(s.get('stop', 0)) > 0 else None
     profit_target = s.get('target') if s.get('target') and float(s.get('target', 0)) > 0 else None
     use_upstox_fees = bool(s.get('use_upstox_fees', True))
-    order_fee = float(s.get('order_fee', 20.0))
+    order_fee = _finite_nonnegative(s.get('order_fee', 20.0), 'Order fee')
     raw_legs = s.get('legs') or template(s.get('template', s.get('name', 'Short straddle')) if s.get('template', s.get('name', 'Short straddle')) in TEMPLATES else 'Short straddle')
     legs_spec = [_normalize_leg(item) for item in raw_legs]
     dte_tuple = s.get('dte')
@@ -363,12 +400,12 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
                 break
             key = contract['instrument_key']
             eb = ticks.get(key, {}).get(entry_stamp)
-            if not valid_price(eb, 0, fill=True):
-                skip_reason = 'Missing exact entry minute or zero volume'
-                break
-            raw_entry = float(eb[0])
             side = int(spec['side'])
             qty = int(contract.get('lot_size') or s.get('quantity') or dated_lot_size(symbol, exp)) * int(spec.get('ratio', 1)) * lots_mult
+            if not valid_price(eb, 0, fill=True, quantity=qty):
+                skip_reason = 'Missing exact entry minute or insufficient traded volume'
+                break
+            raw_entry = float(eb[0])
             fill_entry = raw_entry * (1.0 + side * slip_bps / 10000.0)
             active_legs.append({
                 'contract': contract.get('trading_symbol', key),
@@ -379,7 +416,8 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
                 'quantity': qty,
                 'raw_entry': raw_entry,
                 'entry': fill_entry,
-                'last_close': float(eb[3]) if valid_price(eb, 3, fill=False) else raw_entry,
+                'last_close': float(eb[3]) if valid_price(eb, 3, fill=True) else raw_entry,
+                'last_close_at': entry_stamp,
             })
         if skip_reason:
             record_skip(skips, day, skip_reason)
@@ -388,13 +426,24 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
         user_margin = float(s.get('margin_per_lot') or 0.0)
         if user_margin > 0:
             cap_req = user_margin * lots_mult
+            margin_model = 'user_supplied_per_lot'
+            margin_status = 'USER_SUPPLIED'
         elif s.get('estimate_margin', True):
-            cap_req = estimate_exchange_margin(active_legs, spot_px, symbol=symbol)
+            cap_req = estimate_exchange_margin(
+                active_legs, spot_px, symbol=symbol,
+                short_option_floor_rate=float(s.get('short_option_floor_rate', 0.05)),
+                exposure_add_rate=float(s.get('exposure_add_rate', 0.02)),
+                spread_floor_rate=float(s.get('spread_floor_rate', 0.015)),
+            )
+            margin_model = 'scenario_proxy'
+            margin_status = 'UNVALIDATED_PROXY'
         else:
             cap_req = 0.0
+            margin_model = 'not_modelled'
+            margin_status = 'NOT_MODELLED'
         cap_alloc = float(s['capital_allocated']) if s.get('capital_allocated') else None
         if cap_alloc is not None and cap_alloc > 0 and cap_req > cap_alloc + 0.005:
-            record_skip(skips, day, 'Insufficient allocated capital for exchange margin')
+            record_skip(skips, day, 'Insufficient allocated capital for configured margin assumption')
             continue
 
         # Precompute fixed entry fee once outside the 1-minute monitoring loop
@@ -416,22 +465,17 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
             unreal_gross = 0.0
             for leg in active_legs:
                 b = ticks.get(leg['key'], {}).get(cursor_str)
-                if valid_price(b, 3, fill=False):
+                if valid_price(b, 3, fill=True):
                     leg['last_close'] = float(b[3])
-                elif valid_price(b, 0, fill=False):
+                    leg['last_close_at'] = cursor_str
+                elif valid_price(b, 0, fill=True):
                     leg['last_close'] = float(b[0])
+                    leg['last_close_at'] = cursor_str
                 mark_px = leg['last_close']
                 est_exit = mark_px * (1.0 - leg['side'] * slip_bps / 10000.0)
                 unreal_gross += leg['side'] * (est_exit - leg['entry']) * leg['quantity']
             if cursor < end_dt:
-                if use_upstox_fees:
-                    exit_fee_est = sum(
-                        sum(charge(day, 'Options', leg['last_close'], leg['quantity'], 'sell' if leg['side'] > 0 else 'buy').values())
-                        for leg in active_legs
-                    )
-                    approx_net = unreal_gross - (entry_fee_total + exit_fee_est)
-                else:
-                    approx_net = unreal_gross - 2.0 * entry_fee_total
+                approx_net = unreal_gross - 2.0 * entry_fee_total
                 if (stop_loss is not None and approx_net <= -abs(float(stop_loss))) or (
                     profit_target is not None and approx_net >= abs(float(profit_target))
                 ):
@@ -440,15 +484,31 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
                     break
             cursor += timedelta(minutes=1)
 
-        # Find executable exit minute; never drop an already-entered trade if an OTM wing has 0 volume at 15:15 (use last_close fallback)
+        # Search for an executable exit; carried last_close values remain marks and are never treated as fills.
         fill_dt = exit_dt
         while fill_dt <= end_dt:
             fill_str = fill_dt.strftime('%Y-%m-%d %H:%M')
-            if all(valid_price(ticks.get(leg['key'], {}).get(fill_str), 0, fill=True) for leg in active_legs):
+            if all(valid_price(
+                ticks.get(leg['key'], {}).get(fill_str), 0, fill=True, quantity=leg['quantity']
+            ) for leg in active_legs):
                 break
             fill_dt += timedelta(minutes=1)
         else:
-            fill_dt = exit_dt
+            mark_gross = sum(
+                leg['side'] * (leg['last_close'] - leg['raw_entry']) * leg['quantity']
+                for leg in active_legs
+            )
+            skips.append({
+                'Date': day,
+                'Status': 'UNFILLED_EXIT',
+                'Reason': f'Position has no executable exit quote by {end_dt:%H:%M}; latest prices are marks only',
+                'Expiry': exp,
+                'Entry time': entry_time,
+                'Exit reason': exit_reason,
+                'Last mark times': json.dumps({leg['contract']: leg['last_close_at'] for leg in active_legs}),
+                'Unrealised gross': mark_gross,
+            })
+            continue
 
         fill_str = fill_dt.strftime('%Y-%m-%d %H:%M')
         gross = slippage = 0.0
@@ -458,12 +518,8 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
             xb = ticks.get(leg['key'], {}).get(fill_str)
             if valid_price(xb, 0, fill=True):
                 raw_exit = float(xb[0])
-            elif valid_price(xb, 3, fill=False):
-                raw_exit = float(xb[3])
-            elif valid_price(xb, 0, fill=False):
-                raw_exit = float(xb[0])
             else:
-                raw_exit = float(leg['last_close'])
+                raise RuntimeError('Exit selection did not produce a volume-qualified fill')
             side = leg['side']
             qty = leg['quantity']
             fill_exit = raw_exit * (1.0 - side * slip_bps / 10000.0)
@@ -493,9 +549,16 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
             'Exit reason': exit_reason,
             'Spot signal': spot_px,
             'Capital required': cap_req,
+            'Margin model': margin_model,
+            'Margin assumption status': margin_status,
+            'Margin assumption version': MARGIN_ASSUMPTION_VERSION,
             'Premium': premium_val,
             'Gross': gross,
             'Slippage': slippage,
+            'Slippage bps': slip_bps,
+            'Slippage model': slippage_model,
+            'Execution assumption version': EXECUTION_ASSUMPTION_VERSION,
+            'Charge model version': CHARGE_MODEL_VERSION if use_upstox_fees else 'per-order-fee-proxy',
             'Charges': charges_total,
             'Cost': total_cost_val,
             'Net': net_pnl,
@@ -507,14 +570,19 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
 
 
 
+RISK_METRIC_VERSION = 'daily-capital-return-v2'
+
+
 def summarize_performance(trades: pd.DataFrame, annualization: float = 245.0) -> dict:
-    """Compute guarded Sharpe, Sortino, Max Drawdown, Win Rate, and PnL Attribution."""
+    """Compute risk ratios from daily returns on summed committed capital."""
+    if not np.isfinite(annualization) or annualization <= 0:
+        raise ValueError('annualization must be finite and positive')
     if trades is None or trades.empty or 'Net' not in trades.columns:
         return {
             'trades': 0, 'win_rate_pct': 0.0, 'avg_capital_inr': 0.0, 'total_premium_inr': 0.0,
             'gross_pnl': 0.0, 'slippage': 0.0, 'charges': 0.0, 'net_pnl': 0.0,
             'roi_pct': 0.0, 'max_drawdown_inr': 0.0, 'max_drawdown_pct': 0.0,
-            'sharpe': 0.0, 'sortino': 0.0,
+            'sharpe': 0.0, 'sortino': 0.0, 'risk_metric_version': RISK_METRIC_VERSION,
         }
     net = pd.to_numeric(trades['Net'], errors='coerce').dropna().to_numpy(dtype=float)
     n = len(net)
@@ -523,7 +591,7 @@ def summarize_performance(trades: pd.DataFrame, annualization: float = 245.0) ->
             'trades': 0, 'win_rate_pct': 0.0, 'avg_capital_inr': 0.0, 'total_premium_inr': 0.0,
             'gross_pnl': 0.0, 'slippage': 0.0, 'charges': 0.0, 'net_pnl': 0.0,
             'roi_pct': 0.0, 'max_drawdown_inr': 0.0, 'max_drawdown_pct': 0.0,
-            'sharpe': 0.0, 'sortino': 0.0,
+            'sharpe': 0.0, 'sortino': 0.0, 'risk_metric_version': RISK_METRIC_VERSION,
         }
     cum = np.cumsum(net)
     peaks = np.maximum.accumulate(np.insert(cum, 0, 0.0))[1:]
@@ -535,13 +603,33 @@ def summarize_performance(trades: pd.DataFrame, annualization: float = 245.0) ->
     denom = max_cap + max(0.0, float(np.max(peaks)))
     max_dd_pct = float(max_dd_inr / denom * 100.0) if denom > 0 else 0.0
 
-    mean_pnl = float(np.mean(net))
-    std_pnl = float(np.std(net, ddof=1)) if n > 1 else 0.0
-    sharpe = float((mean_pnl / std_pnl) * math.sqrt(annualization)) if std_pnl > 1e-9 else 0.0
+    if {'Date', 'Capital required'}.issubset(trades.columns):
+        dated = trades.assign(Date=pd.to_datetime(trades['Date'], format='mixed').dt.normalize())
+        daily = dated.groupby('Date').agg(
+            Net=('Net', 'sum'), Capital=('Capital required', 'sum')
+        )
+        daily['Return'] = daily['Net'] / daily['Capital'].where(daily['Capital'] > 0.0)
+        try:
+            try:
+                from market_calendar import is_trading_day
+            except ModuleNotFoundError:
+                from .market_calendar import is_trading_day
+            sessions = [
+                stamp for stamp in pd.date_range(daily.index.min(), daily.index.max(), freq='D')
+                if is_trading_day(stamp.date(), include_special=True)
+            ]
+        except ValueError:
+            sessions = list(pd.bdate_range(daily.index.min(), daily.index.max()))
+        daily_returns = daily['Return'].reindex(sessions, fill_value=0.0).dropna().to_numpy(dtype=float)
+    else:
+        daily_returns = np.array([], dtype=float)
+    mean_return = float(np.mean(daily_returns)) if daily_returns.size else 0.0
+    std_return = float(np.std(daily_returns, ddof=1)) if daily_returns.size > 1 else 0.0
+    sharpe = float((mean_return / std_return) * math.sqrt(annualization)) if std_return > 1e-9 else 0.0
 
-    downside = np.minimum(0.0, net)
-    down_dev = float(math.sqrt(np.mean(np.square(downside))))
-    sortino = float((mean_pnl / down_dev) * math.sqrt(annualization)) if down_dev > 1e-9 else (sharpe if mean_pnl > 0 else 0.0)
+    downside = np.minimum(0.0, daily_returns)
+    down_dev = float(math.sqrt(np.mean(np.square(downside)))) if downside.size else 0.0
+    sortino = float((mean_return / down_dev) * math.sqrt(annualization)) if down_dev > 1e-9 else (sharpe if mean_return > 0 else 0.0)
 
     net_sum = float(net.sum())
     return {
@@ -558,4 +646,5 @@ def summarize_performance(trades: pd.DataFrame, annualization: float = 245.0) ->
         'max_drawdown_pct': max_dd_pct,
         'sharpe': sharpe,
         'sortino': sortino,
+        'risk_metric_version': RISK_METRIC_VERSION,
     }
