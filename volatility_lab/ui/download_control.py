@@ -1,4 +1,5 @@
 """Manual Windows launcher for the existing resumable minute downloader."""
+from volatility_lab.runtime.settings import data_for_root
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
 import argparse
@@ -16,7 +17,7 @@ ROOT=PACKAGE_ROOT
 
 def running(root=ROOT):
     """The downloader's OS lock, not a stale JSON status, determines liveness."""
-    path=Path(root)/'data'/'backtest_1minute'/'download.lock'
+    path=data_for_root(root)/'backtest_1minute'/'download.lock'
     if not path.exists() or msvcrt is None:return False
     with path.open('r+b') as handle:
         handle.seek(0)
@@ -30,7 +31,7 @@ def running(root=ROOT):
 
 
 def read_status(root=ROOT):
-    try:return json.loads((Path(root)/'data'/'backtest_1minute'/'status.json').read_text(encoding='utf-8'))
+    try:return json.loads((data_for_root(root)/'backtest_1minute'/'status.json').read_text(encoding='utf-8'))
     except (OSError,ValueError):return {}
 
 

@@ -1,4 +1,5 @@
 """Futures relative value, separate from options and volatility models."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 
 from pathlib import Path
@@ -27,7 +28,7 @@ from quote_status import futures_display_pairs
 
 from futures_view_cache import database_revision,rolling_revision
 
-ROOT=PACKAGE_ROOT/'data'/'futures'
+ROOT=runtime_data_dir()/'futures'
 
 COLORS=['#50c5b4','#ffbf69']
 

@@ -1,11 +1,12 @@
 """Reusable closed-trade reporting with explicit data exclusions."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 import json,uuid
 from datetime import datetime
 from pathlib import Path
 import numpy as np,pandas as pd,plotly.graph_objects as go,streamlit as st
 from plotly.subplots import make_subplots
-STORE=PACKAGE_ROOT/'data'/'backtest_runs'
+STORE=runtime_data_dir()/'backtest_runs'
 
 def save_run(settings,trades,skips,coverage):
  STORE.mkdir(parents=True,exist_ok=True)

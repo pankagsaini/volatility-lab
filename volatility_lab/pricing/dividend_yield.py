@@ -1,4 +1,5 @@
 """Official index factsheet dividend yields; dated proxy, not forward dividends."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import datetime,timezone
 from pathlib import Path
@@ -8,7 +9,7 @@ from pypdf import PdfReader
 from collector_support import atomic_json
 from collector_support import IST
 
-ROOT=PACKAGE_ROOT/'data'
+ROOT=runtime_data_dir()
 SOURCES={'NIFTY':'https://www.niftyindices.com/Factsheet/ind_nifty50.pdf','BANKNIFTY':'https://www.niftyindices.com/Factsheet/ind_nifty_bank.pdf'}
 _lock=threading.Lock()
 

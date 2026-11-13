@@ -1,6 +1,7 @@
 """Private Drive mirror -> durable local archive -> existing lab stores (Accelerated v4).
 No network credentials; Google Drive desktop supplies the authenticated filesystem.
 """
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
 from contextlib import closing
@@ -11,7 +12,7 @@ import numpy as np
 from collector_support import atomic_json,read_json,data_lock,STATE
 from market_calendar import HOLIDAYS
 ROOT=PACKAGE_ROOT
-DATA=ROOT/'data'
+DATA=runtime_data_dir()
 STORE=DATA/'google_archive'
 CONFIG=ROOT/'cloud'/'apps_script'/'sync_config.json'
 STREAM_SETTLE_SECONDS=3.0
@@ -42,7 +43,8 @@ def _cached_one_year_csv(symbol: str):
 
 
 def source_folder():
-    configured=(read_json(CONFIG, default={}) or {}).get('source_folder')
+    from volatility_lab.runtime.settings import load_settings
+    configured=load_settings().archive_dir or (read_json(CONFIG, default={}) or {}).get('source_folder')
     candidates=[Path(configured)] if configured else []
     for letter in 'DEFGHIJKLMNOPQRSTUVWXYZ':
         candidates.append(Path(letter+':/')/'My Drive'/'Volatility Lab - private Upstox archive')
@@ -309,10 +311,21 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
     STORE.mkdir(parents=True,exist_ok=True)
     source=source_folder()
     if source is None:
-        web_url = (read_json(CONFIG, default={}) or {}).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpiRAE9ZRoGGWTyTncZhwUPmTnimv0HyejOiJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
+        from volatility_lab.runtime.settings import load_settings
+        settings = load_settings()
+        if settings.offline or not settings.cloud_url:
+            return 0
+        web_url = settings.cloud_url
         try:
             import requests
-            resp = requests.get(web_url, timeout=12, allow_redirects=True)
+            from volatility_lab.runtime.external import external_reads
+            from urllib.error import HTTPError
+            def read_snapshot():
+                response = requests.get(web_url, timeout=12, allow_redirects=True)
+                if response.status_code >= 400:
+                    raise HTTPError(web_url, response.status_code, 'Cloud read failed', response.headers, None)
+                return response
+            resp = external_reads.read('apps_script', read_snapshot)
             if resp.status_code == 200:
                 try:
                     obj = validate_report(resp.json())

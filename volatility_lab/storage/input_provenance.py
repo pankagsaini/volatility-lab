@@ -1,5 +1,6 @@
 """Retain pricing inputs beside raw broker captures; never store credentials."""
 from __future__ import annotations
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 
 import hashlib
@@ -8,7 +9,7 @@ import math
 from pathlib import Path
 from typing import Any
 
-ROOT = PACKAGE_ROOT / "data"
+ROOT = runtime_data_dir()
 
 
 def _sanitize_for_json(obj: Any) -> Any:

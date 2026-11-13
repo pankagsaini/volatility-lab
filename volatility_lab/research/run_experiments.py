@@ -1,4 +1,5 @@
 """Explicit reproducible research run, never triggered by periodic refresh."""
+from volatility_lab.runtime.settings import data_for_root
 from volatility_lab import PACKAGE_ROOT
 import os
 os.environ.setdefault('OPENBLAS_NUM_THREADS','1')
@@ -16,8 +17,8 @@ from volatility_regime import regime_input
 
 
 def run(root,symbol,progress=None):
-    source=regime_input(root/'data',symbol);raw=source.read_bytes()
-    folder=root/'data'/'experiments'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')+'_'+symbol+'_'+uuid.uuid4().hex[:6])
+    source=regime_input(data_for_root(root),symbol);raw=source.read_bytes()
+    folder=data_for_root(root)/'experiments'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')+'_'+symbol+'_'+uuid.uuid4().hex[:6])
     folder.mkdir(parents=True);(folder/'input.csv').write_bytes(raw)
     metadata={'status':'running','symbol':symbol,'version':VERSION,'seed':417,'simulations':2048,
         'training':'Rolling calendar year, minimum 200 returns','horizons':[5,10,20,30],

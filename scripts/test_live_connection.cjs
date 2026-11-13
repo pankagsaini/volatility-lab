@@ -37,10 +37,8 @@ web.pricingInputs = {schema:1,rate:{model_rate:.066,source:'https://www.rbi.org.
 for (const [, script] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) new vm.Script(script);
 assert.equal(html, fs.readFileSync(path.join(root, 'docs/index.html'), 'utf8'));
 const webAppUrl = html.match(/var CLOUD_EXEC_URL = '([^']+)'/)[1];
-for (const filename of ['manual_download_session.py', 'google_archive_sync.py']) {
-  const client = fs.readFileSync(path.join(root, 'volatility_lab', 'ingestion', filename), 'utf8');
-  assert(client.includes(webAppUrl), filename + ' and the website must use the same deployment');
-}
+const syncConfig = JSON.parse(fs.readFileSync(path.join(root,'volatility_lab/cloud/apps_script/sync_config.json'),'utf8'));
+assert.equal(syncConfig.web_app_url,webAppUrl,'Frontend and default collector deployment must match');
 
 function candles() {
   let close = 25000;

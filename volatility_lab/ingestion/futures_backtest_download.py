@@ -1,4 +1,5 @@
 """Resumable futures backtest downloader with complete 'data' payload caching and clean status handling."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import datetime, date, timedelta
 from pathlib import Path
@@ -12,7 +13,7 @@ except ImportError:
     msvcrt = None
 from collector_support import atomic_json
 
-ROOT = PACKAGE_ROOT / 'data' / 'futures_backtest'
+ROOT = runtime_data_dir() / 'futures_backtest'
 ROOT.mkdir(parents=True, exist_ok=True)
 
 

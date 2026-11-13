@@ -1,4 +1,5 @@
 """Three-year Upstox-backed futures history and strictly prior carry context."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from contextlib import closing
 from pathlib import Path
@@ -10,7 +11,7 @@ from collector_support import serialized
 from market_calendar import last_trading_day_on_or_before
 
 VERSION='rolling-carry-v1'
-LISTED_CALENDAR=PACKAGE_ROOT/'data'/'listed_monthly_expiries.json'
+LISTED_CALENDAR=runtime_data_dir()/'listed_monthly_expiries.json'
 def monthly_expiry(symbol,month,as_of):
     month=pd.Timestamp(month).to_period('M');as_of=pd.Timestamp(as_of).normalize()
     if month>pd.Period('2026-12'):

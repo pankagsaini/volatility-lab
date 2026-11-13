@@ -1,4 +1,5 @@
 """Intraday loader and simulator; sparse snapshots are marks only and cannot create executable minute fills."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
@@ -7,8 +8,8 @@ from collections import OrderedDict
 import pandas as pd
 from backtest_common import record_skip
 
-ROOT = PACKAGE_ROOT / 'data/backtest_1minute'
-DATA_DIR = PACKAGE_ROOT / 'data'
+ROOT = runtime_data_dir() / 'backtest_1minute'
+DATA_DIR = runtime_data_dir()
 EXECUTION_MODEL_VERSION = 'v3_prior_minute_required'
 _CACHE_LOCK = threading.RLock()
 _FILE_CACHE = OrderedDict()

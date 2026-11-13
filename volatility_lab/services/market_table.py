@@ -1,5 +1,6 @@
 """Market table, ATM Black-76 & broker IV extraction, and historical volatility alignment."""
 from __future__ import annotations
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 
 from datetime import datetime, time, timedelta
@@ -28,7 +29,7 @@ from option_math import (
 )
 
 ROOT = PACKAGE_ROOT
-DATA = ROOT / 'data'
+DATA = runtime_data_dir()
 INDICES = {
     'NIFTY': 'NIFTY 50',
     'BANKNIFTY': 'NIFTY BANK',

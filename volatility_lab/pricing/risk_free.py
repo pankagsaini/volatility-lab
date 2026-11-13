@@ -1,4 +1,5 @@
 """RBI 91-day auction cutoff yield; cached and converted to continuous ACT/365."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import datetime,timezone
 from html import unescape
@@ -7,7 +8,7 @@ import json,math,re,threading,hashlib
 from urllib.request import Request,urlopen
 from collector_support import atomic_json
 URL='https://www.rbi.org.in/'
-PATH=PACKAGE_ROOT/'data'/'risk_free_rate.json'
+PATH=runtime_data_dir()/'risk_free_rate.json'
 _lock=threading.Lock()
 
 def parse_rate(html):

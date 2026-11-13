@@ -12,6 +12,7 @@
    to market against timestamped, two-sided option books, and auto-closes them at 15:15 IST or on SL/TP hit.
 """
 from __future__ import annotations
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 
 import copy
@@ -39,7 +40,7 @@ except ImportError:
     from .market_calendar import HOLIDAYS as CALENDAR_HOLIDAYS  # type: ignore
 
 ROOT = PACKAGE_ROOT
-DATA_DIR = ROOT / "data"
+DATA_DIR = runtime_data_dir()
 LEDGER_FILENAME = "forward_test_ledger.json"
 
 MIN_FORWARD_DATE = "2026-11-11"

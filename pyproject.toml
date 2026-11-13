@@ -40,9 +40,14 @@ dev = [
     "ruff>=0.8.0",
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
+    "hypothesis>=6.100",
+    "pip-audit>=2.7",
     "setuptools>=68.0",
     "wheel",
 ]
+
+[tool.uv]
+required-environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'", "sys_platform == 'win32' and platform_machine == 'AMD64'"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -52,8 +57,10 @@ include = ["volatility_lab*"]
 volatility_lab = [
     "data/*.json",
     "data/*.csv",
-    "data/*.sqlite",
-    "data/google_archive/*.json.gz",
+    "data/charges/upstox/current.json",
+    "data/dividend_sources/*.txt",
+    "data/upstox/*.json",
+    "cloud/apps_script/sync_config.json",
 ]
 
 [tool.ruff]

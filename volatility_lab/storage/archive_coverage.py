@@ -2,6 +2,7 @@
 
 Queue row totals are not unique candles; unobserved dates are not inferred holidays.
 """
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
 from contextlib import closing
@@ -9,7 +10,7 @@ from datetime import date,datetime,timedelta,timezone
 import json,sqlite3
 from collections import defaultdict,Counter
 
-ROOT=PACKAGE_ROOT/'data'/'backtest_1minute'
+ROOT=runtime_data_dir()/'backtest_1minute'
 
 def readonly(path):
     return sqlite3.connect(path.resolve().as_uri()+'?mode=ro',uri=True,timeout=5)

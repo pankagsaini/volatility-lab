@@ -20,3 +20,9 @@ Review supplied 13 November 2026. Findings were checked against the current repo
 3. **Validation/data:** dependency/security checks, property tests, coverage gate and safe runtime/artifact separation.
 
 Each stage must pass full CI and retain browser pricing/provenance tests. Structural cleanup must not change pricing policy, fabricate IV or rewrite historical captures.
+
+## Operational changes and validation
+
+The desk and local service use validated environment settings. Profiles have separate stores by default. The health CLI reports SQLite readability, archive sync and saved snapshot age. Broker, official-source and cloud snapshot reads now have bounded retries, backoff and a process-local circuit breaker. The archive importer supplies the seed utility with verified records. Bundled reference inputs have a checksummed versioned manifest.
+
+CI uses a checked dependency lock, audits resolved packages, enforces the 31% package-wide baseline and tests numerical properties. Archived 3D surfaces use recorded broker IV. Interpolation is a display calculation restricted to the observed strike range. See the [operator runbook](operations.md).

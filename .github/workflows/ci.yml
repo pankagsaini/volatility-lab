@@ -35,8 +35,10 @@ jobs:
 
       - name: Install package & dependencies in editable mode
         run: |
-          python -m pip install --upgrade pip
-          pip install -e .[dev]
+          python -m pip install uv==0.13.8
+          uv export --locked --extra dev --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/volatility-lock.txt"
+          python -m pip install --require-hashes -r "$RUNNER_TEMP/volatility-lock.txt"
+          python -m pip install --no-deps -e .
 
       - name: Run Focused Ruff Linter (volatility_lab & scripts)
         run: |
@@ -44,7 +46,10 @@ jobs:
 
       - name: Run Automated Remediation & Audit Tests
         run: |
-          python -m pytest -ra --cov=volatility_lab --cov-branch --cov-report=term:skip-covered --cov-report=xml
+          python -m pytest -ra --cov=volatility_lab --cov-branch --cov-report=term:skip-covered --cov-report=xml --cov-fail-under=31
+
+      - name: Audit installed dependencies
+        run: python -m pip_audit --local --skip-editable --disable-pip
 
       - name: Retain coverage report
         if: always()

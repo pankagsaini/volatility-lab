@@ -1296,7 +1296,7 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
         self.assertIn("volatility_lab = [", pyproject_text)
         self.assertIn('"data/*.json"', pyproject_text)
         self.assertIn('"data/*.csv"', pyproject_text)
-        self.assertIn('"data/*.sqlite"', pyproject_text)
+        self.assertNotIn('"data/*.sqlite"', pyproject_text)
 
     def test_39_market_calendar_horizon_boundary_and_warning(self):
         """Verify market calendar boundary protections and horizon warning protocol."""

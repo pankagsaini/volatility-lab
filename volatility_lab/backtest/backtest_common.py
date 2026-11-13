@@ -1,10 +1,11 @@
 """Shared helpers, contract blacklists, and dated NSE lot size schedule for Options and Futures backtests."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
 import json
 
 ROOT = PACKAGE_ROOT
-BLACKLIST_PATH = ROOT / 'data' / 'backtest_blacklist.json'
+BLACKLIST_PATH = runtime_data_dir() / 'backtest_blacklist.json'
 BLACKLISTED_OPTIONS = set()
 BLACKLISTED_FUTURES = set()
 

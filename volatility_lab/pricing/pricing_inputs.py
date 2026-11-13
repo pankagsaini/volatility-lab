@@ -1,4 +1,5 @@
 """Fast cached pricing inputs; official-source checks never block rendering (Black-76 Forward Model Edition)."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -14,7 +15,7 @@ PRICING_MODEL = 'Black-76'
 PRICING_MODEL_LABEL = 'Black-76 Forward Model · F = K + e^{rT}(C − P)'
 DEFAULT_RISK_FREE_RATE = float('nan')  # Missing official inputs must remain unavailable.
 
-_ROOT = PACKAGE_ROOT / 'data'
+_ROOT = runtime_data_dir()
 _pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='pricing-inputs')
 _lock = threading.Lock()
 _future = None
@@ -34,6 +35,9 @@ def _refresh():
 
 
 def ensure_refresh():
+    from volatility_lab.runtime.settings import load_settings
+    if load_settings().offline:
+        return None
     global _future, _started
     with _lock:
         if _future is not None and (not _future.done() or time.monotonic() - _started < 3600):

@@ -1,4 +1,5 @@
 """Standalone local options dashboard; no trading actions (Accelerated v7)."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 
 from pathlib import Path
@@ -26,8 +27,8 @@ if not (ROOT/'market_data.py').exists() and (ROOT/'Volatility Lab'/'market_data.
 def _cached_pricing_inputs(ttl_seconds: float = 60.0):
     """Cache risk-free rate and dividend yields in session_state with file-mtime + TTL check."""
     now_mono = time.monotonic()
-    r_path = ROOT / 'data' / 'risk_free_rate.json'
-    d_path = ROOT / 'data' / 'dividend_yields.json'
+    r_path = runtime_data_dir() / 'risk_free_rate.json'
+    d_path = runtime_data_dir() / 'dividend_yields.json'
     try:
         r_mtime = r_path.stat().st_mtime_ns if r_path.exists() else 0
     except OSError:
@@ -115,7 +116,9 @@ def _has_upstox_secret():
     except Exception:
         return False
 
-has_upstox_token = TOKEN_PATH.exists() or bool(os.environ.get('UPSTOX_TOKEN')) or _has_upstox_secret()
+from volatility_lab.runtime.settings import load_settings
+settings = load_settings()
+has_upstox_token = not settings.offline and (TOKEN_PATH.exists() or settings.upstox_token or _has_upstox_secret())
 
 if has_upstox_token:
     token_mtime = TOKEN_PATH.stat().st_mtime_ns if TOKEN_PATH.exists() else 1
@@ -167,7 +170,7 @@ mkt_label = "● Market Live" if is_open else ("◐ Pre-Open" if is_pre else "�
 
 cloud_url = "https://pankagsaini-volatility-lab-streamlit-app-nqnqoa.streamlit.app/"
 repo_url = "https://github.com/pankagsaini/volatility-lab"
-edit_url = "https://github.com/pankagsaini/volatility-lab/edit/master/Volatility%20Lab/dashboard.py"
+edit_url = "https://github.com/pankagsaini/volatility-lab/edit/master/volatility_lab/ui/dashboard.py"
 try:
     lan_ip = ui_theme.get_lan_ip()
 except Exception:
@@ -219,8 +222,9 @@ st.session_state.market_workspace = workspace
 
 @st.fragment(run_every=30)
 def cloud_sync_status():
-    google_archive_sync.ensure_sync(rate, dividend, spread)
-    info = read_json(ROOT / 'data' / 'google_archive' / 'status.json')
+    if not settings.offline:
+        google_archive_sync.ensure_sync(rate, dividend, spread)
+    info = read_json(runtime_data_dir() / 'google_archive' / 'status.json')
     if info and (info.get('total_files') or info.get('updated')):
         sync_version = (info.get('total_files', 0), info.get('updated', ''))
         previous = st.session_state.setdefault('_cloud_seen', sync_version)
@@ -237,7 +241,7 @@ dividend_ready=all(v is not None for v in dividend.values())
 if dividend_ready:
     reg_sig = (rate, tuple(sorted(dividend.items())), spread)
     if st.session_state.get('_registered_pricing_sig') != reg_sig:
-        register(ROOT/'data'/'monitor.sqlite',rate,dividend,spread)
+        register(runtime_data_dir()/'monitor.sqlite',rate,dividend,spread)
         st.session_state['_registered_pricing_sig'] = reg_sig
 
 if workspace=='Backtest':
@@ -245,7 +249,7 @@ if workspace=='Backtest':
     backtest_ui.render()
 elif workspace=='Forward Test':
     import forward_test
-    forward_test.render_forward_test_ui(ROOT/'data')
+    forward_test.render_forward_test_ui(runtime_data_dir())
 else:
     if not dividend_ready:st.info('Dividend inputs unavailable; broker data remains available, model scenarios are withheld.')
     monitor_ui.render_monitor(rate,dividend,spread)

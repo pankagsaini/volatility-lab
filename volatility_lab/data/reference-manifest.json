@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "hash": "sha256, LF-normalized text",
+  "files": {
+    "banknifty_one_year.csv": "e331dacc6d05746d3eab10c67b0adbe57dd6ff4b3260d18ee918925c3b8da79d",
+    "banknifty_option_quotes_2026-11-23.json": "1e2935fdbec3935074cce6226dc08a29e691ec0e33b70ae433c064351c9bd176",
+    "banknifty_option_quotes_2026-12-29.json": "48e098722334e083432d39dc51dec827cd4925bdacca92c49e73e199ba80236c",
+    "banknifty_option_quotes_2027-01-25.json": "a7558140a939259f85c0fd68ac83b46e1d4570f2b8bc4210be396d9da7930928",
+    "charges/upstox/current.json": "55808c110fddcef61239d0650c238de859c47a38c8ddf9583de812b3b0287fbc",
+    "dividend_sources/BANKNIFTY.txt": "a5bac9118f1ed1c6c46dcf06d0ba759e49b063bade200e2c5e5c1fad7b2b8e33",
+    "dividend_sources/NIFTY.txt": "c747dead75faf3cfc95589ebec80b4627ff3e076c18a598b91a91951fdebd704",
+    "dividend_yields.json": "ff99e2792c10b53a203152f0a5080668c3d7be1138958f28a1b835b6a8db016a",
+    "expiry_latest.json": "2c5d8cf200a4511d0c3f1120ef980edaa8917cc33b8c861cc20cbfa924532071",
+    "forward_test_ledger.json": "2a9848adb3cf960cb75be89084e2575a9265b1057f745befa2afcfcf1fe07b02",
+    "index_contracts.csv": "b89cb53ed3195e5b35e5347fe5b662036bd463ff5c712e7137e47ab750e26f0d",
+    "listed_monthly_expiries.json": "b0e36dab7979285399aade6aa73c2c7a3c87d0142f457e0b5c3dcf297ce54320",
+    "macro_event_calendar_cache.json": "85019c4b4f8b49ac2d7f6b986adf8e3890d35f1ebd301d6f005025cbe83f808c",
+    "nifty_daily.csv": "085b5fbfb3e7f6b7ac1e748d1576296de638ad354442c217c5641d75839c8dbe",
+    "nifty_one_year.csv": "98dd9d590a4a5a0f4bea0ed45f4e526058a6675932309c69971a9079387ec1a7",
+    "nifty_option_quotes_2026-11-17.json": "26bbd100ee13acddc0efbd85ef3b4cc301588aad58257deaccdd90a8aeb2c070",
+    "nifty_option_quotes_2026-11-23.json": "9b6300e89983d5f8d58bce36f4bebbe4efed852b83042a145cae832108010ea1",
+    "nifty_option_quotes_2026-12-01.json": "845461db75f1c1c1418b063b116ce773c5829a0af67249b5fe7338af884af814",
+    "nifty_option_quotes_2026-12-08.json": "4c46df964f081ba647f09e0ced2fa3f0cd9f40fb077043887efc94e64fe36ef4",
+    "nifty_option_quotes_2026-12-29.json": "70ab4ddf537ddae5a135f8bbb4974ff00c6394bb7d12d46555aecfb56439ad75",
+    "nifty_option_quotes_2027-01-25.json": "ac0fe74e4cab7ecc2c15c7406b2a5a2d95ce73b247b4d370fcedba2b72c5a670",
+    "nse_event_calendar_cache.json": "4f9e1456a72d7e33f6e612371a22192c86811cf9e79e57ce7afdbdf96b988307",
+    "risk_free_rate.json": "278e368522025b99a62a22f492b63a99dfd7f9049c062bbd68f0f98281eb24f1",
+    "upstox/BANKNIFTY_expiries.json": "b47c9b5df9b45853fa13d9fe5ba9fa96bde7b182f903c0e4210da8c78cb2a06b",
+    "upstox/NIFTY_expiries.json": "90cac773bbf0d7b0fb8c180379fe062dba15e0aeeb54ce3131e00a49dca4fe46",
+    "upstox/master.json": "b7a9216a307e87803c632b1fd35ed6e48b874ebe931e14cf8aada2ee40d189b2"
+  }
+}

@@ -42,12 +42,13 @@ def test_all_streamlit_entries_delegate_to_single_bootstrap():
 def test_bootstrap_reexecutes_cached_code_for_streamlit_reruns(tmp_path, monkeypatch):
     from volatility_lab.runtime import bootstrap
     source = tmp_path/'dashboard.py'
-    source.write_text("count = globals().get('count',0)+1\n")
+    output = tmp_path/'reruns.txt'
+    source.write_text(f"assert 'session_client' not in globals()\nsession_client=object()\nwith open({str(output)!r},'a') as f: f.write('1')\n")
     monkeypatch.setattr(bootstrap, 'DASHBOARD_FILE', source)
     monkeypatch.setattr(sys, bootstrap._CACHE_KEY, None, raising=False)
-    monkeypatch.setattr(sys, bootstrap._SCOPE_KEY, None, raising=False)
+    monkeypatch.setenv('VOL_LAB_DATA_DIR', str(tmp_path / 'references'))
     bootstrap.run(); bootstrap.run()
-    assert getattr(sys, bootstrap._SCOPE_KEY)['count'] == 2
+    assert output.read_text() == '11'
 
 
 def test_launcher_propagates_exit_status_and_defaults_to_loopback(monkeypatch):

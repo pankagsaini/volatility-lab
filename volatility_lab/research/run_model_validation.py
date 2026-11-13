@@ -1,4 +1,5 @@
 """One-year out-of-sample origins, independently refitted rolling-year models."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
 from datetime import datetime,timezone
@@ -24,7 +25,7 @@ def run(symbol,years=None):
     end=pd.Timestamp(frame.Date.max())
     start=end-pd.DateOffset(years=years) if years else pd.Timestamp(frame.Date.min())+pd.DateOffset(years=1)
     config=ValidationConfig(horizons=(5,10,20,30,60))
-    folder=root/'data'/'validation'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'_'+symbol)
+    folder=runtime_data_dir()/'validation'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'_'+symbol)
     folder.mkdir(parents=True)
     raw=frame.to_csv(index=False).encode();(folder/'input.csv').write_bytes(raw)
     meta={'status':'running','symbol':symbol,'evaluation_start':str(start.date()),'data_through':str(end.date()),

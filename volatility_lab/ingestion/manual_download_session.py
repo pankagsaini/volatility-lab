@@ -3,6 +3,7 @@
 Discovers and downloads 1-minute OHLCV candles, synthesizes intraday snapshots,
 saves them to Google Drive and local backtest caches, and synchronizes monitor.sqlite.
 """
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -17,21 +18,24 @@ import urllib.request
 from zoneinfo import ZoneInfo
 
 ROOT = PACKAGE_ROOT
-DATA = ROOT / 'data'
+DATA = runtime_data_dir()
 IST = ZoneInfo('Asia/Kolkata')
 SYNC_CONFIG = ROOT / 'cloud' / 'apps_script' / 'sync_config.json'
 
 
 def load_sync_config():
-    if SYNC_CONFIG.exists():
-        try:
-            return json.loads(SYNC_CONFIG.read_text(encoding='utf-8'))
-        except Exception:
-            pass
-    return {
-        "source_folder": "G:/My Drive/Historical Data/Volatility Lab - private Upstox archive",
-        "web_app_url": "https://script.google.com/macros/s/AKfycbxDbTwpiRAE9ZRoGGWTyTncZhwUPmTnimv0HyejOiJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec"
-    }
+    from volatility_lab.runtime.settings import load_settings
+    settings = load_settings()
+    try:
+        saved = json.loads(SYNC_CONFIG.read_text(encoding='utf-8'))
+    except (OSError,ValueError):
+        saved = {}
+    if settings.offline or not settings.cloud_url:
+        raise ValueError('Cloud download requires an enabled Apps Script connection')
+    folder = settings.archive_dir or saved.get('source_folder')
+    if not folder:
+        raise ValueError('Set VOL_LAB_ARCHIVE_DIR before downloading a session')
+    return {'source_folder':str(folder), 'web_app_url':settings.cloud_url}
 
 
 def query_cloud_endpoint(url: str, params: dict, timeout: int = 45):
