@@ -25,39 +25,5 @@ const OptionsCharts = (() => {
     return points.filter(p => new Date(Date.parse(p.snapshotId || p.markAt) + 19800000).toISOString().startsWith(session))
       .map(p => ({...p, strad:p.markSource === 'paired_book_mid' && p.cQuoteAt && p.pQuoteAt ? p.strad : null}));
   }
-  function expiryForecast(models, row, sessions) {
-    const dayMs = 86400000;
-    const istOffset = 19800000;
-    const at = Date.parse(row.snapshotId || row.ivCapturedAt);
-    if (!Number.isFinite(at) || !/^\d{4}-\d{2}-\d{2}$/.test(row.expiry || '')) return null;
-    const local = new Date(at + istOffset);
-    const day = local.toISOString().slice(0,10);
-    const expiry = Date.parse(row.expiry);
-    const today = Date.parse(day);
-    if (!(expiry > today) || expiry - today > 380 * dayMs || !sessions.session(row.expiry)) return null;
-    const session = sessions.session(day);
-    const minutes = (at + istOffset - today) / 60000;
-    let close = session && minutes >= session.endMins + 5 ? today : today - dayMs;
-    while (!sessions.session(new Date(close).toISOString().slice(0,10))) close -= dayMs;
-    const trainedThrough = new Date(close).toISOString().slice(0,10);
-    const forecast = models?.[trainedThrough];
-    if (!forecast) return null;
-
-    let variance = 0, weightSum = 0, step = 0;
-    let usableGarch = Array.isArray(forecast.garch_variances);
-    for (let ts = close + dayMs; ts <= expiry; ts += dayMs) {
-      const window = sessions.session(new Date(ts).toISOString().slice(0,10));
-      if (!window) continue;
-      const weight = ts < today ? 0 : ts === today
-        ? Math.max(0, Math.min(1, (window.endMins - minutes) / (window.endMins - window.startMins))) : 1;
-      const next = forecast.garch_variances?.[step++];
-      if (positive(next)) variance += next * weight;
-      else usableGarch = false;
-      weightSum += weight;
-    }
-    if (step > 245 || !(weightSum > 0)) return null;
-    return {trainedThrough, garch: usableGarch ? Math.sqrt(variance / weightSum) : null,
-      ewma: positive(forecast.ewma) ? forecast.ewma : null};
-  }
-  return {smile, straddleSeries, expiryForecast};
+  return {smile, straddleSeries};
 })();

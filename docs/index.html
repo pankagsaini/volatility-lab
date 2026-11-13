@@ -13,7 +13,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070b12' stroke='%238b5cf6' stroke-width='3'/%3E%3Cpath d='M32 10 L52 32 L32 54 L12 32 Z' fill='%2338bdf8' fill-opacity='0.18' stroke='%2338bdf8' stroke-width='3'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%2334d399'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="scripts/trading-sessions.js"></script>
-  <script src="scripts/options-charts.js?v=2"></script>
+  <script src="scripts/options-charts.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -120,16 +120,8 @@
     button:focus-visible, select:focus-visible, input:focus-visible {
       outline: 2px solid #38bdf8; outline-offset: 3px;
     }
-    #researchTabs { display: flex; flex-wrap: wrap; max-width: 100%; }
+    #researchTabs { max-width: 100%; flex-wrap: nowrap; overflow-x: auto; }
     #researchTabs button { white-space: nowrap; }
-    .option-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
-    .option-summary .kpi-card { padding: 8px 12px; }
-    .options-chart { height: 390px; }
-    .overflow-x-auto.compact-table table { min-width: 0; }
-    .trade-facts { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px 12px; }
-    .trade-facts dt { font-size: 12px; color: #cbd5e1; }
-    .trade-facts dd { font-variant-numeric: tabular-nums; color: #f1f5f9; }
-    .detail-toggle > summary { cursor: pointer; }
     canvas { max-width: 100%; }
     .overflow-x-auto table { min-width: 520px; }
     #regimeHistoryDates { white-space: nowrap; font-size: 11px; }
@@ -137,19 +129,6 @@
     @media (max-width: 640px) {
       .desk-panel { padding: 12px; }
       .kpi-card { padding: 10px; }
-      .desk-header { padding: 8px 10px; gap: 6px; }
-      .desk-header-start { width: 100%; gap: 6px; }
-      .desk-header .seg-btn { min-height: 32px; padding-inline: 7px; font-size: 12px; }
-      #headerOptionsControls { width: 100%; gap: 5px; flex-wrap: nowrap; }
-      #activeExpirySelect { flex: 1; min-width: 0; min-height: 32px; font-size: 12px; padding-inline: 5px; }
-      .option-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
-      #researchTabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); width: 100%; }
-      #researchTabs button { padding-inline: 4px; }
-      #researchTabs .seg-btn, #tab1Controls .seg-btn { min-height: 32px; padding-block: 3px; }
-      #tab1Controls .seg-btn { padding-inline: 6px; font-size: 12px; }
-      .options-chart { height: 315px; }
-      .compact-table th, .compact-table td { padding-inline: 6px; }
-      .trade-facts { grid-template-columns: repeat(2,minmax(0,1fr)); }
       #deskToast { left: 12px; right: 12px; }
     }
   </style>
@@ -167,8 +146,8 @@
     <!-- =================================================================== -->
     <!-- SINGLE COMPACT DESK BAR (With Market-Hours Gate & Status Badge)     -->
     <!-- =================================================================== -->
-    <header class="desk-header flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#0d1522] border border-[#24344d] border-l-4 border-l-sky-500 rounded-xl">
-      <div class="desk-header-start flex flex-wrap items-center gap-3">
+    <header class="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#0d1522] border border-[#24344d] border-l-4 border-l-sky-500 rounded-xl">
+      <div class="flex flex-wrap items-center gap-3">
         <div class="flex items-center gap-2">
           <span class="text-sky-400 font-bold text-lg">❖</span>
           <span class="font-extrabold text-base tracking-tight text-white">Volatility Lab</span>
@@ -192,61 +171,79 @@
       </div>
 
       <!-- Right: Clean Market Context & Dynamic Market-Hours Gate Pill -->
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">
+      <div class="flex items-center gap-3 mono text-xs">
+        <span class="text-slate-300 hidden sm:inline">INDIA VIX: <strong id="headerVixVal" class="text-sky-300">16.62%</strong></span>
         <span id="marketClockPill" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#070b12] border border-[#334155] text-slate-300 font-semibold">
           <span id="livePulseDot" class="hidden w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
           <span id="marketClockText">Checking market status</span>
         </span>
-        <span id="snapshotAsOf"></span>
       </div>
-      <span id="liveCaptureIntegrity" role="status" class="sr-only"></span>
     </header>
+    <div class="flex flex-wrap justify-between gap-2 px-1 text-xs text-slate-300">
+      <span id="snapshotAsOf" class="mono"></span>
+      <span id="liveCaptureIntegrity" role="status">Checking live connection…</span>
+    </div>
 
     <!-- =================================================================== -->
     <!-- WORKSPACE 1: OPTIONS DESK (100% Pure Quantitative Data)             -->
     <!-- =================================================================== -->
     <main id="workspaceOptions" class="space-y-3.5">
 
-      <div class="option-summary" aria-label="Options overview">
-        <div class="kpi-card">
-          <div class="text-xs font-semibold text-slate-300">Index spot</div>
-          <div id="kpiSpot" class="text-base font-bold text-white">—</div>
-          <div id="kpiVix" class="text-slate-300"></div>
+      <!-- ROW 1: 6 PURE QUANTITATIVE KPI CARDS (Zero Trading Tips) -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        <div class="kpi-card border-t-2 border-t-sky-400">
+          <div class="text-[11px] font-bold uppercase text-slate-300">Spot &amp; Futures</div>
+          <div id="kpiSpot" class="text-lg mono font-extrabold text-white mt-0.5">25,299.35</div>
+          <div id="kpiForwardSub" class="text-[11px] mono text-slate-300 mt-0.5">Future: 25,314.00 · Synthetic Future: 25,290.84</div>
         </div>
-        <div class="kpi-card">
-          <div class="text-xs font-semibold text-slate-300">ATM IV</div>
-          <div id="kpiAtmIv" class="text-base font-bold text-sky-300">—</div>
-          <div id="kpiIvRankSub" class="text-slate-300"></div>
+
+        <div class="kpi-card border-t-2 border-t-sky-400">
+          <div class="text-[11px] font-bold uppercase text-slate-300">ATM IV</div>
+          <div id="kpiAtmIv" class="text-lg mono font-extrabold text-sky-300 mt-0.5">15.59%</div>
+          <div id="kpiIvRankSub" class="text-[11px] mono text-slate-300 mt-0.5">IV Rank: 67th %ile · ATM Strike: 25,300</div>
         </div>
-        <div class="kpi-card">
-          <div class="text-xs font-semibold text-slate-300">HV30</div>
-          <div id="kpiHv30" class="text-base font-bold text-emerald-300">—</div>
-          <div id="kpiHv30Sub" class="text-slate-300"></div>
+
+        <div class="kpi-card border-t-2 border-t-emerald-400">
+          <div class="text-[11px] font-bold uppercase text-slate-300">HV10 &amp; HV30 (Realized)</div>
+          <div id="kpiHvGarch" class="text-lg mono font-extrabold text-emerald-300 mt-0.5">14.99% / 14.78%</div>
+          <div id="kpiHv10Sub" class="text-[11px] mono text-slate-300 mt-0.5">HV20: 15.45% · EWMA: 16.71%</div>
         </div>
-        <div class="kpi-card">
-          <div class="text-xs font-semibold text-slate-300">Expected move to expiry</div>
-          <div id="kpiExpMove" class="text-base font-bold text-white">—</div>
-          <div id="kpiSafeBandSub" class="text-slate-300"></div>
+
+        <div class="kpi-card border-t-2 border-t-emerald-400">
+          <div class="text-[11px] font-bold uppercase text-slate-300">VRP Spread (IV − HV30)</div>
+          <div id="kpiVrpSpread" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">+0.81 pp</div>
+          <div id="kpiGarchGapSub" class="text-[11px] mono text-sky-300 mt-0.5">IV − HV10: +0.60 pp · VIX: 16.62%</div>
+        </div>
+
+        <div class="kpi-card border-t-2 border-t-purple-400">
+          <div class="text-[11px] font-bold uppercase text-slate-300">1σ Expected Move</div>
+          <div id="kpiExpMove" class="text-lg mono font-extrabold text-white mt-0.5">±462 pts (±1.82%)</div>
+          <div id="kpiSafeBandSub" class="text-[11px] mono text-violet-300 mt-0.5">1σ Band: 24,838 – 25,761</div>
+        </div>
+
+        <div class="kpi-card border-t-2 border-t-purple-400">
+          <div class="text-[11px] font-bold uppercase text-slate-300">25Δ Skew &amp; Butterfly</div>
+          <div id="kpiSkew25" class="text-lg mono font-extrabold text-violet-300 mt-0.5">-0.99 / +0.09 pp</div>
+          <div id="kpiSkewSub" class="text-[11px] mono text-slate-300 mt-0.5">RR25 (Put−Call) · BF25 · PCR 0.85</div>
         </div>
       </div>
 
       <!-- ROW 2: 5 RESEARCH TABS (Tabs 1-4 Pure Data + Tab 5 Trade Identification) -->
       <div class="desk-panel space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#24344d] pb-3">
-          <nav class="seg-group" id="researchTabs" aria-label="Options views">
+          <div class="seg-group" id="researchTabs">
             <button type="button" data-tab="regime" class="res-tab-btn seg-btn active">Volatility</button>
             <button type="button" data-tab="term" class="res-tab-btn seg-btn">Term structure</button>
             <button type="button" data-tab="smile" class="res-tab-btn seg-btn">Smile</button>
-            <button type="button" data-tab="straddle" class="res-tab-btn seg-btn">Straddle</button>
-            <button type="button" data-tab="scenarios" class="res-tab-btn seg-btn">Scenarios</button>
+            <button type="button" data-tab="straddle" class="res-tab-btn seg-btn">Straddle &amp; scenarios</button>
             <button type="button" data-tab="trades" class="res-tab-btn seg-btn text-sky-300">Trade setups</button>
-          </nav>
+          </div>
 
           <!-- Context Controls for Tab 1 (Clean Metric & Horizon Selectors) -->
           <div id="tab1Controls" class="flex flex-wrap items-center gap-2">
             <div class="seg-group">
-              <button type="button" data-metric="levels" class="metric-btn seg-btn active">IV &amp; HV</button>
-              <button type="button" data-metric="spread" class="metric-btn seg-btn">IV − HV</button>
+              <button type="button" data-metric="levels" class="metric-btn seg-btn active">IV, HV10 &amp; HV30 (%)</button>
+              <button type="button" data-metric="spread" class="metric-btn seg-btn">VRP Spread (IV − HV)</button>
             </div>
             <div class="seg-group">
               <button type="button" data-range="1M" class="range-btn seg-btn active">1M</button>
@@ -267,7 +264,7 @@
                 NIFTY · ATM IV (%) vs. HV10 (%) &amp; HV30 (%)
               </span>
             </div>
-            <div class="relative options-chart">
+            <div class="relative" style="height: 410px;">
               <canvas id="regimeMainCanvas"></canvas>
             </div>
             <p id="regimeVolSources" class="mt-2 text-xs text-slate-300"></p>
@@ -325,48 +322,33 @@
                 ATM broker IV by listed expiry
               </span>
             </div>
-            <div class="relative options-chart">
+            <div class="relative" style="height: 410px;">
               <canvas id="termMainCanvas"></canvas>
             </div>
+            <p class="mt-2 text-xs text-slate-300"><strong>Forward volatility</strong> is the annualized volatility implied for the period between two adjacent expiries. It is calculated from the difference in their total implied variance. The table shows it on the later expiry’s row. A negative variance difference leaves the value blank.</p>
           </div>
 
-          <div class="compact-table overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
-            <table class="w-full text-right text-sm">
-              <thead class="bg-[#111c2d] text-slate-200">
-                <tr>
-                  <th scope="col" class="py-2 px-3 text-left">Expiry</th>
-                  <th scope="col" class="py-2 px-3">DTE</th>
-                  <th scope="col" class="py-2 px-3 text-sky-300">ATM IV</th>
-                  <th scope="col" class="py-2 px-3 text-violet-300">Forward vol</th>
-                  <th scope="col" class="py-2 px-3">Straddle (pts)</th>
+          <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
+            <table class="w-full text-left border-collapse text-xs mono">
+              <thead>
+                <tr class="border-b border-[#24344d] bg-[#111c2d] text-white font-bold">
+                  <th class="py-2.5 px-3">Listed Expiry</th>
+                  <th class="py-2.5 px-3">Cycle</th>
+                  <th class="py-2.5 px-3 text-right">DTE</th>
+                  <th class="py-2.5 px-3 text-right">ATM Strike</th>
+                  <th class="py-2.5 px-3 text-right">Synthetic Fut</th>
+                  <th class="py-2.5 px-3 text-right">Dated Fut</th>
+                  <th class="py-2.5 px-3 text-right">Basis (pts)</th>
+                  <th class="py-2.5 px-3 text-right text-sky-300">ATM IV (%)</th>
+                  <th class="py-2.5 px-3 text-right text-purple-300">Forward Vol σ_fwd</th>
+                  <th class="py-2.5 px-3 text-right text-emerald-300">IV − HV30</th>
+                  <th class="py-2.5 px-3 text-right">ATM Straddle (₹)</th>
+                  <th class="py-2.5 px-3 text-right">Total variance</th>
                 </tr>
               </thead>
               <tbody id="termMainTableBody" class="divide-y divide-[#1a2639]"></tbody>
             </table>
           </div>
-          <details class="detail-toggle text-sm text-slate-300">
-            <summary>What is forward volatility?</summary>
-            <p class="mt-2">The annualized volatility implied between adjacent expiries. It appears on the later expiry’s row when the difference in total implied variance is nonnegative.</p>
-          </details>
-          <details class="detail-toggle text-sm text-slate-300">
-            <summary>Term details</summary>
-            <div class="mt-2 overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
-              <table class="w-full text-right text-sm">
-                <thead class="bg-[#111c2d] text-slate-200">
-                  <tr>
-                    <th scope="col" class="py-2 px-3 text-left">Expiry</th>
-                    <th scope="col" class="py-2 px-3">ATM strike</th>
-                    <th scope="col" class="py-2 px-3">Synthetic future</th>
-                    <th scope="col" class="py-2 px-3">Listed future</th>
-                    <th scope="col" class="py-2 px-3">Basis (pts)</th>
-                    <th scope="col" class="py-2 px-3">IV − HV30</th>
-                    <th scope="col" class="py-2 px-3">Total variance</th>
-                  </tr>
-                </thead>
-                <tbody id="termDetailsTableBody" class="divide-y divide-[#1a2639]"></tbody>
-              </table>
-            </div>
-          </details>
         </div>
 
         <!-- =============================================================== -->
@@ -375,78 +357,67 @@
         <div id="panel-smile" class="hidden space-y-4">
           <div class="bg-[#080d16] border border-[#24344d] rounded-xl p-4">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-              <h2 class="font-semibold text-white">Broker smile and forecasts to expiry</h2>
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-200">
+                Captured broker smile · 10Δ put to 10Δ call
+              </span>
+              <label class="text-xs text-slate-300">Table strike range
+                <select id="smileRangeSelect" class="desk-select">
+                  <option value="NEAR">Within 10% of spot</option>
+                  <option value="ALL">All strikes</option>
+                </select>
+              </label>
             </div>
-            <div class="relative options-chart">
-              <canvas id="smileMainCanvas" aria-label="Broker implied volatility and underlying volatility forecasts to expiry" role="img"></canvas>
+            <div class="relative" style="height: 390px;">
+              <canvas id="smileMainCanvas"></canvas>
             </div>
-            <p id="smileSource" class="text-sm text-slate-300 mt-2"></p>
-            <p id="smileForecastSummary" class="text-sm text-slate-300 mt-1" role="status"></p>
+            <div id="smileSource" class="text-xs text-slate-300 mt-2">
+            </div>
           </div>
 
-          <div class="compact-table overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
-            <table class="w-full text-right text-sm">
-              <thead class="bg-[#111c2d] text-slate-200">
-                <tr>
-                  <th scope="col" class="py-2 px-3 text-left">Smile point</th>
-                  <th scope="col" class="py-2 px-3">Strike</th>
-                  <th scope="col" class="py-2 px-3">Broker IV</th>
-                </tr>
-              </thead>
-              <tbody id="smilePointsBody" class="divide-y divide-[#1a2639]"></tbody>
-            </table>
-          </div>
-
-          <details class="detail-toggle text-sm text-slate-300">
-            <summary>25Δ skew</summary>
-            <p id="smileSkew" class="mt-2"></p>
-          </details>
-          <details id="smileChainDetails" class="detail-toggle text-sm text-slate-300">
-            <summary>Full chain</summary>
-            <div class="mt-2 overflow-auto max-h-[520px] rounded-xl border border-[#24344d] bg-[#080d16]">
+          <div class="overflow-auto max-h-[520px] rounded-xl border border-[#24344d] bg-[#080d16]">
             <table class="w-full text-right border-collapse text-xs mono">
               <thead class="sticky top-0">
                 <tr class="border-b border-[#24344d] bg-[#111c2d] text-white font-bold">
                   <th class="py-2.5 px-3 text-left">Moneyness vs spot</th>
                   <th class="py-2.5 px-3">Call OI (k)</th>
-                  <th class="py-2.5 px-3 text-emerald-300">Call LTP (pts)</th>
+                  <th class="py-2.5 px-3 text-emerald-300">Call LTP (₹)</th>
                   <th class="py-2.5 px-3">Call Delta</th>
                   <th class="py-2.5 px-3 text-sky-300">Broker call IV %</th>
                   <th class="py-2.5 px-3 text-center bg-[#070b12]">Strike</th>
                   <th class="py-2.5 px-3 text-violet-300">Broker put IV %</th>
                   <th class="py-2.5 px-3">Put Delta</th>
-                  <th class="py-2.5 px-3 text-sky-300">Put LTP (pts)</th>
+                  <th class="py-2.5 px-3 text-sky-300">Put LTP (₹)</th>
                   <th class="py-2.5 px-3">Put OI (k)</th>
                   <th class="py-2.5 px-3 text-emerald-300">OTM Smile IV %</th>
                 </tr>
               </thead>
               <tbody id="smileMainTableBody" class="divide-y divide-[#1a2639]"></tbody>
             </table>
-            </div>
-          </details>
+          </div>
         </div>
 
         <!-- =============================================================== -->
         <!-- TAB 4: INTRADAY STRADDLE DECAY & POSITION STRESS MATRIX         -->
         <!-- =============================================================== -->
         <div id="panel-straddle" class="hidden space-y-4">
-          <div class="bg-[#080d16] border border-[#24344d] rounded-xl p-4 space-y-3">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <h2 class="font-semibold text-white">Fixed-strike straddle</h2>
-              <div class="seg-group" id="straddleChartModeGroup">
-                <button type="button" data-scmode="intraday" class="scmode-btn seg-btn active">Premium</button>
-                <button type="button" data-scmode="intra_iv" class="scmode-btn seg-btn">Broker IV</button>
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div class="lg:col-span-7 bg-[#080d16] border border-[#24344d] rounded-xl p-4 space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="seg-group" id="straddleChartModeGroup">
+                  <button type="button" data-scmode="intraday" class="scmode-btn seg-btn active">Straddle price</button>
+                  <button type="button" data-scmode="intra_iv" class="scmode-btn seg-btn">Captured IV (%)</button>
+                  <button type="button" data-scmode="payoff" class="scmode-btn seg-btn">Expiry payoff</button>
+                </div>
+                <span id="straddleSummaryBadge" class="text-xs mono text-emerald-400 font-bold">Fixed-strike call + put</span>
+              </div>
+              <div class="relative" style="height: 360px;">
+                <canvas id="straddleMainCanvas"></canvas>
               </div>
             </div>
-            <p id="straddleSummaryBadge" class="text-sm text-slate-200"></p>
-            <div class="relative options-chart"><canvas id="straddleMainCanvas"></canvas></div>
-          </div>
-        </div>
 
-        <div id="panel-scenarios" class="hidden space-y-4">
-          <div class="bg-[#080d16] border border-[#24344d] rounded-xl p-4 space-y-3">
+            <div class="lg:col-span-5 bg-[#080d16] border border-[#24344d] rounded-xl p-4 space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <h2 class="font-semibold text-white">Expiry payoff</h2>
+                <span class="text-xs font-bold uppercase text-white">One-day scenario P&amp;L (₹)</span>
                 <div class="flex items-center gap-2">
                   <select id="stressStructureSelect" aria-label="Stress Structure" class="desk-select mono text-xs py-1">
                     <option value="IRON_CONDOR">Short iron condor</option>
@@ -457,11 +428,7 @@
                   <input id="stressLotsInput" type="number" min="1" max="50" value="1" aria-label="Lots" class="desk-input mono text-xs py-1 w-16 text-center" title="Lots" />
                 </div>
               </div>
-              <p id="scenarioSummary" class="text-sm text-slate-200"></p>
-              <div class="relative options-chart"><canvas id="scenarioMainCanvas"></canvas></div>
-          </div>
-          <div class="bg-[#080d16] border border-[#24344d] rounded-xl p-4 space-y-3">
-              <h2 class="font-semibold text-white">One-day scenario P&amp;L (₹)</h2>
+              <p class="text-[11px] text-slate-300">Black-76 estimate one calendar day ahead, before fees; rate 6.60%. Each leg uses its broker IV plus the column shift. The forward moves with spot.</p>
               <div class="overflow-x-auto rounded-lg border border-[#24344d]">
                 <table class="w-full text-center border-collapse text-xs mono">
                   <thead>
@@ -477,11 +444,9 @@
                   <tbody id="stressMatrixTableBody" class="divide-y divide-[#1a2639]"></tbody>
                 </table>
               </div>
-              <details class="detail-toggle text-sm text-slate-300">
-                <summary>Scenario inputs and legs</summary>
-                <p id="stressModelNote" class="mt-2"></p>
-                <div id="stressGreeksStrip" class="mt-1 leading-relaxed"></div>
-              </details>
+              <p id="stressModelNote" class="text-sm text-slate-300"></p>
+                <div id="stressGreeksStrip" class="text-xs leading-relaxed text-slate-300"></div>
+            </div>
           </div>
         </div>
 
@@ -490,31 +455,59 @@
         <!-- =============================================================== -->
         <div id="panel-trades" class="hidden space-y-4">
           <div class="flex flex-wrap items-center justify-between gap-3 bg-[#080d16] p-3.5 rounded-xl border border-[#24344d]">
-            <h2 class="font-semibold text-white">Trade setups</h2>
-            <div class="flex flex-wrap items-center gap-2 text-sm">
-              <label for="tradeIdIndexFilter" class="text-slate-300">Index</label>
-              <select id="tradeIdIndexFilter" class="desk-select">
-                <option value="ACTIVE" selected>Selected index</option>
-                <option value="ALL">Both indices</option>
-                <option value="NIFTY">NIFTY 50</option>
-                <option value="BANKNIFTY">BANKNIFTY</option>
+            <div class="space-y-0.5">
+              <div class="text-xs font-extrabold uppercase tracking-wider text-sky-300">
+                ❖ Multi-Expiry Quantitative Trade Identification Matrix (S1–S6)
+              </div>
+              <div id="tradeIdSummarySub" class="text-[11px] mono text-slate-300">
+                Evaluates all active expiries against S1–S6 quantitative thresholds, exact strikes, capital, breakevens &amp; ROC %.
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <label for="tradeIdIndexFilter" class="text-slate-300 font-semibold">Index:</label>
+              <select id="tradeIdIndexFilter" class="desk-select mono text-xs py-1">
+                <option value="ACTIVE" selected>Active Index</option>
+                <option value="ALL">All Indices (NIFTY + BANKNIFTY)</option>
+                <option value="NIFTY">NIFTY 50 Only</option>
+                <option value="BANKNIFTY">BANKNIFTY Only</option>
               </select>
-              <label for="tradeIdExpiryFilter" class="text-slate-300">Expiry</label>
-              <select id="tradeIdExpiryFilter" class="desk-select">
-                <option value="SELECTED" selected>Selected expiry</option>
-                <option value="ALL">All listed expiries</option>
+
+              <label for="tradeIdExpiryFilter" class="text-slate-300 font-semibold ml-1">Expiry:</label>
+              <select id="tradeIdExpiryFilter" class="desk-select mono text-xs py-1">
+                <option value="ALL" selected>All Active Expiries</option>
               </select>
-              <label for="tradeIdStatusFilter" class="text-slate-300">Show</label>
-              <select id="tradeIdStatusFilter" class="desk-select">
-                <option value="TRIGGERED" selected>Triggered</option>
-                <option value="ALL">Triggered and watch</option>
+
+              <label for="tradeIdStatusFilter" class="text-slate-300 font-semibold ml-1">Filter:</label>
+              <select id="tradeIdStatusFilter" class="desk-select mono text-xs py-1">
+                <option value="ALL" selected>All 6 Strategies (S1–S6)</option>
+                <option value="TRIGGERED">Triggered Setups Only</option>
               </select>
-              <label for="tradeIdLotsInput" class="text-slate-300">Lots</label>
-              <input id="tradeIdLotsInput" type="number" min="1" max="50" value="1" class="desk-input w-16 text-center" />
+
+              <label for="tradeIdLotsInput" class="text-slate-300 font-semibold ml-1">Lots:</label>
+              <input id="tradeIdLotsInput" type="number" min="1" max="50" value="1" class="desk-input mono text-xs py-1 w-16 text-center" />
             </div>
           </div>
-          <p id="tradeIdSummarySub" class="text-sm text-slate-300" role="status"></p>
-          <div id="tradeIdCards" class="grid grid-cols-1 xl:grid-cols-2 gap-3"></div>
+
+          <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
+            <table class="w-full text-left border-collapse text-xs mono">
+              <thead>
+                <tr class="border-b border-[#24344d] bg-[#111c2d] text-white font-bold">
+                  <th class="py-2.5 px-3">Expiry &amp; DTE</th>
+                  <th class="py-2.5 px-3">Strategy (S1–S6)</th>
+                  <th class="py-2.5 px-3">Status</th>
+                  <th class="py-2.5 px-3">Trigger Metrics (IV / HV / VRP / Skew)</th>
+                  <th class="py-2.5 px-3">Exact Strikes (Per Lot)</th>
+                  <th class="py-2.5 px-3 text-right">Est. Credit / Debit</th>
+                  <th class="py-2.5 px-3 text-right text-sky-300">Capital Used (₹)</th>
+                  <th class="py-2.5 px-3 text-right">Breakeven Band</th>
+                  <th class="py-2.5 px-3 text-right text-emerald-300">Max Profit / Loss (ROC %)</th>
+                  <th class="py-2.5 px-3 text-center">Backtest &amp; Auto-Forward</th>
+                </tr>
+              </thead>
+              <tbody id="tradeIdTableBody" class="divide-y divide-[#1a2639]"></tbody>
+            </table>
+          </div>
         </div>
 
       </div>
@@ -701,20 +694,29 @@
       <div class="desk-panel space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#1e2d42]">
           <div class="flex flex-wrap items-center gap-2.5">
-            <h2 class="font-semibold text-white">Paper trading</h2>
-            <span id="fwdLastMarkedBadge" class="text-sm text-slate-300" role="status">Waiting for cloud ledger</span>
+            <span class="px-2.5 py-1 rounded-md bg-sky-500/15 border border-sky-400/40 text-sky-300 font-extrabold text-xs mono">
+              Cloud ledger · paper trading
+            </span>
+            <button type="button" id="fwdAutoModeToggle" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-bold text-xs mono transition hover:bg-emerald-900/80">
+              <span id="fwdAutoPulseDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span id="fwdAutoModeLabel">CLOUD LEDGER · AWAITING VALIDATED SNAPSHOT</span>
+            </button>
+            <span id="fwdLastMarkedBadge" class="text-[11px] mono text-slate-300">
+              Waiting for cloud ledger
+            </span>
+
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <button type="button" id="fwdScanNowBtn" class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs transition">
-              Refresh ledger
+              Refresh Cloud Ledger
             </button>
             <button type="button" id="fwdExportCsvBtn" class="px-3 py-1.5 rounded-lg bg-[#090f1a] hover:bg-slate-800 text-sky-300 font-bold text-xs border border-sky-500/40">
-              Export CSV
+              Export Forward Ledger CSV
             </button>
           </div>
         </div>
 
-        <div id="fwdFilters" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-end">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-end">
           <div>
             <label for="fwdIndexFilter" class="block text-xs font-bold text-slate-200 mb-1">Index Filter</label>
             <select id="fwdIndexFilter" class="desk-select mono w-full">
@@ -745,7 +747,7 @@
         </div>
       </div>
 
-      <div id="fwdLedgerContent" class="hidden space-y-3.5">
+      <!-- 6 Forward-Test KPI Summary Cards -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Open positions</div>
@@ -837,9 +839,11 @@
       </div>
 
       <!-- 6-Strategy Forward-Test Scorecard Table -->
-      <details class="detail-toggle rounded-xl border border-[#24344d] bg-[#0d1522]">
-        <summary class="px-4 py-3 font-semibold text-white">Strategy scorecard</summary>
-        <div class="overflow-x-auto">
+      <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#0d1522]">
+        <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
+          <span class="text-xs font-bold uppercase text-white">Strategy scorecard</span>
+          <span class="text-[11px] mono text-sky-300">Click any strategy row to filter Open &amp; Closed Forward Ledgers</span>
+        </div>
         <table class="w-full text-left border-collapse text-xs mono">
           <thead>
             <tr class="border-b border-[#24344d] bg-[#090f1a] text-slate-300 font-bold">
@@ -859,13 +863,13 @@
           </thead>
           <tbody id="fwdScorecardBody" class="divide-y divide-[#1a2639]"></tbody>
         </table>
-        </div>
-      </details>
+      </div>
 
       <!-- Panel 2 — Completed Auto-Triggered Intraday Forward Trade Ledger -->
       <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#0d1522]">
         <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
           <span class="text-xs font-bold uppercase text-white">Closed paper trades</span>
+          <span class="text-[11px] mono text-slate-300">Strictly live forward trades triggered from 2026-11-11 09:20 IST onwards · Zero historical backtest contamination</span>
         </div>
         <table class="w-full text-left border-collapse text-xs mono">
           <thead>
@@ -886,7 +890,6 @@
         </table>
       </div>
 
-      </div>
     </main>
 
   </div>
@@ -1102,8 +1105,7 @@
         if (!pill || !txt) return st;
         var age = ((nowDate ? new Date(nowDate).getTime() : Date.now()) - Date.parse(lastSyncedRetrievedAt)) / 1000;
         var fresh = st.isOpen && liveSnapshotAccepted && age >= -30 && age <= 120;
-        txt.textContent = st.isOpen ? (fresh ? 'Live quotes' : 'Market open · delayed')
-          : st.status === 'PRE-OPEN' ? 'Pre-open' : 'Market closed';
+        txt.textContent = st.isOpen ? (fresh ? 'Live quotes' : 'Market open · quotes not live') : st.status;
         const asOf = document.getElementById('snapshotAsOf');
         if (asOf) asOf.textContent = 'Snapshot · ' + new Date(lastSyncedRetrievedAt).toLocaleString('en-GB',
           {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'Asia/Kolkata'}) + ' IST';
@@ -1433,10 +1435,18 @@
         var list = marketCatalog[activeSymbol] || [];
         if (activeExpiryIdx >= list.length) activeExpiryIdx = 0;
         sel.innerHTML = list.map(function(item, idx) {
-          return '<option value="' + idx + '"' + (idx === activeExpiryIdx ? ' selected' : '') + '>' + shortExpiryDate(item.expiry) + ' · ' + item.dte.toFixed(0) + ' DTE</option>';
+          return '<option value="' + idx + '"' + (idx === activeExpiryIdx ? ' selected' : '') + '>' + item.expiry + ' · ' + item.kind + ' (' + item.dte.toFixed(0) + ' DTE)</option>';
         }).join('');
 
-
+        var tf = document.getElementById('tradeIdExpiryFilter');
+        if (tf) {
+          var prevVal = tf.value || 'ALL';
+          tf.innerHTML = '<option value="ALL">All Active Expiries (' + list.length + ')</option>' +
+            list.map(function(item) {
+              return '<option value="' + item.expiry + '">' + item.expiry + ' (' + item.kind + ' · ' + item.dte.toFixed(0) + 'd)</option>';
+            }).join('');
+          tf.value = list.some(function(x) { return x.expiry === prevVal; }) ? prevVal : 'ALL';
+        }
       }
 
       function currentRow() {
@@ -1461,25 +1471,34 @@
         if (!r) return;
         enrichItemWithBlack76(r);
         const completed = (REAL_HISTORICAL_1Y[activeSymbol] || []).find(row => row.hvCloseDate === r.sessionDate);
+        var vrp30 = observedSpread(r.iv, completed?.h30 ?? r.hv30);
+        var vrp10 = observedSpread(r.iv, completed?.h10 ?? r.hv10);
         var movePts = r.spot > 0 && r.iv > 0 && r.dte >= 0 ? r.spot * (r.iv / 100.0) * Math.sqrt(r.dte / 365.0) : NaN;
         var movePct = (movePts / r.spot) * 100.0;
         var low = Math.round(r.spot - movePts);
         var high = Math.round(r.spot + movePts);
 
+        var b76C = (r.b76CallIv != null && r.b76CallIv > 0 ? r.b76CallIv : null);
+        var b76P = (r.b76PutIv != null && r.b76PutIv > 0 ? r.b76PutIv : null);
+        var uC = (r.upstoxCallIv != null && r.upstoxCallIv > 0 ? r.upstoxCallIv : (r.cIv || null));
+        var uP = (r.upstoxPutIv != null && r.upstoxPutIv > 0 ? r.upstoxPutIv : (r.pIv || null));
+        var atmIvVal = (r.b76AtmIv != null && r.b76AtmIv > 0) ? r.b76AtmIv : r.iv;
+        var dispFwd = isFinite(r.syn) && r.syn > 0 ? r.syn : null;
         document.getElementById('kpiSpot').textContent = r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        document.getElementById('kpiVix').textContent = r.vix > 0 ? 'India VIX ' + formatIv(r.vix) : '';
-        document.getElementById('kpiAtmIv').textContent = formatIv(r.iv);
-        document.getElementById('kpiIvRankSub').textContent = (r.modelAtmIv > 0 ? r.pricingModel + ' model' : 'Broker IV') + ' · ' + r.atm.toLocaleString('en-IN');
-        document.getElementById('kpiHv30').textContent = formatIv(completed?.h30 ?? r.hv30);
-        const riskDate = completed?.hvCloseDate || r.riskAsOf;
-        document.getElementById('kpiHv30Sub').textContent = riskDate ? 'Through ' + shortExpiryDate(riskDate) : '';
-        document.getElementById('kpiExpMove').textContent = Number.isFinite(movePts) ? '±' + Math.round(movePts).toLocaleString('en-IN') + ' pts' : '—';
-        document.getElementById('kpiSafeBandSub').textContent = Number.isFinite(movePts) ? low.toLocaleString('en-IN') + ' – ' + high.toLocaleString('en-IN') : '';
-        document.getElementById('kpiExpMove').title = Number.isFinite(movePct) ? '±' + movePct.toFixed(2) + '%' : '';
-      }
-
-      function shortExpiryDate(day) {
-        return new Date(day + 'T00:00:00Z').toLocaleDateString('en-GB', {day:'numeric',month:'short',timeZone:'UTC'});
+        document.getElementById('kpiForwardSub').textContent = 'Future: ' + formatLiveNumber(r.fut, 1) + ' · Synthetic Future: ' + (dispFwd ? dispFwd.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—');
+        document.getElementById('kpiAtmIv').textContent = formatIv(atmIvVal);
+        document.getElementById('kpiIvRankSub').textContent = 'Strike ' + r.atm.toLocaleString('en-IN') + ' · ' + (r.modelAtmIv > 0 ? r.pricingModel + ' IV' : 'Broker IV');
+        document.getElementById('kpiHvGarch').textContent = formatIv(completed?.h10 ?? r.hv10) + ' / ' + formatIv(completed?.h30 ?? r.hv30);
+        document.getElementById('kpiHv10Sub').textContent = 'Index closes through ' + (completed?.hvCloseDate || r.riskAsOf || '—');
+        document.getElementById('kpiVrpSpread').textContent = (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp';
+        document.getElementById('kpiVrpSpread').className = 'text-lg mono font-extrabold mt-0.5 ' + (vrp30 >= 0 ? 'text-emerald-400' : 'text-rose-400');
+        document.getElementById('kpiGarchGapSub').textContent = 'IV − HV10: ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp';
+        document.getElementById('kpiExpMove').textContent = Number.isFinite(movePts) ? '±' + Math.round(movePts) + ' pts (±' + movePct.toFixed(2) + '%)' : '—';
+        document.getElementById('kpiSafeBandSub').textContent = Number.isFinite(movePts) ? '1σ Band: ' + low.toLocaleString('en-IN') + ' – ' + high.toLocaleString('en-IN') : 'Missing IV or expiry inputs';
+        document.getElementById('kpiSkew25').textContent = (r.rev25 >= 0 ? '+' : '') + formatLiveNumber(r.rev25, 2) + ' / ' + (r.bfly25 >= 0 ? '+' : '') + formatLiveNumber(r.bfly25, 2) + ' pp';
+        document.getElementById('kpiSkewSub').textContent = 'RR25 (Put−Call) · BF25 · PCR ' + formatLiveNumber(r.pcr, 2);
+        var vixEl = document.getElementById('headerVixVal');
+        if (vixEl) vixEl.textContent = formatIv(r.vix);
       }
 
       // ===================================================================
@@ -1724,24 +1743,37 @@
         var list = (marketCatalog[activeSymbol] || []).slice().sort((a, b) => a.expiry.localeCompare(b.expiry));
         var labels = [], ivArr = [];
         var tbody = document.getElementById('termMainTableBody');
-        let rowsHtml = '', detailsHtml = '';
-        const cell = (value, color = 'text-slate-200') => '<td class="py-2 px-3 ' + color + '">' + value + '</td>';
-        list.forEach((item, i) => {
+        var rowsHtml = '';
+
+        for (var i = 0; i < list.length; i++) {
+          var item = list[i];
           labels.push(item.expiry);
           ivArr.push(item.brokerAtmIv > 0 ? item.brokerAtmIv : null);
           const interval = forwardInterval(i ? {dte:list[i-1].dte, iv:ivArr[i-1]} : null, {dte:item.dte, iv:ivArr[i]});
           const vrp = observedSpread(ivArr[i], item.hv30);
           const basis = observedSpread(item.syn, item.fut);
-          const date = '<th scope="row" class="text-left text-white py-2 px-3 whitespace-nowrap" title="' + item.expiry + ' · ' + item.kind + '">' + shortExpiryDate(item.expiry) + '</th>';
-          const row = '<tr' + (item === selected ? ' class="bg-sky-500/15"' : '') + '>';
-          rowsHtml += row + date + cell(formatLiveNumber(item.dte, 0)) + cell(formatLiveNumber(ivArr[i], 2, '%'), 'font-semibold text-sky-300')
-            + cell(formatLiveNumber(interval.vol, 2, '%'), 'text-violet-300') + cell(formatLiveNumber(item.strad, 2)) + '</tr>';
-          detailsHtml += row + date + cell(item.atm.toLocaleString('en-IN')) + cell(formatLiveNumber(item.syn, 1))
-            + cell(formatLiveNumber(item.fut, 1)) + cell(formatLiveNumber(basis, 1))
-            + cell(formatLiveNumber(vrp, 2, ' pp')) + cell(interval.slope) + '</tr>';
-        });
+          const strad = chartNumber(item.strad);
+          const stradPct = strad !== null && item.spot > 0 ? strad / item.spot * 100 : null;
+          const varStatus = interval.slope;
+          const fwdText = formatLiveNumber(interval.vol, 2, '%');
+
+          rowsHtml +=
+            '<tr class="' + (item === selected ? 'bg-sky-500/15 font-bold' : 'hover:bg-[#111c2d]') + '">' +
+              '<td class="py-2.5 px-3 text-white font-bold">' + item.expiry + '</td>' +
+              '<td class="py-2.5 px-3 text-slate-300">' + item.kind + '</td>' +
+              '<td class="py-2.5 px-3 text-right text-white">' + formatLiveNumber(item.dte, 0) + '</td>' +
+              '<td class="py-2.5 px-3 text-right text-slate-200">' + item.atm.toLocaleString('en-IN') + '</td>' +
+              '<td class="py-2.5 px-3 text-right text-slate-200">' + (chartNumber(item.syn) !== null ? item.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—') + '</td>' +
+              '<td class="py-2.5 px-3 text-right text-slate-300">' + formatLiveNumber(item.fut, 1) + '</td>' +
+              '<td class="py-2.5 px-3 text-right ' + (Math.abs(basis) > 25 ? 'text-sky-300 font-bold' : 'text-slate-300') + '">' + (basis !== null ? (basis >= 0 ? '+' : '') + basis.toFixed(1) : '—') + '</td>' +
+              '<td class="py-2.5 px-3 text-right font-bold text-sky-300">' + formatLiveNumber(ivArr[i], 2, '%') + '</td>' +
+              '<td class="py-2.5 px-3 text-right font-bold text-purple-300">' + fwdText + '</td>' +
+              '<td class="py-2.5 px-3 text-right font-bold ' + (vrp >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + (vrp === null ? '—' : (vrp >= 0 ? '+' : '') + vrp.toFixed(2) + ' pp') + '</td>' +
+              '<td class="py-2.5 px-3 text-right text-white">' + (strad === null ? '—' : '₹' + strad.toFixed(2) + ' (' + formatLiveNumber(stradPct, 2, '%') + ')') + '</td>' +
+              '<td class="py-2.5 px-3 text-right">' + varStatus + '</td>' +
+            '</tr>';
+        }
         tbody.innerHTML = rowsHtml;
-        document.getElementById('termDetailsTableBody').innerHTML = detailsHtml;
 
         var ctx = document.getElementById('termMainCanvas');
         var termData = {
@@ -1772,7 +1804,7 @@
         opts.scales.x.afterBuildTicks = axis => {
           axis.ticks = list.filter(r => Number.isFinite(r.dte)).map(r => ({value:r.dte}));
         };
-        opts.scales.x.ticks.display = false;
+        opts.scales.x.ticks.callback = d => list.find(r => r.dte === d)?.expiry || '';
         opts.scales.x.title.text = 'Listed expiry · spaced by days remaining';
         opts.plugins.tooltip.callbacks = {title: items => items.length ? items[0].raw.expiry + ' · ' + items[0].parsed.x.toFixed(1) + ' days' : ''};
         termChart = updateOrCreateChart(termChart, ctx, 'line', termData, opts);
@@ -1781,82 +1813,60 @@
       // ===================================================================
       // TAB 3: SMILE, SKEW & STRIKE SURFACE (100% Real Upstox Chain Data)
       // ===================================================================
-      let smileForecasts = null;
-      let lastSmileForecastFetch = 0;
-
-      function loadSmileForecasts() {
-        if (Date.now() - lastSmileForecastFetch < 900000) return;
-        lastSmileForecastFetch = Date.now();
-        const load = url => fetch(url).then(response => {
-          if (!response.ok) throw new Error('Forecast data unavailable');
-          return response.json();
-        });
-        return load('data/smile-forecasts.json').catch(() => load('docs/data/smile-forecasts.json')).then(data => {
-          if (data.schema === 1 && data.source === 'Upstox daily index candles') {
-            smileForecasts = data.models;
-            if (activeResTab === 'smile') renderTab3Smile();
-          }
-        }).catch(() => {});
-      }
-
       function renderTab3Smile() {
-        const r = currentRow();
+        var r = currentRow();
         if (!r) return;
+        var allStrikes = (r.chain && r.chain.length) ? r.chain : [];
+        const showAll = document.getElementById('smileRangeSelect').value === 'ALL';
+        var chain = allStrikes.filter(node => showAll || Math.abs(node.k / r.spot - 1) <= .10).slice().sort((a,b) => a.k-b.k);
+
+        var tbody = document.getElementById('smileMainTableBody');
+        var rowsHtml = '';
+
+        for (const node of chain) {
+          const k = node.k, cIv = node.uCallIv, pIv = node.uPutIv;
+          const otmIv = r.spot > 0 ? (k < r.spot ? pIv : cIv) : null;
+          const cLtp = node.cLtp, pLtp = node.pLtp, cDel = node.uCallDelta, pDel = node.uPutDelta;
+          const zone = k === r.atm ? 'ATM' : r.spot > 0 ? ((k / r.spot - 1) * 100).toFixed(2) + '%' : '—';
+
+          var cLtpTxt = cLtp > 0 ? ('₹' + cLtp.toFixed(2)) : '—';
+          var pLtpTxt = pLtp > 0 ? ('₹' + pLtp.toFixed(2)) : '—';
+          var cDelTxt = formatLiveNumber(cDel,3);
+          var pDelTxt = formatLiveNumber(pDel,3);
+          var cIvTxt = cIv > 0 ? (cIv.toFixed(2) + '%') : '—';
+          var pIvTxt = pIv > 0 ? (pIv.toFixed(2) + '%') : '—';
+          var otmIvTxt = otmIv > 0 ? (otmIv.toFixed(2) + '%') : '—';
+
+          rowsHtml +=
+            '<tr class="' + (k === r.atm ? 'bg-sky-500/15 font-bold' : 'hover:bg-[#111c2d]') + '">' +
+              '<td class="py-2 px-3 text-left text-white">' + zone + '</td>' +
+              '<td class="py-2 px-3 text-slate-300">' + (node.cOi || 0).toLocaleString('en-IN') + 'k</td>' +
+              '<td class="py-2 px-3 text-emerald-300">' + cLtpTxt + '</td>' +
+              '<td class="py-2 px-3 text-slate-200">' + cDelTxt + '</td>' +
+              '<td class="py-2 px-3 text-sky-300">' + cIvTxt + '</td>' +
+              '<td class="py-2 px-3 text-center bg-[#070b12] text-white font-bold">' + k.toLocaleString('en-IN') + '</td>' +
+              '<td class="py-2 px-3 text-violet-300">' + pIvTxt + '</td>' +
+              '<td class="py-2 px-3 text-slate-200">' + pDelTxt + '</td>' +
+              '<td class="py-2 px-3 text-sky-300">' + pLtpTxt + '</td>' +
+              '<td class="py-2 px-3 text-slate-300">' + (node.pOi || 0).toLocaleString('en-IN') + 'k</td>' +
+              '<td class="py-2 px-3 font-bold text-emerald-300">' + otmIvTxt + '</td>' +
+            '</tr>';
+        }
+        tbody.innerHTML = rowsHtml;
+
+        var ctx = document.getElementById('smileMainCanvas');
         const marks = OptionsCharts.smile(r);
         const labels = ['10Δ put','25Δ put','ATM','25Δ call','10Δ call'];
-        const point = (label, mark, i) => '<tr' + (i === 2 ? ' class="bg-sky-500/15"' : '') + '>'
-          + '<th scope="row" class="text-left px-3 py-2 text-slate-200">' + label + '</th>'
-          + '<td class="px-3 py-2">' + (mark ? mark.strike.toLocaleString('en-IN') : '—') + '</td>'
-          + '<td class="px-3 py-2 font-semibold text-sky-300">' + formatIv(mark?.iv) + '</td></tr>';
-        document.getElementById('smilePointsBody').innerHTML = labels.map((label, i) => point(label, marks[i], i)).join('');
-        const riskReversal = observedSpread(marks[1]?.iv, marks[3]?.iv);
-        const butterfly = riskReversal === null ? null : observedSpread((marks[1].iv + marks[3].iv) / 2, marks[2]?.iv);
-        document.getElementById('smileSkew').textContent = 'Risk reversal (put − call) ' + formatLiveNumber(riskReversal, 2, ' pp')
-          + ' · Butterfly ' + formatLiveNumber(butterfly, 2, ' pp');
-
-        if (document.getElementById('smileChainDetails').open) {
-          const tableCell = value => '<td class="py-2 px-3">' + value + '</td>';
-          document.getElementById('smileMainTableBody').innerHTML = r.chain.slice().sort((a,b) => a.k-b.k).map(node => {
-            const k = node.k, zone = k === r.atm ? 'ATM' : formatLiveNumber((k / r.spot - 1) * 100, 2, '%');
-            return '<tr' + (k === r.atm ? ' class="bg-sky-500/15"' : '') + '>' +
-              '<td class="py-2 px-3 text-left">' + zone + '</td>' +
-              [formatLiveNumber(node.cOi, 1), formatLiveNumber(node.cLtp, 2), formatLiveNumber(node.uCallDelta, 3),
-                formatIv(node.uCallIv), k.toLocaleString('en-IN'), formatIv(node.uPutIv), formatLiveNumber(node.uPutDelta, 3),
-                formatLiveNumber(node.pLtp, 2), formatLiveNumber(node.pOi, 1),
-                formatIv(k === r.atm ? marks[2]?.iv : k < r.spot ? node.uPutIv : node.uCallIv)].map(tableCell).join('') + '</tr>';
-          }).join('');
-        }
-
-        const forecast = OptionsCharts.expiryForecast(smileForecasts?.[activeSymbol], r, TradingSessions);
-        const datasets = [{label:'Broker IV', data:marks.map(m => m?.iv ?? null), order:0,
-          borderColor:'#38bdf8', pointRadius:5, showLabels:true, pointValueLabels:'iv', spanGaps:false, tension:0}];
-        const models = [
-          {name:'GARCH(1,1)', value:forecast?.garch, color:'#c4b5fd', dash:[8,4]},
-          {name:'EWMA', value:forecast?.ewma, color:'#6ee7b7', dash:[2,3]}
-        ];
-        for (const model of models) {
-          if (model.value > 0) datasets.push({label:model.name, data:labels.map(() => model.value), order:1,
-            borderColor:model.color, backgroundColor:model.color, borderDash:model.dash, borderWidth:2,
-            pointRadius:0, tension:0});
-        }
+        const smileData = {labels, datasets:[{label:'Captured IV (%)', data:marks.map(m => m ? m.iv : null),
+          borderColor:'#38bdf8', pointRadius:5, showLabels:true, pointValueLabels:'iv', spanGaps:false, tension:0}]};
         const opts = chartOpts('%', false);
-        opts.scales.x.ticks.maxTicksLimit = labels.length;
-        opts.scales.x.ticks.autoSkip = false;
-        opts.scales.x.ticks.font = {size:10};
-        opts.plugins.legend.labels.sort = (a,b) => a.datasetIndex - b.datasetIndex;
         opts.plugins.tooltip.callbacks = {afterLabel: item => {
-          if (item.datasetIndex !== 0) return 'Underlying forecast to expiry';
           const m = marks[item.dataIndex];
-          return m ? 'Strike ' + m.strike.toLocaleString('en-IN') : '';
+          return 'Strike ' + m.strike + (m.delta == null ? ' · call/put mean' : ' · broker Δ ' + m.delta.toFixed(3));
         }};
-        const captured = new Date(r.ivCapturedAt || r.snapshotId);
-        document.getElementById('smileSource').textContent = 'Expiry ' + shortExpiryDate(r.expiry) + ' · ' +
-          (Number.isFinite(captured.getTime()) ? 'Broker IV at ' + captured.toLocaleString('en-GB',
-            {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'}) + ' IST' : 'Broker capture time unavailable');
-        document.getElementById('smileForecastSummary').textContent = 'Forecast to expiry · '
-          + models.map(model => model.name + ' ' + formatIv(model.value)).join(' · ')
-          + (models.some(model => model.value > 0) ? ' · Closes through ' + shortExpiryDate(forecast.trainedThrough) : ' · Unavailable');
-        smileChart = updateOrCreateChart(smileChart, document.getElementById('smileMainCanvas'), 'line', {labels,datasets}, opts);
+        document.getElementById('smileSource').textContent = r.expiry + ' · ' + (r.ivCapturedAt || 'Capture time unavailable') +
+          ' · Nearest OTM broker delta within ±0.025. ATM requires both IVs. Gaps indicate missing quotes.';
+        smileChart = updateOrCreateChart(smileChart, ctx, 'line', smileData, opts);
       }
 
       // ===================================================================
@@ -1879,69 +1889,68 @@
       }
 
       function renderTab4Straddle() {
-        const r = currentRow();
+        var r = currentRow();
         if (!r) return;
-        const ivMode = activeScMode === 'intra_iv';
-        const data = OptionsCharts.straddleSeries(r).map(pt => {
-          const [hours, minutes] = String(pt.t).split(':').map(Number);
-          return {x: hours * 60 + minutes, y: ivMode ? observedIv(pt) : (pt.strad > 0 ? chartNumber(pt.strad) : null)};
-        });
-        const observed = data.filter(point => point.y !== null);
-        const first = observed[0], last = observed.at(-1);
-        const timeLabel = value => String(Math.floor(value / 60)).padStart(2,'0') + ':' + String(Math.floor(value % 60)).padStart(2,'0');
-        const summary = [shortExpiryDate(r.expiry), (r.straddleStrike || r.atm).toLocaleString('en-IN') + ' CE + PE'];
-        if (last) summary.push((ivMode ? formatIv(last.y) : formatLiveNumber(last.y, 2, ' pts')) + ' at ' + timeLabel(last.x) + ' IST');
-        else summary.push(ivMode ? 'No captured IV for this strike' : 'No paired quotes for this strike');
-        if (last && first !== last) {
-          const change = last.y - first.y;
-          summary.push((change >= 0 ? '+' : '') + change.toFixed(2) + (ivMode ? ' pp' : ' pts') + ' since ' + timeLabel(first.x));
-        }
-        document.getElementById('straddleSummaryBadge').textContent = summary.join(' · ');
-        const opts = chartOpts(ivMode ? '%' : ' pts', false);
-        opts.scales.x.type = 'linear';
-        opts.scales.x.title = {display: true, text: 'Capture time (IST)', color: '#cbd5e1'};
-        opts.scales.x.ticks.callback = timeLabel;
-        opts.plugins.tooltip.callbacks = {title: items => items.length ? timeLabel(items[0].parsed.x) + ' IST' : ''};
-        straddleChart = updateOrCreateChart(straddleChart, document.getElementById('straddleMainCanvas'), 'line', {datasets: [{
-          label: ivMode ? 'Broker IV for fixed strike' : 'Combined premium (midpoints)',
-          data, borderColor: ivMode ? '#38bdf8' : '#10b981', pointRadius:3, showLine:false, spanGaps:false
-        }]}, opts);
-      }
-
-      let scenarioChart = null;
-      function renderScenarios() {
-        const r = currentRow();
-        if (!r) return;
-        const select = document.getElementById('stressStructureSelect');
+        const struct = document.getElementById('stressStructureSelect').value;
         const input = document.getElementById('stressLotsInput');
         const lots = Math.min(50, Math.max(1, Math.floor(Number(input.value) || 1)));
         input.value = lots;
         const units = (activeSymbol === 'NIFTY' ? 65 : 30) * lots;
-        const legs = scenarioLegs(r, activeSymbol, select.value);
-        const marked = legs.every(leg => leg.entryPx !== null);
-        const payoff = marked ? expiryPayoff(legs.map(leg => ({
-          strike:leg.strike, type:leg.call ? 'CE' : 'PE', entryPx:leg.entryPx,
-          side:Math.sign(leg.qty), mult:Math.abs(leg.qty)
-        })), units) : null;
-        const summary = [shortExpiryDate(r.expiry), lots + (lots === 1 ? ' lot' : ' lots')];
-        if (payoff) {
-          summary.push('Breakeven ' + (payoff.breakEvens.map(level => level.toLocaleString('en-IN', {maximumFractionDigits:1})).join(' / ') || '—'));
-          summary.push('Max loss ' + (payoff.maxLoss === null ? 'unlimited' : fmtInr(Math.round(payoff.maxLoss), false)));
+        const legs = scenarioLegs(r, activeSymbol, struct);
+        const marked = legs.every(l => l.entryPx !== null);
+        const premium = marked ? -legs.reduce((total, l) => total + l.qty * l.entryPx, 0) : null;
+        const intraList = OptionsCharts.straddleSeries(r);
+        const insufficientHistory = intraList.filter(pt => activeScMode === 'intra_iv'
+          ? observedIv(pt) > 0 : pt.strad > 0).length < 2;
+        const showPayoff = activeScMode === 'payoff' || insufficientHistory;
+        const ctx = document.getElementById('straddleMainCanvas');
+        const summary = document.getElementById('straddleSummaryBadge');
+        summary.textContent = showPayoff
+          ? (activeScMode !== 'payoff' ? 'Fewer than two comparable captures · ' : '') +
+            (marked ? r.expiry + ' · ' + struct.replaceAll('_', ' ').toLowerCase() + ' payoff from snapshot last prices · ' + units + ' units · before fees' : 'Missing leg price · payoff unavailable')
+          : r.expiry + ' · ' + (r.straddleStrike || r.atm).toLocaleString('en-IN') + ' CE + PE · ' + intraList.length + ' captures' +
+            (intraList.length ? ' · ' + new Date(intraList[0].snapshotId).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric',timeZone:'Asia/Kolkata'}) : '');
+
+        if (showPayoff) {
+          const low = Math.min(r.spot * .97, ...legs.map(l => l.strike));
+          const high = Math.max(r.spot * 1.03, ...legs.map(l => l.strike));
+          const spots = [...new Set([Math.floor(low), r.spot, ...legs.map(l => l.strike), Math.ceil(high)])].sort((a,b) => a-b);
+          const points = marked ? spots.map(x => ({x, y: units * (premium + legs.reduce((total, l) =>
+            total + l.qty * Math.max(0, l.call ? x - l.strike : l.strike - x), 0))})) : [];
+          const opts = chartOpts('₹', true);
+          opts.scales.x.type = 'linear';
+          opts.scales.x.title = {display: true, text: 'Index level at expiry', color: '#cbd5e1'};
+          opts.plugins.tooltip.callbacks = {title: items => items.length ? 'Index ' + items[0].parsed.x.toLocaleString('en-IN') : ''};
+          const data = {datasets: [{label: 'Expiry P&L before fees (₹)', data: points, borderColor: '#10b981',
+            pointRadius: 3, borderWidth: 2.5, tension: 0}]};
+          straddleChart = updateOrCreateChart(straddleChart, ctx, 'line', data, opts);
         } else {
-          summary.push('Payoff unavailable · missing leg prices');
+          const ivMode = activeScMode === 'intra_iv';
+          const data = intraList.map(pt => {
+            const parts = String(pt.t).split(':').map(Number);
+            return {x: parts[0] * 60 + parts[1], y: ivMode ? observedIv(pt) : (pt.strad > 0 ? chartNumber(pt.strad) : null),
+              capturedAt: ivMode ? pt.snapshotId : pt.markAt};
+          });
+          const first = data.find(p => p.y !== null);
+          const last = data.filter(p => p.y !== null).at(-1);
+          if (first && last && first !== last) {
+            summary.textContent += ' · Change since ' + new Date(first.capturedAt).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})
+              + ' IST ' + (last.y>first.y ? '+' : '') + (last.y-first.y).toFixed(2) + (ivMode ? ' pp' : ' points');
+          } else {
+            summary.textContent += ' · Two observations needed for change';
+          }
+          const opts = chartOpts(ivMode ? '%' : ' pts', false);
+          opts.scales.x.type = 'linear';
+          opts.scales.x.title = {display: true, text: 'Capture time (IST)', color: '#cbd5e1'};
+          const timeLabel = value => String(Math.floor(value / 60)).padStart(2,'0') + ':' + String(Math.round(value % 60)).padStart(2,'0');
+          opts.scales.x.ticks.callback = timeLabel;
+          opts.plugins.tooltip.callbacks = {title: items => items.length ? timeLabel(items[0].parsed.x) + ' IST' : ''};
+          straddleChart = updateOrCreateChart(straddleChart, ctx, 'line', {datasets: [{
+            label: ivMode ? 'Captured strike IV (%)' : 'Call + put book midpoints (points, before costs)',
+            data, borderColor: ivMode ? '#38bdf8' : '#10b981',
+            backgroundColor: ivMode ? '#38bdf8' : '#10b981', pointRadius: 4, showLine: false, spanGaps: false
+          }]}, opts);
         }
-        document.getElementById('scenarioSummary').textContent = summary.join(' · ');
-        const low = Math.min(r.spot * .97, ...legs.map(leg => leg.strike));
-        const high = Math.max(r.spot * 1.03, ...legs.map(leg => leg.strike));
-        const spots = [...new Set([Math.floor(low), r.spot, ...legs.map(leg => leg.strike), Math.ceil(high)])].sort((a,b) => a-b);
-        const points = payoff ? spots.map(x => ({x, y: payoff.netPremium + units * legs.reduce((total, leg) =>
-          total + leg.qty * Math.max(0, leg.call ? x - leg.strike : leg.strike - x), 0)})) : [];
-        const opts = chartOpts('₹', true);
-        opts.scales.x.type = 'linear';
-        opts.scales.x.title = {display: true, text: 'Index level at expiry', color: '#cbd5e1'};
-        opts.plugins.tooltip.callbacks = {title: items => items.length ? 'Index ' + items[0].parsed.x.toLocaleString('en-IN') : ''};
-        const data = {datasets: [{label:'Expiry P&L before fees (₹)', data:points, borderColor:'#10b981', pointRadius:3, tension:0}]};
-        scenarioChart = updateOrCreateChart(scenarioChart, document.getElementById('scenarioMainCanvas'), 'line', data, opts);
 
         const decision = r.modelDecision || {};
         const forward = chartNumber(decision.forward);
@@ -2085,17 +2094,13 @@
         return NaN;
       }
 
-      function setupQuoteReady(item, reference) {
-        const atm = item.chain?.find(node => node.k === item.atm);
-        return !!atm && liveBookValid(atm, 'c', reference) && liveBookValid(atm, 'p', reference)
-          && Number.isFinite(brokerIvPercent(atm.uCallIv) + brokerIvPercent(atm.uPutIv));
-      }
-
-      function evaluateStrategiesForExpiry(item, sym, lots, reference = new Date().toISOString()) {
+      function evaluateStrategiesForExpiry(item, sym, lots) {
         const K = item.atm, units = (sym === 'NIFTY' ? 65 : 30) * lots;
-        if (!setupQuoteReady(item, reference)) return [];
-        const atm = item.chain.find(node => node.k === K);
+        const reference = new Date().toISOString();
+        const atm = (item.chain || []).find(node => node.k === K);
+        if (!atm || !liveBookValid(atm, 'c', reference) || !liveBookValid(atm, 'p', reference)) return [];
         const iv = (brokerIvPercent(atm.uCallIv) + brokerIvPercent(atm.uPutIv)) / 2;
+        if (!Number.isFinite(iv)) return [];
         const c25 = brokerWingIv_(item.chain, 'c', reference), p25 = brokerWingIv_(item.chain, 'p', reference);
         const rev25 = p25 - c25, bfly25 = (p25 + c25) / 2 - iv;
         const vrp30 = iv - item.hv30, vrp10 = iv - item.hv10;
@@ -2126,76 +2131,85 @@
           if (code === 'S2' ? payoff.netPremium >= 0 : payoff.netPremium <= 0) return;
           const capital = Math.max(STRATEGY_CAPITAL_PER_LOT[sym][code] * lots, -payoff.netPremium);
           result.push({code, name: names[i], triggered: signal, metrics: metrics[i], capital, legs, ...payoff,
+            strikes: legs.map(l => (l.side > 0 ? 'Buy ' : 'Sell ') + l.mult + '× ' + l.strike + l.type).join(' / '),
+            premText: payoff.netPremiumPoints + ' pts (' + (payoff.netPremium < 0 ? 'debit' : 'credit') + ')',
+            beText: payoff.breakEvens.join(' / ') || '—', maxProf: payoff.maxProfit,
             rocPct: payoff.maxProfit === null ? null : payoff.maxProfit / capital * 100});
         });
         return result;
       }
 
-      let tradeScanState = '';
-      function tradeQuoteState(at, session) {
-        if (!session.isOpen) return 'closed';
-        const age = (at.getTime() - Date.parse(lastSyncedRetrievedAt)) / 1000;
-        return liveSnapshotAccepted && age >= -30 && age <= 120 ? 'live' : 'delayed';
-      }
-
       function renderTab5TradeIdentification() {
-        const idxMode = document.getElementById('tradeIdIndexFilter').value;
-        const expMode = document.getElementById('tradeIdExpiryFilter').value;
-        const triggeredOnly = document.getElementById('tradeIdStatusFilter').value === 'TRIGGERED';
-        const lots = Math.min(50, Math.max(1, Math.floor(Number(document.getElementById('tradeIdLotsInput').value) || 1)));
-        const targetSyms = idxMode === 'ALL' ? ['NIFTY','BANKNIFTY'] : [idxMode === 'ACTIVE' ? activeSymbol : idxMode];
-        const cards = document.getElementById('tradeIdCards');
-        const summary = document.getElementById('tradeIdSummarySub');
-        const at = new Date(), session = getMarketSessionState(at);
-        tradeScanState = tradeQuoteState(at, session);
-        if (tradeScanState !== 'live') {
-          cards.innerHTML = '';
-          summary.textContent = tradeScanState === 'closed'
-            ? 'Market closed. Setups resume when live quotes are available.'
-            : 'Waiting for fresh bid and ask quotes.';
-          return;
+        var idxFilterEl = document.getElementById('tradeIdIndexFilter');
+        var expFilterEl = document.getElementById('tradeIdExpiryFilter');
+        var statusFilterEl = document.getElementById('tradeIdStatusFilter');
+        var lotsEl = document.getElementById('tradeIdLotsInput');
+        var idxMode = idxFilterEl ? idxFilterEl.value : 'ACTIVE';
+        var expFilter = expFilterEl ? expFilterEl.value : 'ALL';
+        var statusFilter = statusFilterEl ? statusFilterEl.value : 'ALL';
+        var lots = Math.max(1, parseInt(lotsEl ? lotsEl.value : '1', 10));
+
+        var targetSyms = idxMode === 'ALL' ? ['NIFTY', 'BANKNIFTY'] : [idxMode === 'ACTIVE' ? activeSymbol : idxMode];
+        var tbody = document.getElementById('tradeIdTableBody');
+        if (!tbody) return;
+
+        var html = '';
+        var totalSetups = 0;
+        var trigCount = 0;
+        var totalExpiries = 0;
+
+        for (var sIdx = 0; sIdx < targetSyms.length; sIdx++) {
+          var symKey = targetSyms[sIdx];
+          var list = marketCatalog[symKey] || [];
+          for (var i = 0; i < list.length; i++) {
+            var item = list[i];
+            if (expFilter !== 'ALL' && item.expiry !== expFilter) continue;
+            totalExpiries++;
+            var setups = evaluateStrategiesForExpiry(item, symKey, lots);
+            for (var j = 0; j < setups.length; j++) {
+              var s = setups[j];
+              totalSetups++;
+              if (s.triggered) trigCount++;
+              if (statusFilter === 'TRIGGERED' && !s.triggered) continue;
+
+              var badge = s.triggered
+                ? '<span class="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-bold text-[10.5px]">● TRIGGERED</span>'
+                : '<span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-600 text-slate-300 font-semibold text-[10.5px]">○ WATCH</span>';
+
+              var symPill = targetSyms.length > 1
+                ? '<span class="px-1.5 py-0.5 mr-1.5 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 font-bold text-[10px]">' + symKey + '</span>'
+                : '';
+
+              html +=
+                '<tr class="' + (s.triggered ? 'bg-emerald-950/15 hover:bg-[#111c2d]' : 'hover:bg-[#111c2d] opacity-85') + '">' +
+                  '<td class="py-2.5 px-3 text-white font-bold whitespace-nowrap">' + symPill + item.expiry + ' <span class="text-slate-400 font-normal">(' + item.kind + ' · ' + item.dte.toFixed(0) + 'd)</span></td>' +
+                  '<td class="py-2.5 px-3 font-bold text-sky-300 whitespace-nowrap">' + s.name + '</td>' +
+                  '<td class="py-2.5 px-3 whitespace-nowrap">' + badge + '</td>' +
+                  '<td class="py-2.5 px-3 text-slate-200">' + s.metrics + '</td>' +
+                  '<td class="py-2.5 px-3 text-white">' + s.strikes + '</td>' +
+                  '<td class="py-2.5 px-3 text-right font-bold ' + (s.code === 'S2' ? 'text-sky-300' : 'text-emerald-300') + ' whitespace-nowrap">' + s.premText + '</td>' +
+                  '<td class="py-2.5 px-3 text-right font-bold text-sky-300 whitespace-nowrap">₹' + s.capital.toLocaleString('en-IN') + '</td>' +
+                  '<td class="py-2.5 px-3 text-right text-slate-200 whitespace-nowrap">' + s.beText + '</td>' +
+                  '<td class="py-2.5 px-3 text-right whitespace-nowrap"><span class="text-emerald-400 font-bold">' + (s.maxProf === null ? 'Unbounded' : '+₹' + s.maxProf.toLocaleString('en-IN')) + '</span> / <span class="text-rose-400">-₹' + s.maxLoss.toLocaleString('en-IN') + '</span> <span class="text-sky-300 font-bold">' + (s.rocPct === null ? '' : '(+' + s.rocPct.toFixed(1) + '% ROC)') + '</span></td>' +
+                  '<td class="py-2.5 px-3 text-center whitespace-nowrap space-x-1.5">' +
+                    '<button type="button" onclick="window.testStrategyInBacktest(\'' + s.code + '\', \'' + symKey + '\')" class="px-2 py-1 rounded bg-[#16263d] hover:bg-sky-600 text-sky-200 hover:text-white border border-sky-400/50 font-bold text-[10.5px] transition">' +
+                      'Test in Backtest →' +
+                    '</button>' +
+                    '<button type="button" onclick="window.autoForwardTrackSetup(\'' + s.code + '\', \'' + symKey + '\', \'' + item.expiry + '\')" class="px-2 py-1 rounded bg-emerald-950/70 hover:bg-emerald-600 text-emerald-300 hover:text-slate-950 border border-emerald-500/50 font-bold text-[10.5px] transition">' +
+                      'Auto-Forward Track →' +
+                    '</button>' +
+                  '</td>' +
+                '</tr>';
+            }
+          }
         }
 
-        const expiry = currentRow()?.expiry;
-        const reference = at.toISOString();
-        const candidates = targetSyms.flatMap(sym => (marketCatalog[sym] || [])
-          .filter(item => expMode === 'ALL' || item.expiry === expiry).map(item => ({item,sym})));
-        const quoted = candidates.filter(({item}) => setupQuoteReady(item, reference));
-        const setups = quoted.flatMap(({item,sym}) => evaluateStrategiesForExpiry(item,sym,lots,reference)
-          .map(setup => ({item,sym,setup})));
-        const visible = setups.filter(({setup}) => !triggeredOnly || setup.triggered)
-          .sort((a,b) => Number(b.setup.triggered) - Number(a.setup.triggered) || a.item.expiry.localeCompare(b.item.expiry));
-        summary.textContent = !candidates.length ? 'The selected index has no listing for this expiry.'
-          : !quoted.length ? 'Live two-sided ATM quotes are unavailable for this selection.'
-          : !setups.length ? 'No setups with sufficient quotes for every leg at this lot size.'
-          : !visible.length ? 'No triggers matched. Choose “Triggered and watch” to see the other setups.'
-          : visible.length + (visible.length === 1 ? ' setup' : ' setups') + ' · Live quotes · Before fees';
-
-        const opened = new Set([...cards.querySelectorAll('details[open]')].map(detail => detail.id));
-        const facts = (label, value) => '<div><dt>' + label + '</dt><dd class="font-semibold">' + value + '</dd></div>';
-        const rupees = value => '₹' + value.toLocaleString('en-IN', {maximumFractionDigits:2});
-        const level = value => value.toLocaleString('en-IN', {maximumFractionDigits:1});
-        cards.innerHTML = visible.map(({item,sym,setup:s}) => {
-          const key = 'setup-' + sym + '-' + item.expiry + '-' + s.code;
-          const premium = (s.netPremium < 0 ? 'Debit ' : 'Credit ') + rupees(Math.abs(s.netPremium) / lots);
-          const maxLoss = s.maxLoss === null ? 'Unlimited' : rupees(s.maxLoss);
-          const maxProfit = s.maxProfit === null ? 'Unlimited' : rupees(s.maxProfit);
-          return '<article class="rounded-xl border border-[#24344d] bg-[#080d16] p-3.5 space-y-3">'
-            + '<div class="flex flex-wrap justify-between gap-1"><h3 class="text-base font-semibold text-white">' + s.name + '</h3>'
-            + '<span class="text-sm ' + (s.triggered ? 'text-emerald-300' : 'text-slate-300') + '">' + (s.triggered ? 'Triggered' : 'Watch') + '</span></div>'
-            + '<p class="text-sm text-slate-300">' + sym + ' · ' + shortExpiryDate(item.expiry) + ' · ' + item.dte.toFixed(0) + ' DTE</p>'
-            + '<p class="text-sm text-slate-200">' + s.metrics + '</p>'
-            + '<dl class="trade-facts">' + facts('Premium per lot',premium) + facts('Breakeven',s.breakEvens.map(level).join(' / ') || '—')
-            + facts('Max loss · ' + lots + (lots === 1 ? ' lot' : ' lots'),maxLoss) + '</dl>'
-            + '<details class="detail-toggle text-sm text-slate-300" id="' + key + '"' + (opened.has(key) ? ' open' : '') + '>'
-            + '<summary>Legs and payoff</summary><ul class="my-2 space-y-1">'
-            + s.legs.map(leg => '<li>' + (leg.side > 0 ? 'Buy ' : 'Sell ') + (leg.mult * lots) + ' × ' + level(leg.strike)
-              + ' ' + leg.type + ' @ ' + leg.entryPx.toFixed(2) + ' pts</li>').join('') + '</ul>'
-            + '<dl class="trade-facts">' + facts('Max profit',maxProfit) + facts('Capital estimate',rupees(s.capital))
-            + facts('Max return on estimated capital',s.rocPct === null ? '—' : s.rocPct.toFixed(1) + '%') + '</dl></details>'
-            + '<div class="flex flex-wrap gap-2"><button type="button" class="seg-btn" onclick="window.testStrategyInBacktest(\'' + s.code + '\',\'' + sym + '\')">Backtest</button>'
-            + '<button type="button" class="seg-btn" onclick="window.autoForwardTrackSetup(\'' + s.code + '\',\'' + sym + '\')">Paper ledger</button></div></article>';
-        }).join('');
+        tbody.innerHTML = html || '<tr><td colspan="10" class="py-6 text-center text-slate-400">No executable setups match the current quotes and filter.</td></tr>';
+        var sub = document.getElementById('tradeIdSummarySub');
+        if (sub) {
+          var scopeLabel = targetSyms.join(' + ');
+          sub.textContent = scopeLabel + ' · Evaluated ' + totalSetups + ' Expiry × Strategy combinations across ' + totalExpiries + ' active Upstox expiries (' + trigCount + ' currently meeting quantitative entry triggers).';
+        }
       }
 
       window.testStrategyInBacktest = function(stratCode, symName) {
@@ -2217,12 +2231,8 @@
         if (t1Ctrl) t1Ctrl.classList.toggle('hidden', activeResTab !== 'regime');
         if (activeResTab === 'regime') renderTab1Regime();
         else if (activeResTab === 'term') renderTab2Term();
-        else if (activeResTab === 'smile') {
-          renderTab3Smile();
-          loadSmileForecasts();
-        }
+        else if (activeResTab === 'smile') renderTab3Smile();
         else if (activeResTab === 'straddle') renderTab4Straddle();
-        else if (activeResTab === 'scenarios') renderScenarios();
         else if (activeResTab === 'trades') renderTab5TradeIdentification();
       }
 
@@ -2250,7 +2260,7 @@
           document.querySelectorAll('.res-tab-btn').forEach(function(b) {
             b.classList.toggle('active', b.getAttribute('data-tab') === activeResTab);
           });
-          ['regime', 'term', 'smile', 'straddle', 'scenarios', 'trades'].forEach(function(t) {
+          ['regime', 'term', 'smile', 'straddle', 'trades'].forEach(function(t) {
             var el = document.getElementById('panel-' + t);
             if (el) el.classList.toggle('hidden', t !== activeResTab);
           });
@@ -2291,8 +2301,8 @@
       ['stressStructureSelect', 'stressLotsInput'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) {
-          el.addEventListener('change', renderScenarios);
-          el.addEventListener('input', renderScenarios);
+          el.addEventListener('change', renderTab4Straddle);
+          el.addEventListener('input', renderTab4Straddle);
         }
       });
 
@@ -2753,12 +2763,12 @@
         const ledgerReady = !String(forwardLedger.status).startsWith('WAITING_FOR_');
         const badge = document.getElementById('fwdLastMarkedBadge');
         if (badge) badge.textContent = forwardStatusLabel();
-        for (const id of ['fwdFilters','fwdLedgerContent','fwdExportCsvBtn']) {
-          document.getElementById(id).classList.toggle('hidden', !ledgerReady);
-        }
-        if (!ledgerReady) return;
+        const modeLabel = document.getElementById('fwdAutoModeLabel');
+        if (modeLabel) modeLabel.textContent = 'Paper trading · cloud ledger';
+        const dot = document.getElementById('fwdAutoPulseDot');
+        if (dot) dot.classList.toggle('hidden', !ledgerReady || forwardLedger.status !== 'ACTIVE_LIVE_SESSION');
         const openSub = document.getElementById('fwdOpenTableSub');
-        if (openSub) openSub.textContent = 'Positions matching your filters';
+        if (openSub) openSub.textContent = ledgerReady ? 'Positions matching your filters' : forwardStatusLabel();
         var state = evaluateFwdSetupState();
         var openList = state.open;
         var closedList = state.closed;
@@ -2833,7 +2843,16 @@
         var elChgSub = document.getElementById('fwdKpiChargesSub');
         if (elChgSub) elChgSub.textContent = 'Upstox Statutory Costs: ' + fmtInr(Math.round(closedChg), false);
 
-        if (withheldOpenCount) {
+        if (!ledgerReady) {
+          ['fwdKpiOpenCount','fwdKpiOpenMtm','fwdKpiClosedNet','fwdKpiCapital','fwdKpiRoc','fwdKpiWinPf'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = '—';
+          });
+          ['fwdKpiOpenMtmSub','fwdKpiClosedNetSub','fwdKpiCapitalSub','fwdKpiRocSub','fwdKpiChargesSub'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = 'Waiting for ledger';
+          });
+        } else if (withheldOpenCount) {
           if (elOpenMtm) elOpenMtm.textContent = '—';
           if (elRoc) elRoc.textContent = '—';
           if (elRocSub) elRocSub.textContent = 'Incomplete position marks';
@@ -2843,7 +2862,7 @@
         var openTbody = document.getElementById('fwdOpenPositionsBody');
         if (openTbody) {
           if (!openList.length) {
-            openTbody.innerHTML = '<tr><td colspan="12" class="py-6 px-4 text-center text-slate-300">No positions match these filters.</td></tr>';
+            openTbody.innerHTML = '<tr><td colspan="12" class="py-6 px-4 text-center text-emerald-300 font-semibold mono">' + (ledgerReady ? 'No positions match these filters.' : forwardStatusLabel()) + '</td></tr>';
           } else {
             openTbody.innerHTML = openList.map(function(p) {
               return '<tr class="hover:bg-[#111c2d]">' +
@@ -2895,7 +2914,7 @@
           barOpenData.push(ledgerReady && markedOSub.length === oSub.length ? Math.round(oNet) : null);
 
           var statusBadgeHtml = (oSub.length === 0 && cSub.length === 0)
-            ? '<span class="text-slate-300">No trades</span>'
+            ? '<span class="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold text-[10px]">' + (ledgerReady ? 'No trades' : 'Waiting for ledger') + '</span>'
             : '<span class="px-2 py-0.5 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 font-bold text-[10px]">PF ' + scPf.toFixed(2) + ' · ACTIVE</span>';
 
           scHtml += '<tr onclick="document.getElementById(\'fwdStrategyFilter\').value=\'' + sc + '\'; renderForwardWorkspace();" class="cursor-pointer hover:bg-[#111c2d]">' +
@@ -2920,7 +2939,7 @@
         var closedTbody = document.getElementById('fwdClosedLedgerBody');
         if (closedTbody) {
           if (!closedList.length) {
-            closedTbody.innerHTML = '<tr><td colspan="10" class="py-6 px-4 text-center text-slate-300">No positions match these filters.</td></tr>';
+            closedTbody.innerHTML = '<tr><td colspan="10" class="py-6 px-4 text-center text-emerald-300 font-semibold mono">' + (ledgerReady ? 'No positions match these filters.' : forwardStatusLabel()) + '</td></tr>';
           } else {
             closedTbody.innerHTML = closedList.map(function(t) {
               return '<tr class="hover:bg-[#111c2d]">' +
@@ -3051,7 +3070,7 @@
         toast('Cloud-ledger positions are read-only in the browser; no local close was applied.');
       };
 
-      window.autoForwardTrackSetup = function(stratCode, symName) {
+      window.autoForwardTrackSetup = function(stratCode, symName, expiryDate) {
         var sym = symName || activeSymbol || 'NIFTY';
         if (document.getElementById('fwdIndexFilter')) document.getElementById('fwdIndexFilter').value = sym;
         if (document.getElementById('fwdExpiryScope')) document.getElementById('fwdExpiryScope').value = 'ALL';
@@ -3061,6 +3080,7 @@
 
         // Entries, exits, and marks are generated only by the cloud ledger.
         // This click intentionally just filters the read-only workspace.
+        toast('Cloud-ledger setup selected; browser-side trade creation is disabled.');
         return false;
       };
 
@@ -3078,8 +3098,15 @@
           forwardLedger = JSON.parse(JSON.stringify(FORWARD_CLEAN_LEDGER_TEMPLATE));
           forwardLedger.status = 'WAITING_FOR_VALIDATED_CLOUD_LEDGER';
           syncForwardLedgerGlobals();
+          var missingBadge = document.getElementById('fwdLastMarkedBadge');
+          if (missingBadge) missingBadge.innerHTML = 'Status: <strong class="text-sky-300">WAITING_FOR_VALIDATED_CLOUD_LEDGER</strong>';
+          setLiveCaptureIntegrity('Live snapshot validated, but the forward ledger is stale or incomplete and has been withheld.', 'text-sky-300');
           renderForwardWorkspace();
           return false;
+        }
+        var cloudBadge = document.getElementById('fwdLastMarkedBadge');
+        if (cloudBadge) {
+          cloudBadge.innerHTML = 'Cloud ledger: <strong class="text-emerald-300">' + String(forwardLedger.status || 'READY') + '</strong>';
         }
         renderForwardWorkspace();
         return true;
@@ -3136,6 +3163,17 @@
           el.addEventListener('input', renderForwardWorkspace);
         }
       });
+
+      var fwdAutoBtn = document.getElementById('fwdAutoModeToggle');
+      if (fwdAutoBtn) {
+        fwdAutoBtn.addEventListener('click', function() {
+          var cloudDot = document.getElementById('fwdAutoPulseDot');
+          var cloudLabel = document.getElementById('fwdAutoModeLabel');
+          if (cloudDot) cloudDot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+          if (cloudLabel) cloudLabel.textContent = 'CLOUD LEDGER · AUTOMATION CONTROLLED BY APPS SCRIPT';
+          toast('The cloud collector controls forward-test automation; the browser is display-only.');
+        });
+      }
 
       var fwdScanBtn = document.getElementById('fwdScanNowBtn');
       if (fwdScanBtn) {
@@ -3231,8 +3269,7 @@
         var el = document.getElementById('liveCaptureIntegrity');
         if (!el) return;
         el.textContent = message;
-        const pill = document.getElementById('marketClockPill');
-        if (pill) pill.title = message;
+        el.className = 'text-[11px] mono ' + (className || 'text-sky-300');
       }
 
       function validCloudCapture(payload) {
@@ -3607,9 +3644,7 @@
             renderTab5TradeIdentification();
           });
         }
-        document.getElementById('smileChainDetails').addEventListener('toggle', () => {
-          if (activeResTab === 'smile') renderTab3Smile();
-        });
+        document.getElementById('smileRangeSelect').addEventListener('change', renderTab3Smile);
         populateExpiryDropdown();
         updateMarketClock();
         initForwardTest();
@@ -3618,9 +3653,7 @@
         renderForwardWorkspace();
         loadPricingInputs().then(() => syncLiveCloudSnapshot(true));
         setInterval(function() {
-          const at = new Date();
-          const session = updateMarketClock(at);
-          if (activeResTab === 'trades' && tradeQuoteState(at, session) !== tradeScanState) renderTab5TradeIdentification();
+          updateMarketClock();
         }, 15000);
         setInterval(function() {
           var cur = updateMarketClock();

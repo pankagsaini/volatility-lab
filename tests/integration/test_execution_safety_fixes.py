@@ -449,7 +449,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
 
     def test_browser_forward_workspace_never_recalculates_or_persists_cloud_ledger(self):
         html = self._read_docs_html()
-        self.assertIn('id="fwdLastMarkedBadge"', html)
+        self.assertIn("Cloud ledger · paper trading", html)
         self.assertIn("MTM WITHHELD — STALE MARK", html)
         self.assertIn("isFreshValidatedCloudSnapshot(payload)", html)
         self.assertIn("isFreshCloudForwardLedger(cloudLedger, snapshot)", html)

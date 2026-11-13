@@ -1044,8 +1044,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
             html = _read_html_audit_range(p)
             self.assertIn('id="workspaceForwardTest"', html)
             for ctrl_id in (
-                "fwdLastMarkedBadge",
-                "fwdLedgerContent",
+                "fwdAutoModeToggle",
                 "fwdIndexFilter",
                 "fwdExpiryScope",
                 "fwdStrategyFilter",
@@ -1065,9 +1064,9 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
             ):
                 self.assertIn(f'id="{ctrl_id}"', html, f"Missing {ctrl_id} in {rel}")
             self.assertNotIn('id="fwdResetSeedBtn"', html)
-            self.assertIn("Waiting for cloud ledger", html)
+            self.assertIn("Cloud ledger · paper trading", html)
             self.assertIn("liveCaptureIntegrity", html)
-            self.assertIn("Refresh ledger", html)
+            self.assertIn("CLOUD LEDGER", html)
             self.assertIn("NIFTY 50 (Lot 65)", html)
             self.assertIn("ARMED_WAITING_FOR_NEXT_SESSION", html)
 
