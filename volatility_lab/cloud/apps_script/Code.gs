@@ -626,7 +626,7 @@ function enrichSnapshotInputs_(report, started) {
   // Apps Script URLs have a 2 KB limit, tighter than Upstox's 500-key limit.
   let batch = [];
   keys.forEach(key => {
-    if (batch.length && encodeURIComponent(batch.concat([key]).join(',')).length > 1700) {
+    if (batch.length && (batch.length >= 500 || encodeURIComponent(batch.concat([key]).join(',')).length > 1700)) {
       requests.push({ label: 'option_quotes:' + requests.length, path: '/v2/market-quote/quotes', params: { instrument_key: batch.join(',') } });
       batch = [];
     }
@@ -634,9 +634,17 @@ function enrichSnapshotInputs_(report, started) {
   });
   if (batch.length) requests.push({ label: 'option_quotes:' + requests.length, path: '/v2/market-quote/quotes', params: { instrument_key: batch.join(',') } });
   const quotes = new Map();
-  for (let offset = 0; offset < requests.length; offset += 10) {
+  // Standard market-data APIs permit 50 requests/second. Keep headroom and
+  // space group starts even when the preceding fetch completes in under a second.
+  let previousGroupStarted = null;
+  for (let offset = 0; offset < requests.length; offset += 40) {
+    if (previousGroupStarted !== null) {
+      const remaining = 1000 - (Date.now() - previousGroupStarted);
+      if (remaining > 0) Utilities.sleep(remaining);
+    }
     if (Date.now() - started > CAPTURE_SAFE_DEADLINE_MS - 60000) throw new Error('Snapshot enrichment time budget exhausted');
-    apiAll_(requests.slice(offset, offset + 10)).forEach(res => {
+    previousGroupStarted = Date.now();
+    apiAll_(requests.slice(offset, offset + 40)).forEach(res => {
       try {
         if (res.error) throw new Error(res.error);
         if (res.label.indexOf('risk:') === 0) {
@@ -818,6 +826,7 @@ function capture_(mode, recovery) {
   // remain separate and are validated before entry or MTM.
   report.retrieved_at = new Date().toISOString();
 
+  const evaluationStarted = Date.now();
   if (mode === 'snapshot' && report.status !== 'complete') {
     // A partial capture may omit an expiry, a leg, or the index quote.  It is
     // retained for diagnostics but cannot create or mark a forward-test trade.
@@ -835,9 +844,12 @@ function capture_(mode, recovery) {
     }
   }
 
+  report.evaluation_seconds = (Date.now() - evaluationStarted) / 1000;
+  const archiveStarted = Date.now();
   const fileName = (report.target_day || today) + '_' + mode + '_' + Utilities.formatDate(now, CONFIG.timeZone, 'HHmmss') + '_' + report.status;
   const fileId = save_(fileName, report);
 
+  report.archive_seconds = (Date.now() - archiveStarted) / 1000;
   report.file_id = fileId;
   report.total_seconds = (Date.now() - started) / 1000;
 
@@ -848,6 +860,9 @@ function capture_(mode, recovery) {
     status: report.status,
     file_id: fileId,
     seconds: report.total_seconds,
+    fetch_seconds: report.fetch_seconds,
+    evaluation_seconds: report.evaluation_seconds,
+    archive_seconds: report.archive_seconds,
     errors: report.errors,
     pending: report.pending
   }));
@@ -1865,7 +1880,8 @@ function sanitizeForwardLedger_(raw) {
 }
 
 function ledgerFile_(name) {
-  const id = name === 'forward_test_ledger.json' && props_().getProperty('FORWARD_LEDGER_FILE_ID');
+  const property = name === 'forward_test_ledger.json' ? 'FORWARD_LEDGER_FILE_ID' : 'FORWARD_LEDGER_BACKUP_FILE_ID';
+  const id = props_().getProperty(property);
   if (id) {
     const file = DriveApp.getFileById(id);
     if (file.isTrashed()) throw new Error('Forward ledger was trashed. Restore it before capture.');
@@ -1875,6 +1891,7 @@ function ledgerFile_(name) {
   if (!files.hasNext()) return null;
   const file = files.next();
   if (files.hasNext()) throw new Error('Ambiguous forward ledger files: ' + name);
+  props_().setProperty(property, file.getId());
   return file;
 }
 
@@ -1901,34 +1918,48 @@ function readLedgerContent_(content) {
   }
 }
 
-function loadForwardLedger_() {
+function loadForwardLedger_(state) {
+  if (state) state.loaded = false;
   const file = ledgerFile_('forward_test_ledger.json');
-  if (file) return sanitizeForwardLedger_(readLedgerContent_(file.getBlob().getDataAsString()));
-  if (ledgerFile_('forward_test_ledger.bak')) throw new Error('Forward ledger missing. Restore the backup.');
-  return cleanSlateForwardLedger_();
+  const previous = file ? file.getBlob().getDataAsString() : null;
+  const ledger = file ? sanitizeForwardLedger_(readLedgerContent_(previous)) : cleanSlateForwardLedger_();
+  if (!file && ledgerFile_('forward_test_ledger.bak')) throw new Error('Forward ledger missing. Restore the backup.');
+  if (state) Object.assign(state, { loaded: true, file: file, previous: previous });
+  return ledger;
 }
 
-function saveForwardLedger_(ledger) {
-  // All state-changing callers hold the script lock from load through save.
+function saveForwardLedger_(ledger, state) {
+  // State belongs to this evaluation only, under the caller's script lock.
+  // No-argument callers still read and validate the authoritative file.
+  state = state || {};
   const clean = sanitizeForwardLedger_(validateLedger_(ledger));
   clean.updated_at = new Date().toISOString();
   const content = JSON.stringify(clean, null, 2);
-  let file = ledgerFile_('forward_test_ledger.json');
-  const backup = ledgerFile_('forward_test_ledger.bak');
-  if (file) {
-    const previous = file.getBlob().getDataAsString();
-    readLedgerContent_(previous);
-    if (backup) backup.setContent(previous);
-    else folder_().createFile('forward_test_ledger.bak', previous, MimeType.PLAIN_TEXT);
-    file.setContent(content);
-  } else {
-    if (backup) throw new Error('Forward ledger missing. Restore the backup.');
-    file = folder_().createFile('forward_test_ledger.json', content, MimeType.PLAIN_TEXT);
+  if (!state.loaded) loadForwardLedger_(state);
+  let file = state.file;
+  try {
+    const backup = ledgerFile_('forward_test_ledger.bak');
+    if (file) {
+      if (backup) backup.setContent(state.previous);
+      else {
+        const created = folder_().createFile('forward_test_ledger.bak', state.previous, MimeType.PLAIN_TEXT);
+        props_().setProperty('FORWARD_LEDGER_BACKUP_FILE_ID', created.getId());
+      }
+      file.setContent(content);
+    } else {
+      if (backup) throw new Error('Forward ledger missing. Restore the backup.');
+      file = folder_().createFile('forward_test_ledger.json', content, MimeType.PLAIN_TEXT);
+    }
+    props_().setProperty('FORWARD_LEDGER_FILE_ID', file.getId());
+    const cache = scriptCache_();
+    if (cache) cache.remove('DOGET_FWD_LEDGER_JSON');
+    Object.assign(state, { file: file, previous: content });
+    return file.getId();
+  } catch (error) {
+    // A failed Drive operation may have partially completed. Re-read on retry.
+    state.loaded = false;
+    throw error;
   }
-  props_().setProperty('FORWARD_LEDGER_FILE_ID', file.getId());
-  const cache = scriptCache_();
-  if (cache) cache.remove('DOGET_FWD_LEDGER_JSON');
-  return file.getId();
 }
 
 // Explicit operator recovery from the Apps Script editor. Preserve the old file for inspection.
@@ -2016,7 +2047,8 @@ function evaluateForwardTest_(report) {
   const timeIstLabel = mkt.timeIstLabel;
   const hmLabel = mkt.hmLabel;
 
-  const ledger = loadForwardLedger_();
+  const ledgerState = {};
+  const ledger = loadForwardLedger_(ledgerState);
 
   if (snapshotDay < MIN_FORWARD_DATE || !mkt.open) {
     report.forward_test_ledger = ledger;
@@ -2042,7 +2074,7 @@ function evaluateForwardTest_(report) {
       integrity_status: 'WITHHELD_NO_LIVE_OPTION_CHAIN'
     });
     ledger.updated_at = snapDate.toISOString();
-    saveForwardLedger_(ledger);
+    saveForwardLedger_(ledger, ledgerState);
     report.forward_test_ledger = ledger;
     return ledger;
   }
@@ -2334,7 +2366,7 @@ function evaluateForwardTest_(report) {
     ? 'INTEGRITY_REVIEW_REQUIRED'
     : (stillOpen.length ? 'ACTIVE_LIVE_SESSION' : (ledger.closed_trades.length ? 'SESSION_COMPLETED_1515_IST' : 'ARMED_WAITING_FOR_NEXT_SESSION'));
 
-  saveForwardLedger_(ledger);
+  saveForwardLedger_(ledger, ledgerState);
   report.forward_test_ledger = ledger;
   return ledger;
 }

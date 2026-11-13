@@ -1187,8 +1187,8 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
         self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", code_gs)
         self.assertIn("function getNseMarketStatusIST(", code_gs)
         self.assertIn("function evaluateForwardTest_(report)", code_gs)
-        self.assertIn("function loadForwardLedger_()", code_gs)
-        self.assertIn("function saveForwardLedger_(ledger)", code_gs)
+        self.assertIn("function loadForwardLedger_(state)", code_gs)
+        self.assertIn("function saveForwardLedger_(ledger, state)", code_gs)
         self.assertIn("forward_test_ledger.json", code_gs)
         self.assertIn("payload.forward_test_ledger", code_gs)
 
