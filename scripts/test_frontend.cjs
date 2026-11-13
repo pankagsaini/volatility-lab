@@ -13,6 +13,10 @@ const web = vm.createContext({console, window:{innerWidth:390}, document:{getEle
   activeSymbol:'NIFTY', activeExpiryIdx:0, activeScMode:'payoff', activeRange:'1M', activeMetric:'levels',
   B76_RISK_FREE_RATE:.066, B76_INV_SQRT_2PI:1/Math.sqrt(2*Math.PI),
   straddleChart:null, regimeChart:null, termChart:null});
+const optionsAsset = fs.readFileSync(path.join(__dirname, 'options-charts.js'), 'utf8');
+assert.equal(optionsAsset, fs.readFileSync(path.join(__dirname, '../docs/scripts/options-charts.js'), 'utf8'));
+vm.runInContext(optionsAsset,web);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8'),web);
 for (const name of ['chartNumber','observedIv','observedSpread','observedMean','distribution','formatLiveNumber',
   'forwardInterval','scenarioLegs','black76Price','normCdf','normPdf','currentRow','chartOpts',
   'renderTab1Regime','renderTab2Term','renderTab4Straddle']) {
@@ -27,7 +31,7 @@ for(const missing of [null,undefined,'', '  ',false,NaN,Infinity]) assert.equal(
 assert.equal(web.chartNumber(0),0);
 assert.equal(web.observedSpread(15,null),null);
 assert.equal(web.observedMean([null,NaN]),null);
-const observation={iv:20,ivSource:'Upstox option_greeks.iv',snapshotId:'2026-11-12T09:30:00Z',expiry:'2026-11-17',atm:25000};
+const observation={iv:20,ivSource:'Upstox option_greeks.iv',snapshotId:'2026-11-12T09:30:00Z',expiry:'2026-11-17',atm:25000,markSource:'paired_book_mid',markAt:'2026-11-12T09:30:00Z',cQuoteAt:'2026-11-12T09:30:00Z',pQuoteAt:'2026-11-12T09:30:00Z'};
 assert.equal(web.observedIv(observation),20);
 for(const field of ['ivSource','snapshotId','expiry','atm']) assert.equal(web.observedIv({...observation,[field]:null}),null);
 assert.equal(web.observedIv({...observation,ivSource:'realized-volatility proxy'}),null);
@@ -46,7 +50,7 @@ for(const bad of [{iv:null,dte:14},{iv:0,dte:14},{iv:20,dte:7}])
 
 const chain=Array.from({length:21},(_,i)=>({k:24500+50*i,cLtp:100,pLtp:100,uCallIv:20,uPutIv:20}));
 web.marketCatalog={NIFTY:[{atm:25000,spot:25000,syn:25000,dte:1,expiry:'2026-11-17',chain,iv:20,brokerAtmIv:20,
-  hv10:null,hv20:15,hv30:15,intraday:[{...observation,t:'09:15',strad:200},{...observation,t:'11:30',iv:null,strad:null}]}]};
+  hv10:null,hv20:15,hv30:15,intraday:[{...observation,t:'09:15',strad:200,snapshotId:'2026-11-12T03:45:00Z'},{...observation,t:'11:30',iv:null,strad:null,snapshotId:'2026-11-12T06:00:00Z'},{...observation,t:'13:30',iv:19,strad:160,snapshotId:'2026-11-12T08:00:00Z'}]}]};
 element('stressLotsInput').value='1';
 element('stressStructureSelect').value='SHORT_STRADDLE';
 web.renderTab4Straddle();
@@ -75,7 +79,7 @@ web.activeScMode='intraday';web.renderTab4Straddle();
 assert.equal(web.straddleChart.data.datasets.length,1,'No invented VWAP');
 assert.equal(web.straddleChart.data.datasets[0].data[1].y,null);
 
-web.REAL_HISTORICAL_1Y={NIFTY:[{...observation,d:'2026-11-10',l:'10 Nov',h10:12,h30:14},
+web.REAL_HISTORICAL_1Y={NIFTY:[{...observation,d:'2026-11-09',l:'09 Nov',h10:12,h30:14},
   {d:'2026-11-11',l:'11 Nov',iv:null,h10:null,h30:null},
   {...observation,d:'2026-11-12',l:'12 Nov',iv:22,h10:13,h30:15}]};
 web.renderTab1Regime();
@@ -84,14 +88,37 @@ assert.deepEqual(Array.from(web.regimeChart.data.datasets[1].data),[12,null,13])
 assert.equal(web.regimeChart.data.datasets[0].spanGaps,false);
 web.activeMetric='spread';web.renderTab1Regime();
 assert.deepEqual(Array.from(web.regimeChart.data.datasets[0].data),[6,null,7]);
-web.marketCatalog.NIFTY.push({...web.marketCatalog.NIFTY[0],expiry:'2026-12-29',dte:43,iv:null});
+web.marketCatalog.NIFTY.push({...web.marketCatalog.NIFTY[0],expiry:'2026-12-29',dte:43,iv:25,brokerAtmIv:null});
 web.renderTab2Term();
 assert.equal(web.termChart.data.datasets[1].data[0].y,null);
 assert.equal(web.termChart.data.datasets[1].data[1].y,null);
 assert.equal(web.termChart.options.scales.x.type,'linear');
+assert.equal(web.termChart.data.datasets.length,2);
+assert.equal(web.termChart.options.scales.x.ticks.callback(43),'2026-12-29');
+assert.equal(web.termChart.data.datasets[0].data[1].y,null,'model IV cannot replace missing broker ATM IV');
 assert.equal(web.termChart.data.datasets[0].data[1].x,43);
 
 // The shipped history may contain IV only with provenance; pre-capture years stay empty.
+const charts = vm.runInContext('OptionsCharts',web);
+const smile = charts.smile({spot:100,atm:100,chain:[
+  {k:90,uPutIv:22,uPutDelta:-.11}, {k:95,uPutIv:19,uPutDelta:-.20},
+  {k:100,uCallIv:16,uPutIv:18}, {k:105,uCallIv:15,uCallDelta:.25},
+  {k:110,modelCallIv:12,uCallDelta:.10}
+]});
+assert.deepEqual(Array.from(smile,pt=>pt?.iv ?? null),[22,null,17,15,null]);
+assert.equal(smile[0].delta,-.11);
+assert.equal(charts.smile({chain:[{k:100,uCallIv:13}],atm:100,spot:100})[2],null);
+const base = {...observation,strad:200};
+const stable = charts.straddleSeries({atm:25000,expiry:base.expiry,sessionDate:'2026-11-12',
+  intraday:[base,{...base,atm:25100},{...base,expiry:'2026-11-24'},{...base,snapshotId:'2026-11-11T10:00:00Z'}]});
+assert.equal(stable.length,1); assert.equal(stable[0].strad,200);
+assert.equal(charts.straddleSeries({atm:25000,expiry:base.expiry,intraday:[{...base,markSource:null} ]})[0].strad,null);
+const sessions = vm.runInContext('TradingSessions',web);
+assert.equal(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8'),fs.readFileSync(path.join(__dirname,'../docs/scripts/trading-sessions.js'),'utf8'));
+assert.deepEqual(Array.from(sessions.history([{d:'2026-11-06'},{d:'2026-11-12'}]),r=>r.d),
+  ['2026-11-06','2026-11-08','2026-11-09','2026-11-11','2026-11-12']);
+assert.equal(sessions.session('2026-11-13').endMins,940);
+assert.equal(sessions.expiryMillis('2026-12-29'),Date.parse('2026-12-29T15:30:00+05:30'));
 const embedded=JSON.parse(html.match(/var REAL_HISTORICAL_1Y = (.*);/)[1]);
 for(const rows of Object.values(embedded)) for(const row of rows) {
   if(row.iv!==null) {assert.equal(web.observedIv(row),row.iv);assert(row.archiveFile);}

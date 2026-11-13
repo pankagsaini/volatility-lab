@@ -5,8 +5,7 @@
  * Private, read-only automated data pipeline for Upstox NSE Market Feeds.
  *
  * v20.0 Upgrades:
- * 1. Tightened Regular Market Hours (09:15–15:31 IST, mins 555..931) — saves 45
- *    wasted snapshots/day while capturing the full NSE F&O session + closing print.
+ * 1. Uses effective-dated NSE equity derivatives trading hours and special sessions.
  * 2. Skips capture/status writes outside active windows; bounded scheduler state
  *    records trigger runtime for the free-tier execution quota.
  * 3. 55-Second CacheService Layer on doGet(e) — serves frequent web/Streamlit
@@ -30,7 +29,6 @@ const CONFIG = {
   timeZone: 'Asia/Kolkata',
   riskFreeRate: 0.066,
   regularStartMins: 555, // 09:15 IST (9 * 60 + 15)
-  regularEndMins: 931,  // 15:31 IST (15 * 60 + 31)
   eodStartMins: 18 * 60,         // 18:00 IST (1080)
   eodEndMins: 22 * 60,           // 22:00 IST (1320)
   completedEodMaxDays: 30,
@@ -48,29 +46,15 @@ const VL = {
 };
 
 /**
- * Verified NSE Special / Muhurat Trading Sessions (2026-2028).
+ * Confirmed Muhurat block (NSE/FAOP/76940).
  */
 const SPECIAL_SESSIONS = {
   '2026-11-08': {
     label: 'Diwali Muhurat Trading (Samvat 2083 - Sunday)',
-    startMins: 14 * 60 + 5,
-    endMins: 15 * 60 + 45,
+    startMins: 14 * 60 + 20,
+    endMins: 15 * 60 + 40,
     eodStartMins: 15 * 60 + 50,
     eodEndMins: 22 * 60
-  },
-  '2027-10-29': {
-    label: 'Diwali Muhurat Trading (Samvat 2084 - Friday Evening)',
-    startMins: 18 * 60,
-    endMins: 19 * 60 + 35,
-    eodStartMins: 19 * 60 + 45,
-    eodEndMins: 23 * 60
-  },
-  '2028-10-17': {
-    label: 'Diwali Muhurat Trading (Samvat 2085 - Tuesday Evening)',
-    startMins: 18 * 60,
-    endMins: 19 * 60 + 35,
-    eodStartMins: 19 * 60 + 45,
-    eodEndMins: 23 * 60
   }
 };
 
@@ -102,6 +86,17 @@ function readJsonProperty_(properties, key, fallback) {
     properties.setProperty('COLLECTOR_STATUS', 'Invalid saved state for ' + key + '; safe defaults applied');
     return fallback;
   }
+}
+
+function runtimePolicy_(properties) {
+  const workspace = properties.getProperty('COLLECTOR_QUOTA_TIER') === 'verified_workspace';
+  const maximum = workspace ? 355 : 85;
+  const requested = Number(properties.getProperty('COLLECTOR_RUNTIME_MINUTES'));
+  // A smaller explicit budget is valid even when all of it is reserved for EOD.
+  const total = Number.isInteger(requested) && requested > 0 ? Math.min(requested, maximum) : maximum;
+  const reserve = Math.min(5, total);
+  return { tier: workspace ? 'operator_verified_workspace' : 'consumer_default',
+    total_minutes: total, snapshot_minutes: total - reserve, eod_reserve_minutes: reserve };
 }
 
 function readRuntimeBudget_(properties, key, nowMs) {
@@ -426,9 +421,30 @@ function catalogue_(now) {
 
 /**
  * Determines whether a given date is open, closed, or a special session.
- * Regular weekday market hours are tightened to 09:15–15:31 IST (555..931)
- * to save 45 wasted snapshots/day on free-tier Drive & Apps Script quotas.
+ * NSE/FAOP/74467 and the December 2026 CAS rules define regular F&O hours.
  */
+function regularCloseMinutes_(day) {
+  return day < '2026-08-03' ? 930 : day < '2026-12-07' ? 940 : 945;
+}
+
+function indexExpiryMillis_(day) {
+  // From Dec 7 expiring index contracts cease at 15:30 while the segment stays open.
+  const mins = day >= '2026-12-07' ? 930 : regularCloseMinutes_(day);
+  return Date.parse(day + 'T00:00:00+05:30') + mins * 60000;
+}
+
+function regularWindowLabel_(day) {
+  const end = regularCloseMinutes_(day);
+  return '09:15-' + Math.floor(end / 60) + ':' + String(end % 60).padStart(2,'0');
+}
+
+function calendarSpecial_(calendar, day) {
+  const entry = calendar && calendar.special && calendar.special[day];
+  if (!entry) return null;
+  return {startMins:minute_(new Date(entry.start_time)), endMins:minute_(new Date(entry.end_time)),
+    eodStartMins:CONFIG.eodStartMins, eodEndMins:CONFIG.eodEndMins, label:'Broker NFO special session'};
+}
+
 function marketWindow_(dateObj) {
   const properties = props_();
   const targetDay = day_(dateObj);
@@ -439,6 +455,7 @@ function marketWindow_(dateObj) {
   try {
     customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
   } catch (e) {}
+  let calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
   const configuredSpecial = customSpecial[targetDay] || SPECIAL_SESSIONS[targetDay];
   if (configuredSpecial) {
     return {
@@ -446,19 +463,14 @@ function marketWindow_(dateObj) {
       special: true,
       label: configuredSpecial.label || 'Special Session',
       startMins: Number(configuredSpecial.startMins || 555),
-      endMins: Number(configuredSpecial.endMins || 931),
+      endMins: Number(configuredSpecial.endMins || regularCloseMinutes_(targetDay)),
       eodStartMins: Number(configuredSpecial.eodStartMins || 975),
       eodEndMins: Number(configuredSpecial.eodEndMins || 1320)
     };
   }
 
-  if (weekday > 5) {
-    return { closed: true, special: false, label: 'Weekend' };
-  }
-
-  let calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
   const todayStr = targetDay;
-  if (!calendar || calendar.checked !== todayStr) {
+  if (!calendar || calendar.checked !== todayStr || !calendar.special) {
     try {
       const response = UrlFetchApp.fetch('https://api.upstox.com/v2/market/holidays', {
         headers: {
@@ -475,6 +487,13 @@ function marketWindow_(dateObj) {
           calendar = {
             year: year,
             checked: todayStr,
+            special: Object.fromEntries(body.data.flatMap(r => {
+              const nfo = (r.open_exchanges || []).find(e => e.exchange === 'NFO');
+              if (!nfo || !/^\d{4}-\d{2}-\d{2}$/.test(r.date) || !r.date.startsWith(year)) return [];
+              const start = timestampMillis_(nfo.start_time), end = timestampMillis_(nfo.end_time);
+              if (!(end > start) || day_(new Date(start)) !== r.date || day_(new Date(end)) !== r.date) return [];
+              return [[r.date, {start_time:start, end_time:end}]];
+            })),
             closed: body.data
               .filter(r => (
                 r.date && r.date.startsWith(year) &&
@@ -490,10 +509,14 @@ function marketWindow_(dateObj) {
     } catch (err) {}
   }
 
-  if (!calendar || !Array.isArray(calendar.closed)) {
+  if (!calendar || calendar.year !== year || !Array.isArray(calendar.closed)
+      || !Number.isFinite(Date.parse(calendar.checked)) || Date.parse(todayStr) - Date.parse(calendar.checked) > 7 * 86400000) {
     return { closed: true, special: false, label: 'Market calendar unavailable' };
   }
 
+  const special = calendarSpecial_(calendar,targetDay);
+  if (special) return Object.assign({closed:false, special:true},special);
+  if (weekday > 5) return {closed:true, special:false, label:'Weekend'};
   if (calendar.closed.includes(targetDay)) {
     return { closed: true, special: false, label: 'Trading Holiday' };
   }
@@ -501,68 +524,21 @@ function marketWindow_(dateObj) {
   return {
     closed: false,
     special: false,
-    label: 'Regular Session (09:15-15:31 IST)',
+    label: 'Regular session ' + regularWindowLabel_(targetDay) + ' IST',
     startMins: CONFIG.regularStartMins, // 555 (09:15 IST)
-    endMins: CONFIG.regularEndMins,     // 931 (15:31 IST)
+    endMins: regularCloseMinutes_(targetDay),
     eodStartMins: CONFIG.eodStartMins,  // 1080 (18:00 IST)
     eodEndMins: CONFIG.eodEndMins       // 1320 (22:00 IST)
   };
 }
 
 function marketClosed_(now) {
-  const properties = props_();
-  const today = day_(now);
-  const year = today.slice(0, 4);
-  let customSpecial = {};
-  try {
-    customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
-  } catch (e) {}
-  if (customSpecial[today] || SPECIAL_SESSIONS[today]) {
-    return false;
-  }
-  let calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
-  if (!calendar || calendar.checked !== today) {
-    try {
-      const response = UrlFetchApp.fetch('https://api.upstox.com/v2/market/holidays', {
-        headers: {
-          Accept: 'application/json',
-          Authorization: 'Bearer ' + properties.getProperty('UPSTOX_TOKEN')
-        },
-        muteHttpExceptions: true,
-        followRedirects: false,
-        timeoutSeconds: 8
-      });
-      if (response.getResponseCode() !== 200) {
-        throw new Error('Calendar unavailable');
-      }
-      const body = JSON.parse(response.getContentText());
-      if (body.status !== 'success' || !Array.isArray(body.data) || !body.data.length) {
-        throw new Error('Calendar unavailable');
-      }
-      calendar = {
-        year: year,
-        checked: today,
-        closed: body.data
-          .filter(r => (
-            r.date.startsWith(year) &&
-            r.holiday_type === 'TRADING_HOLIDAY' &&
-            (r.closed_exchanges || []).includes('NFO') &&
-            !(r.open_exchanges || []).some(e => e.exchange === 'NFO')
-          ))
-          .map(r => r.date)
-      };
-      properties.setProperty('MARKET_CALENDAR', JSON.stringify(calendar));
-    } catch (err) {
-      if (!calendar || calendar.year !== year || Date.parse(today) - Date.parse(calendar.checked) > 7 * 86400000) {
-        properties.setProperty('COLLECTOR_STATUS', 'Calendar unavailable; capture paused');
-        throw new Error('Market calendar unavailable; retry next trigger');
-      }
-    }
-  }
-  if (!calendar || !Array.isArray(calendar.closed)) {
+  const session = marketWindow_(now);
+  if (session.label === 'Market calendar unavailable') {
+    props_().setProperty('COLLECTOR_STATUS', 'Calendar unavailable; capture paused');
     throw new Error('Market calendar unavailable; retry next trigger');
   }
-  return calendar.closed.includes(today);
+  return session.closed;
 }
 
 // Full quotes supply feed timestamps and executable depth absent from option/chain.
@@ -595,7 +571,186 @@ function snapshotRiskMetrics_(candles, sessionDay, instrumentKey) {
     source: 'Upstox historical-candle v3 days/1', instrument_key: instrumentKey, observations: days.length };
 }
 
-function enrichSnapshotInputs_(report, started) {
+// Snapshot callers hold the capture lock. Keep one bounded map for the session.
+function dailyIvRow_(report, symbol, archiveFile) {
+  if (report.status !== 'complete' || !report.nfo_session_validated) return null;
+  const first = report.records.filter(r => r.label.startsWith(symbol + '|') &&
+    /^\d{4}-\d{2}-\d{2}$/.test(r.label.slice(symbol.length+1)) && r.label.slice(symbol.length+1) > report.day)
+    .sort((a,b) => a.label.localeCompare(b.label))[0];
+  if (!first || !Array.isArray(first.data)) return null;
+  const stamp = first.chain_retrieved_at || first.retrieved_at;
+  const time = timestampMillis_(stamp);
+  if (!Number.isFinite(time) || day_(new Date(time)) !== report.day || !forwardQuoteFresh_(time,report.retrieved_at)) return null;
+  const spot = Number(first.data[0]?.underlying_spot_price);
+  if (!Number.isFinite(spot) || !(spot > 0)) return null;
+  let nearest = null;
+  for (const row of first.data) {
+    const strike = Number(row.strike_price);
+    if (!(strike > 0) || !Number.isFinite(strike)) continue;
+    const distance = Math.abs(strike - spot);
+    if (!nearest || distance < nearest.distance || (distance === nearest.distance && strike < nearest.strike)) {
+      nearest = {strike,distance,row};
+    }
+  }
+  if (!nearest) return null;
+  const legs = [nearest.row.call_options,nearest.row.put_options];
+  const ivs = legs.map(leg => Number(leg?.option_greeks?.iv));
+  if (!ivs.every(v => Number.isFinite(v) && v > 0)) return null;
+  const risk = report.risk_metrics?.[symbol];
+  const metric = key => Number.isFinite(risk?.[key]) ? risk[key] : null;
+  return {d:report.day,c:spot,iv:(ivs[0]+ivs[1])/2,expiry:first.label.split('|')[1],atm:nearest.strike,
+    snapshotId:new Date(time).toISOString(),ivSource:'Upstox option_greeks.iv',archiveFile,
+    h10:metric('hv10'),h20:metric('hv20'),h30:metric('hv30'),ew:metric('ewma'),riskAsOf:risk?.as_of || null};
+}
+
+function dailyIndexKey_(symbol, day) {
+  return 'DAILY_IV_' + symbol + '_' + day.slice(0,7) + '_' + (Number(day.slice(8)) <= 15 ? 'A' : 'B');
+}
+
+function dailyIndexCutoff_(day) {
+  return new Date(Date.parse(day + 'T00:00:00Z') - 365 * 86400000).toISOString().slice(0,10);
+}
+
+function updateDailyIndex_(properties, report, archiveFile) {
+  const last = readJsonProperty_(properties,'LAST_SNAPSHOT',null);
+  const prior = last?.daily_rows || {};
+  const rows = last?.day === report.day ? Object.assign({},prior) : {};
+  if (last?.day && last.day < report.day) {
+    const cutoff = dailyIndexCutoff_(report.day);
+    // Roll over idempotently before the existing LAST_SNAPSHOT write replaces prior.
+    for (const symbol of Object.keys(CONFIG.indices)) {
+      const row = prior[symbol];
+      if (!row || row.d !== last.day || row.d < cutoff) continue;
+      const key = dailyIndexKey_(symbol,row.d);
+      const days = readJsonProperty_(properties,key,{});
+      days[row.d] = row;
+      properties.setProperty(key,JSON.stringify(days));
+    }
+    for (const key of properties.getKeys()) {
+      const match = /^DAILY_IV_(NIFTY|BANKNIFTY)_(\d{4}-\d{2})_([AB])$/.exec(key);
+      if (match && match[2] + (match[3] === 'A' ? '-15' : '-31') < cutoff) properties.deleteProperty(key);
+    }
+  }
+  for (const symbol of Object.keys(CONFIG.indices)) {
+    const row = dailyIvRow_(report,symbol,archiveFile);
+    if (row && (!rows[symbol] || row.snapshotId >= rows[symbol].snapshotId)) rows[symbol] = row;
+  }
+  return rows;
+}
+
+function publishedDailyHistory_(properties, day) {
+  const values = properties.getProperties();
+  const latest = JSON.parse(values.LAST_SNAPSHOT || '{}').daily_rows || {};
+  const cutoff = dailyIndexCutoff_(day);
+  const result = {};
+  for (const symbol of Object.keys(CONFIG.indices)) {
+    const days = {};
+    for (const key of Object.keys(values)) {
+      if (!key.startsWith('DAILY_IV_' + symbol + '_')) continue;
+      try { Object.assign(days,JSON.parse(values[key])); } catch (err) {}
+    }
+    if (latest[symbol]) days[latest[symbol].d] = latest[symbol];
+    result[symbol] = Object.keys(days).filter(d => d >= cutoff && d <= day).sort().map(d => days[d]);
+  }
+  return result;
+}
+
+function attachStraddleAnchors_(report, properties) {
+  const stored = readJsonProperty_(properties,'SESSION_STRADDLE_ANCHORS',null);
+  const prior = stored && stored.day === report.day ? stored.strikes : {};
+  const strikes = Object.assign({}, prior);
+  let changed = false;
+  for (const rec of report.records) {
+    if (!/^(NIFTY|BANKNIFTY)\|\d{4}-\d{2}-\d{2}$/.test(rec.label) || !Array.isArray(rec.data)) continue;
+    if (!(strikes[rec.label] > 0)) {
+      // A partial market capture cannot establish a new anchor.
+      if (report.errors.length || report.pending.length) continue;
+      const spot = Number(rec.data[0]?.underlying_spot_price);
+      const listed = rec.data.map(row => Number(row.strike_price)).filter(k => Number.isFinite(k) && k > 0);
+      if (!(spot > 0) || !listed.length) continue;
+      strikes[rec.label] = listed.reduce((a,b) => Math.abs(a-spot) === Math.abs(b-spot) ? Math.min(a,b)
+        : Math.abs(a-spot) < Math.abs(b-spot) ? a : b);
+      changed = true;
+    }
+    rec.straddle_anchor_strike = strikes[rec.label];
+  }
+  if (changed) properties.setProperty('SESSION_STRADDLE_ANCHORS',JSON.stringify({day:report.day,strikes}));
+}
+
+function straddleHistoryTuple_(rec, stamp) {
+  const markAt = timestampMillis_(stamp);
+  const row = rec.data.find(r => Number(r.strike_price) === rec.straddle_anchor_strike);
+  const ivTime = timestampMillis_(rec.chain_retrieved_at || rec.retrieved_at);
+  const c = row?.call_options, p = row?.put_options;
+  const ivs = [c,p].map(leg => Number(leg?.option_greeks?.iv));
+  const iv = forwardQuoteFresh_(ivTime, markAt) && ivs.every(v => Number.isFinite(v) && v > 0)
+    ? (ivs[0] + ivs[1]) / 2 : null;
+  const books = [c,p].map(leg => {
+    const md = leg?.market_data;
+    if (md?.quote_source !== 'Upstox /v2/market-quote/quotes') return null;
+    const time = timestampMillis_(md.quote_timestamp);
+    const bid = Number(md.bid_price), ask = Number(md.ask_price);
+    if (!forwardQuoteFresh_(time, markAt) || ![bid,ask].every(Number.isFinite)
+        || !(bid > 0 && ask >= bid && md.bid_qty > 0 && md.ask_qty > 0)) return null;
+    return {time, mid:(bid + ask) / 2};
+  });
+  const matched = books[0] && books[1] && Math.abs(books[0].time - books[1].time) <= 30000;
+  return [iv === null ? null : ivTime, markAt, iv, matched ? books[0].mid + books[1].mid : null,
+    matched ? books[0].time : null, matched ? books[1].time : null];
+}
+
+function attachStraddleHistory_(report, cache) {
+  const records = report.records.filter(r => r.straddle_anchor_strike > 0 && Array.isArray(r.data));
+  const keys = records.map(r => ['STRADDLE_V1',report.day,r.label,r.straddle_anchor_strike].join(':'));
+  let cached = {};
+  try { if (keys.length && cache) cached = cache.getAll(keys) || {}; } catch (err) {}
+  const updates = {};
+  records.forEach((rec,i) => {
+    const point = straddleHistoryTuple_(rec,report.retrieved_at);
+    let prior;
+    try { prior = JSON.parse(cached[keys[i]] || '[]'); } catch (err) { prior = []; }
+    const history = Array.isArray(prior) ? prior.filter(p => Array.isArray(p) && p.length === 6
+      && Number.isFinite(p[1]) && p[1] < point[1]).slice(-399) : [];
+    history.push(point);
+    rec.straddle_history = history;
+    updates[keys[i]] = JSON.stringify(history);
+  });
+  return updates;
+}
+
+function quoteStrikes_(rec, ledger) {
+  const [sym, expiry] = rec.label.split('|');
+  const rows = rec.data, step = sym === 'NIFTY' ? 50 : 100;
+  const spot = Number(rows[0] && rows[0].underlying_spot_price);
+  const atm = Math.round(spot / step) * step;
+  const strikes = new Set();
+  if (rec.straddle_anchor_strike > 0) strikes.add(rec.straddle_anchor_strike);
+  for (let offset = -4; offset <= 4; ++offset) strikes.add(atm + offset * step);
+  for (const strat of ['S1','S2','S3','S4','S5','S6']) {
+    buildStrategyLegs_(sym, atm, strat).forEach(leg => strikes.add(leg.strike));
+  }
+  for (const pos of ledger?.open_positions || []) {
+    if (pos.sym === sym && pos.exp === expiry) (pos.legs || []).forEach(leg => strikes.add(Number(leg.strike)));
+  }
+  for (const side of ['call_options','put_options']) {
+    const sign = side === 'call_options' ? 1 : -1;
+    const candidates = rows.map(r => ({k:Number(r.strike_price), d:sign * Number(r[side]?.option_greeks?.delta),
+      iv:Number(r[side]?.option_greeks?.iv)})).filter(r => r.d > 0 && r.d < 1 && r.iv > 0);
+    for (const target of [.10,.25]) {
+      for (const pool of [candidates, candidates.filter(r => (r.k - spot) * sign > 0)]) {
+        let lower = -Infinity, upper = Infinity;
+        for (const r of pool) {
+          if (r.d <= target) lower = Math.max(lower,r.d);
+          if (r.d >= target) upper = Math.min(upper,r.d);
+        }
+        for (const r of pool) if (r.d === lower || r.d === upper) strikes.add(r.k);
+      }
+    }
+  }
+  return strikes;
+}
+
+function enrichSnapshotInputs_(report, started, ledger, fullDepth) {
   report.risk_metrics = {};
   report.input_diagnostics = [];
   const cache = scriptCache_();
@@ -617,11 +772,17 @@ function enrichSnapshotInputs_(report, started) {
   });
   const chains = report.records.filter(r => /^(NIFTY|BANKNIFTY)\|\d{4}-\d{2}-\d{2}$/.test(r.label) && Array.isArray(r.data));
   const options = [];
-  chains.forEach(rec => rec.data.forEach(row => ['call_options', 'put_options'].forEach(side => {
-    const option = row[side];
-    if (option && option.instrument_key) options.push(option);
-    else report.errors.push({ item: rec.label, reason: 'Missing option instrument key' });
-  })));
+  for (const rec of chains) {
+    const selected = fullDepth ? null : quoteStrikes_(rec,ledger);
+    for (const row of rec.data) {
+      if (selected && !selected.has(Number(row.strike_price))) continue;
+      for (const side of ['call_options','put_options']) {
+        const option = row[side];
+        if (option && option.instrument_key) options.push(option);
+        else report.input_diagnostics.push({item:rec.label, reason:'Missing option instrument key'});
+      }
+    }
+  }
   const keys = Array.from(new Set(options.map(o => o.instrument_key)));
   // Apps Script URLs have a 2 KB limit, tighter than Upstox's 500-key limit.
   let batch = [];
@@ -658,7 +819,7 @@ function enrichSnapshotInputs_(report, started) {
         }
       } catch (err) {
         if (res.label.indexOf('risk:') === 0) report.input_diagnostics.push({ item: res.label, reason: String(err.message || err) });
-        else report.errors.push({ item: res.label, reason: String(err.message || err) });
+        else report.input_diagnostics.push({ item: res.label, reason: String(err.message || err) });
       }
     });
   }
@@ -694,6 +855,8 @@ function capture_(mode, recovery) {
   const today = day_(now);
   const properties = props_();
 
+  const ledgerState = {};
+  let ledger, ledgerError;
   const report = {
     schema: 1,
     provider: 'Upstox',
@@ -815,7 +978,17 @@ function capture_(mode, recovery) {
       }
     }
 
-    if (mode === 'snapshot') enrichSnapshotInputs_(report, started);
+    if (mode === 'snapshot') {
+      try { ledger = loadForwardLedger_(ledgerState); } catch (err) { ledgerError = err; }
+      try {
+        attachStraddleAnchors_(report,properties);
+        enrichSnapshotInputs_(report, started, ledger, properties.getProperty('OPTION_QUOTE_DEPTH') === 'full');
+        report.enrichment_status = report.input_diagnostics.length ? 'partial' : 'complete';
+      } catch (err) {
+        report.enrichment_status = 'failed';
+        report.input_diagnostics = (report.input_diagnostics || []).concat([{item:'enrichment',reason:safeError_(err)}]);
+      }
+    }
     report.status = (report.errors.length || report.pending.length) ? 'partial' : 'complete';
   } catch (err) {
     report.errors.push({ item: 'catalogue', reason: safeError_(err) });
@@ -833,21 +1006,29 @@ function capture_(mode, recovery) {
     report.forward_test_status = 'withheld_incomplete_snapshot';
   } else if (mode === 'snapshot' && report.records && report.records.length) {
     try {
-      const forwardLedger = evaluateForwardTest_(report);
+      if (ledgerError) throw ledgerError;
+      if (report.enrichment_status === 'failed') throw new Error('Timestamped quote enrichment unavailable');
+      const forwardLedger = evaluateForwardTest_(report, ledger, ledgerState);
       if (!forwardLedger) throw new Error('Forward evaluator returned no ledger');
       report.forward_test_status = 'complete';
     } catch (fwdErr) {
       report.forward_test_status = 'failed';
-      report.errors.push({ item: 'forward_test', reason: safeError_(fwdErr) });
-      report.status = 'partial';
-      console.log('Forward test failed; snapshot marked partial: ' + safeError_(fwdErr));
+      report.forward_test_error = safeError_(fwdErr);
+      delete report.forward_test_ledger;
+      console.log('Forward test failed: ' + report.forward_test_error);
     }
   }
 
   report.evaluation_seconds = (Date.now() - evaluationStarted) / 1000;
   const archiveStarted = Date.now();
   const fileName = (report.target_day || today) + '_' + mode + '_' + Utilities.formatDate(now, CONFIG.timeZone, 'HHmmss') + '_' + report.status;
+  const historyCache = mode === 'snapshot' && report.status === 'complete' ? scriptCache_() : null;
+  const history = mode === 'snapshot' && report.status === 'complete' ? attachStraddleHistory_(report,historyCache) : {};
   const fileId = save_(fileName, report);
+  // Only committed archives can supply observations to the next snapshot.
+  if (historyCache && Object.keys(history).length) {
+    try { historyCache.putAll(history,21600); } catch (err) {}
+  }
 
   report.archive_seconds = (Date.now() - archiveStarted) / 1000;
   report.file_id = fileId;
@@ -857,8 +1038,12 @@ function capture_(mode, recovery) {
   properties.setProperty(propertyKey, JSON.stringify({
     day: today,
     target_day: report.target_day || today,
+    daily_rows: mode === 'snapshot' ? updateDailyIndex_(properties,report,fileName + '.json.gz') : undefined,
     status: report.status,
     file_id: fileId,
+    retrieved_at: report.retrieved_at,
+    forward_test_status: report.forward_test_status,
+    enrichment_status: report.enrichment_status,
     seconds: report.total_seconds,
     fetch_seconds: report.fetch_seconds,
     evaluation_seconds: report.evaluation_seconds,
@@ -910,7 +1095,8 @@ function capture_(mode, recovery) {
 
 function safeError_(err) {
   const message = String(err.message || '');
-  if (message === 'Invalid forward ledger. Restore a validated backup.') return message;
+  if (['Invalid forward ledger. Restore a validated backup.', 'Timestamped quote enrichment unavailable',
+       'Snapshot enrichment time budget exhausted'].includes(message)) return message;
   const isWhitelisted = /^(Broker HTTP \d{3}|Empty broker data|Invalid broker JSON|Incomplete quote response|Wrong option expiry|Instrument master unavailable|(Three futures unavailable|Futures contracts unavailable) for (NIFTY|BANKNIFTY)|No option expiries for (NIFTY|BANKNIFTY)|Set UPSTOX_TOKEN in Script Properties)$/.test(message);
   return isWhitelisted ? message : 'Capture failed; check permissions, network or quota';
 }
@@ -977,7 +1163,7 @@ function installIntradaySchedule() {
   properties.setProperty('INTERVAL_MINUTES', '1');
   properties.setProperty('SCHEDULE_MODE', 'intraday');
 
-  console.log('Enabled: one-minute snapshots, weekdays 09:15-15:31 IST; EOD retries 18:00-22:00 IST; raw snapshots retained indefinitely; watchdog enabled.');
+  console.log('Enabled: one-minute snapshots, weekdays exchange session hours; EOD retries 18:00-22:00 IST; raw snapshots retained indefinitely; watchdog enabled.');
 }
 
 /**
@@ -1007,7 +1193,7 @@ function scheduledWatchdog() {
 /**
  * Core time-driven capture scheduler (runs every minute).
  * Quota-optimized:
- * - Tightened regular market hours: 09:15–15:31 IST (mins 555..931, saving 45 wasted snapshots/day)
+ * - Tightened regular market hours: date-specific NSE F&O hours
  * - Skips PropertiesService writes outside market hours so daily write quota is never wasted.
  */
 function scheduledCapture() {
@@ -1025,7 +1211,11 @@ function scheduledCapture() {
   try {
     customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
   } catch (e) {}
-  const sp = customSpecial[today] || SPECIAL_SESSIONS[today];
+  let sp = customSpecial[today] || SPECIAL_SESSIONS[today] || calendarSpecial_(readJsonProperty_(properties,'MARKET_CALENDAR',null),today);
+  if (!sp && mins >= 420 && mins < 540 && readJsonProperty_(properties,'MARKET_CALENDAR',{}).checked !== today) {
+    const session = marketWindow_(now);
+    if (session.special) sp = session;
+  }
 
   // Skip weekends (Saturday=6, Sunday=7) before any reconciliation or capture (unless special session)
   if (weekday > 5) {
@@ -1039,11 +1229,11 @@ function scheduledCapture() {
   }
 
   const snapStart = sp ? sp.startMins : CONFIG.regularStartMins; // 555 (09:15 IST)
-  const snapEnd = sp ? sp.endMins : CONFIG.regularEndMins;       // 931 (15:31 IST)
+  const snapEnd = sp ? sp.endMins : regularCloseMinutes_(today);
   const eodStart = sp ? sp.eodStartMins : CONFIG.eodStartMins;   // 1080 (18:00 IST)
   const eodEnd = sp ? sp.eodEndMins : CONFIG.eodEndMins;         // 1320 (22:00 IST)
 
-  // Intraday snapshots: 09:15 - 15:31 IST (555 to 931 inclusive)
+  // Intraday snapshots: regular or published special session, inclusive
   // EOD candle retries: 18:00 - 22:00 IST (1080 to 1320)
   const mode = (mins >= snapStart && mins <= snapEnd)
     ? 'snapshot'
@@ -1056,10 +1246,12 @@ function scheduledCapture() {
     return;
   }
 
+  const policy = runtimePolicy_(properties);
+  const limit = (mode === 'eod' ? policy.total_minutes : policy.snapshot_minutes) * 60000;
+  const pauseMessage = mode + ' runtime admission limit reached (' + limit / 60000 + ' minutes). ' + today;
   let budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now());
-  if (budget.ms >= 75 * 60000) {
-    properties.setProperty('RUNTIME_BUDGET', JSON.stringify(budget));
-    properties.setProperty('COLLECTOR_STATUS', 'Rolling 24-hour runtime safety limit reached. ' + today);
+  if (budget.ms >= limit) {
+    properties.setProperty('COLLECTOR_STATUS', pauseMessage);
     return;
   }
 
@@ -1124,9 +1316,8 @@ function scheduledCapture() {
     }
 
     budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now());
-    if (budget.ms >= 75 * 60000) {
-      const message = 'Rolling 24-hour runtime safety limit reached.';
-      properties.setProperty('COLLECTOR_STATUS', message + ' ' + today);
+    if (budget.ms >= limit) {
+      properties.setProperty('COLLECTOR_STATUS', pauseMessage);
       return;
     }
 
@@ -1217,7 +1408,7 @@ function reconcilePriorSession() {
     let budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', now.getTime());
     let reconciliationBudget = readRuntimeBudget_(properties, 'RECONCILIATION_BUDGET', now.getTime());
 
-    if (budget.ms >= 55 * 60000 || reconciliationBudget.ms >= 8 * 60000) {
+    if (budget.ms >= Math.min(55, runtimePolicy_(properties).snapshot_minutes) * 60000 || reconciliationBudget.ms >= 8 * 60000) {
       return;
     }
 
@@ -1264,7 +1455,7 @@ function auditStatus() {
     sharing: String(folder_().getSharingAccess()),
     handlers: ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()),
     interval: properties.getProperty('INTERVAL_MINUTES') || '1',
-    regular_window_ist: '09:15-15:31',
+    regular_window_ist: regularWindowLabel_(day_(new Date())),
     snapshot_retention_days: CONFIG.snapshotRetentionDays,
     completed_eod_cap_days: CONFIG.completedEodMaxDays,
     status: properties.getProperty('COLLECTOR_STATUS'),
@@ -1407,6 +1598,19 @@ function backfillAllMissingEod_2026_11_04_to_08() {
   return results;
 }
 
+function captureIntegrity_(properties,stamp,day) {
+    const capturedAt = timestampMillis_(stamp);
+    return {
+      status: properties.getProperty('COLLECTOR_STATUS'),
+      captured_at: stamp || null,
+      age_seconds: Number.isFinite(capturedAt) ? Math.max(0, (Date.now() - capturedAt) / 1000) : null,
+      snapshot_gap: properties.getProperty('SNAPSHOT_GAP_DAY') === String(day || '').slice(0, 10)
+        ? (properties.getProperty('SNAPSHOT_GAP') || 'Detected snapshot gap')
+        : null,
+      raw_snapshot_retention: 'indefinite'
+    };
+}
+
 function doGet(e) {
   try {
     const properties = props_();
@@ -1505,10 +1709,11 @@ function doGet(e) {
         last_snapshot_slot: properties.getProperty('LAST_SNAPSHOT_SLOT'),
         mode: properties.getProperty('SCHEDULE_MODE'),
         interval: properties.getProperty('INTERVAL_MINUTES') || '1',
-        regular_window_ist: '09:15-15:31',
+        regular_window_ist: regularWindowLabel_(day_(new Date())),
         triggers: triggers,
         calendar: properties.getProperty('MARKET_CALENDAR'),
         budget: properties.getProperty('RUNTIME_BUDGET'),
+        runtime_policy: runtimePolicy_(properties),
         last_snapshot_at_ms: properties.getProperty('LAST_SNAPSHOT_AT_MS'),
         snapshot_gap: properties.getProperty('SNAPSHOT_GAP'),
         raw_snapshot_retention: 'indefinite'
@@ -1533,14 +1738,18 @@ function doGet(e) {
       return ContentService.createTextOutput(ledgerStr).setMimeType(ContentService.MimeType.JSON);
     }
 
-    if (cache) {
-      const cachedSnap = cache.get('DOGET_LATEST_SNAPSHOT_JSON');
-      if (cachedSnap) {
-        return ContentService.createTextOutput(cachedSnap).setMimeType(ContentService.MimeType.JSON);
-      }
+    const fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
+    const last = readJsonProperty_(properties,'LAST_SNAPSHOT',null);
+    if (fileId && last && last.file_id === fileId && last.status === 'complete' && last.retrieved_at &&
+        e?.parameter?.since === last.retrieved_at) {
+      return ContentService.createTextOutput(JSON.stringify({unchanged:true,retrieved_at:last.retrieved_at,
+        capture_integrity:captureIntegrity_(properties,last.retrieved_at,last.day)})).setMimeType(ContentService.MimeType.JSON);
+    }
+    if (cache && fileId) {
+      const cachedSnap = cache.get('DOGET_LATEST_SNAPSHOT_JSON_' + fileId);
+      if (cachedSnap) return ContentService.createTextOutput(cachedSnap).setMimeType(ContentService.MimeType.JSON);
     }
 
-    let fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
     let file = null;
 
     if (fileId) {
@@ -1573,20 +1782,15 @@ function doGet(e) {
         || !Array.isArray(payload.records) || !payload.records.length) {
       throw new Error('Latest archived snapshot is incomplete or invalid');
     }
-    const capturedAt = timestampMillis_(payload.retrieved_at);
-    payload.capture_integrity = {
-      status: properties.getProperty('COLLECTOR_STATUS'),
-      captured_at: payload.retrieved_at || null,
-      age_seconds: Number.isFinite(capturedAt) ? Math.max(0, (Date.now() - capturedAt) / 1000) : null,
-      snapshot_gap: properties.getProperty('SNAPSHOT_GAP_DAY') === String(payload.day || '').slice(0, 10)
-        ? (properties.getProperty('SNAPSHOT_GAP') || 'Detected snapshot gap')
-        : null,
-      raw_snapshot_retention: 'indefinite'
-    };
-    try { payload.forward_test_ledger = loadForwardLedger_(); } catch (fwdErr) {}
+    payload.capture_integrity = captureIntegrity_(properties,payload.retrieved_at,payload.day);
+    const calendar = readJsonProperty_(properties,'MARKET_CALENDAR',null);
+    if (calendar && Array.isArray(calendar.closed)) {
+      payload.exchange_calendar = {year:calendar.year, closed:calendar.closed, special:calendar.special || {}};
+    }
+    payload.daily_history = publishedDailyHistory_(properties,day_(new Date()));
     const outStr = JSON.stringify(payload);
-    if (cache && outStr.length < 95000) {
-      try { cache.put('DOGET_LATEST_SNAPSHOT_JSON', outStr, CONFIG.doGetCacheSeconds); } catch (e) {}
+    if (cache && fileId && file.getId() === fileId && outStr.length < 95000) {
+      try { cache.put('DOGET_LATEST_SNAPSHOT_JSON_' + fileId, outStr, CONFIG.doGetCacheSeconds); } catch (e) {}
     }
     return ContentService.createTextOutput(outStr)
       .setMimeType(ContentService.MimeType.JSON);
@@ -2032,9 +2236,9 @@ function forwardRiskMetrics_(report, sym, snapshotDay) {
 /**
  * Evaluates all active expiries against S1–S6 during capture_('snapshot'),
  * using Black-76 Put-Call Parity Forward F = K + exp(r*T)*(C - P) and
- * strictly enforcing MIN_FORWARD_DATE = '2026-11-11' AND live market hours (09:15-15:31 IST).
+ * strictly enforcing MIN_FORWARD_DATE = '2026-11-11' AND live market hours (exchange session hours).
  */
-function evaluateForwardTest_(report) {
+function evaluateForwardTest_(report, ledger, ledgerState) {
   if (!report || !Array.isArray(report.records)) return null;
   if (report.status !== 'complete') throw new Error('Forward test requires a complete snapshot');
   if (report.nfo_session_validated !== true) throw new Error('NFO trading session was not validated');
@@ -2047,8 +2251,8 @@ function evaluateForwardTest_(report) {
   const timeIstLabel = mkt.timeIstLabel;
   const hmLabel = mkt.hmLabel;
 
-  const ledgerState = {};
-  const ledger = loadForwardLedger_(ledgerState);
+  ledgerState = ledgerState || {};
+  if (!ledger) ledger = loadForwardLedger_(ledgerState);
 
   if (snapshotDay < MIN_FORWARD_DATE || !mkt.open) {
     report.forward_test_ledger = ledger;
@@ -2146,7 +2350,7 @@ function evaluateForwardTest_(report) {
           || !forwardQuoteFresh_(atmNode.cQuoteAt, ch.retrievedAt)
           || !forwardQuoteFresh_(atmNode.pQuoteAt, ch.retrievedAt)) { reject(key, 'Missing or stale ATM quote timestamps / IV'); return; }
 
-      const expiryMs = Date.parse(exp + 'T15:30:00+05:30');
+      const expiryMs = indexExpiryMillis_(exp);
       const secondsToExpiry = (expiryMs - new Date(ch.retrievedAt).getTime()) / 1000.0;
       if (!Number.isFinite(secondsToExpiry) || secondsToExpiry <= 0) return;
       const dte = Math.ceil(secondsToExpiry / 86400.0);

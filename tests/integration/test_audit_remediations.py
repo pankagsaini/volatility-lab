@@ -218,7 +218,7 @@ class TestTrack2CloudAndDownloaders(unittest.TestCase):
         code_gs = cgs_path.read_text(encoding="utf-8")
         # 1. Weekend guard appears before reconcilePriorSession() in scheduledCapture()
         sched_idx = code_gs.index("function scheduledCapture()")
-        sched_body = code_gs[sched_idx:sched_idx + 1200]
+        sched_body = code_gs[sched_idx:code_gs.index("function reconcilePriorSession()", sched_idx)]
         self.assertLess(sched_body.index("if (weekday > 5)"), sched_body.index("reconcilePriorSession()"))
         # 2. Artificial + 1000ms budget padding removed
         self.assertNotIn("Date.now() - started + 1000", code_gs)
@@ -1186,11 +1186,11 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
         code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
         self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", code_gs)
         self.assertIn("function getNseMarketStatusIST(", code_gs)
-        self.assertIn("function evaluateForwardTest_(report)", code_gs)
+        self.assertIn("function evaluateForwardTest_(report, ledger, ledgerState)", code_gs)
         self.assertIn("function loadForwardLedger_(state)", code_gs)
         self.assertIn("function saveForwardLedger_(ledger, state)", code_gs)
         self.assertIn("forward_test_ledger.json", code_gs)
-        self.assertIn("payload.forward_test_ledger", code_gs)
+        self.assertIn("report.forward_test_ledger = ledger", code_gs)
 
 
 
@@ -1619,7 +1619,7 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
         """Verify Code.gs free-tier quota optimizations and website Black-76 option chain enrichment."""
         code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
         self.assertIn("regularStartMins: 555", code_gs)
-        self.assertIn("regularEndMins: 931", code_gs)
+        self.assertIn("regularCloseMinutes_(today)", code_gs)
         self.assertIn("CacheService.getScriptCache()", code_gs)
         self.assertIn("const SNAPSHOT_RETENTION_DAYS = 0", code_gs)
         self.assertIn("retention: 'indefinite'", code_gs)
