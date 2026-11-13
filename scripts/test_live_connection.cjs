@@ -154,6 +154,21 @@ async function main() {
   const previous = web.marketCatalog.NIFTY[0];
   assert.equal(previous.snapshotId, report.retrieved_at);
   assert(previous.b76AtmIv > 19 && previous.b76AtmIv < 21);
+  assert.equal(previous.brokerAtmIv, 20);
+  assert.equal(web.REAL_HISTORICAL_1Y.NIFTY.at(-1).iv, 20);
+  assert.equal(web.REAL_HISTORICAL_1Y.NIFTY.at(-1).ivSource, 'Upstox option_greeks.iv');
+  const missingIv = clone(report);
+  for (const rec of missingIv.records) if (Array.isArray(rec.data)) {
+    for (const row of rec.data) for (const side of ['call_options','put_options']) row[side].option_greeks.iv = null;
+  }
+  const noBroker = web.normalizeLiveSnapshot(missingIv);
+  assert.equal(noBroker.catalog.NIFTY[0].brokerAtmIv, null);
+  assert.equal(noBroker.catalog.NIFTY[0].intraday.at(-1).iv, null, 'Model IV must not become a historical broker capture');
+  assert.equal(noBroker.history.NIFTY.at(-1).iv,20,'Retain an earlier same-day real capture with its original timestamp');
+  const savedObserved = web.REAL_HISTORICAL_1Y;
+  web.REAL_HISTORICAL_1Y={NIFTY:[],BANKNIFTY:[]};
+  assert.equal(web.normalizeLiveSnapshot(missingIv).history.NIFTY[0].iv,null);
+  web.REAL_HISTORICAL_1Y=savedObserved;
   assert.equal(await web.syncLiveCloudSnapshot(true), false, 'duplicate snapshot');
 
   now = Date.parse('2026-11-16T04:30:00Z');

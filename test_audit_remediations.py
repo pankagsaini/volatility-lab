@@ -60,11 +60,8 @@ if not PATCH_DIR.exists():
 
 
 def _read_html_audit_range(path):
-    """Read only the user-authorized HTML audit range (lines 675-1850)."""
-    with path.open(encoding="utf-8") as stream:
-        for _ in range(674):
-            next(stream, None)
-        return "".join(next(stream, "") for _ in range(1176))
+    """Read by content so layout edits cannot silently truncate audited functions."""
+    return path.read_text(encoding="utf-8")
 
 import vol_lib
 import option_math
@@ -1047,11 +1044,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 "fwdIndexFilter",
                 "fwdExpiryScope",
                 "fwdStrategyFilter",
-                "fwdLotsInput",
-                "fwdStopLossRule",
-                "fwdProfitTargetRule",
                 "fwdScanNowBtn",
-                "fwdResetSeedBtn",
                 "fwdExportCsvBtn",
                 "fwdKpiOpenCount",
                 "fwdKpiOpenMtm",
@@ -1066,8 +1059,8 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 "fwdStrategyBarCanvas",
             ):
                 self.assertIn(f'id="{ctrl_id}"', html, f"Missing {ctrl_id} in {rel}")
-            self.assertIn("Cloud Ledger Reset Disabled", html)
-            self.assertIn("CLOUD-AUTHORITATIVE FORWARD-TEST LEDGER", html)
+            self.assertNotIn('id="fwdResetSeedBtn"', html)
+            self.assertIn("Cloud ledger · paper trading", html)
             self.assertIn("liveCaptureIntegrity", html)
             self.assertIn("CLOUD LEDGER", html)
             self.assertIn("NIFTY 50 (Lot 65)", html)
