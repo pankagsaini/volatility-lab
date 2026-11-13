@@ -21,14 +21,15 @@ function browserFunction(name) {
 }
 const web = vm.createContext({ Date: Clock, console, window: {}, B76_RISK_FREE_RATE: 0.066, B76_INV_SQRT_2PI: 1 / Math.sqrt(2 * Math.PI),
   marketCatalog: {NIFTY: [], BANKNIFTY: []}, REAL_HISTORICAL_1Y: {NIFTY: [], BANKNIFTY: []},
-  activeSymbol: 'NIFTY', activeExpiryIdx: 0, lastSyncedRetrievedAt: '', liveSnapshotRequest: null,
+  activeSymbol: 'NIFTY', activeExpiryIdx: 0, lastSyncedRetrievedAt: '', loadedCloudCapture:false, liveSnapshotRequest: null,
   CLOUD_EXEC_URL: 'https://example.invalid', updateMarketClock: () => ({isOpen: true}),
   populateExpiryDropdown() {}, renderActiveOptionsTab() {}, renderForwardWorkspace() {},
   setLiveCaptureIntegrity(message) { web.message = message; }
 });
+vm.runInContext(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8'),web);
 for (const name of ['normPdf', 'normCdf', 'computeBlack76ParityForward', 'black76Greeks', 'black76Price',
   'black76IvDec', 'black76Iv', 'bsmIvDec', 'bsmGreeks', 'currentPricingInputs', 'relativeBookSpread', 'selectOptionPricing', 'enrichItemWithBlack76', 'liveNumber', 'liveTimestamp', 'liveBookValid',
-  'liveDeltaIv', 'normalizeLiveSnapshot', 'currentRow', 'isFreshValidatedCloudSnapshot', 'syncLiveCloudSnapshot']) {
+  'liveDeltaIv', 'capturedDeltaIv','validCloudCapture','showCaptureState','normalizeLiveSnapshot', 'currentRow', 'isFreshValidatedCloudSnapshot', 'syncLiveCloudSnapshot']) {
   vm.runInContext(browserFunction(name), web);
 }
 web.pricingInputs = {schema:1,rate:{model_rate:.066,source:'https://www.rbi.org.in/',sha256:'fixture',checked_at:new Date(now).toISOString()},
@@ -83,7 +84,7 @@ cloud.props_ = () => ({getProperty: key => properties.get(key) || null,
   setProperty: (key, val) => properties.set(key, val)});
 cloud.scriptCache_ = () => ({get: key => cache.get(key), put: (k, v) => cache.set(k, v), remove: k => cache.delete(k)});
 cloud.marketClosed_ = () => false;
-cloud.marketWindow_ = () => ({closed: false, startMins: 555, endMins: 931});
+cloud.marketWindow_ = () => ({closed: false, startMins: 555, endMins: 940});
 cloud.catalogue_ = () => ({indices: {
   NIFTY: {futures: [], option_expiries: ['2026-11-17']},
   BANKNIFTY: {futures: [], option_expiries: ['2026-11-23']}
@@ -120,6 +121,58 @@ cloud.apiAll_ = requests => requests.map(req => {
   return {...req, data};
 });
 
+// Exercise both scheduler admission checks and the EOD reserve with an existing budget.
+{
+  const settings = new Map([['SCHEDULE_MODE', 'intraday']]);
+  const props = {getProperty: key => settings.get(key) || null,
+    setProperty: (key, value) => settings.set(key, value), deleteProperty: key => settings.delete(key)};
+  const initialWindow = {windowStartMs: now - 60000, windowEndMs: now + 86400000, ms: 0};
+  const budgetAt = minutes => settings.set('RUNTIME_BUDGET', JSON.stringify({...initialWindow, ms: minutes * 60000}));
+  let minute = 600, lockedUsage = null;
+  const attempts = [];
+  const scheduler = vm.createContext({Date: Clock, Utilities: {formatDate: () => '5'},
+    LockService: {getScriptLock: () => ({tryLock() {
+      if (lockedUsage !== null) budgetAt(lockedUsage);
+      return true;
+    }, releaseLock() {}})}});
+  vm.runInContext(gs, scheduler);
+  scheduler.props_ = () => props;
+  scheduler.day_ = () => '2026-11-13';
+  scheduler.minute_ = () => minute;
+  scheduler.marketClosed_ = () => false;
+  scheduler.capture_ = mode => {attempts.push(mode); return {status: 'complete'};};
+  budgetAt(80);
+  scheduler.scheduledCapture();
+  assert.deepEqual(attempts, []);
+  assert.deepEqual(JSON.parse(settings.get('RUNTIME_BUDGET')), {...initialWindow, ms: 80 * 60000});
+  budgetAt(79); lockedUsage = 80;
+  scheduler.scheduledCapture();
+  assert.deepEqual(attempts, [], 'a concurrent capture can consume the remaining snapshot allowance');
+  lockedUsage = null;
+  budgetAt(79.99);
+  scheduler.scheduledCapture();
+  minute = 1100;
+  budgetAt(84.99);
+  scheduler.scheduledCapture();
+  budgetAt(85); settings.delete('SUCCESS_EOD'); settings.delete('ATTEMPT_eod');
+  scheduler.scheduledCapture();
+  assert.deepEqual(attempts, ['snapshot', 'eod']);
+  const policy = () => scheduler.runtimePolicy_(props);
+  for (const value of ['200', 'invalid', '-1', '0', '2.5']) {
+    settings.set('COLLECTOR_RUNTIME_MINUTES', value);
+    assert.equal(policy().total_minutes, 85);
+  }
+  settings.set('COLLECTOR_RUNTIME_MINUTES', '60');
+  assert.equal(policy().snapshot_minutes, 55);
+  settings.set('COLLECTOR_RUNTIME_MINUTES', '3');
+  assert.equal(policy().snapshot_minutes, 0);
+  settings.set('COLLECTOR_QUOTA_TIER', 'verified_workspace');
+  settings.set('COLLECTOR_RUNTIME_MINUTES', '360');
+  assert.equal(policy().snapshot_minutes, 350);
+  assert.equal(policy().total_minutes, 355);
+  settings.set('COLLECTOR_QUOTA_TIER', 'workspace');
+  assert.equal(policy().total_minutes, 85);
+}
 // Exercise the real enrichment loop independently of the capture fixtures.
 {
   const batching = vm.createContext({Date: Clock, console, Utilities: {
@@ -150,7 +203,7 @@ cloud.apiAll_ = requests => requests.map(req => {
       label: 'NIFTY|2026-11-17', retrieved_at: new Date(now).toISOString(),
       data: options.map(o => ({call_options: o, put_options: o}))
     }]};
-    batching.enrichSnapshotInputs_(report, now);
+    batching.enrichSnapshotInputs_(report, now, null, true);
     assert.deepEqual(seen, options.map(o => o.instrument_key), 'every unique leg gets a full quote');
     assert(groups.every(size => size <= 40));
     assert.equal(groups.length, Math.ceil(count / 40));
@@ -228,10 +281,84 @@ async function main() {
   assert.equal(report.risk_metrics.NIFTY.as_of, '2026-11-12');
   const expectedHv = Math.sqrt(30 / 29) * 0.003 * Math.sqrt(245) * 100;
   assert(Math.abs(report.risk_metrics.NIFTY.hv30 - expectedHv) < 1e-10);
-  const firstOption = report.records[1].data[0].call_options.market_data;
+  assert.deepEqual(['2026-07-31','2026-08-03','2026-12-07'].map(cloud.regularCloseMinutes_),[930,940,945]);
+  assert.equal(cloud.indexExpiryMillis_('2026-12-08'),Date.parse('2026-12-08T15:30:00+05:30'));
+  assert.equal(cloud.indexExpiryMillis_('2026-11-17'),Date.parse('2026-11-17T15:40:00+05:30'));
+  assert.deepEqual(Array.from(vm.runInContext("[SPECIAL_SESSIONS['2026-11-08'].startMins,SPECIAL_SESSIONS['2026-11-08'].endMins]",cloud)),[860,940]);
+  const longChain = rawChain('NIFTY','2026-11-17');
+  longChain.forEach((r,i) => {
+    r.call_options.option_greeks.delta = (33-i)/34;
+    r.put_options.option_greeks.delta = -(i+1)/34;
+  });
+  const selected = cloud.quoteStrikes_({label:'NIFTY|2026-11-17',data:longChain},
+    {open_positions:[{sym:'NIFTY',exp:'2026-11-17',legs:[{strike:24200}]}]});
+  assert(selected.has(24200)); assert(selected.has(25000)); assert(selected.size < longChain.length);
+  for (const strat of ['S1','S2','S3','S4','S5','S6']) {
+    cloud.buildStrategyLegs_('NIFTY',25000,strat).forEach(l => assert(selected.has(l.strike)));
+  }
+  const loadLedger = cloud.loadForwardLedger_;
+  cloud.loadForwardLedger_ = () => {throw new Error('fixture ledger unavailable');};
+  const failedLedger = cloud.capture_('snapshot');
+  assert.equal(failedLedger.status,'complete');
+  assert.equal(failedLedger.forward_test_status,'failed');
+  assert.equal(failedLedger.records[1].data.length,33);
+  cloud.loadForwardLedger_ = loadLedger;
+  const enrich = cloud.enrichSnapshotInputs_;
+  cloud.enrichSnapshotInputs_ = () => {throw new Error('fixture enrichment failure');};
+  const rawOnly = cloud.capture_('snapshot');
+  assert.equal(rawOnly.status,'complete'); assert.equal(rawOnly.enrichment_status,'failed');
+  assert.equal(rawOnly.forward_test_status,'failed'); assert.equal(rawOnly.records[1].data[0].call_options.market_data.ltp,999);
+  cloud.enrichSnapshotInputs_ = enrich;
+  cloud.ContentService = {MimeType:{JSON:'json'},createTextOutput:text => ({setMimeType:() => JSON.parse(text)})};
+  properties.set('LATEST_SNAPSHOT_FILE_ID',status.file_id);
+  assert.equal(cloud.doGet({parameter:{since:status.retrieved_at}}).unchanged,true);
+  properties.set('LATEST_SNAPSHOT_FILE_ID','different-file');
+  assert.notEqual(cloud.doGet({parameter:{since:status.retrieved_at}}).unchanged,true);
+  const anchorProps = new Map();
+  const localProps = {getProperty:k=>anchorProps.get(k), setProperty:(k,v)=>anchorProps.set(k,v)};
+  const anchorRec = {label:'NIFTY|2026-11-17',data:rawChain('NIFTY','2026-11-17')};
+  const anchorReport = {day:'2026-11-13',records:[anchorRec],pending:[],errors:[]};
+  cloud.attachStraddleAnchors_(anchorReport,localProps);
+  assert.equal(anchorRec.straddle_anchor_strike,25000);
+  const savedAnchors = anchorProps.get('SESSION_STRADDLE_ANCHORS');
+  anchorRec.data = rawChain('NIFTY','2026-11-17',27500);
+  anchorRec.data.push(rawChain('NIFTY','2026-11-17',25000)[16]);
+  anchorRec.data.forEach(row=>{row.underlying_spot_price=27500;});
+  anchorReport.errors.push({reason:'partial'});
+  cloud.attachStraddleAnchors_(anchorReport,localProps);
+  assert.equal(anchorProps.get('SESSION_STRADDLE_ANCHORS'),savedAnchors);
+  assert.equal(anchorRec.straddle_anchor_strike,25000);
+  assert(cloud.quoteStrikes_(anchorRec,null).has(25000));
+  anchorReport.day = '2026-11-16';anchorReport.errors=[];
+  cloud.attachStraddleAnchors_(anchorReport,localProps);
+  assert.equal(anchorRec.straddle_anchor_strike,27500);
+  const priorCache = cloud.scriptCache_, priorSave = cloud.save_;
+  const histories = {};
+  let writes = 0;
+  cloud.scriptCache_ = () => ({get:()=>null,put(){},remove(){},getAll:()=>histories,
+    putAll(values){writes++;Object.assign(histories,values);}});
+  const archived = cloud.capture_('snapshot');
+  const tuple = archived.records[1].straddle_history[0];
+  assert.equal(tuple.length,6); assert.equal(tuple[2],20);
+  assert(tuple[3]>0); assert.equal(tuple[4],now-1000); assert.equal(tuple[5],now-1000);
+  const previousNow = now;
+  now += 60000;
+  cloud.save_ = () => {throw Error('archive write failed');};
+  assert.throws(()=>cloud.capture_('snapshot'),/archive write failed/);
+  assert.equal(writes,1);
+  cloud.save_ = priorSave;
+  now += 60000;
+  mode='no-times';
+  const gap = cloud.capture_('snapshot').records[1].straddle_history;
+  assert.equal(gap.length,2); assert.equal(gap[1][2],20);
+  assert.deepEqual(Array.from(gap[1].slice(3)),[null,null,null]);
+  assert.equal(gap[1][1]-gap[0][1],120000);
+  assert(Object.values(histories).every(v => Buffer.byteLength(v)<100000));
+  mode='valid'; now=previousNow; cloud.scriptCache_=priorCache;
+  const firstOption = report.records[1].data.find(r => r.strike_price === 25000).call_options.market_data;
   assert.equal(firstOption.quote_timestamp, new Date(now - 1000).toISOString());
   assert.notEqual(firstOption.ltp, 999, 'timestamp must travel with its own book');
-  assert.equal(report.records[1].data[0].call_options.chain_market_data.ltp, 999);
+  assert.equal(report.records[1].data.find(r => r.strike_price === 25000).call_options.chain_market_data.ltp, 999);
   for (const failure of ['stale', 'no-times', 'no-history']) {
     mode = failure; cache.clear();
     const invalid = cloud.capture_('snapshot');
@@ -266,6 +393,53 @@ async function main() {
   assert.equal(previous.brokerAtmIv, 20);
   assert.equal(web.REAL_HISTORICAL_1Y.NIFTY.at(-1).iv, 20);
   assert.equal(web.REAL_HISTORICAL_1Y.NIFTY.at(-1).ivSource, 'Upstox option_greeks.iv');
+  // Normalize and render a session that moves away from its initial ATM, loses a
+  // leg's contemporaneous book, then recovers. The contract identity stays fixed.
+  {
+    const desk = vm.createContext({...web, window:{innerWidth:900}, activeScMode:'intraday', straddleChart:null});
+    for (const name of ['chartNumber','observedIv','chartOpts','scenarioLegs','renderTab4Straddle','formatLiveNumber','currentRow']) {
+      vm.runInContext(browserFunction(name),desk);
+    }
+    vm.runInContext(fs.readFileSync(path.join(root,'scripts/options-charts.js'),'utf8'),desk);
+    const els = {};
+    desk.document = {getElementById: id => els[id] ||= {value:id === 'stressStructureSelect' ? 'SHORT_STRADDLE' : '1'}};
+    desk.updateOrCreateChart = (_,ctx,type,data) => ({data});
+    desk.fmtInr = String;
+    const previousCatalog = web.marketCatalog;
+    try {
+      for (const [minute, spot, missing] of [[1,25050,false],[2,25050,true],[3,25000,false]]) {
+        const moved = clone(report);
+        const stamp = new Date(now + minute * 60000).toISOString();
+        moved.retrieved_at = stamp;
+        for (const rec of moved.records) {
+          rec.retrieved_at = stamp;
+          if (Array.isArray(rec.data)) {
+            rec.chain_retrieved_at = stamp;
+            for (const row of rec.data) for (const side of ['call_options','put_options']) {
+              const md = row[side].market_data;
+              md.quote_timestamp = stamp;
+              if (row.strike_price === 25000 && side === 'put_options' && missing) md.quote_timestamp = new Date(Date.parse(stamp)-65000).toISOString();
+            }
+          } else for (const q of Object.values(rec.data)) {
+            q.timestamp = stamp;
+            if (q.instrument_token === 'NSE_INDEX|Nifty 50') q.last_price = spot;
+          }
+        }
+        web.marketCatalog = web.normalizeLiveSnapshot(moved).catalog;
+        const r = web.marketCatalog.NIFTY[0];
+        assert.equal(r.atm,spot); assert.equal(r.straddleStrike,25000);
+        const mark = r.intraday.at(-1);
+        assert.equal(mark.atm,25000);
+        assert.equal(mark.strad === null,missing);
+        desk.marketCatalog = web.marketCatalog;
+        desk.renderTab4Straddle();
+        assert(desk.straddleChart.data.datasets[0].label.includes('book midpoints'));
+        assert.equal(desk.straddleChart.data.datasets[0].data.length,minute + 1);
+        assert.equal(desk.straddleChart.data.datasets[0].data.at(-1).y,mark.strad);
+        assert(els.straddleSummaryBadge.textContent.includes('25,000 CE + PE'));
+      }
+    } finally {web.marketCatalog = previousCatalog;}
+  }
   const missingIv = clone(report);
   for (const rec of missingIv.records) if (Array.isArray(rec.data)) {
     for (const row of rec.data) for (const side of ['call_options','put_options']) row[side].option_greeks.iv = null;
@@ -328,6 +502,29 @@ async function main() {
   web.fetch = async () => ({ok:true, json:async () => report});
   assert.equal(await web.syncLiveCloudSnapshot(true), false);
   assert.equal(web.marketCatalog, savedCatalog);
+  // A late, complete capture advances research views while execution remains withheld.
+  web.lastSyncedRetrievedAt = report.retrieved_at;
+  now += 10*60000;
+  const delayed = {...next,capture_integrity:{age_seconds:600,status:'snapshot runtime admission limit reached'}};
+  let marks = 0;
+  web.window.markForwardPositionsFromPayload = () => { marks++; };
+  web.fetch = async () => ({ok:true,json:async () => delayed});
+  assert.equal(await web.syncLiveCloudSnapshot(true), true);
+  assert.equal(web.lastSyncedRetrievedAt,next.retrieved_at);
+  assert.equal(web.liveSnapshotAccepted,false); assert.equal(marks,0);
+  assert.match(web.message,/runtime limit.*10 min/);
+  web.fetch = async () => ({ok:true,json:async () => ({unchanged:true,retrieved_at:next.retrieved_at,capture_integrity:delayed.capture_integrity})});
+  assert.equal(await web.syncLiveCloudSnapshot(true),false);
+  assert.match(web.message,/runtime limit/);
+  const lateJoin = clone(delayed);
+  const rec = lateJoin.records.find(r => r.label.startsWith('NIFTY|'));
+  rec.straddle_anchor_strike = rec.data[12].strike_price;
+  const time = Date.parse(next.retrieved_at)-60000;
+  rec.straddle_history = [[time,time,18,99,time,time],[time+1000,time+1000,18,999,time-200000,time+1000]];
+  const replay = web.normalizeLiveSnapshot(lateJoin).catalog.NIFTY[0];
+  assert.equal(replay.straddleStrike,rec.straddle_anchor_strike);
+  assert.equal(replay.intraday.find(p => Date.parse(p.markAt)===time).strad,99);
+  assert.equal(replay.intraday.find(p => Date.parse(p.markAt)===time+1000).strad,null);
   console.log('Live connection regressions passed: collector contract, event-time gates, HV provenance, atomic refresh, session/expiry transitions, deduplication and parity.');
 }
 main().catch(error => {console.error(error); process.exitCode = 1;});
