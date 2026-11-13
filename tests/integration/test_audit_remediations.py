@@ -216,10 +216,12 @@ class TestTrack2CloudAndDownloaders(unittest.TestCase):
     def test_code_gs_weekend_guard_and_budget_fixes(self):
         cgs_path = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs") if (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").exists() else (PATCH_DIR / "Code.gs")
         code_gs = cgs_path.read_text(encoding="utf-8")
-        # 1. Weekend guard appears before reconcilePriorSession() in scheduledCapture()
+        # 1. Resolve the special-session window before skipping ordinary weekends.
         sched_idx = code_gs.index("function scheduledCapture()")
         sched_body = code_gs[sched_idx:code_gs.index("function reconcilePriorSession()", sched_idx)]
-        self.assertLess(sched_body.index("if (weekday > 5)"), sched_body.index("reconcilePriorSession()"))
+        guard = sched_body.index("if (weekend && !sp) return;")
+        self.assertLess(sched_body.index("const session = marketWindow_(now);"), guard)
+        self.assertLess(guard, sched_body.index("reconcilePriorSession()"))
         # 2. Artificial + 1000ms budget padding removed
         self.assertNotIn("Date.now() - started + 1000", code_gs)
         # 3. 401/403 retry storm prevention present
