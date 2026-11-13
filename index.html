@@ -3307,8 +3307,8 @@
         var browserAge = (Date.now() - capturedAt) / 1000;
         return isFinite(age) && age >= 0 && age <= 120
           && isFinite(capturedAt) && isFinite(browserAge)
-          && browserAge >= -30 && browserAge <= 120
-          && !integrity.snapshot_gap;
+          && browserAge >= -30 && browserAge <= 120;
+        // snapshot_gap describes missing history, not the validity of this capture.
       }
 
       function liveNumber(value) {
@@ -3480,7 +3480,7 @@
             if (!isFreshValidatedCloudSnapshot(payload)) {
               liveSnapshotAccepted = false;
               updateMarketClock();
-              setLiveCaptureIntegrity('Live data withheld: cloud snapshot is incomplete, stale, or has a detected gap.', 'text-rose-300');
+              setLiveCaptureIntegrity('Waiting for a complete, fresh capture. Showing the last accepted snapshot.', 'text-rose-300');
               return false;
             }
             if (liveTimestamp(payload.retrieved_at) <= liveTimestamp(lastSyncedRetrievedAt)) return false;
@@ -3500,7 +3500,11 @@
             updateMarketClock();
             renderActiveOptionsTab();
             renderForwardWorkspace();
-            setLiveCaptureIntegrity('Market snapshot updated · ' + latestAsOfLabel + (ledgerApplied ? ' · Cloud ledger updated' : ' · Forward ledger unavailable'), ledgerApplied ? 'text-emerald-300' : 'text-sky-300');
+            const hasHistoryGap = Boolean(payload.capture_integrity && payload.capture_integrity.snapshot_gap);
+            setLiveCaptureIntegrity('Live snapshot updated' +
+              (hasHistoryGap ? ' · Earlier capture gap; missing history remains blank' : '') +
+              (ledgerApplied ? ' · Cloud ledger updated' : ' · Forward ledger unavailable'),
+              hasHistoryGap || !ledgerApplied ? 'text-sky-300' : 'text-emerald-300');
             return true;
           })
           .catch(function() {

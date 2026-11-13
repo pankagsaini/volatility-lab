@@ -146,6 +146,15 @@ async function main() {
 
   // Replay two sessions with new ATM, chain prices and expiry membership.
   report.capture_integrity = {age_seconds: 0};
+  // A missed historical slot must not reject a later complete, fresh snapshot.
+  report.capture_integrity.snapshot_gap = '2026-11-13|124 to 2026-11-13|126 detected earlier';
+  assert.equal(web.isFreshValidatedCloudSnapshot(report), true);
+  for (const invalid of [
+    {...report, status:'partial'},
+    {...report, nfo_session_validated:false},
+    {...report, retrieved_at:new Date(now-121000).toISOString()},
+    {...report, capture_integrity:{...report.capture_integrity,age_seconds:121}},
+  ]) assert.equal(web.isFreshValidatedCloudSnapshot(invalid),false,'Current validity gates remain enforced');
   web.REAL_HISTORICAL_1Y = {NIFTY: [{d:'2026-11-12', c:24900, iv:17, h10:14, h30:15}], BANKNIFTY: []};
   const oldHistory = clone(web.REAL_HISTORICAL_1Y.NIFTY[0]);
   web.fetch = async () => ({ok: true, json: async () => report});
