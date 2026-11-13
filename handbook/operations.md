@@ -29,3 +29,13 @@ The supported variables and defaults are in [.env.example](../.env.example). Exp
 Install the recorded uv version and run `uv sync --locked --extra dev`. For a dependency update, regenerate `uv.lock`, inspect the changes and run the Python matrix, dependency audit and wheel checks. The combined branch/statement coverage floor is 35%, raised from the original 31% baseline after startup, replay and property tests were added. CI publishes coverage XML for each Python version.
 
 Python 3.11 is the minimum supported runtime. Python 3.10 resolves to vulnerable versions of Pillow and filelock whose available fixes require a newer interpreter. The CI matrix covers Python 3.11, 3.12 and 3.13.
+
+## Collector runtime
+
+The Apps Script collector records a rolling 24-hour runtime budget and pauses at 75 minutes to leave headroom under the consumer trigger allowance. Check the public status response for the recorded window end. The 13 November 2026 pause occurred at 13:14 IST, with its current window ending at 07:20 IST on 14 November.
+
+Quote enrichment uses groups of up to 40 requests with at least one second between group starts. Each request respects the Apps Script URL limit and Upstox's 500-key limit. The same evaluation passes its validated ledger contents into the save operation, which writes those exact previous contents to the backup. This reduces repeated Drive reads and folder searches.
+
+The next captured status reports fetch, evaluation and archive seconds. Measure a complete session before concluding that collection fits within the budget. Existing missing historical IV stays unavailable.
+
+Provider limits are documented by [Google Apps Script](https://developers.google.com/apps-script/guides/services/quotas) and [Upstox](https://upstox.com/developer/api-documentation/rate-limiting/).

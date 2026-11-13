@@ -120,9 +120,109 @@ cloud.apiAll_ = requests => requests.map(req => {
   return {...req, data};
 });
 
+// Exercise the real enrichment loop independently of the capture fixtures.
+{
+  const batching = vm.createContext({Date: Clock, console, Utilities: {
+    sleep(ms) { now += ms; }
+  }});
+  vm.runInContext(gs, batching);
+  batching.scriptCache_ = () => ({get: () => JSON.stringify({as_of: '2026-11-12', units: 'annualized_percent', hv10: 10, hv30: 10})});
+  batching.day_ = () => '2026-11-12';
+  const initialNow = now;
+  for (const count of [0, 1, 40, 41, 80, 81]) {
+    const starts = [], groups = [], seen = [];
+    batching.apiAll_ = requests => {
+      starts.push(now); groups.push(requests.length);
+      return requests.map(req => {
+        const keys = req.params.instrument_key.split(',');
+        assert(keys.length <= 500);
+        assert(('https://api.upstox.com' + req.path + '?instrument_key=' + encodeURIComponent(req.params.instrument_key)).length < 2082);
+        seen.push(...keys);
+        return {...req, data: Object.fromEntries(keys.map(key => [key, {
+          instrument_token: key, timestamp: new Date(now).toISOString(),
+          depth: {buy: [{price: 1, quantity: 1}], sell: [{price: 2, quantity: 1}]}
+        }]))};
+      });
+    };
+    // Long keys force exactly one full-quote URL per key, covering group edges.
+    const options = Array.from({length: count}, (_, i) => ({instrument_key: 'NSE_FO|' + i + 'x'.repeat(900), market_data: {ltp: 7}}));
+    const report = {day: '2026-11-13', errors: [], records: [{
+      label: 'NIFTY|2026-11-17', retrieved_at: new Date(now).toISOString(),
+      data: options.map(o => ({call_options: o, put_options: o}))
+    }]};
+    batching.enrichSnapshotInputs_(report, now);
+    assert.deepEqual(seen, options.map(o => o.instrument_key), 'every unique leg gets a full quote');
+    assert(groups.every(size => size <= 40));
+    assert.equal(groups.length, Math.ceil(count / 40));
+    starts.slice(1).forEach((start, i) => assert(start - starts[i] >= 1000));
+    options.forEach((o, i) => assert.equal(o.market_data.quote_timestamp, new Date(starts[Math.floor(i / 40)]).toISOString()));
+  }
+  now = initialNow;
+}
+
+// Real load/save path, including exact prior bytes, retries and fresh evaluation state.
+{
+  const ledgerProperties = new Map(), files = new Map();
+  let reads = 0, scans = 0, failPrimary = false, failBackup = false;
+  const ledgerCloud = vm.createContext({Date: Clock, MimeType: {PLAIN_TEXT: 'text/plain'}});
+  vm.runInContext(gs, ledgerCloud);
+  const makeFile = (name, content) => {
+    const file = {content, getId: () => name, isTrashed: () => false,
+      getBlob: () => ({getDataAsString: () => {reads++; return file.content;}}),
+      setContent(value) {
+        if ((name.endsWith('.json') && failPrimary) || (name.endsWith('.bak') && failBackup)) throw Error('write failed');
+        file.content = value;
+      }};
+    files.set(name, file); return file;
+  };
+  ledgerCloud.props_ = () => ({getProperty: k => ledgerProperties.get(k), setProperty: (k, v) => ledgerProperties.set(k, v)});
+  ledgerCloud.scriptCache_ = () => null;
+  ledgerCloud.DriveApp = {getFileById: id => files.get(id)};
+  ledgerCloud.folder_ = () => ({
+    getFilesByName(name) {scans++; let remaining = files.has(name); return {
+      hasNext: () => remaining, next: () => {remaining = false; return files.get(name);}
+    };},
+    createFile: makeFile
+  });
+  const original = JSON.stringify(ledgerCloud.cleanSlateForwardLedger_(), null, 4);
+  const primary = makeFile('forward_test_ledger.json', original);
+  const state = {};
+  const ledger = ledgerCloud.loadForwardLedger_(state);
+  ledgerCloud.saveForwardLedger_(ledger, state);
+  assert.equal(reads, 1, 'save reuses the validated load under the same lock');
+  const backup = files.get('forward_test_ledger.bak');
+  assert.equal(backup.content, original, 'backup preserves exact previous bytes');
+  const firstSaved = primary.content, firstScans = scans;
+  ledger.intraday_mtm_series.push({session_date: '2026-11-13', t: '10:01'});
+  ledgerCloud.saveForwardLedger_(ledger, state);
+  assert.equal(reads, 1); assert.equal(scans, firstScans);
+  assert.equal(backup.content, firstSaved);
+  failBackup = true;
+  const beforeFailure = primary.content;
+  assert.throws(() => ledgerCloud.saveForwardLedger_(ledger, state), /write failed/);
+  assert.equal(primary.content, beforeFailure); assert.equal(state.loaded, false);
+  failBackup = false; failPrimary = true;
+  assert.throws(() => ledgerCloud.saveForwardLedger_(ledger, state), /write failed/);
+  assert.equal(backup.content, beforeFailure); assert.equal(state.loaded, false);
+  failPrimary = false;
+  ledgerCloud.saveForwardLedger_(ledger, state);
+  const beforeReload = reads;
+  ledgerCloud.loadForwardLedger_({});
+  assert.equal(reads, beforeReload + 1, 'new evaluation always reads Drive');
+  const priorReads = reads;
+  ledgerCloud.saveForwardLedger_(ledger);
+  assert.equal(reads, priorReads + 1, 'legacy save validates the current primary');
+  primary.content = '{';
+  assert.throws(() => ledgerCloud.saveForwardLedger_(ledger), /Invalid forward ledger/);
+}
 async function main() {
   // Exercise capture_ itself through the real evaluator, with documented response shapes.
   const report = cloud.capture_('snapshot');
+  const status = JSON.parse(properties.get('LAST_SNAPSHOT'));
+  for (const field of ['fetch_seconds', 'evaluation_seconds', 'archive_seconds']) {
+    assert.equal(typeof status[field], 'number');
+    assert.equal(status[field], report[field]);
+  }
   assert.equal(report.status, 'complete', JSON.stringify(report.errors));
   assert(report.forward_test_ledger.open_positions.length > 0, 'valid collector inputs must reach evaluator: ' + JSON.stringify({rejections:report.forward_rejections, metrics: report.risk_metrics, mkt:cloud.getNseMarketStatusIST(new Clock())}));
   assert.equal(report.risk_metrics.NIFTY.as_of, '2026-11-12');
