@@ -1,13 +1,15 @@
 """RBI 91-day auction cutoff yield; cached and converted to continuous ACT/365."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import datetime,timezone
 from html import unescape
 from pathlib import Path
 import json,math,re,threading,hashlib
-from urllib.request import Request,urlopen
+from volatility_lab.runtime.external import read_url
+from volatility_lab.runtime.settings import load_settings
 from collector_support import atomic_json
 URL='https://www.rbi.org.in/'
-PATH=PACKAGE_ROOT/'data'/'risk_free_rate.json'
+PATH=runtime_data_dir()/'risk_free_rate.json'
 _lock=threading.Lock()
 
 def parse_rate(html):
@@ -23,13 +25,14 @@ def get_rate(force=False):
     with _lock:
         try:saved=json.loads(PATH.read_text(encoding='utf-8'))
         except (OSError,ValueError):saved={}
+        if load_settings().offline:
+            return saved
         now=datetime.now(timezone.utc)
         checked=saved.get('last_attempt')
         if not force and checked and (now-datetime.fromisoformat(checked)).total_seconds()<3600:return saved
         saved['last_attempt']=now.isoformat()
         try:
-            with urlopen(Request(URL,headers={'User-Agent':'VolatilityLab/1.0'}),timeout=6) as response:
-                raw=response.read(500000).decode('utf-8')
+            raw=read_url('rbi',URL,timeout=6,max_bytes=500000).decode('utf-8')
             value=parse_rate(raw)
             saved.update(yield_percent=value,model_rate=math.log1p(value/100*91/365)*365/91,
                          checked_at=now.isoformat(),source=URL,sha256=hashlib.sha256(raw.encode('utf-8')).hexdigest(),

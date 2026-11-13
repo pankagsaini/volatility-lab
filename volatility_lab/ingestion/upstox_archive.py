@@ -1,4 +1,5 @@
 """Resumable Upstox research archive; raw candles never masquerade as historical IV."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
 from datetime import datetime,timedelta
@@ -11,7 +12,7 @@ from upstox_adapter import market_client
 from upstox_rate_limit import wait_for_slot
 from market_calendar import last_trading_day_on_or_before
 
-ROOT=PACKAGE_ROOT/'data'/'upstox'
+ROOT=runtime_data_dir()/'upstox'
 STATUS=ROOT/'collection_status.json'
 
 def connect():

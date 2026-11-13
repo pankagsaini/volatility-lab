@@ -23,8 +23,9 @@ if __name__ == '__main__':
     for path in ([args.output] if args.output else [ROOT / 'pricing-inputs.json', ROOT / 'docs/pricing-inputs.json']):
         atomic_json(path, inputs)
     if args.update_python_cache:
-        atomic_json(ROOT / 'volatility_lab/data/risk_free_rate.json', inputs['rate'])
-        atomic_json(ROOT / 'volatility_lab/data/dividend_yields.json', inputs['dividends'])
+        from volatility_lab.runtime.settings import data_dir
+        atomic_json(data_dir() / 'risk_free_rate.json', inputs['rate'])
+        atomic_json(data_dir() / 'dividend_yields.json', inputs['dividends'])
     print(json.dumps({'rate_yield_percent':inputs['rate']['yield_percent'],
         'continuous_rate_percent':100*inputs['rate']['model_rate'],
         'dividends':{k:{'yield_percent':v['yield_percent'],'as_of':v['as_of']} for k,v in inputs['dividends'].items()}}))

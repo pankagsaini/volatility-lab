@@ -1,5 +1,6 @@
 """Dated futures carry backtest engine with LRU archive caching and expiry roll/exit handling."""
 from __future__ import annotations
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 
 import gzip
@@ -17,7 +18,7 @@ from backtest_common import is_blacklisted_future, record_skip
 from broker_charges import charge
 from market_calendar import last_trading_day_on_or_before
 
-ROOT = PACKAGE_ROOT / "data"
+ROOT = runtime_data_dir()
 _FILE_CACHE: OrderedDict[str, Any] = OrderedDict()
 _CACHE_LOCK = RLock()
 _MAX_CACHE_FILES = 128

@@ -31,11 +31,17 @@ def archive_quotes(root: Path, symbol: str, expiry: str, payload: dict[str, Any]
     if config is not None and "config" not in out_obj:
         out_obj["config"] = config
     direct_path = root_path / f"{str(symbol).lower()}_option_quotes_{expiry}.json"
-    txt = json.dumps(out_obj, indent=2, sort_keys=True, default=str)
-    direct_path.write_text(txt, encoding="utf-8")
-    target_dir = root_path / "quotes_archive" / str(symbol)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    (target_dir / f"{expiry}.json").write_text(txt, encoding="utf-8")
+    from volatility_lab.pricing.pricing_policy import timestamp
+    from volatility_lab.storage.collector_support import atomic_json
+    observed = timestamp(out_obj.get('valuation'))
+    for target in (direct_path, root_path / "quotes_archive" / str(symbol) / f"{expiry}.json"):
+        try:
+            previous = timestamp(json.loads(target.read_text(encoding="utf-8")).get('valuation'))
+        except (OSError, ValueError, AttributeError):
+            previous = None
+        if previous is None or (observed is not None and observed >= previous):
+            # Legacy callers may pass datetimes in broker contract metadata.
+            atomic_json(target, json.loads(json.dumps(out_obj, default=str)))
     return direct_path
 
 

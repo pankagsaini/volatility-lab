@@ -72,7 +72,9 @@ app.add_middleware(
 @app.get("/api/health")
 async def api_health():
     """Health check endpoint."""
-    return {"status": "ok", "app": "Volatility Lab Modern SaaS Workstation", "engine": "FastAPI + Starlette"}
+    from volatility_lab.runtime.settings import load_settings
+    from volatility_lab.runtime.health import inspect
+    return await asyncio.to_thread(inspect, load_settings())
 
 @app.get("/api/market-summary")
 async def api_market_summary():

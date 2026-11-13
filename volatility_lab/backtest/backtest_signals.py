@@ -1,4 +1,5 @@
 """As-known-at-entry signal loader and point-in-time filter evaluator (strict AvailableAt <= DecisionTime)."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 import json
 import math
@@ -13,7 +14,7 @@ except ModuleNotFoundError:
     from .market_calendar import last_trading_day_on_or_before
 
 ROOT = PACKAGE_ROOT
-DB = ROOT / 'data' / 'monitor.sqlite'
+DB = runtime_data_dir() / 'monitor.sqlite'
 PATH = DB
 
 _METRIC_ALIASES = {

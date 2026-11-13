@@ -2,11 +2,11 @@
 
 ## Local desk
 
-Install the package and launch `python -m volatility_lab`. For Streamlit Community Cloud, choose `streamlit_app.py` and Python 3.11. Tested versions are 3.10, 3.11 and 3.12.
+Install the package and launch `python -m volatility_lab`. For Streamlit Community Cloud, choose `streamlit_app.py` and Python 3.11. Tested versions are 3.11, 3.12 and 3.13.
 
 The default bind address is loopback; LAN access requires `--lan`. Old launchers are wrappers and must contain no setup logic.
 
-Broker tokens are optional for saved research. Direct collection requires an Upstox analytics token through the supported environment/Streamlit secret or encrypted local store. A `.env` file is not automatically loaded merely because it exists; export variables explicitly until the central settings layer is enabled. Never put credentials in public HTML, URL query strings, committed settings or logs.
+Broker tokens are optional for saved research. Direct collection requires an Upstox analytics token through the supported environment/Streamlit secret or encrypted local store. Export settings in the process environment or point `VOL_LAB_ENV_FILE` at a local file with `KEY=value` lines. Exported values take precedence. Never put credentials in public HTML, URL query strings, committed settings or logs.
 
 ## Website
 

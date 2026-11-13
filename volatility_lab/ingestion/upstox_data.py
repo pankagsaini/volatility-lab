@@ -1,4 +1,5 @@
 """Read-only Upstox market-data connection with Windows-encrypted credentials."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import datetime, timedelta
 import json
@@ -17,7 +18,7 @@ from market_data import IST, NoRedirect, MarketDataError
 
 ROOT=PACKAGE_ROOT
 TOKEN_PATH=ROOT/'.auth'/'upstox_analytics.bin'
-REPORT_PATH=ROOT/'data'/'upstox'/'connection_test.json'
+REPORT_PATH=runtime_data_dir()/'upstox'/'connection_test.json'
 INDICES={'NIFTY':'NSE_INDEX|Nifty 50','BANKNIFTY':'NSE_INDEX|Nifty Bank'}
 
 
@@ -88,32 +89,31 @@ class UpstoxDataClient:
         self._opener=build_opener(NoRedirect(),_MarketHTTPSHandler())
 
     def _get(self,path,params=None,*,before_attempt=None):
+        from volatility_lab.runtime.settings import load_settings
+        if load_settings().offline:
+            raise UpstoxDataError('Broker feed disabled in offline mode.')
         allowed=path in ('/v2/market-quote/quotes','/v2/option/contract','/v2/option/chain') or path.startswith('/v3/historical-candle/') or path in ('/v2/expired-instruments/expiries','/v2/expired-instruments/option/contract','/v2/expired-instruments/future/contract') or path.startswith('/v2/expired-instruments/historical-candle/')
         if not allowed or '..' in path or '?' in path or '#' in path:
             raise UpstoxDataError('Only approved read-only market-data endpoints are enabled.')
         url='https://api.upstox.com'+path
         if params:url+='?'+urlencode(params)
         request=Request(url,headers={'Authorization':'Bearer '+self._token,'Accept':'application/json','User-Agent':'VolatilityLab/1.0 (read-only market-data client)'},method='GET')
-        for attempt in range(3):
+        from volatility_lab.runtime.external import external_reads
+        def read():
             if before_attempt is not None:
                 before_attempt()
-            try:
-                with self._opener.open(request,timeout=20) as response:
-                    payload=json.loads(response.read(20000000))
-                break
-            except HTTPError as error:
-                if error.code in (429,500,502,503,504) and attempt<2:
-                    try:delay=min(float((error.headers or {}).get('Retry-After','0')),30.)
-                    except (TypeError,ValueError):delay=0.
-                    time.sleep(max(delay,2.0*(2**attempt)))
-                    continue
-                raise UpstoxDataError(http_error_message(error,path)) from None
-            except (URLError,OSError,ValueError):
-                if attempt<2:
-                    time.sleep(2.0*(2**attempt))
-                    continue
-                raise UpstoxDataError('Upstox connection failed or returned an invalid response after 3 attempts (retry horizon exceeded).') from None
-        if payload.get('status')!='success' or 'data' not in payload:
+            with self._opener.open(request, timeout=20) as response:
+                raw = response.read(20_000_001)
+            if len(raw) > 20_000_000:
+                raise UpstoxDataError('Oversized Upstox response')
+            return json.loads(raw)
+        try:
+            payload = external_reads.read('upstox', read)
+        except HTTPError as error:
+            raise UpstoxDataError(http_error_message(error,path)) from None
+        except (OSError, ValueError):
+            raise UpstoxDataError('Upstox connection unavailable or invalid response.') from None
+        if not isinstance(payload,dict) or payload.get('status')!='success' or not isinstance(payload.get('data'),(dict,list)):
             raise UpstoxDataError('Upstox did not return successful market data.')
         return payload['data']
 
@@ -135,6 +135,8 @@ class UpstoxDataClient:
 
 
 def save_token(token):
+    if os.name != 'nt':
+        raise UpstoxDataError('Use an environment or Streamlit secret for token storage on this operating system.')
     client=UpstoxDataClient(token)
     # Verify read-only market access before persisting a replacement token.
     result=client.quotes(list(INDICES.values()))
@@ -149,7 +151,8 @@ def save_token(token):
 
 
 def saved_client():
-    token = os.environ.get('UPSTOX_TOKEN')
+    from volatility_lab.runtime.settings import load_settings
+    token = load_settings().upstox_token
     if not token:
         try:
             import streamlit as st
@@ -162,7 +165,7 @@ def saved_client():
             return UpstoxDataClient(token)
         except Exception as err:
             raise UpstoxDataError(f'Configured secret UPSTOX_TOKEN is invalid: {err}') from None
-    if TOKEN_PATH.exists():
+    if os.name == "nt" and TOKEN_PATH.exists():
         try:
             return UpstoxDataClient(protect(TOKEN_PATH.read_bytes(), decrypt=True).decode())
         except Exception:

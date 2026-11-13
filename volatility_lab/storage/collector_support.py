@@ -1,4 +1,5 @@
 """Shared atomic file I/O, cross-process locking, DPAPI token protection, and validation helpers."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
@@ -23,7 +24,7 @@ except ImportError:
     fcntl = None
 
 ROOT = PACKAGE_ROOT
-DATA = ROOT / 'data'
+DATA = runtime_data_dir()
 PRIVATE = DATA / 'private'
 STATE = DATA / 'state'
 

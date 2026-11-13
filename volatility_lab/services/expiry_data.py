@@ -109,7 +109,9 @@ def history(symbol,expiry,config):
 
         marks=','.join('?' for _ in keys)
 
-        frame=pd.read_sql_query(f"SELECT date AS Date,iv AS IV,spread AS Spread,source AS Source,config AS Config FROM expiry_observations WHERE symbol=? AND expiry=? AND source='Upstox supplied IV (Google Cloud)' AND config IN ({marks}) ORDER BY date",con,params=[symbol,str(expiry),*keys],parse_dates=['Date'])
+        frame=pd.read_sql_query(f"SELECT date AS Date,expiry AS Expiry,iv AS IV,spread AS Spread,source AS Source,config AS Config FROM expiry_observations WHERE symbol=? AND expiry=? AND source='Upstox supplied IV (Google Cloud)' AND config IN ({marks}) ORDER BY date",con,params=[symbol,str(expiry),*keys],parse_dates=['Date'])
+        from volatility_lab.storage.snapshot_history import exclude_modeled_daily
+        frame=exclude_modeled_daily(frame,con,symbol).drop(columns='Expiry')
 
         frame['_preferred']=frame.Config.eq(config)
 
@@ -169,7 +171,10 @@ def load_snapshot(config,allow_saved=False):
 @lru_cache(maxsize=8)
 def _aligned_snapshot(raw,history_revision):
     """Invalidate on either quote content or saved OHLC; callers receive a copy."""
-    return align_snapshot(json.loads(raw))
+    from volatility_lab.storage.snapshot_history import historical_fields
+    snapshot = json.loads(raw)
+    snapshot['rows'] = [historical_fields(row) for row in snapshot.get('rows', [])]
+    return align_snapshot(snapshot)
 
 
 class ExpiryMonitor(base.Monitor):
@@ -345,14 +350,6 @@ class ExpiryMonitor(base.Monitor):
                     payload.update(broker_option_chain=broker_raw,broker_received_at=received.isoformat(),iv_source='Upstox supplied IV')
                     archive_quotes(DATA,symbol,expiry,payload)
 
-                    target=DATA/f'{symbol.lower()}_option_quotes_{expiry}.json'
-
-                    temporary=target.with_suffix('.tmp')
-
-                    temporary.write_text(json.dumps(payload,default=str),encoding='utf-8')
-
-                    temporary.replace(target)
-
             except (MarketDataError,ValueError,KeyError,TypeError) as exc:
 
                 message=str(exc) if isinstance(exc,MarketDataError) else 'Market data unavailable; retry refresh.'
@@ -377,7 +374,7 @@ class ExpiryMonitor(base.Monitor):
 
         if progress:progress(1.,'Updated')
 
-        return write_snapshot(result)
+        return result
 
 
 

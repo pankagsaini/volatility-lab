@@ -1,10 +1,11 @@
 """Shared cross-process pacing for read-only Upstox API requests."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
 import sqlite3
 import time
 
-ROOT = PACKAGE_ROOT / 'data' / 'upstox'
+ROOT = runtime_data_dir() / 'upstox'
 DB = ROOT / 'request_pacing.sqlite'
 MIN_INTERVAL = 1.05  # ~1,715 requests per 30 minutes; below Upstox's 2,000 cap.
 

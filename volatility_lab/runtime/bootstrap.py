@@ -8,10 +8,20 @@ from volatility_lab import PACKAGE_ROOT
 
 DASHBOARD_FILE = PACKAGE_ROOT / 'ui' / 'dashboard.py'
 _CACHE_KEY = '_vol_lab_dashboard_bytecode'
-_SCOPE_KEY = '_vol_lab_dashboard_scope'
+_REFERENCE_REVISION = None
 
 
 def run():
+    from .settings import load_settings
+    from .events import configure
+    settings = load_settings()
+    configure(settings.log_level)
+    from volatility_lab.storage.references import initialize_references
+    global _REFERENCE_REVISION
+    revision = (settings.data_dir, (PACKAGE_ROOT / 'data/reference-manifest.json').stat().st_mtime_ns)
+    if revision != _REFERENCE_REVISION:
+        initialize_references(settings.data_dir)
+        _REFERENCE_REVISION = revision
     for key in ('OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS'):
         os.environ.setdefault(key, '1')
     os.environ.setdefault('MALLOC_TRIM_THRESHOLD_', '65536')
@@ -24,9 +34,7 @@ def run():
         gc.collect()
     else:
         code = cached[1]
-    scope = getattr(sys, _SCOPE_KEY, None)
-    if scope is None:
-        scope = {}
-        setattr(sys, _SCOPE_KEY, scope)
+    # Compiled code is process-safe. Dashboard globals can contain a session's data client.
+    scope = {}
     scope.update(__file__=str(path), __name__='__main__', __doc__=None)
     exec(code, scope)

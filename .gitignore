@@ -111,3 +111,7 @@ volatility_lab/data/audit/**
 .coverage*
 coverage.xml
 htmlcov/
+
+!uv.lock
+.hypothesis/
+.venv/

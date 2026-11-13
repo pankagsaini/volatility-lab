@@ -7,6 +7,7 @@ import sqlite3
 import numpy as np
 import pandas as pd
 from expiry_forecast import expiry_forecast, eligible_history
+from volatility_lab.storage.snapshot_history import broker_sourced, historical_fields
 
 
 def _mid_rank_percentile(values, current):
@@ -73,7 +74,7 @@ def load_history(path, symbol=None, max_rows=2500):
     records = []
     for exp, cfg, as_of, payload_str in rows:
         try:
-            item = json.loads(payload_str)
+            item = historical_fields(json.loads(payload_str))
             item.setdefault('Expiry', exp)
             item.setdefault('Config', cfg)
             item.setdefault('As of', as_of)
@@ -100,10 +101,7 @@ def history(path, symbol=None, config=None, comparable=True):
     if frame.empty:
         return frame
     if comparable and 'Source' in frame.columns:
-        src = frame['Source'].fillna('').astype(str)
-        filtered = frame[src.str.startswith('Upstox supplied IV')].copy()
-        if not filtered.empty:
-            frame = filtered
+        frame = frame[frame['Source'].isin(('Upstox supplied IV', 'Upstox supplied IV (Google Cloud)', 'Upstox supplied Greeks'))].copy()
     return frame.reset_index(drop=True)
 
 
@@ -117,7 +115,7 @@ def capture(root_or_path, snapshot):
     rows = snapshot.get('rows', [])
     saved_count = 0
     for row in rows:
-        if not isinstance(row, dict) or not row.get('Instrument') or not row.get('Expiry') or not row.get('As of'):
+        if not broker_sourced(row) or not row.get('Instrument') or not row.get('Expiry') or not row.get('As of'):
             continue
         rec = dict(row)
         rec.setdefault('Config', cfg)

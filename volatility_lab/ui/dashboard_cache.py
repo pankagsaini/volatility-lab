@@ -1,4 +1,5 @@
 """Small saved-status caches; revisions always follow the files on disk."""
+from volatility_lab.runtime.settings import data_for_root
 from datetime import datetime
 from pathlib import Path
 import gzip
@@ -25,7 +26,7 @@ def _capture_summary(path,revision):
 
 
 def latest_cloud_capture(root):
-    folder=Path(root)/'data'/'google_archive'
+    folder=data_for_root(root)/'google_archive'
     try:
         # Windows can delay directory mtime changes; enumerate filenames so a
         # just-synced capture cannot be hidden by a cached directory revision.

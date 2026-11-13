@@ -8,12 +8,13 @@ The public website is **[volatilitylab.in](https://volatilitylab.in)**: a static
 
 ## Local development
 
-Python **3.10–3.12** is tested. Python 3.11 is the default development version.
+Python **3.11–3.13** is tested. Python 3.11 is the default development version.
 
 ```sh
 python -m venv .venv
 # Activate .venv using your shell's activation command.
-python -m pip install -e ".[dev]"
+python -m pip install uv==0.13.8
+uv sync --locked --extra dev
 python -m volatility_lab
 ```
 

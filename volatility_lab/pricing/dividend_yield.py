@@ -1,14 +1,16 @@
 """Official index factsheet dividend yields; dated proxy, not forward dividends."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import datetime,timezone
 from pathlib import Path
 import hashlib,io,json,re,threading
-from urllib.request import Request,urlopen
+from volatility_lab.runtime.external import read_url
+from volatility_lab.runtime.settings import load_settings
 from pypdf import PdfReader
 from collector_support import atomic_json
 from collector_support import IST
 
-ROOT=PACKAGE_ROOT/'data'
+ROOT=runtime_data_dir()
 SOURCES={'NIFTY':'https://www.niftyindices.com/Factsheet/ind_nifty50.pdf','BANKNIFTY':'https://www.niftyindices.com/Factsheet/ind_nifty_bank.pdf'}
 _lock=threading.Lock()
 
@@ -37,14 +39,15 @@ def get_yields(force=False,root=ROOT,now=None):
     with _lock:
         try:cache=json.loads(path.read_text(encoding='utf-8'))
         except (OSError,ValueError):cache={}
+        offline=load_settings().offline
         changed=False
         for symbol,url in SOURCES.items():
             item=cache.get(symbol,{})
             attempt=item.get('attempt_day')
-            if force or attempt!=str(today):
+            if not offline and (force or attempt!=str(today)):
                 changed=True
                 try:
-                    raw=urlopen(Request(url,headers={'User-Agent':'Mozilla/5.0'}),timeout=8).read(4000000)
+                    raw=read_url('nse_'+('nifty' if symbol=='NIFTY' else 'bank'),url,timeout=8)
                     parsed=parse_pdf(raw,symbol,today)
                     if item.get('as_of','')>parsed['as_of']:raise ValueError('Publication date regressed')
                     digest=hashlib.sha256(raw).hexdigest();folder=root/'dividend_sources';folder.mkdir(exist_ok=True)

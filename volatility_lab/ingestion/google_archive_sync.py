@@ -1,6 +1,7 @@
 """Private Drive mirror -> durable local archive -> existing lab stores (Accelerated v4).
 No network credentials; Google Drive desktop supplies the authenticated filesystem.
 """
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
 from contextlib import closing
@@ -9,13 +10,15 @@ import gzip,hashlib,json,os,sqlite3,threading,time,zlib
 import pandas as pd
 import numpy as np
 from collector_support import atomic_json,read_json,data_lock,STATE
-from market_calendar import HOLIDAYS
+from market_calendar import HOLIDAYS, is_trading_day
+from volatility_lab.pricing.pricing_policy import number
 ROOT=PACKAGE_ROOT
-DATA=ROOT/'data'
+DATA=runtime_data_dir()
 STORE=DATA/'google_archive'
 CONFIG=ROOT/'cloud'/'apps_script'/'sync_config.json'
 STREAM_SETTLE_SECONDS=3.0
 LIVE_QUOTE_MAX_AGE_SECONDS=120.0
+IMPORT_VERSION="broker-iv-v2"
 _pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='drive-import')
 _guard=threading.Lock()
 _future=None
@@ -42,7 +45,8 @@ def _cached_one_year_csv(symbol: str):
 
 
 def source_folder():
-    configured=(read_json(CONFIG, default={}) or {}).get('source_folder')
+    from volatility_lab.runtime.settings import load_settings
+    configured=load_settings().archive_dir or (read_json(CONFIG, default={}) or {}).get('source_folder')
     candidates=[Path(configured)] if configured else []
     for letter in 'DEFGHIJKLMNOPQRSTUVWXYZ':
         candidates.append(Path(letter+':/')/'My Drive'/'Volatility Lab - private Upstox archive')
@@ -61,7 +65,7 @@ def _aware_timestamp(value, label):
     return stamp.tz_convert('UTC')
 
 
-def validate_report(obj):
+def validate_report(obj, *, historical=False):
     """Validate a complete cloud report before it can enter research stores."""
     if not isinstance(obj,dict):raise ValueError('Invalid capture payload')
     if obj.get('schema')!=1 or obj.get('provider')!='Upstox' or obj.get('mode') not in ('snapshot','eod'):
@@ -81,6 +85,10 @@ def validate_report(obj):
         record_stamp=_aware_timestamp(rec.get('retrieved_at'),'record timestamp')
         age=(stamp-record_stamp).total_seconds()
         if age < -30.0 or age > 600.0:raise ValueError('Record timestamp outside capture window')
+        if 'chain_retrieved_at' in rec:
+            chain_stamp = _aware_timestamp(rec['chain_retrieved_at'], 'option-chain capture timestamp')
+            if not -30 <= (stamp-chain_stamp).total_seconds() <= 600:
+                raise ValueError('Option-chain capture timestamp outside capture window')
         data=rec.get('data')
         if rec['label']=='quotes':
             if not isinstance(data,dict) or not all(isinstance(q,dict) for q in data.values()):
@@ -90,22 +98,51 @@ def validate_report(obj):
             if len(parts)!=2 or not parts[0] or not parts[1] or not isinstance(data,list) or not data:
                 raise ValueError('Invalid option-chain record')
             expiry=parts[1]
+            strikes = set()
             for row in data:
                 if not isinstance(row,dict) or str(row.get('expiry') or '')[:10]!=expiry:
                     raise ValueError('Option-chain expiry does not match its record label')
-                spot=pd.to_numeric(row.get('underlying_spot_price'),errors='coerce')
-                if not np.isfinite(spot) or float(spot)<=0:
+                strike = number(row.get('strike_price'))
+                if strike is None or strike <= 0 or strike in strikes:
+                    raise ValueError('Invalid or duplicate option strike')
+                strikes.add(strike)
+                for side in ('call_options', 'put_options'):
+                    leg = row.get(side)
+                    if leg is not None and (not isinstance(leg, dict) or any(
+                        leg.get(key) is not None and not isinstance(leg[key], dict)
+                        for key in ('option_greeks', 'market_data')
+                    )):
+                        raise ValueError('Malformed option leg')
+                spot=number(row.get('underlying_spot_price'))
+                if spot is None or spot<=0:
                     raise ValueError('Option-chain row has no valid underlying spot')
             option_labels+=1
         elif not isinstance(data,(list,dict)):
             raise ValueError('Invalid instrument record')
     if obj.get('mode')=='snapshot':
-        if obj.get('nfo_session_validated') is not True:raise ValueError('NFO session was not validated')
+        if obj.get('nfo_session_validated') is not True:
+            # Earlier private archives predate the collector's session flag. Accept those only
+            # on replay during a documented regular session; require a fresh underlying quote below.
+            local = stamp.tz_convert('Asia/Kolkata')
+            if not (historical and 'nfo_session_validated' not in obj and is_trading_day(local.date())
+                    and 555 <= local.hour * 60 + local.minute <= 930):
+                raise ValueError('NFO session was not validated')
         day=str(obj.get('day') or '')[:10]
         if day != stamp.tz_convert('Asia/Kolkata').strftime('%Y-%m-%d'):
             raise ValueError('Snapshot day does not match capture timestamp')
         if 'quotes' not in labels or not option_labels:
             raise ValueError('Snapshot is missing quotes or option-chain evidence')
+    catalogue = obj.get('catalogue')
+    indices = catalogue.get('indices') if isinstance(catalogue, dict) else None
+    if not isinstance(indices, dict) or not indices:
+        raise ValueError('Missing instrument catalogue')
+    for entry in indices.values():
+        if not isinstance(entry, dict) or not isinstance(entry.get('futures'),list) or not isinstance(entry.get('option_expiries'),list):
+            raise ValueError('Invalid instrument catalogue')
+        if any(not isinstance(f,dict) or not f.get('expiry') or not f.get('instrument_key') for f in entry['futures']):
+            raise ValueError('Invalid listed future')
+        if any(not isinstance(e,str) for e in entry['option_expiries']):
+            raise ValueError('Invalid option expiry')
     return obj
 
 
@@ -114,9 +151,9 @@ def validated(raw):
     import io
     with gzip.GzipFile(fileobj=io.BytesIO(raw)) as f:body=f.read(40_000_001)
     if len(body)>40_000_000:raise ValueError('Oversized payload')
-    return validate_report(json.loads(body))
+    return validate_report(json.loads(body), historical=True)
 
-def import_report(obj,rate,dividend,spread):
+def import_report(obj,rate,dividend,spread, *, historical=False):
     from upstox_adapter import provider_timestamp
     from upstox_data import INDICES
     from expiry_data import calculation_key,save_observation,load_snapshot,write_snapshot,SCHEMA
@@ -124,9 +161,9 @@ def import_report(obj,rate,dividend,spread):
     from broker_options import chain_from_response
     from market_table import atm_values,aligned_spread
     from option_math import reversal_values
-    from snapshot_history import save as save_intraday
+    from snapshot_history import save as save_intraday, broker_sourced
     from smile import smile_points,save_smile
-    validate_report(obj)
+    validate_report(obj, historical=historical)
     stamp=pd.Timestamp(obj['retrieved_at']).tz_convert('Asia/Kolkata')
     config=calculation_key(rate,dividend,spread)
     register(DATA/'monitor.sqlite',rate,dividend,spread)
@@ -172,40 +209,37 @@ def import_report(obj,rate,dividend,spread):
             # provenance label instead.
             call,put,iv=atm_values(chain,strikes,spot,use_black76=False)
             align={**base_alignment,'IV-RV Spread':iv-base_alignment['HV30'] if np.isfinite(iv) and np.isfinite(base_alignment['HV30']) else np.nan}
-            prev=float(q.get('last_price',0))-float(q.get('net_change',0))
-            row={'Provider':'Upstox','Instrument':symbol,'Expiry':e,'Type':'Monthly' if e in monthly else 'Weekly','Price':spot,'% change':100*(spot/prev-1) if prev>0 else None,'Call IV':call,'Put IV':put,'IV':iv,**reversal_values(chain,symbol),**align,'As of':asof.isoformat(),'Retrieved at':rec['retrieved_at'],'Source':'Upstox supplied Greeks','Timestamp note':'Underlying quote timestamp verified against capture; broker Greeks have no per-option event timestamp','IV method':'Arithmetic mean of broker-supplied ATM call and put IV; not independently re-solved from LTP','Capture source':'Google Drive','Greeks source':'Upstox supplied Greeks','Research status':'Broker option IV is usable for hypothesis generation only; per-option event-time validation is unavailable'}
-            with closing(sqlite3.connect(DATA/'monitor.sqlite',timeout=30)) as existing_con:
-                existing_con.execute('PRAGMA journal_mode=WAL')
-                existing_con.execute('PRAGMA busy_timeout=30000')
-                exists=existing_con.execute("SELECT 1 FROM sqlite_master WHERE name='intraday_observations'").fetchone()
-                saved=existing_con.execute('SELECT payload FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND as_of=?', (symbol,e,config,row['As of'])).fetchone() if exists else None
-                if saved:
-                    previous=json.loads(saved[0])
-                    if (previous.get('Capture source')=='Google Drive' and previous.get('IV') is not None and np.isfinite(previous['IV']) and previous['IV']>0):
-                        from expiry_data import db
-                        with closing(db()) as con:
-                            prior=con.execute('SELECT MAX(as_of) FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND substr(as_of,1,10)=?', (symbol,e,config,str(asof.date()))).fetchone()[0]
-                            if prior==row['As of']:
-                                save_observation(symbol,e,config,asof.date(),previous['IV'], previous.get('IV-RV Spread') if previous.get('IV-RV Spread') is not None else np.nan, 'Upstox supplied IV (Google Cloud)')
-                                save_smile(DATA/'monitor.sqlite',symbol,e,config,row['As of'], smile_points(chain,strikes,spot),capture_source='Google Drive')
-                        rows.append(previous)
-                        details.append({'Instrument':symbol,'Expiry':e,'Status':'Existing timestamp retained','As of':previous['As of']})
-                        continue
+            last, change = number(q.get('last_price')), number(q.get('net_change'))
+            prev = last - change if last is not None and change is not None else 0
+            row={'Provider':'Upstox','Instrument':symbol,'Expiry':e,'Type':'Monthly' if e in monthly else 'Weekly','Price':spot,'ATM strike':min(strikes,key=lambda k:(abs(k-spot),k)),'% change':100*(spot/prev-1) if prev>0 else None,'Call IV':call,'Put IV':put,'IV':iv,**reversal_values(chain,symbol),**align,'As of':asof.isoformat(),'Retrieved at':rec.get('chain_retrieved_at',rec['retrieved_at']),'Source':'Upstox supplied Greeks','Timestamp note':'Underlying quote timestamp verified against capture; broker Greeks have no per-option event timestamp','IV method':'Arithmetic mean of broker-supplied ATM call and put IV; not independently re-solved from LTP','Capture source':'Google Drive','Greeks source':'Upstox supplied Greeks','Research status':'Broker option IV is usable for hypothesis generation only; per-option event-time validation is unavailable'}
             save_intraday(DATA/'monitor.sqlite',config,row)
             save_smile(DATA/'monitor.sqlite',symbol,e,config,row['As of'],smile_points(chain,strikes,spot),capture_source='Google Drive')
-            try:
-                from trade_review import archive_quotes
-                archive_quotes(DATA, symbol, e, {'provider': 'Upstox', 'valuation': asof.isoformat(), 'spot': spot, 'broker_option_chain': raw}, config)
-            except Exception:
-                pass
+            from trade_review import archive_quotes
+            archive_quotes(DATA, symbol, e, {'provider': 'Upstox', 'valuation': asof.isoformat(), 'spot': spot,
+                                             'broker_received_at': row['Retrieved at'], 'broker_option_chain': raw}, config)
             from expiry_data import db
             with closing(db()) as con:
-                prior=con.execute('SELECT MAX(as_of) FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND substr(as_of,1,10)=?', (symbol,e,config,str(asof.date()))).fetchone()[0]
-                if prior==row['As of']:save_observation(symbol,e,config,asof.date(),iv,align['IV-RV Spread'],'Upstox supplied IV (Google Cloud)')
+                recorded = con.execute(
+                    'SELECT payload FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? '
+                    'AND substr(as_of,1,10)=? ORDER BY as_of DESC', (symbol,e,config,str(asof.date()))
+                ).fetchall()
+            for (payload,) in recorded:
+                try:
+                    previous = json.loads(payload)
+                except (TypeError, ValueError):
+                    continue
+                latest_iv = number(previous.get('IV')) if broker_sourced(previous) else None
+                if latest_iv is not None and latest_iv > 0:
+                    latest_spread = number(previous.get('IV-RV Spread'))
+                    save_observation(symbol,e,config,asof.date(),latest_iv,
+                                     latest_spread if latest_spread is not None else np.nan,
+                                     'Upstox supplied IV (Google Cloud)')
+                    break
             rows.append(row);details.append({'Instrument':symbol,'Expiry':e,'Status':'Cloud capture','As of':row['As of'],**align})
+    processed = len(rows)
     if rows:
         old=load_snapshot(config,allow_saved=True) or {}
-        if pd.Timestamp(old.get('timestamp','1970-01-01T00:00:00Z'))<stamp:
+        if pd.Timestamp(old.get('timestamp','1970-01-01T00:00:00Z'))<=stamp:
             combined={(r['Instrument'],r['Expiry']):r for r in old.get('rows',[])}
             for r in rows:
                 key=(r['Instrument'],r['Expiry']);previous=combined.get(key,{})
@@ -219,7 +253,7 @@ def import_report(obj,rate,dividend,spread):
             from relative_value import capture
             capture(DATA,cloud_snapshot)
     import_futures(obj,quotes,stamp)
-    return len(rows)
+    return processed
 
 def import_futures(obj,quotes,stamp):
     from futures_data import connection,quote_value,quote_pair
@@ -309,10 +343,21 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
     STORE.mkdir(parents=True,exist_ok=True)
     source=source_folder()
     if source is None:
-        web_url = (read_json(CONFIG, default={}) or {}).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpiRAE9ZRoGGWTyTncZhwUPmTnimv0HyejOiJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
+        from volatility_lab.runtime.settings import load_settings
+        settings = load_settings()
+        if settings.offline or not settings.cloud_url:
+            return 0
+        web_url = settings.cloud_url
         try:
             import requests
-            resp = requests.get(web_url, timeout=12, allow_redirects=True)
+            from volatility_lab.runtime.external import external_reads
+            from urllib.error import HTTPError
+            def read_snapshot():
+                response = requests.get(web_url, timeout=12, allow_redirects=True)
+                if response.status_code >= 400:
+                    raise HTTPError(web_url, response.status_code, 'Cloud read failed', response.headers, None)
+                return response
+            resp = external_reads.read('apps_script', read_snapshot)
             if resp.status_code == 200:
                 try:
                     obj = validate_report(resp.json())
@@ -344,16 +389,18 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
             if (time.time() - info.st_mtime) < STREAM_SETTLE_SECONDS:
                 continue
             known=manifest.get(path.name)
-            if known and known.get('size')==info.st_size and known.get('mtime')==info.st_mtime_ns and (STORE/path.name).is_file() and (STORE/path.name).stat().st_size==known['size']:
+            if known and known.get('import_version')==IMPORT_VERSION and known.get('size')==info.st_size and known.get('mtime')==info.st_mtime_ns and (STORE/path.name).is_file() and (STORE/path.name).stat().st_size==known['size']:
                 if not verify_receipt or hashlib.sha256((STORE/path.name).read_bytes()).hexdigest()==known['sha256']:continue
             raw=path.read_bytes();obj=validated(raw);digest=hashlib.sha256(raw).hexdigest()
             dest=STORE/path.name
             temp=dest.with_suffix('.tmp');temp.write_bytes(raw);os.replace(temp,dest)
             if hashlib.sha256(dest.read_bytes()).hexdigest()!=digest:raise ValueError('Local verification failed')
-            with data_lock(timeout=120):import_report(obj,rate,dividend,spread)
-            manifest[path.name]={'sha256':digest,'size':len(raw),'mtime':info.st_mtime_ns,'saved_at':pd.Timestamp.now(tz='UTC').isoformat()}
+            with data_lock(timeout=120):import_report(obj,rate,dividend,spread,historical=True)
+            manifest[path.name]={'import_version':IMPORT_VERSION,'sha256':digest,'size':len(raw),'mtime':info.st_mtime_ns,'saved_at':pd.Timestamp.now(tz='UTC').isoformat()}
             atomic_json(STORE/'manifest.json',manifest);count+=1
             atomic_json(STORE/'status.json',{'status':'syncing','total_files':len(manifest),'updated':pd.Timestamp.now(tz='UTC').isoformat()})
+            if count >= 50:
+                return count
         except (EOFError, gzip.BadGzipFile, zlib.error, json.JSONDecodeError):
             # Transient Google Drive stream still flushing; retry on next cycle without error penalty
             continue

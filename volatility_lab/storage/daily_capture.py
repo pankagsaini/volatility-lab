@@ -1,4 +1,5 @@
 """Local scheduled collection; session secrets stay Windows-encrypted."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import datetime, time
 from pathlib import Path
@@ -88,9 +89,9 @@ def _run(now=None):
         state['step']='Futures history';atomic_json(STATUS,state)
         from futures_sync import refresh_all
         from futures_data import FuturesMonitor
-        errors.extend(refresh_all(FuturesMonitor(),client,ROOT/'data'/'futures',history_only=stage=='history_catchup'))
+        errors.extend(refresh_all(FuturesMonitor(),client,runtime_data_dir()/'futures',history_only=stage=='history_catchup'))
         if stage!='closing_quotes':
-            errors.extend(verify_history(ROOT/'data'/'futures',expected_day(now)))
+            errors.extend(verify_history(runtime_data_dir()/'futures',expected_day(now)))
             state['step']='Index minute history and option-chain archive';atomic_json(STATUS,state)
             from upstox_archive import incremental_capture
             try:incremental_capture()

@@ -1,4 +1,5 @@
 """Upstox market-data adapter for the existing read-only calculation engines."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import datetime,timedelta
 from pathlib import Path
@@ -9,7 +10,7 @@ from market_data import IST,MarketDataError,history_cutoff,candles_to_frame
 from upstox_data import UpstoxDataClient,saved_client,INDICES
 
 ROOT=PACKAGE_ROOT
-CACHE=ROOT/'data'/'upstox'
+CACHE=runtime_data_dir()/'upstox'
 NAMES={'NIFTY':'NIFTY 50','BANKNIFTY':'NIFTY BANK'}
 
 

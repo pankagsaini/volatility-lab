@@ -1,4 +1,5 @@
 """Resumable raw backtest archive. No bid/ask or IV inferred from candles."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
 from datetime import date,timedelta,datetime
@@ -16,7 +17,7 @@ except ImportError:
     Collector = object
     INDICES = {'NIFTY': 'NSE_INDEX|Nifty 50', 'BANKNIFTY': 'NSE_INDEX|Nifty Bank'}
 from collector_support import atomic_json as _atomic_json
-ROOT=PACKAGE_ROOT/'data'/'backtest_1minute'
+ROOT=runtime_data_dir()/'backtest_1minute'
 ROOT.mkdir(parents=True,exist_ok=True)
 STATUS=ROOT/'status.json'
 _thread=threading.local()

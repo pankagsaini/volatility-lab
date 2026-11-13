@@ -7,7 +7,7 @@ name = "volatility-lab"
 version = "18.0.0"
 description = "Institutional-grade options volatility analytics and 6-strategy backtest engine"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [
     {name = "Pankaj Saini", email = "pankajsaini2148@gmail.com"}
@@ -16,7 +16,7 @@ keywords = ["options", "volatility", "bsm", "greeks", "backtesting", "finance", 
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Financial and Insurance Industry",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Office/Business :: Financial :: Investment",
@@ -40,9 +40,18 @@ dev = [
     "ruff>=0.8.0",
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
+    "hypothesis>=6.100",
+    "pip-audit>=2.7",
     "setuptools>=68.0",
     "wheel",
+    "build>=1.2",
 ]
+
+[dependency-groups]
+publishing = ["pypdf>=4.0"]
+
+[tool.uv]
+required-environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'", "sys_platform == 'win32' and platform_machine == 'AMD64'"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -52,13 +61,15 @@ include = ["volatility_lab*"]
 volatility_lab = [
     "data/*.json",
     "data/*.csv",
-    "data/*.sqlite",
-    "data/google_archive/*.json.gz",
+    "data/charges/upstox/current.json",
+    "data/dividend_sources/*.txt",
+    "data/upstox/*.json",
+    "cloud/apps_script/sync_config.json",
 ]
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py311"
 exclude = [
     ".git",
     "docs",

@@ -1,11 +1,12 @@
 """Historical and current statutory + broker transaction charge schedules for NSE F&O."""
+from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import date, datetime, timezone
 from pathlib import Path
 import json
 
 ROOT = PACKAGE_ROOT
-STORE = ROOT / 'data' / 'charges' / 'upstox'
+STORE = runtime_data_dir() / 'charges' / 'upstox'
 
 # Dated against the NSE transaction-charge circular effective 2026-03-01 and
 # the STT change effective 2026-04-01.  Keep the version alongside reports so

@@ -1,4 +1,5 @@
 """Optional research tools, separate from live pricing and production models."""
+from volatility_lab.runtime.settings import data_for_root
 from datetime import datetime,timezone
 import hashlib
 import json
@@ -17,7 +18,7 @@ def table(frame):
 
 
 def render_research(root,symbol,selected):
-    data=root/'data';as_of=selected.get('As of')
+    data=data_for_root(root);as_of=selected.get('As of')
     if not as_of:
         st.info('Refresh quotes to establish the research valuation time.');return
     with st.expander('Volatility-of-volatility'):
