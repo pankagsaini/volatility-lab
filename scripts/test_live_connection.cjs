@@ -140,6 +140,7 @@ cloud.apiAll_ = requests => requests.map(req => {
   scheduler.day_ = () => '2026-11-13';
   scheduler.minute_ = () => minute;
   scheduler.marketClosed_ = () => false;
+  settings.set('MARKET_CALENDAR',JSON.stringify({year:'2026',checked:'2026-11-13',closed:[],special:{}}));
   scheduler.capture_ = mode => {attempts.push(mode); return {status: 'complete'};};
   budgetAt(80);
   scheduler.scheduledCapture();
@@ -199,7 +200,9 @@ cloud.apiAll_ = requests => requests.map(req => {
       reads++;
       return {getResponseCode:()=>available ? 200 : 503, getContentText:()=>JSON.stringify({status:'success',data:[
         {date:sessionDate, holiday_type:'SPECIAL_TIMING', open_exchanges:[{exchange:'NFO',start_time:start,end_time:end}]},
-        {date:'2026-11-27',holiday_type:'TRADING_HOLIDAY',closed_exchanges:['NFO']}
+        {date:'2026-11-27',holiday_type:'TRADING_HOLIDAY',closed_exchanges:['NFO']},
+        {date:'2026-11-23',holiday_type:'SPECIAL_TIMING',open_exchanges:[{exchange:'NFO',
+          start_time:Date.parse('2026-11-23T14:20:00+05:30'),end_time:Date.parse('2026-11-23T15:40:00+05:30')}]}
       ]})};
     }}});
   vm.runInContext(gs,calendar);
@@ -222,6 +225,8 @@ cloud.apiAll_ = requests => requests.map(req => {
   run(sessionDate,'14:20'); assert.deepEqual(attempts,['snapshot','snapshot','snapshot']);
   assert.equal(JSON.parse(state.get('MARKET_CALENDAR')).special[sessionDate].start_time,start);
   assert.equal(state.has('MARKET_CALENDAR_RETRY_AT'),false);
+  run('2026-11-23','09:15');
+  assert.deepEqual(attempts,['snapshot','snapshot','snapshot'],'a known weekday special cannot start at the normal open');
   available = false;
   run('2026-11-27','09:15');
   assert.deepEqual(attempts,['snapshot','snapshot','snapshot'],'saved later NSE closure survives broker outage');

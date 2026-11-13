@@ -1276,8 +1276,9 @@ function scheduledCapture() {
   let sp = customSpecial[today] || SPECIAL_SESSIONS[today] ||
     (calendar?.checked <= today ? calendarSpecial_(calendar,today) : null);
   const weekend = weekday > 5;
-  // Recheck unknown weekends after a failed morning lookup. marketWindow_ limits failed refreshes.
-  if (!sp && mins >= 420 && (mins < 540 || (weekend && mins < CONFIG.eodEndMins)) &&
+  // Refresh before selecting a window, including after a failed premarket lookup.
+  // Unknown weekends can still discover an announced afternoon session.
+  if (!sp && mins >= 420 && mins < CONFIG.eodEndMins &&
       (calendar?.checked !== today || !calendar.special)) {
     const session = marketWindow_(now);
     if (session.special) sp = session;
