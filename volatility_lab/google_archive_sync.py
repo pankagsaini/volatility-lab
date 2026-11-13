@@ -308,7 +308,7 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
     STORE.mkdir(parents=True,exist_ok=True)
     source=source_folder()
     if source is None:
-        web_url = (read_json(CONFIG, default={}) or {}).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpIRAEOZRoGGwTyTncZhwUPmTnimv0Hyej0iJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
+        web_url = (read_json(CONFIG, default={}) or {}).get('web_app_url') or 'https://script.google.com/macros/s/AKfycbxDbTwpiRAE9ZRoGGWTyTncZhwUPmTnimv0HyejOiJilfS7lPnxZsF4mj701Fd4jdz5qQ/exec'
         try:
             import requests
             resp = requests.get(web_url, timeout=12, allow_redirects=True)

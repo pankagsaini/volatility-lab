@@ -565,6 +565,121 @@ function marketClosed_(now) {
   return calendar.closed.includes(today);
 }
 
+// Full quotes supply feed timestamps and executable depth absent from option/chain.
+// Never substitute the HTTP retrieval time or last-trade time for the feed time.
+function snapshotRiskMetrics_(candles, sessionDay, instrumentKey) {
+  if (!Array.isArray(candles)) throw new Error('Missing daily candles');
+  const closes = new Map();
+  candles.forEach(c => {
+    const date = String(c && c[0] || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Invalid daily candle date');
+    if (date >= sessionDay) return; // Only completed sessions are eligible.
+    const close = Number(c[4]);
+    if (!Number.isFinite(close) || close <= 0 || closes.has(date)) throw new Error('Invalid or duplicate daily close');
+    closes.set(date, close);
+  });
+  const days = Array.from(closes.keys()).sort();
+  if (days.length < 31) throw new Error('Need 31 completed daily closes for HV30');
+  const asOf = days[days.length - 1];
+  const age = (Date.parse(sessionDay) - Date.parse(asOf)) / 86400000;
+  if (age <= 0 || age > 5) throw new Error('Historical volatility inputs are stale');
+  const returns = days.slice(1).map((d, i) => Math.log(closes.get(d) / closes.get(days[i])));
+  const hv = n => {
+    const values = returns.slice(-n);
+    const mean = values.reduce((a, b) => a + b, 0) / n;
+    return Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (n - 1) * 245) * 100;
+  };
+  const variance = returns.reduce((v, r, i) => i ? 0.94 * v + 0.06 * r * r : r * r, 0);
+  return { as_of: asOf, hv10: hv(10), hv20: hv(20), hv30: hv(30), ewma: Math.sqrt(variance * 245) * 100,
+    units: 'annualized_percent', annualization_sessions: 245, method: 'sample_std_log_close_returns',
+    source: 'Upstox historical-candle v3 days/1', instrument_key: instrumentKey, observations: days.length };
+}
+
+function enrichSnapshotInputs_(report, started) {
+  report.risk_metrics = {};
+  report.input_diagnostics = [];
+  const cache = scriptCache_();
+  const requests = [];
+  const dayMs = Date.parse(report.day + 'T12:00:00+05:30');
+  const toDay = day_(new Date(dayMs - 86400000));
+  const fromDay = day_(new Date(dayMs - 100 * 86400000));
+  Object.keys(CONFIG.indices).forEach(sym => {
+    const cacheKey = 'HV_V1_' + report.day + '_' + sym;
+    let cached = null;
+    try { cached = cache && JSON.parse(cache.get(cacheKey) || 'null'); } catch (e) {}
+    if (cached && cached.as_of < report.day && cached.units === 'annualized_percent'
+        && Number.isFinite(cached.hv30) && (Date.parse(report.day) - Date.parse(cached.as_of)) <= 5 * 86400000) {
+      report.risk_metrics[sym] = cached;
+    } else {
+      requests.push({ label: 'risk:' + sym, path: '/v3/historical-candle/' + encodeURIComponent(CONFIG.indices[sym])
+        + '/days/1/' + toDay + '/' + fromDay });
+    }
+  });
+  const chains = report.records.filter(r => /^(NIFTY|BANKNIFTY)\|\d{4}-\d{2}-\d{2}$/.test(r.label) && Array.isArray(r.data));
+  const options = [];
+  chains.forEach(rec => rec.data.forEach(row => ['call_options', 'put_options'].forEach(side => {
+    const option = row[side];
+    if (option && option.instrument_key) options.push(option);
+    else report.errors.push({ item: rec.label, reason: 'Missing option instrument key' });
+  })));
+  const keys = Array.from(new Set(options.map(o => o.instrument_key)));
+  // Apps Script URLs have a 2 KB limit, tighter than Upstox's 500-key limit.
+  let batch = [];
+  keys.forEach(key => {
+    if (batch.length && encodeURIComponent(batch.concat([key]).join(',')).length > 1700) {
+      requests.push({ label: 'option_quotes:' + requests.length, path: '/v2/market-quote/quotes', params: { instrument_key: batch.join(',') } });
+      batch = [];
+    }
+    batch.push(key);
+  });
+  if (batch.length) requests.push({ label: 'option_quotes:' + requests.length, path: '/v2/market-quote/quotes', params: { instrument_key: batch.join(',') } });
+  const quotes = new Map();
+  for (let offset = 0; offset < requests.length; offset += 10) {
+    if (Date.now() - started > CAPTURE_SAFE_DEADLINE_MS - 60000) throw new Error('Snapshot enrichment time budget exhausted');
+    apiAll_(requests.slice(offset, offset + 10)).forEach(res => {
+      try {
+        if (res.error) throw new Error(res.error);
+        if (res.label.indexOf('risk:') === 0) {
+          const sym = res.label.slice(5);
+          const metrics = snapshotRiskMetrics_(res.data.candles, report.day, CONFIG.indices[sym]);
+          metrics.retrieved_at = new Date().toISOString();
+          report.risk_metrics[sym] = metrics;
+          if (cache) { try { cache.put('HV_V1_' + report.day + '_' + sym, JSON.stringify(metrics), 21600); } catch (e) {} }
+        } else {
+          Object.values(res.data || {}).forEach(q => { if (q && q.instrument_token) quotes.set(q.instrument_token, q); });
+        }
+      } catch (err) {
+        if (res.label.indexOf('risk:') === 0) report.input_diagnostics.push({ item: res.label, reason: String(err.message || err) });
+        else report.errors.push({ item: res.label, reason: String(err.message || err) });
+      }
+    });
+  }
+  options.forEach(option => {
+    // Keep the original response for archive consumers, including prev_oi and close_price.
+    option.chain_market_data = option.market_data;
+    const q = quotes.get(option.instrument_key);
+    if (!q || !Number.isFinite(timestampMillis_(q.timestamp))) {
+      option.market_data = {}; // Withhold a book whose source time is unknown.
+      report.input_diagnostics.push({ item: option.instrument_key, reason: 'Missing full quote or feed timestamp' });
+      return;
+    }
+    const buy = q.depth && q.depth.buy && q.depth.buy[0] || {};
+    const sell = q.depth && q.depth.sell && q.depth.sell[0] || {};
+    option.market_data = Object.assign({}, option.chain_market_data, {
+      ltp: q.last_price, bid_price: buy.price, ask_price: sell.price, bid_qty: buy.quantity, ask_qty: sell.quantity,
+      volume: q.volume, oi: q.oi, quote_timestamp: q.timestamp, last_trade_time: q.last_trade_time,
+      quote_source: 'Upstox /v2/market-quote/quotes'
+    });
+  });
+  chains.forEach(rec => {
+    rec.chain_retrieved_at = rec.retrieved_at;
+    rec.retrieved_at = new Date().toISOString();
+    if (!forwardQuoteFresh_(rec.chain_retrieved_at, rec.retrieved_at)) {
+      report.errors.push({ item: rec.label, reason: 'Option-chain Greeks became stale during quote enrichment' });
+    }
+  });
+}
+
 function capture_(mode, recovery) {
   const started = Date.now();
   const now = new Date();
@@ -692,6 +807,7 @@ function capture_(mode, recovery) {
       }
     }
 
+    if (mode === 'snapshot') enrichSnapshotInputs_(report, started);
     report.status = (report.errors.length || report.pending.length) ? 'partial' : 'complete';
   } catch (err) {
     report.errors.push({ item: 'catalogue', reason: safeError_(err) });
@@ -1588,8 +1704,8 @@ function forwardRiskMetrics_(report, sym, snapshotDay) {
     return { hv10: NaN, hv30: NaN, item: null };
   }
   return {
-    hv10: forwardIvPercent_(item.hv10),
-    hv30: forwardIvPercent_(item.hv30),
+    hv10: item.units === 'annualized_percent' ? Number(item.hv10) : forwardIvPercent_(item.hv10),
+    hv30: item.units === 'annualized_percent' ? Number(item.hv30) : forwardIvPercent_(item.hv30),
     item: item
   };
 }
@@ -1643,6 +1759,8 @@ function evaluateForwardTest_(report) {
     return ledger;
   }
 
+  report.forward_rejections = [];
+  const reject = (key, reason) => report.forward_rejections.push({ item: key, reason: reason });
   const chainMap = {};
   report.records.forEach(rec => {
     if (!rec.label || rec.label.indexOf('|') === -1 || !Array.isArray(rec.data) || !rec.data.length) return;
@@ -1697,7 +1815,7 @@ function evaluateForwardTest_(report) {
       const chainMkt = ch && ch.mkt;
       if (!ch || !Number.isFinite(ch.spot) || ch.spot <= 0 || !ch.fresh || !chainMkt
           || chainMkt.isoDay !== snapshotDay || !chainMkt.open
-          || chainMkt.mins < 560 || chainMkt.mins >= 915) return;
+          || chainMkt.mins < 560 || chainMkt.mins >= 915) { reject(key, 'Missing or stale chain / ineligible session'); return; }
       const step = sym === 'NIFTY' ? 50 : 100;
       const lotQty = sym === 'NIFTY' ? 65 : 30;
       const K = Math.round(ch.spot / step) * step;
@@ -1705,7 +1823,7 @@ function evaluateForwardTest_(report) {
       if (!atmNode || !(Number.isFinite(atmNode.cIv) && atmNode.cIv > 0)
           || !(Number.isFinite(atmNode.pIv) && atmNode.pIv > 0)
           || !forwardQuoteFresh_(atmNode.cQuoteAt, ch.retrievedAt)
-          || !forwardQuoteFresh_(atmNode.pQuoteAt, ch.retrievedAt)) return;
+          || !forwardQuoteFresh_(atmNode.pQuoteAt, ch.retrievedAt)) { reject(key, 'Missing or stale ATM quote timestamps / IV'); return; }
 
       const expiryMs = Date.parse(exp + 'T15:30:00+05:30');
       const secondsToExpiry = (expiryMs - new Date(ch.retrievedAt).getTime()) / 1000.0;
@@ -1718,6 +1836,7 @@ function evaluateForwardTest_(report) {
       const hv30 = riskMetrics.hv30;
       const hv10Valid = Number.isFinite(hv10) && hv10 > 0;
       const hv30Valid = Number.isFinite(hv30) && hv30 > 0;
+      if (!hv10Valid || !hv30Valid) reject(key, 'HV10/HV30 unavailable or stale; dependent strategies withheld');
       const vrp30 = hv30Valid ? Number((iv - hv30).toFixed(2)) : NaN;
       const vrp10 = hv10Valid ? Number((iv - hv10).toFixed(2)) : NaN;
       const wShort = sym === 'NIFTY' ? 200 : 400;
@@ -1761,7 +1880,7 @@ function evaluateForwardTest_(report) {
           l.entryPx = Number(px.toFixed(2));
           l.curPx = Number(px.toFixed(2));
         });
-        if (invalidQuote) return;
+        if (invalidQuote) { reject(key + '|' + sCode, 'Missing, stale, one-sided or insufficient-depth leg quote'); return; }
         const cap = (STRATEGY_CAPITAL_PER_LOT[sym] || STRATEGY_CAPITAL_PER_LOT.NIFTY)[sCode];
         const credPts = Math.max(15.0, legs.reduce((acc, l) => acc + (-l.side) * l.mult * l.entryPx, 0));
         const debitInr = Math.round(legs.reduce((acc, l) => acc + l.entryPx * lotQty * l.mult, 0));

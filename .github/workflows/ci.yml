@@ -80,6 +80,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Node for live connection regressions
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify collector and browser live connection
+        run: node scripts/test_live_connection.cjs
+
       - name: Verify Web Asset SHA-256 Parity
         run: |
           python -c "

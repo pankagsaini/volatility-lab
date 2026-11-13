@@ -113,6 +113,14 @@ def _risk_vol_metrics(payload: dict[str, Any], symbol: str, session_day: str) ->
         return None, None
     if age_days < 0 or age_days > 5:
         return None, None
+    if item.get("units") == "annualized_percent":
+        def annualized_percent(key):
+            try:
+                value = float(item[key])
+            except (KeyError, ValueError, TypeError, OverflowError):
+                return None
+            return value if np.isfinite(value) and 0.0 < value <= 500.0 else None
+        return annualized_percent("hv10"), annualized_percent("hv30")
     return _iv_percent(item.get("hv10")), _iv_percent(item.get("hv30"))
 
 
