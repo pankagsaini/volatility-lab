@@ -118,7 +118,12 @@ def test_interrupted_and_concurrent_ledger_writes(tmp_path, monkeypatch):
     previous = target.read_bytes()
     with monkeypatch.context() as patch:
         import collector_support
-        patch.setattr(collector_support.os, "replace", lambda *args: (_ for _ in ()).throw(OSError("interrupted")))
+        replace = collector_support.os.replace
+        def interrupt_target_write(source, destination):
+            if destination == target:
+                raise OSError("interrupted")
+            return replace(source, destination)
+        patch.setattr(collector_support.os, "replace", interrupt_target_write)
         with pytest.raises(OSError, match="interrupted"):
             forward_test.save_forward_ledger(forward_test.load_forward_ledger(tmp_path), tmp_path)
     assert target.read_bytes() == previous
@@ -128,7 +133,7 @@ def test_interrupted_and_concurrent_ledger_writes(tmp_path, monkeypatch):
     with pytest.raises(ValueError):
         forward_test.save_forward_ledger(first, tmp_path)
     restored = forward_test.restore_forward_ledger(tmp_path)
-    assert restored["intraday_mtm_series"] == ledger["intraday_mtm_series"]
+    assert restored["intraday_mtm_series"] == json.loads(previous)["intraday_mtm_series"]
     assert next(tmp_path.glob("*.before-restore")).read_bytes() == b'{"open_positions":'
 
 

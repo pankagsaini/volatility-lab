@@ -895,6 +895,7 @@ function capture_(mode, recovery) {
 
 function safeError_(err) {
   const message = String(err.message || '');
+  if (message === 'Invalid forward ledger. Restore a validated backup.') return message;
   const isWhitelisted = /^(Broker HTTP \d{3}|Empty broker data|Invalid broker JSON|Incomplete quote response|Wrong option expiry|Instrument master unavailable|(Three futures unavailable|Futures contracts unavailable) for (NIFTY|BANKNIFTY)|No option expiries for (NIFTY|BANKNIFTY)|Set UPSTOX_TOKEN in Script Properties)$/.test(message);
   return isWhitelisted ? message : 'Capture failed; check permissions, network or quota';
 }
@@ -1610,8 +1611,8 @@ function upstoxOptionCharge_(price, qty, isSell) {
   return brokerage + stt + exch + sebi + ipft + stamp + gst;
 }
 
-function positionCharges_(legs, sym, includeExit) {
-  const lotQty = sym === 'NIFTY' ? 65 : 30;
+function positionCharges_(legs, sym, includeExit, lots = 1) {
+  const lotQty = (sym === 'NIFTY' ? 65 : 30) * lots;
   let total = 0.0;
   (legs || []).forEach(l => {
     const qty = lotQty * Number(l.mult || 1);
@@ -1681,11 +1682,11 @@ function buildStrategyLegs_(sym, K, stratCode) {
 }
 
 function expiryPayoff(legs, units) {
-  const premium = -legs.reduce((sum, leg) => sum + leg.side * leg.mult * leg.entryPx, 0);
+  const premium = -legs.reduce((sum, leg) => sum + leg.side * (leg.mult || 1) * leg.entryPx, 0);
   const strikes = [...new Set([0, ...legs.map(leg => leg.strike)])].sort((a, b) => a - b);
   const values = strikes.map(spot => legs.reduce((sum, leg) => {
     const intrinsic = Math.max(0, (spot - leg.strike) * (leg.type === 'CE' ? 1 : -1));
-    return sum + leg.side * leg.mult * intrinsic;
+    return sum + leg.side * (leg.mult || 1) * intrinsic;
   }, premium));
   const roots = [];
   strikes.forEach((strike, i) => {
@@ -1693,7 +1694,7 @@ function expiryPayoff(legs, units) {
     if (Math.abs(y) < 1e-9) roots.push(strike);
     if (i && y * values[i-1] < 0) roots.push(strike - y * (strike - strikes[i-1]) / (y - values[i-1]));
   });
-  const slope = legs.reduce((sum, leg) => sum + (leg.type === 'CE' ? leg.side * leg.mult : 0), 0);
+  const slope = legs.reduce((sum, leg) => sum + (leg.type === 'CE' ? leg.side * (leg.mult || 1) : 0), 0);
   const last = strikes.length - 1;
   if (slope && -values[last] / slope > 0) roots.push(strikes[last] - values[last] / slope);
   return { netPremiumPoints: Number(premium.toFixed(8)), netPremium: Number((premium * units).toFixed(2)),
@@ -1884,9 +1885,17 @@ function validateLedger_(value) {
   return value;
 }
 
+function readLedgerContent_(content) {
+  try {
+    return validateLedger_(JSON.parse(content));
+  } catch (error) {
+    throw new Error('Invalid forward ledger. Restore a validated backup.');
+  }
+}
+
 function loadForwardLedger_() {
   const file = ledgerFile_('forward_test_ledger.json');
-  if (file) return sanitizeForwardLedger_(validateLedger_(JSON.parse(file.getBlob().getDataAsString())));
+  if (file) return sanitizeForwardLedger_(readLedgerContent_(file.getBlob().getDataAsString()));
   if (ledgerFile_('forward_test_ledger.bak')) throw new Error('Forward ledger missing. Restore the backup.');
   return cleanSlateForwardLedger_();
 }
@@ -1900,7 +1909,7 @@ function saveForwardLedger_(ledger) {
   const backup = ledgerFile_('forward_test_ledger.bak');
   if (file) {
     const previous = file.getBlob().getDataAsString();
-    validateLedger_(JSON.parse(previous));
+    readLedgerContent_(previous);
     if (backup) backup.setContent(previous);
     else folder_().createFile('forward_test_ledger.bak', previous, MimeType.PLAIN_TEXT);
     file.setContent(content);
@@ -1922,7 +1931,7 @@ function restoreForwardLedgerFromBackup() {
     const backup = ledgerFile_('forward_test_ledger.bak');
     if (!backup) throw new Error('Forward ledger backup missing.');
     const content = backup.getBlob().getDataAsString();
-    validateLedger_(JSON.parse(content));
+    readLedgerContent_(content);
     let file = null;
     const id = props_().getProperty('FORWARD_LEDGER_FILE_ID');
     if (id) file = DriveApp.getFileById(id);
@@ -2199,10 +2208,12 @@ function evaluateForwardTest_(report) {
     const key = pos.sym + '|' + pos.exp;
     const ch = chainMap[key];
     const positionMkt = ch && ch.mkt ? ch.mkt : mkt;
-    const lotQty = pos.sym === 'NIFTY' ? 65 : 30;
+    const lots = Number(pos.lots || 1);
+    const lotQty = (pos.sym === 'NIFTY' ? 65 : 30) * lots;
     const legs = Array.isArray(pos.legs) ? pos.legs : [];
     let allLegsFresh = Boolean(ch && ch.fresh && legs.length);
     let gross = 0.0;
+    const marks = [];
     legs.forEach(l => {
       const node = ch && ch.strikes ? ch.strikes[l.strike] : null;
       const qty = lotQty * Number(l.mult || 1);
@@ -2211,7 +2222,7 @@ function evaluateForwardTest_(report) {
         allLegsFresh = false;
         return;
       }
-      l.curPx = Number(px.toFixed(2));
+      marks.push(Number(px.toFixed(2)));
       const ePx = Number(l.entryPx || 0);
       gross += (Number(l.side) < 0 ? (ePx - px) : (px - ePx)) * qty;
     });
@@ -2224,11 +2235,12 @@ function evaluateForwardTest_(report) {
       return;
     }
 
+    legs.forEach((leg, index) => { leg.curPx = marks[index]; });
     pos.freshness = 'FRESH';
     delete pos.staleReason;
     pos.integrity_status = 'VALIDATED_FRESH_EXECUTABLE_MARK';
     pos.grossMtm = Number(gross.toFixed(2));
-    pos.estCharges = positionCharges_(pos.legs, pos.sym, true);
+    pos.estCharges = positionCharges_(pos.legs, pos.sym, true, lots);
     pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
     pos.markedAt = positionMkt.timeIstLabel;
 
@@ -2261,7 +2273,8 @@ function evaluateForwardTest_(report) {
         legsText: (pos.legs || []).map(l => (l.side < 0 ? 'S' : 'B') + (l.mult > 1 ? l.mult : '') + ' ' + l.strike + l.type + ' (' + l.entryPx + '→' + l.curPx + ')').join(' / '),
         legs: pos.legs,
         capital: pos.capital,
-        ...expiryPayoff(pos.legs, lotQty),
+        lots: lots,
+        ...bounds,
         maxCredit: pos.maxCredit,
         entryIv: pos.entryIv || 16.0,
         gross: pos.grossMtm,

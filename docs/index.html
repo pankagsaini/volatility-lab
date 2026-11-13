@@ -2122,11 +2122,11 @@
       }
       
       function expiryPayoff(legs, units) {
-        const premium = -legs.reduce((sum, leg) => sum + leg.side * leg.mult * leg.entryPx, 0);
+        const premium = -legs.reduce((sum, leg) => sum + leg.side * (leg.mult || 1) * leg.entryPx, 0);
         const strikes = [...new Set([0, ...legs.map(leg => leg.strike)])].sort((a, b) => a - b);
         const values = strikes.map(spot => legs.reduce((sum, leg) => {
           const intrinsic = Math.max(0, (spot - leg.strike) * (leg.type === 'CE' ? 1 : -1));
-          return sum + leg.side * leg.mult * intrinsic;
+          return sum + leg.side * (leg.mult || 1) * intrinsic;
         }, premium));
         const roots = [];
         strikes.forEach((strike, i) => {
@@ -2134,7 +2134,7 @@
           if (Math.abs(y) < 1e-9) roots.push(strike);
           if (i && y * values[i-1] < 0) roots.push(strike - y * (strike - strikes[i-1]) / (y - values[i-1]));
         });
-        const slope = legs.reduce((sum, leg) => sum + (leg.type === 'CE' ? leg.side * leg.mult : 0), 0);
+        const slope = legs.reduce((sum, leg) => sum + (leg.type === 'CE' ? leg.side * (leg.mult || 1) : 0), 0);
         const last = strikes.length - 1;
         if (slope && -values[last] / slope > 0) roots.push(strikes[last] - values[last] / slope);
         return { netPremiumPoints: Number(premium.toFixed(8)), netPremium: Number((premium * units).toFixed(2)),
@@ -2191,7 +2191,7 @@
           'IV ' + iv.toFixed(2) + '% · HV10 ' + formatLiveNumber(item.hv10, 2) + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp',
           'ATM IV ' + iv.toFixed(2) + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp · DTE ' + item.dte.toFixed(0) + 'd',
           'RR25 ' + (rev25 >= 0 ? '+' : '') + formatLiveNumber(rev25, 2) + ' pp · BF25 ' + (bfly25 >= 0 ? '+' : '') + formatLiveNumber(bfly25, 2) + ' pp',
-          'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp · HV10 ' + formatLiveNumber(item.hv10, 2) + '% · PCR ' + (item.pcr || 1.0).toFixed(2),
+          'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp · HV10 ' + formatLiveNumber(item.hv10, 2) + '% · PCR ' + formatLiveNumber(item.pcr, 2),
           'Basis ' + (isFinite(basis) ? (basis >= 0 ? '+' : '') + basis.toFixed(1) + ' pts' : 'unavailable') + ' · BF25 ' + (bfly25 >= 0 ? '+' : '') + formatLiveNumber(bfly25, 2) + ' pp'];
         const chain = new Map(item.chain.map(node => [node.k, node]));
         const result = [];

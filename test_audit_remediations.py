@@ -41,8 +41,6 @@ except ImportError:
     sys.modules["plotly"] = plotly_stub
     sys.modules["plotly.graph_objects"] = graph_objects_stub
     sys.modules["plotly.subplots"] = subplots_stub
-if "msvcrt" not in sys.modules:
-    sys.modules["msvcrt"] = SimpleNamespace(LK_NBLCK=1, LK_UNLCK=2, locking=lambda *a, **kw: None)
 
 
 # Add patched directory to sys.path when running in sandbox or local repo

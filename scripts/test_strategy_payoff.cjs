@@ -55,6 +55,6 @@ for (const {sym, spot, lots, rows, setups} of JSON.parse(fs.readFileSync(0, 'utf
 // An unreadable authoritative Drive file must stop both reads and writes.
 const corrupt = {getBlob: () => ({getDataAsString: () => '{'}), setContent: assert.fail};
 cloud.ledgerFile_ = name => name.endsWith('.json') ? corrupt : null;
-assert.throws(() => cloud.loadForwardLedger_(), /JSON/);
-assert.throws(() => cloud.saveForwardLedger_(cloud.cleanSlateForwardLedger_()), /JSON/);
+assert.throws(() => cloud.loadForwardLedger_(), /Invalid forward ledger/);
+assert.throws(() => cloud.saveForwardLedger_(cloud.cleanSlateForwardLedger_()), /Invalid forward ledger/);
 assert.throws(() => cloud.validateLedger_({open_positions: [], closed_trades: {}}), /ledger field/);
