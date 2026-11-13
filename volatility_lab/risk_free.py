@@ -2,7 +2,7 @@
 from datetime import datetime,timezone
 from html import unescape
 from pathlib import Path
-import json,math,re,threading
+import json,math,re,threading,hashlib
 from urllib.request import Request,urlopen
 from collector_support import atomic_json
 URL='https://www.rbi.org.in/'
@@ -31,7 +31,8 @@ def get_rate(force=False):
                 raw=response.read(500000).decode('utf-8')
             value=parse_rate(raw)
             saved.update(yield_percent=value,model_rate=math.log1p(value/100*91/365)*365/91,
-                         checked_at=now.isoformat(),source=URL,basis='91-day T-bill auction cutoff',error=None)
+                         checked_at=now.isoformat(),source=URL,sha256=hashlib.sha256(raw.encode('utf-8')).hexdigest(),
+                         basis='91-day T-bill auction cutoff',error=None)
         except (OSError,ValueError) as error:
             saved['error']='RBI update unavailable; using last verified rate.' if 'model_rate' in saved else 'RBI rate unavailable.'
         if saved.get('error') is None and saved.get('model_rate') is not None:

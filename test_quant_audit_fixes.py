@@ -105,7 +105,7 @@ class TestQuantAuditFixes(unittest.TestCase):
              'bid': 209.0, 'ask': 211.0, 'timestamp': epoch_ms},
         ]
         result = synthetic_future.calculate(
-            rows, spot=25005.0, years=7 / 365, expiry='2026-11-17',
+            rows, spot=25005.0, rate=.06, years=7 / 365, expiry='2026-11-17',
             as_of=as_of, spot_timestamp=epoch_ms,
         )
         self.assertIsNotNone(result['Synthetic future'])

@@ -226,6 +226,11 @@
         </div>
       </div>
 
+      <details class="desk-panel text-sm text-slate-300">
+        <summary id="pricingModelSummary" class="cursor-pointer">Pricing model · waiting for verified live inputs</summary>
+        <div id="pricingInputDetails" class="mt-3 leading-relaxed"></div>
+      </details>
+
       <!-- ROW 2: 5 RESEARCH TABS (Tabs 1-4 Pure Data + Tab 5 Trade Identification) -->
       <div class="desk-panel space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#24344d] pb-3">
@@ -459,7 +464,8 @@
                   <tbody id="stressMatrixTableBody" class="divide-y divide-[#1a2639]"></tbody>
                 </table>
               </div>
-              <div id="stressGreeksStrip" class="text-xs leading-relaxed text-slate-300"></div>
+              <p id="stressModelNote" class="text-sm text-slate-300"></p>
+                <div id="stressGreeksStrip" class="text-xs leading-relaxed text-slate-300"></div>
             </div>
           </div>
         </div>
@@ -1197,7 +1203,9 @@
           item.bfly25 = Number.isFinite(c25) && Number.isFinite(p25) && item.iv > 0 ? (c25 + p25) / 2 - item.iv : null;
         });
       });
-      var B76_RISK_FREE_RATE = 0.066;
+      var B76_RISK_FREE_RATE = NaN; // Never substitute an assumed rate for the official RBI input.
+      var pricingInputs = null;
+      var pricingInputsLoadedAt = 0;
       var B76_INV_SQRT_2PI = 0.3989422804014327;
 
       function normPdf(x) {
@@ -1205,13 +1213,19 @@
       }
 
       function normCdf(x) {
-        if (!isFinite(x)) return x > 0 ? 1.0 : 0.0;
-        var neg = x < 0;
-        var z = Math.abs(x);
-        var t = 1.0 / (1.0 + 0.2316419 * z);
-        var poly = t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + 1.330274429 * t))));
-        var cdf = 1.0 - B76_INV_SQRT_2PI * Math.exp(-0.5 * z * z) * poly;
-        return neg ? (1.0 - cdf) : cdf;
+        if (Number.isNaN(x)) return NaN;
+        if (x >= 8.3) return 1;
+        if (x <= -8.3) return 0;
+        // Convergent normal integral series; avoids derivative noise in approximate CDF polynomials.
+        const z = Math.abs(x);
+        let term = z, sum = z;
+        for (let k = 1; k < 200; k++) {
+          term *= z*z/(2*k+1);
+          sum += term;
+          if (term <= sum*1e-16) break;
+        }
+        const tail = Math.max(0, .5-normPdf(z)*sum);
+        return x < 0 ? tail : 1-tail;
       }
 
       function computeBlack76ParityForward(K, cLtp, pLtp, T, r) {
@@ -1303,90 +1317,175 @@
         return isFinite(dec) ? Number((dec * 100.0).toFixed(2)) : NaN;
       }
 
+
+      function currentPricingInputs(symbol, asOf) {
+        const missing = {rate: NaN, dividend: NaN};
+        if (!pricingInputs || pricingInputs.schema !== 1) return missing;
+        const now = Math.max(liveTimestamp(asOf), Date.now()), rate = pricingInputs.rate || {}, div = (pricingInputs.dividends || {})[symbol] || {};
+        const age = (now - liveTimestamp(rate.checked_at)) / 86400000;
+        const divAge = (now - Date.parse((div.as_of || '') + 'T00:00:00+05:30')) / 86400000;
+        const r = rate.source === 'https://www.rbi.org.in/' && rate.sha256 && age >= -120/86400 && age <= 7
+          ? liveNumber(rate.model_rate) : NaN;
+        const expected = symbol === 'NIFTY' ? 'ind_nifty50.pdf' : 'ind_nifty_bank.pdf';
+        const q = div.source === 'https://www.niftyindices.com/Factsheet/' + expected && div.sha256 && divAge >= 0 && divAge <= 62
+          ? liveNumber(div.model_yield) : NaN;
+        return {rate: Number.isFinite(r) && r >= 0 && r < .30 ? r : NaN,
+          dividend: Number.isFinite(q) && q >= 0 && q <= .15 ? q : NaN};
+      }
+
+      function loadPricingInputs() {
+        if (pricingInputs && Date.now() - pricingInputsLoadedAt < 3600000) return Promise.resolve();
+        return fetch('pricing-inputs.json', {cache:'no-store'}).then(response => {
+          if (!response.ok) throw new Error('Official pricing inputs unavailable');
+          return response.json();
+        }).then(data => {
+          if (data.schema !== 1) throw new Error('Invalid pricing inputs schema');
+          pricingInputs = data;
+          pricingInputsLoadedAt = Date.now();
+        }).catch(() => {}); // Retain dated inputs; currentPricingInputs enforces their maximum age.
+      }
+
+      function bsmGreeks(S, K, T, r, q, sigma, isCall) {
+        if (![S,K,T,r,q,sigma].every(Number.isFinite) || S <= 0 || K <= 0 || sigma < 0)
+          return {price:NaN,delta:NaN,fwdDelta:NaN,gamma:NaN,vega:NaN,thetaDaily:NaN};
+        if (T <= 0) return black76Greeks(S,K,T,r,sigma,isCall);
+        if (sigma <= 0) return {price:NaN,delta:NaN,fwdDelta:NaN,gamma:NaN,vega:NaN,thetaDaily:NaN};
+        const sqrtT = Math.sqrt(T), D = Math.exp(-r*T), Q = Math.exp(-q*T);
+        const d1 = (Math.log(S/K) + (r-q+sigma*sigma/2)*T)/(sigma*sqrtT), d2 = d1-sigma*sqrtT;
+        const n1 = isCall ? normCdf(d1) : normCdf(-d1), n2 = isCall ? normCdf(d2) : normCdf(-d2);
+        const sign = isCall ? 1 : -1;
+        const price = sign*(S*Q*n1-K*D*n2), delta = sign*Q*n1;
+        const theta = -S*Q*normPdf(d1)*sigma/(2*sqrtT) + sign*(q*S*Q*n1-r*K*D*n2);
+        return {price,delta,fwdDelta:sign*n1,gamma:Q*normPdf(d1)/(S*sigma*sqrtT),
+          vega:.01*S*Q*normPdf(d1)*sqrtT,thetaDaily:theta/365};
+      }
+
+      function bsmIvDec(price, S, K, T, r, q, isCall) {
+        if (![price,S,K,T,r,q].every(Number.isFinite) || S <= 0 || T <= 0) return NaN;
+        // Exact BSM/Black equivalence with deterministic carry; Greeks remain spot-based.
+        return black76IvDec(price, S*Math.exp((r-q)*T), K, T, r, isCall);
+      }
+
+      function relativeBookSpread(node, prefix, reference) {
+        if (!node || !liveBookValid(node,prefix,reference)) return NaN;
+        const bid = node[prefix+'Bid'], ask = node[prefix+'Ask'];
+        return 100*(ask-bid)/((ask+bid)/2);
+      }
+
+      function selectOptionPricing(item) {
+        const result = {model:null,source:'unavailable',forward:NaN,syntheticForward:NaN,
+          rate:liveNumber(item.rate),dividend:liveNumber(item.dividend),spread:NaN,reason:'Verified RBI rate or time to expiry unavailable'};
+        const T = item.dte/365;
+        if (!(T > 0) || !Number.isFinite(result.rate)) return result;
+        const atm = (item.chain || []).find(n => n.k === item.atm);
+        const spotAge = liveTimestamp(item.snapshotId)-liveTimestamp(item.spotQuoteAt);
+        const spotFresh = item.spot > 0 && Number.isFinite(spotAge) && spotAge >= -30000 && spotAge <= 120000;
+        const cSpread = relativeBookSpread(atm,'c',item.snapshotId), pSpread = relativeBookSpread(atm,'p',item.snapshotId);
+        result.spread = Number.isFinite(cSpread) && Number.isFinite(pSpread) ? Math.max(cSpread,pSpread) : NaN;
+        const paired = atm && Math.abs(liveTimestamp(atm.cQuoteAt)-liveTimestamp(atm.pQuoteAt)) <= 5000;
+        if (spotFresh && paired && Number.isFinite(result.spread) && result.spread < 3) {
+          const c = (atm.cBid+atm.cAsk)/2, p = (atm.pBid+atm.pAsk)/2;
+          const f = computeBlack76ParityForward(atm.k,c,p,T,result.rate);
+          if (f > 0 && Number.isFinite(f)) result.syntheticForward = f;
+        }
+        const future = item.futureBook;
+        if (future && future.expiry === item.expiry && liveBookValid(future,'f',item.snapshotId)) {
+          result.model = 'black76'; result.source = 'listed_future';
+          result.forward = (future.fBid+future.fAsk)/2; result.reason = 'Fresh future with matching expiry';
+        } else if (Number.isFinite(result.syntheticForward)) {
+          result.model = 'black76'; result.source = 'synthetic_forward';
+          result.forward = result.syntheticForward; result.reason = 'Matched ATM call/put spreads below 3%';
+        } else if (spotFresh && Number.isFinite(result.dividend)) {
+          result.model = 'bsm'; result.source = 'spot';
+          result.forward = item.spot*Math.exp((result.rate-result.dividend)*T);
+          result.reason = Number.isFinite(result.spread) && result.spread >= 3
+            ? 'ATM call/put spread at or above 3%' : 'No eligible matched future or synthetic forward';
+        } else result.reason = 'Fresh spot or verified NSE dividend yield unavailable';
+        return result;
+      }
+
       function enrichItemWithBlack76(item) {
         if (!item || (item.archivedAsOf && !item.snapshotId)) return item;
         if (!Array.isArray(item.chain)) item.chain = [];
-        if (!item.chain.length) {
-          item.syn = NaN;
-          Object.keys(item).filter(function(key) { return key.indexOf('b76') === 0; }).forEach(function(key) { item[key] = null; });
-          item.b76CallIv = item.b76PutIv = item.b76AtmIv = null;
-          return item;
-        }
-        var K_atm = Number(item.atm || 0);
-        var dte = Number(item.dte);
-        // Date-only zero DTE lacks the intraday expiry timestamp required to price safely.
-        var T = isFinite(dte) && dte > 0 ? dte / 365.0 : NaN;
-        var atmNode = item.chain.find(function(x) { return Number(x.k) === K_atm; }) || item.chain[Math.floor(item.chain.length / 2)];
-        if (!atmNode) return item;
-        // Always invalidate derived values when the executable inputs lose validation.
-        if (item.quoteIntegrity !== 'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK'
-            || !liveBookValid(atmNode, 'c', item.snapshotId) || !liveBookValid(atmNode, 'p', item.snapshotId)) {
-          item.syn = NaN;
-          item.rev25 = item.bfly25 = NaN;
-          item.pricingModel = 'Broker-supplied IV only · Black-76 withheld pending validated bid/ask event timestamps';
-          item.cIv = Number(item.upstoxCallIv !== undefined ? item.upstoxCallIv : atmNode.uCallIv);
-          item.pIv = Number(item.upstoxPutIv !== undefined ? item.upstoxPutIv : atmNode.uPutIv);
-          item.iv = (item.cIv + item.pIv) / 2;
-          Object.keys(item).filter(function(key) { return key.indexOf('b76') === 0; }).forEach(function(key) { item[key] = null; });
-          item.b76CallIv = item.b76PutIv = item.b76AtmIv = null;
-          item.chain.forEach(function(node) {
-            ['b76CallIv', 'b76PutIv', 'b76CallDelta', 'b76PutDelta', 'b76CallFwdDelta', 'b76PutFwdDelta', 'b76OtmIv'].forEach(function(key) { node[key] = null; });
-            node.cIv = Number(node.uCallIv);
-            node.pIv = Number(node.uPutIv);
-            node.cDelta = Number(node.uCallDelta);
-            node.pDelta = Number(node.uPutDelta);
-          });
-          return item;
-        }
-        var cLtp = 0.5 * (Number(atmNode.cBid || 0) + Number(atmNode.cAsk || 0));
-        var pLtp = 0.5 * (Number(atmNode.pBid || 0) + Number(atmNode.pAsk || 0));
-        var F = NaN;
-        if (isFinite(T) && cLtp > 0 && pLtp > 0) {
-          var parityForward = computeBlack76ParityForward(K_atm, cLtp, pLtp, T, B76_RISK_FREE_RATE);
-          if (isFinite(parityForward) && parityForward > 0) F = Number(parityForward.toFixed(2));
-        }
-        item.syn = F;
-        item.pricingModel = 'Black-76 Forward Model';
-        if (item.upstoxCallIv === undefined) item.upstoxCallIv = Number(atmNode.uCallIv || item.cIv || item.iv);
-        if (item.upstoxPutIv === undefined) item.upstoxPutIv = Number(atmNode.uPutIv || item.pIv || item.iv);
-        var atmCIv = black76Iv(cLtp, F, K_atm, T, B76_RISK_FREE_RATE, true);
-        var atmPIv = black76Iv(pLtp, F, K_atm, T, B76_RISK_FREE_RATE, false);
-        item.b76CallIv = isFinite(atmCIv) ? atmCIv : null;
-        item.b76PutIv = isFinite(atmPIv) ? atmPIv : null;
-        item.b76AtmIv = isFinite(atmCIv) && isFinite(atmPIv) ? Number((0.5 * (atmCIv + atmPIv)).toFixed(2)) : null;
-        if (isFinite(atmCIv) && isFinite(atmPIv)) {
-          item.cIv = item.b76CallIv;
-          item.pIv = item.b76PutIv;
-          item.iv = item.b76AtmIv;
-        }
-        item.chain.forEach(function(node) {
-          var k = Number(node.k);
-          if (node.uCallIv === undefined) node.uCallIv = Number(node.cIv || 0);
-          if (node.uPutIv === undefined) node.uPutIv = Number(node.pIv || 0);
-          if (node.uCallDelta === undefined) node.uCallDelta = Number(node.cDelta || 0);
-          if (node.uPutDelta === undefined) node.uPutDelta = Number(node.pDelta || 0);
-          var cMid = 0.5 * (Number(node.cBid || 0) + Number(node.cAsk || 0));
-          var pMid = 0.5 * (Number(node.pBid || 0) + Number(node.pAsk || 0));
-          var cSolved = liveBookValid(node, 'c', item.snapshotId) ? black76IvDec(cMid, F, k, T, B76_RISK_FREE_RATE, true) : NaN;
-          var pSolved = liveBookValid(node, 'p', item.snapshotId) ? black76IvDec(pMid, F, k, T, B76_RISK_FREE_RATE, false) : NaN;
-          var cSig = isFinite(cSolved) ? cSolved : NaN;
-          var pSig = isFinite(pSolved) ? pSolved : NaN;
-          var cG = black76Greeks(F, k, T, B76_RISK_FREE_RATE, cSig, true);
-          var pG = black76Greeks(F, k, T, B76_RISK_FREE_RATE, pSig, false);
-          node.b76CallIv = isFinite(cSig) ? Number((cSig * 100.0).toFixed(2)) : null;
-          node.b76PutIv = isFinite(pSig) ? Number((pSig * 100.0).toFixed(2)) : null;
-          node.b76CallDelta = isFinite(cG.delta) ? Number(cG.delta.toFixed(3)) : null;
-          node.b76PutDelta = isFinite(pG.delta) ? Number(pG.delta.toFixed(3)) : null;
-          node.b76CallFwdDelta = isFinite(cG.fwdDelta) ? Number(cG.fwdDelta.toFixed(3)) : null;
-          node.b76PutFwdDelta = isFinite(pG.fwdDelta) ? Number(pG.fwdDelta.toFixed(3)) : null;
-          node.b76OtmIv = k < F ? node.b76PutIv : (k > F ? node.b76CallIv : (node.b76CallIv !== null && node.b76PutIv !== null && isFinite(node.b76CallIv) && isFinite(node.b76PutIv) ? Number((0.5 * (node.b76CallIv + node.b76PutIv)).toFixed(2)) : null));
-          node.cIv = node.b76CallIv;
-          node.pIv = node.b76PutIv;
-          node.mktIv = node.b76OtmIv;
-          node.cDelta = node.b76CallDelta;
-          node.pDelta = node.b76PutDelta;
+        const decision = selectOptionPricing(item), T = item.dte/365;
+        item.modelDecision = decision;
+        item.modelForward = decision.forward;
+        item.syn = decision.syntheticForward;
+        item.fut = decision.source === 'listed_future' ? decision.forward : NaN;
+        item.modelAtmIv = item.b76AtmIv = item.b76CallIv = item.b76PutIv = null;
+
+        item.pricingModel = decision.model === 'black76' ? 'Black-76' : decision.model === 'bsm' ? 'BSM' : 'Broker IV only';
+        item.pricingReason = decision.reason;
+        item.chain.forEach(node => {
+          for (const key of Object.keys(node)) if (key.startsWith('b76') || key.startsWith('model')) node[key] = null;
+          for (const key of ['b76CallIv','b76PutIv','b76CallDelta','b76PutDelta','b76CallFwdDelta','b76PutFwdDelta','b76OtmIv']) node[key] = null;
+          for (const [prefix,call,side] of [['c',true,'Call'],['p',false,'Put']]) {
+            const mid = (node[prefix+'Bid']+node[prefix+'Ask'])/2;
+            const valid = decision.model && liveBookValid(node,prefix,item.snapshotId);
+            const sigma = !valid ? NaN : decision.model === 'black76'
+              ? black76IvDec(mid,decision.forward,node.k,T,decision.rate,call)
+              : bsmIvDec(mid,item.spot,node.k,T,decision.rate,decision.dividend,call);
+            const g = decision.model === 'bsm'
+              ? bsmGreeks(item.spot,node.k,T,decision.rate,decision.dividend,sigma,call)
+              : black76Greeks(decision.forward,node.k,T,decision.rate,sigma,call);
+            node['model'+side+'Iv'] = Number.isFinite(sigma) ? 100*sigma : null;
+            node['model'+side+'Delta'] = Number.isFinite(g.delta) ? g.delta : null;
+            node['model'+side+'FwdDelta'] = Number.isFinite(g.fwdDelta) ? g.fwdDelta : null;
+            if (decision.model === 'black76') {
+              node['b76'+side+'Iv'] = node['model'+side+'Iv'];
+              node['b76'+side+'Delta'] = node['model'+side+'Delta'];
+              node['b76'+side+'FwdDelta'] = node['model'+side+'FwdDelta'];
+            }
+            node[prefix+'Iv'] = decision.model ? node['model'+side+'Iv'] : liveNumber(node['u'+side+'Iv']);
+            node[prefix+'Delta'] = decision.model ? node['model'+side+'Delta'] : liveNumber(node['u'+side+'Delta']);
+          }
+          const reference = Number.isFinite(decision.forward) ? decision.forward : item.spot;
+          node.mktIv = node.k < reference ? node.pIv : node.cIv;
+          node.b76OtmIv = decision.model === 'black76' ? node.mktIv : null;
         });
+        const atm = item.chain.find(n => n.k === item.atm);
+        if (!atm) { item.iv = item.cIv = item.pIv = NaN; return item; }
+        item.cIv = atm.cIv; item.pIv = atm.pIv;
+        const modelCall = atm.modelCallIv, modelPut = atm.modelPutIv;
+        if (modelCall > 0 && modelPut > 0) item.modelAtmIv = (modelCall+modelPut)/2;
+        item.iv = item.modelAtmIv > 0 ? item.modelAtmIv : item.brokerAtmIv;
+        if (!(item.modelAtmIv > 0)) item.pricingModel = 'Broker IV only';
+        if (decision.model === 'black76') {
+          item.b76CallIv = modelCall; item.b76PutIv = modelPut; item.b76AtmIv = item.modelAtmIv;
+        }
+        const put25 = liveDeltaIv(item.chain,false,-.25), call25 = liveDeltaIv(item.chain,true,.25);
+        item.rev25 = Number.isFinite(put25) && Number.isFinite(call25) ? put25-call25 : NaN;
+        item.bfly25 = Number.isFinite(put25) && Number.isFinite(call25) && item.modelAtmIv > 0
+          ? (put25+call25)/2-item.modelAtmIv : NaN;
         return item;
+      }
+
+      function renderPricingSources(item) {
+        const decision = item.modelDecision;
+        const summary = document.getElementById('pricingModelSummary'), detail = document.getElementById('pricingInputDetails');
+        if (!summary || !detail) return;
+        summary.textContent = decision
+          ? item.pricingModel + ' · ' + decision.reason
+          : 'Broker IV · archived observation; no model recalculation';
+        const inputs = currentPricingInputs(activeSymbol, Date.now());
+        const rate = (pricingInputs || {}).rate || {}, div = ((pricingInputs || {}).dividends || {})[activeSymbol] || {};
+        const checked = Number.isFinite(Date.parse(rate.checked_at))
+          ? new Date(rate.checked_at).toLocaleString('en-GB', {timeZone:'Asia/Kolkata'}) + ' IST' : 'unavailable';
+        // Source URLs are fixed, and all external dates/numbers are rendered as text.
+        detail.replaceChildren();
+        for (const [label,url] of [['RBI 91-day T-bill','https://www.rbi.org.in/'],
+          ['NSE index factsheet','https://www.niftyindices.com/Factsheet/' + (activeSymbol === 'NIFTY' ? 'ind_nifty50.pdf' : 'ind_nifty_bank.pdf')]]) {
+          const a = document.createElement('a'); a.textContent = label; a.href = url;
+          a.target = '_blank'; a.rel = 'noopener noreferrer'; a.className = 'text-sky-300 underline mr-4';
+          detail.appendChild(a);
+        }
+        const p = document.createElement('p');
+        p.textContent = 'T-bill auction yield: ' + (Number.isFinite(inputs.rate) ? formatLiveNumber(rate.yield_percent,4,'%') : 'unavailable')
+          + ' · continuous model rate: ' + formatLiveNumber(inputs.rate*100,4,'%') + ' · checked ' + checked
+          + '. NSE dividend yield: ' + formatLiveNumber(inputs.dividend*100,2,'%')
+          + ' · factsheet ' + (/^\d{4}-\d{2}-\d{2}$/.test(div.as_of || '') ? div.as_of : 'unavailable')
+          + '. Published index yield is a proxy, not an expiry-specific dividend forecast. Both ATM leg spreads must be below 3% of midpoint for synthetic Black-76. Wider or missing books use BSM only with verified inputs; unpriceable legs stay blank. Model IV never replaces captured history.';
+        p.className = 'mt-2'; detail.appendChild(p);
       }
 
       window.black76Price = black76Price;
@@ -1436,7 +1535,7 @@
         var r = currentRow();
         if (!r) return;
         enrichItemWithBlack76(r);
-        var basis = r.syn - r.fut;
+        renderPricingSources(r);
         var vrp30 = observedSpread(r.iv, r.hv30);
         var vrp10 = observedSpread(r.iv, r.hv10);
         var movePts = r.spot > 0 && r.iv > 0 && r.dte >= 0 ? r.spot * (r.iv / 100.0) * Math.sqrt(r.dte / 365.0) : NaN;
@@ -1449,11 +1548,11 @@
         var uC = (r.upstoxCallIv != null && r.upstoxCallIv > 0 ? r.upstoxCallIv : (r.cIv || null));
         var uP = (r.upstoxPutIv != null && r.upstoxPutIv > 0 ? r.upstoxPutIv : (r.pIv || null));
         var atmIvVal = (r.b76AtmIv != null && r.b76AtmIv > 0) ? r.b76AtmIv : r.iv;
-        var dispFwd = isFinite(r.syn) && r.syn > 0 ? r.syn : (isFinite(r.fut) && r.fut > 0 ? r.fut : null);
+        var dispFwd = isFinite(r.syn) && r.syn > 0 ? r.syn : null;
         document.getElementById('kpiSpot').textContent = r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         document.getElementById('kpiForwardSub').textContent = 'Future: ' + formatLiveNumber(r.fut, 1) + ' · Synthetic Future: ' + (dispFwd ? dispFwd.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—');
         document.getElementById('kpiAtmIv').textContent = formatIv(atmIvVal);
-        document.getElementById('kpiIvRankSub').textContent = 'Strike ' + r.atm.toLocaleString('en-IN') + ' · ' + (r.b76AtmIv > 0 ? 'Model IV' : 'Broker IV');
+        document.getElementById('kpiIvRankSub').textContent = 'Strike ' + r.atm.toLocaleString('en-IN') + ' · ' + (r.modelAtmIv > 0 ? r.pricingModel + ' IV' : 'Broker IV');
         document.getElementById('kpiHvGarch').textContent = formatIv(r.hv10) + ' / ' + formatIv(r.hv30);
         document.getElementById('kpiHv10Sub').textContent = 'HV20: ' + formatIv(r.hv20) + ' · EWMA: ' + formatIv(r.ewma) + (r.riskAsOf ? ' · ' + r.riskAsOf : '');
         document.getElementById('kpiVrpSpread').textContent = (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp';
@@ -1800,9 +1899,9 @@
         var uP = (r.upstoxPutIv !== undefined ? r.upstoxPutIv : null);
 
         var atmEl = document.getElementById('smileAtmSummary');
-        if (atmEl) atmEl.textContent = r.atm.toLocaleString('en-IN') + ' · F = ' + (isFinite(r.syn) ? r.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—') + ' (Spot ' + r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ')';
+        if (atmEl) atmEl.textContent = r.atm.toLocaleString('en-IN') + ' · F = ' + (isFinite(r.modelForward) ? r.modelForward.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—') + ' (Spot ' + r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ')';
         var cpEl = document.getElementById('smileCpIvSummary');
-        if (cpEl) cpEl.textContent = formatIv(r.iv);
+        if (cpEl) cpEl.textContent = formatIv(r.iv) + ' · ' + (r.pricingModel || 'Broker IV');
         var rrEl = document.getElementById('smileRrVal');
         if (rrEl) rrEl.textContent = (r.rev25 >= 0 ? '+' : '') + formatLiveNumber(r.rev25, 2) + ' pp';
         var bfEl = document.getElementById('smileBfVal');
@@ -1815,36 +1914,36 @@
         var tbody = document.getElementById('smileMainTableBody');
         var rowsHtml = '';
 
-        var dispF = isFinite(r.syn) && r.syn > 0 ? r.syn : (isFinite(r.fut) && r.fut > 0 ? r.fut : r.spot);
+        var dispF = Number.isFinite(r.modelForward) && r.modelForward > 0 ? r.modelForward : (r.syn > 0 ? r.syn : r.spot);
         for (var idx = 0; idx < chain.length; idx++) {
           var node = chain[idx];
           var k = node.k;
-          var cIv = Number((node.b76CallIv != null && node.b76CallIv > 0) ? node.b76CallIv : (node.cIv || node.uCallIv || 0));
-          var pIv = Number((node.b76PutIv != null && node.b76PutIv > 0) ? node.b76PutIv : (node.pIv || node.uPutIv || 0));
+          var cIv = Number((node.b76CallIv != null && node.b76CallIv > 0) ? node.b76CallIv : (r.modelDecision && r.modelDecision.model ? node.modelCallIv : (node.cIv || node.uCallIv || 0)));
+          var pIv = Number((node.b76PutIv != null && node.b76PutIv > 0) ? node.b76PutIv : (r.modelDecision && r.modelDecision.model ? node.modelPutIv : (node.pIv || node.uPutIv || 0)));
           var uCallIv = Number(node.uCallIv != null && node.uCallIv > 0 ? node.uCallIv : cIv);
           var uPutIv = Number(node.uPutIv != null && node.uPutIv > 0 ? node.uPutIv : pIv);
           var otmIv = Number((node.b76OtmIv != null && node.b76OtmIv > 0) ? node.b76OtmIv : (node.mktIv || (k < dispF ? pIv : cIv) || 0));
           var cLtp = Number(node.cLtp || 0);
           var pLtp = Number(node.pLtp || 0);
-          var cDel = Number(node.b76CallDelta != null ? node.b76CallDelta : (node.cDelta || node.uCallDelta || 0));
-          var pDel = Number(node.b76PutDelta != null ? node.b76PutDelta : (node.pDelta || node.uPutDelta || 0));
+          var cDel = r.modelDecision && r.modelDecision.model ? chartNumber(node.modelCallDelta) : chartNumber(node.uCallDelta);
+          var pDel = r.modelDecision && r.modelDecision.model ? chartNumber(node.modelPutDelta) : chartNumber(node.uPutDelta);
 
           strikes.push(k.toString());
           otmArr.push(otmIv > 0 ? Number(otmIv.toFixed(2)) : null);
           callIvArr.push(cIv > 0 ? Number(cIv.toFixed(2)) : null);
           putIvArr.push(pIv > 0 ? Number(pIv.toFixed(2)) : null);
 
-          var moneynessPct = isFinite(r.syn) && r.syn > 0 ? ((k / r.syn - 1.0) * 100.0) : NaN;
+          var moneynessPct = isFinite(dispF) && dispF > 0 ? ((k / dispF - 1.0) * 100.0) : NaN;
           var zone = !isFinite(moneynessPct)
             ? 'Forward unavailable'
             : (k === r.atm
-            ? 'ATM Parity (' + (moneynessPct >= 0 ? '+' : '') + moneynessPct.toFixed(2) + '% vs F)'
-            : (k < r.syn ? 'OTM Put (' + moneynessPct.toFixed(1) + '% vs F)' : 'OTM Call (+' + moneynessPct.toFixed(1) + '% vs F)'));
+            ? 'ATM (' + (moneynessPct >= 0 ? '+' : '') + moneynessPct.toFixed(2) + '% vs F)'
+            : (k < dispF ? 'OTM Put (' + moneynessPct.toFixed(1) + '% vs F)' : 'OTM Call (+' + moneynessPct.toFixed(1) + '% vs F)'));
 
           var cLtpTxt = cLtp > 0 ? ('₹' + cLtp.toFixed(2)) : '—';
           var pLtpTxt = pLtp > 0 ? ('₹' + pLtp.toFixed(2)) : '—';
-          var cDelTxt = (cDel !== 0) ? cDel.toFixed(3) : ((cIv > 0 && cLtp > 0) ? cDel.toFixed(3) : '—');
-          var pDelTxt = (pDel !== 0) ? pDel.toFixed(3) : ((pIv > 0 && pLtp > 0) ? pDel.toFixed(3) : '—');
+          var cDelTxt = formatLiveNumber(cDel,3);
+          var pDelTxt = formatLiveNumber(pDel,3);
           var cIvTxt = cIv > 0 ? (cIv.toFixed(2) + '%') : '—';
           var pIvTxt = pIv > 0 ? (pIv.toFixed(2) + '%') : '—';
           var otmIvTxt = otmIv > 0 ? (otmIv.toFixed(2) + '%') : '—';
@@ -1929,7 +2028,7 @@
         return shapes[structure].map(([strike, call, qty]) => {
           const node = item.chain.find(row => row.k === strike);
           const price = node && chartNumber(node[call ? 'cLtp' : 'pLtp']);
-          const iv = node && chartNumber(node[call ? 'uCallIv' : 'uPutIv']);
+          const iv = node && chartNumber(node[item.modelDecision && item.modelDecision.model ? (call ? 'modelCallIv' : 'modelPutIv') : (call ? 'uCallIv' : 'uPutIv')]);
           return {strike, call, qty, entryPx: price > 0 ? price : null, iv: iv > 0 ? iv : null};
         });
       }
@@ -1986,17 +2085,26 @@
           }]}, opts);
         }
 
-        const forward = chartNumber(r.syn);
-        const canStress = marked && forward > 0 && r.spot > 0 && r.dte > 0;
+        const decision = r.modelDecision || {};
+        const forward = chartNumber(decision.forward);
+        const years = Math.max(0, r.dte - 1) / 365;
+        const canStress = marked && r.spot > 0 && r.dte > 0 && (years === 0 ||
+          (decision.model && forward > 0 && Number.isFinite(decision.rate) &&
+          (decision.model !== 'bsm' || Number.isFinite(decision.dividend))));
+        document.getElementById('stressModelNote').textContent = years === 0
+          ? 'T+1 reaches expiry · intrinsic value'
+          : canStress ? 'T+1 model estimate · ' + r.pricingModel + ' · constant IV shift and proportional forward move'
+          : 'T+1 estimate unavailable · verified model inputs required';
         document.getElementById('stressMatrixTableBody').innerHTML = [-2,-1,0,1,2].map(move => {
           const shiftedSpot = r.spot * (1 + move / 100);
           const shiftedForward = forward * (1 + move / 100);
-          const years = Math.max(0, r.dte - 1) / 365;
           const cells = [-3,-1.5,0,1.5,3].map(shift => {
             const value = canStress ? legs.reduce((total, l) => {
               if (years > 0 && (l.iv === null || l.iv + shift <= 0)) return NaN;
               const mark = years === 0 ? Math.max(0, l.call ? shiftedSpot - l.strike : l.strike - shiftedSpot)
-                : black76Price(shiftedForward, l.strike, years, B76_RISK_FREE_RATE, (l.iv + shift) / 100, l.call);
+                : decision.model === 'bsm'
+                  ? bsmGreeks(shiftedSpot,l.strike,years,decision.rate,decision.dividend,(l.iv+shift)/100,l.call).price
+                  : black76Price(shiftedForward,l.strike,years,decision.rate,(l.iv+shift)/100,l.call);
               return total + units * l.qty * (mark - l.entryPx);
             }, 0) : NaN;
             return '<td class="py-2 px-2">' + (Number.isFinite(value) ? fmtInr(Math.round(value), true) : '—') + '</td>';
@@ -3343,7 +3451,7 @@
 
       function liveDeltaIv(chain, prefix, target) {
         var points = chain.map(function(n) {
-          return { delta: liveNumber(n[prefix === 'c' ? 'b76CallFwdDelta' : 'b76PutFwdDelta']), iv: liveNumber(n[prefix === 'c' ? 'b76CallIv' : 'b76PutIv']) };
+          return { delta: liveNumber(n[prefix === 'c' ? 'modelCallFwdDelta' : 'modelPutFwdDelta']), iv: liveNumber(n[prefix === 'c' ? 'modelCallIv' : 'modelPutIv']) };
         }).filter(function(p) { return isFinite(p.delta) && p.iv > 0; }).sort(function(a, b) { return a.delta - b.delta; });
         for (var i = 0; i < points.length; i++) {
           if (points[i].delta === target) return points[i].iv;
@@ -3417,7 +3525,13 @@
           var vixQuote = findQuote('NSE_INDEX|India VIX');
           var callOi = chain.reduce(function(sum, n) { return sum + (n.cOi || 0); }, 0);
           var putOi = chain.reduce(function(sum, n) { return sum + (n.pOi || 0); }, 0);
-          var item = { expiry: expiry, kind: future ? 'Monthly' : (metadata ? 'Weekly' : 'Listed'), dte: dte, spot: spot, atm: atm.k,
+          var inputs = currentPricingInputs(sym, asOf);
+          var futureDepth = futureQuote && futureQuote.depth || {};
+          var bid = (futureDepth.buy || [])[0] || {}, ask = (futureDepth.sell || [])[0] || {};
+          var item = { rate: inputs.rate, dividend: inputs.dividend, symbol: sym, spotQuoteAt: spotQuote && spotQuote.timestamp,
+            futureBook: futureQuote ? {expiry:future.expiry, fBid:liveNumber(bid.price), fAsk:liveNumber(ask.price),
+              fBidQty:liveNumber(bid.quantity), fAskQty:liveNumber(ask.quantity), fQuoteAt:futureQuote.timestamp} : null,
+            expiry: expiry, kind: future ? 'Monthly' : (metadata ? 'Weekly' : 'Listed'), dte: dte, spot: spot, atm: atm.k,
             chain: chain, snapshotId: asOf, sessionDate: sessionDay, pricingAsOf: asOf,
             riskAsOf: validRisk ? risk.as_of : null, riskSource: validRisk ? risk.source : null,
             iv: (atm.cIv + atm.pIv) / 2, cIv: atm.cIv, pIv: atm.pIv,
@@ -3435,7 +3549,7 @@
           enrichItemWithBlack76(item);
           var c25 = liveDeltaIv(chain, 'c', 0.25), p25 = liveDeltaIv(chain, 'p', -0.25);
           item.rev25 = p25 - c25;
-          item.bfly25 = (p25 + c25) / 2 - liveNumber(item.b76AtmIv);
+          item.bfly25 = (p25 + c25) / 2 - liveNumber(item.modelAtmIv);
           var previous = (marketCatalog[sym] || []).find(function(x) { return x.expiry === expiry && x.sessionDate === sessionDay && x.atm === item.atm; });
           item.intraday = previous ? (previous.intraday || []).slice() : [];
           item.intraday.push({ t: new Date(captured + 19800000).toISOString().slice(11, 16), spot: spot, atm: item.atm,
@@ -3558,14 +3672,14 @@
         renderActiveOptionsTab();
         renderBacktestWorkspace();
         renderForwardWorkspace();
-        syncLiveCloudSnapshot(true);
+        loadPricingInputs().then(() => syncLiveCloudSnapshot(true));
         setInterval(function() {
           updateMarketClock();
         }, 15000);
         setInterval(function() {
           var cur = updateMarketClock();
           if (cur.isOpen) {
-            syncLiveCloudSnapshot(false);
+            loadPricingInputs().then(() => syncLiveCloudSnapshot(false));
           }
         }, 60000);
       }

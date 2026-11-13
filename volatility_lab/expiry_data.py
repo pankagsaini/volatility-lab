@@ -293,7 +293,7 @@ class ExpiryMonitor(base.Monitor):
                     valuation_dt=pd.Timestamp(valuation).to_pydatetime()
                     years_to_expiry=(expiry_close-valuation_dt).total_seconds()/(365.0*86400.0)
                     parity=synthetic_future(
-                        synthetic_rows,spot,rate=rate,years=years_to_expiry,
+                        synthetic_rows,spot,rate=rate,years=years_to_expiry,dividend=dividend,
                         future_quote=validated_future,expiry=str(expiry),as_of=received,
                         spot_timestamp=spotq.get('timestamp'),
                         future_contract=future_contract,

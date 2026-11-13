@@ -4,14 +4,14 @@ from datetime import datetime
 from pathlib import Path
 import json, math, threading, time
 try:
-    from market_data import IST
+    from collector_support import IST
 except ImportError:
     from zoneinfo import ZoneInfo
     IST = ZoneInfo('Asia/Kolkata')
 
 PRICING_MODEL = 'Black-76'
 PRICING_MODEL_LABEL = 'Black-76 Forward Model · F = K + e^{rT}(C − P)'
-DEFAULT_RISK_FREE_RATE = 0.066
+DEFAULT_RISK_FREE_RATE = float('nan')  # Missing official inputs must remain unavailable.
 
 _ROOT = Path(__file__).resolve().parent / 'data'
 _pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='pricing-inputs')
@@ -52,6 +52,15 @@ def _read(name):
 def get_rate():
     ensure_refresh()
     saved = _read('risk_free_rate.json')
+    try:
+        age = (datetime.now(IST) - datetime.fromisoformat(saved['checked_at'])).total_seconds()
+        valid = (saved.get('source') == 'https://www.rbi.org.in/' and saved.get('sha256')
+                 and 0 <= age <= 7 * 86400 and 0 <= float(saved['model_rate']) < .30)
+    except (KeyError, TypeError, ValueError):
+        valid = False
+    if not valid:
+        saved['model_rate'] = None
+        saved['error'] = 'No recent verified RBI rate; background check in progress.'
     if saved:
         saved.setdefault('pricing_model', PRICING_MODEL)
         saved.setdefault('pricing_model_label', PRICING_MODEL_LABEL)
@@ -72,18 +81,25 @@ def get_yields():
         if not 0 <= age <= 62:
             if item.get('model_yield') is not None:
                 item['stale'] = True
+                item['model_yield'] = None
                 item['error'] = 'Factsheet older than 62 days; retaining last verified yield while background refresh runs.'
             else:
                 item['model_yield'] = None
                 item['error'] = 'No recent verified dividend yield; background check in progress.'
         else:
             item['stale'] = False
+        expected = 'https://www.niftyindices.com/Factsheet/' + ('ind_nifty50.pdf' if symbol == 'NIFTY' else 'ind_nifty_bank.pdf')
+        if item.get('source') != expected or not item.get('sha256'):
+            item['model_yield'] = None
     return saved
 
 
 def compute_parity_forward(strike: float, call_price: float, put_price: float, years: float, rate: float | None = None) -> float:
     """Compute Black-76 Put-Call Parity Implied Forward F = K + exp(r * T) * (C - P)."""
-    r = float(rate) if (rate is not None and math.isfinite(float(rate))) else float(get_rate().get('model_rate') or DEFAULT_RISK_FREE_RATE)
+    r = get_rate().get('model_rate') if rate is None else rate
+    if r is None or not math.isfinite(float(r)):
+        return float('nan')
+    r = float(r)
     t = max(0.0, float(years))
     return float(strike) + math.exp(r * t) * (float(call_price) - float(put_price))
 
@@ -94,7 +110,7 @@ def get_pricing_model_config() -> dict:
     return {
         'model': PRICING_MODEL,
         'label': PRICING_MODEL_LABEL,
-        'rate': float(rate_info.get('model_rate') or DEFAULT_RISK_FREE_RATE),
-        'as_of': rate_info.get('as_of'),
-        'source': rate_info.get('source', 'FBIL / RBI 91-Day Treasury Bill Benchmark'),
+        'rate': rate_info.get('model_rate'),
+        'as_of': rate_info.get('checked_at'),
+        'source': rate_info.get('source'),
     }

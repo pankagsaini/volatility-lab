@@ -415,11 +415,12 @@ class TestExecutionSafetyFixes(unittest.TestCase):
             return all_html[start:end]
 
         helpers = "\n".join([
-            live_helper("liveTimestamp"),
+            live_helper("liveTimestamp"), live_helper("liveNumber"), live_helper("relativeBookSpread"),
+            live_helper("selectOptionPricing"), live_helper("liveDeltaIv"), live_helper("bsmGreeks"),
             live_helper("liveBookValid"),
             function_source("computeBlack76ParityForward", "black76Greeks"),
             function_source("black76Greeks", "black76Price"),
-            function_source("enrichItemWithBlack76", "populateExpiryDropdown"),
+            live_helper("enrichItemWithBlack76"),
         ])
         script = "\n".join([
             "var B76_RISK_FREE_RATE = 0.05;",
@@ -435,10 +436,10 @@ class TestExecutionSafetyFixes(unittest.TestCase):
             "if (expiry.price !== 5 || expiry.gamma !== 0) throw new Error('expiry intrinsic value failed');",
             "var unverified = enrichItemWithBlack76({dte: 0.01, atm: 100, chain: [{k: 100, cLtp: 10, pLtp: 9, uCallIv: 22, uPutIv: 23}]});",
             "if (!Number.isNaN(unverified.syn) || unverified.chain[0].b76CallIv !== null || seenTimes.length !== 0) throw new Error('unverified LTPs were promoted to Black-76 inputs');",
-            "var subday = enrichItemWithBlack76({quoteIntegrity: 'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK', snapshotId: '2026-11-13T04:30:00Z', dte: 0.01, atm: 100, chain: [{k: 100, cQuoteAt: '2026-11-13T04:30:00Z', pQuoteAt: '2026-11-13T04:30:00Z', cBidQty: 100, cAskQty: 100, pBidQty: 100, pAskQty: 100, cBid: 9.9, cAsk: 10.1, pBid: 8.9, pAsk: 9.1}]});",
+            "var subday = enrichItemWithBlack76({rate: .05, spot:100, spotQuoteAt:'2026-11-13T04:30:00Z', quoteIntegrity: 'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK', snapshotId: '2026-11-13T04:30:00Z', dte: 0.01, atm: 100, chain: [{k: 100, cQuoteAt: '2026-11-13T04:30:00Z', pQuoteAt: '2026-11-13T04:30:00Z', cBidQty: 100, cAskQty: 100, pBidQty: 100, pAskQty: 100, cBid: 9.9, cAsk: 10.1, pBid: 8.9, pAsk: 9.1}]});",
             "if (Math.abs(seenTimes[0] - (0.01 / 365)) > 1e-15) throw new Error('sub-day DTE was floored');",
             "if (subday.chain[0].b76CallIv !== null || subday.chain[0].b76PutIv !== null) throw new Error('unpriced IV was substituted');",
-            "var zeroDte = enrichItemWithBlack76({quoteIntegrity: 'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK', snapshotId: '2026-11-13T04:30:00Z', dte: 0, atm: 100, chain: [{k: 100, cQuoteAt: '2026-11-13T04:30:00Z', pQuoteAt: '2026-11-13T04:30:00Z', cBidQty: 100, cAskQty: 100, pBidQty: 100, pAskQty: 100, cBid: 9.9, cAsk: 10.1, pBid: 8.9, pAsk: 9.1}]});",
+            "var zeroDte = enrichItemWithBlack76({rate: .05, spot:100, spotQuoteAt:'2026-11-13T04:30:00Z', quoteIntegrity: 'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK', snapshotId: '2026-11-13T04:30:00Z', dte: 0, atm: 100, chain: [{k: 100, cQuoteAt: '2026-11-13T04:30:00Z', pQuoteAt: '2026-11-13T04:30:00Z', cBidQty: 100, cAskQty: 100, pBidQty: 100, pAskQty: 100, cBid: 9.9, cAsk: 10.1, pBid: 8.9, pAsk: 9.1}]});",
             "if (!Number.isNaN(zeroDte.syn) || zeroDte.b76AtmIv !== null) throw new Error('date-only zero DTE was treated as a precise expiry time');",
             "var missing = enrichItemWithBlack76({dte: 1, atm: 100, syn: 110, spot: 111, chain: [{k: 100, cLtp: 0, pLtp: 0, uCallIv: 22, uPutIv: 23}]});",
             "if (!Number.isNaN(missing.syn) || missing.chain[0].b76CallIv !== null || missing.chain[0].b76OtmIv !== null) throw new Error('spot or upstream IV fallback was used');",

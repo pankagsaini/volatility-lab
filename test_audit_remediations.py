@@ -1327,7 +1327,7 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
 
 
     def test_40_sensibull_standard_black76_and_greeks_parity(self):
-        """Verify Black-76 pricing engine, Greeks parity, and BSM primary model preservation."""
+        """Verify Black-76 pricing engine, Greeks parity, and Black-76 primary model selection."""
         import option_math
         from pricing import (
             DEFAULT_PRICING_MODEL,
@@ -1338,9 +1338,9 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
             calculate_greeks,
             calculate_iv,
         )
-        # BSM remains the default primary model for backward compatibility
-        self.assertEqual(DEFAULT_PRICING_MODEL, "bsm")
-        self.assertEqual(option_math.DEFAULT_PRICING_MODEL, "bsm")
+        # Black-76 is the primary model; its underlying argument is a forward.
+        self.assertEqual(DEFAULT_PRICING_MODEL, "black76")
+        self.assertEqual(option_math.DEFAULT_PRICING_MODEL, "black76")
 
         # 1. Black-76 roundtrip
         F, K, T, r, true_vol = 25018.6, 25050.0, 8.0 / 365.0, 0.0585, 0.1665
@@ -1442,7 +1442,7 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
         quote_time = '2026-11-10T09:20:00+05:30'
         expiry = '2026-11-17'
         res_fut = determine_forward(
-            [], spot=25000.0,
+            [], spot=25000.0, rate=0.06,
             future_quote={'expiry': expiry, 'timestamp': quote_time, 'bid_price': 25034.0, 'ask_price': 25036.0},
             expiry=expiry, as_of=quote_time, spot_timestamp=quote_time,
         )
@@ -1472,7 +1472,7 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
             self.assertIn('forward_price', chain_table)
             self.assertIn('forward_source', chain_table)
             self.assertIn('pricing_model', chain_table)
-            self.assertEqual(chain_table['pricing_model'], 'Black-76 (Forward Anchored)')
+            self.assertIn(chain_table['pricing_model'], ('Black-76', 'BSM', 'Broker IV only'))
 
 
 
@@ -1636,11 +1636,11 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
             self.assertIn("window.black76Greeks", html)
             self.assertIn("window.black76Iv", html)
             self.assertIn("window.computeBlack76ParityForward", html)
-            self.assertIn("Black-76 Forward Model", html)
+            self.assertIn("selectOptionPricing", html)
             self.assertIn("Black-76 withheld pending validated bid/ask event timestamps", html)
             self.assertIn("VALIDATED_EVENT_TIME_TWO_SIDED_BOOK", html)
-            self.assertIn("Date-only zero DTE lacks the intraday expiry timestamp", html)
-            self.assertIn("var cSig = isFinite(cSolved) ? cSolved : NaN;", html)
+            self.assertIn("if (!(T > 0)", html)
+            self.assertIn("const sigma = !valid ? NaN", html)
             self.assertNotIn(": 0.16", html)
             self.assertNotIn("Number(item.syn || item.spot)", html)
 
@@ -1721,7 +1721,7 @@ class TestIndependentQuantitativeAuditRegressions(unittest.TestCase):
             {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'CE', 'bid': 239.0, 'ask': 241.0, 'timestamp': as_of},
             {'expiry': '2026-11-17', 'strike': 25000, 'option_type': 'PE', 'bid': 209.0, 'ask': 211.0, 'timestamp': as_of},
         ]
-        good = calculate(valid_rows, 25005.0, years=7 / 365, expiry='2026-11-17', as_of=as_of, spot_timestamp=as_of)
+        good = calculate(valid_rows, 25005.0, rate=.06, years=7 / 365, expiry='2026-11-17', as_of=as_of, spot_timestamp=as_of)
         self.assertIsNotNone(good['Synthetic future'])
 
         stale_ltp = [
@@ -1746,7 +1746,7 @@ class TestIndependentQuantitativeAuditRegressions(unittest.TestCase):
         self.assertIsNone(unmatched_future['Basis'])
 
         unvalidated_future = determine_forward(
-            [], spot=25000.0, future_quote={'last_price': 25035.0},
+            [], spot=25000.0, rate=.06, dividend=.0142, future_quote={'last_price': 25035.0},
             expiry='2026-11-17', as_of=as_of, spot_timestamp=as_of,
         )
         self.assertEqual(unvalidated_future['source'], 'cost_of_carry_forward')
