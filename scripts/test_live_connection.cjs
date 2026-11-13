@@ -29,7 +29,7 @@ const web = vm.createContext({ Date: Clock, console, window: {}, B76_RISK_FREE_R
 vm.runInContext(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8'),web);
 for (const name of ['normPdf', 'normCdf', 'computeBlack76ParityForward', 'black76Greeks', 'black76Price',
   'black76IvDec', 'black76Iv', 'bsmIvDec', 'bsmGreeks', 'currentPricingInputs', 'relativeBookSpread', 'selectOptionPricing', 'enrichItemWithBlack76', 'liveNumber', 'liveTimestamp', 'liveBookValid',
-  'liveDeltaIv', 'capturedDeltaIv','validCloudCapture','showCaptureState','normalizeLiveSnapshot', 'currentRow', 'isFreshValidatedCloudSnapshot', 'syncLiveCloudSnapshot']) {
+  'liveDeltaIv', 'capturedDeltaIv','validCloudCapture','showCaptureState','combineDailyCaptures','normalizeLiveSnapshot', 'currentRow', 'isFreshValidatedCloudSnapshot', 'syncLiveCloudSnapshot']) {
   vm.runInContext(browserFunction(name), web);
 }
 web.pricingInputs = {schema:1,rate:{model_rate:.066,source:'https://www.rbi.org.in/',sha256:'fixture',checked_at:new Date(now).toISOString()},
@@ -355,6 +355,33 @@ async function main() {
   assert.equal(gap[1][1]-gap[0][1],120000);
   assert(Object.values(histories).every(v => Buffer.byteLength(v)<100000));
   mode='valid'; now=previousNow; cloud.scriptCache_=priorCache;
+  // Current-day rows survive a partial snapshot, then roll over once per symbol.
+  const byKey = new Map(), indexProps = {getProperty:k=>byKey.get(k),setProperty:(k,v)=>byKey.set(k,v),
+    getProperties:()=>Object.fromEntries(byKey),getKeys:()=>Array.from(byKey.keys()),deleteProperty:k=>byKey.delete(k)};
+  const basenames = ['2026-11-13_snapshot_100000_complete.json.gz','2026-11-16_snapshot_100000_complete.json.gz'];
+  const indexed = clone(report);
+  const near = indexed.records.find(r=>r.label.startsWith('NIFTY|'));
+  indexed.records.push({...near,label:'NIFTY|2026-11-13'}, {...near,label:'NIFTY|2026-12-01'});
+  let currentRows = cloud.updateDailyIndex_(indexProps,indexed,basenames[0]);
+  assert.equal(currentRows.NIFTY.expiry,'2026-11-17'); assert.equal(currentRows.NIFTY.atm,25000);
+  assert.equal(currentRows.NIFTY.h30,report.risk_metrics.NIFTY.hv30);
+  assert.equal(currentRows.NIFTY.archiveFile,basenames[0]);
+  byKey.set('LAST_SNAPSHOT',JSON.stringify({day:indexed.day,daily_rows:currentRows}));
+  near.data.find(r=>r.strike_price===25000).call_options.option_greeks.iv=null;
+  assert.equal(cloud.dailyIvRow_(indexed,'NIFTY',basenames[0]),null,'do not switch expiry or strike for missing IV');
+  near.chain_retrieved_at='bogus';
+  assert.equal(cloud.dailyIvRow_(indexed,'NIFTY',basenames[0]),null);
+  indexed.status='partial';
+  assert.deepEqual(clone(cloud.updateDailyIndex_(indexProps,indexed,basenames[0])),clone(currentRows));
+  byKey.set('DAILY_IV_NIFTY_2024-01_A','{}');
+  indexed.day='2026-11-16';
+  const todayRows=cloud.updateDailyIndex_(indexProps,indexed,basenames[1]);
+  byKey.set('LAST_SNAPSHOT',JSON.stringify({day:indexed.day,daily_rows:todayRows}));
+  assert.equal(byKey.has('DAILY_IV_NIFTY_2024-01_A'),false);
+  const indexedHistory=cloud.publishedDailyHistory_(indexProps,indexed.day);
+  assert.deepEqual(clone(indexedHistory.NIFTY),[clone(currentRows.NIFTY)]);
+  const partition=Object.fromEntries(Array.from({length:16},(_,i)=>['2026-11-'+(16+i),currentRows.BANKNIFTY]));
+  assert(Buffer.byteLength(JSON.stringify(partition))<9000);
   const firstOption = report.records[1].data.find(r => r.strike_price === 25000).call_options.market_data;
   assert.equal(firstOption.quote_timestamp, new Date(now - 1000).toISOString());
   assert.notEqual(firstOption.ltp, 999, 'timestamp must travel with its own book');
@@ -516,6 +543,10 @@ async function main() {
   web.fetch = async () => ({ok:true,json:async () => ({unchanged:true,retrieved_at:next.retrieved_at,capture_integrity:delayed.capture_integrity})});
   assert.equal(await web.syncLiveCloudSnapshot(true),false);
   assert.match(web.message,/runtime limit/);
+  const historicalRow = {d:'2026-11-12',c:24999,iv:18.6,expiry:'2026-11-17',atm:25000,h10:13,
+    snapshotId:'2026-11-12T09:00:00Z',archiveFile:'2026-11-12_snapshot_143000_complete.json.gz',ivSource:'Upstox option_greeks.iv'};
+  assert.equal(web.combineDailyCaptures([], [historicalRow], '2026-11-13')[0].iv,18.6);
+  assert.equal(web.combineDailyCaptures([], [{...historicalRow,expiry:'2026-11-12'},{...historicalRow,ivSource:'model'}], '2026-11-13').length,0);
   const lateJoin = clone(delayed);
   const rec = lateJoin.records.find(r => r.label.startsWith('NIFTY|'));
   rec.straddle_anchor_strike = rec.data[12].strike_price;

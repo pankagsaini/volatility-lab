@@ -572,6 +572,89 @@ function snapshotRiskMetrics_(candles, sessionDay, instrumentKey) {
 }
 
 // Snapshot callers hold the capture lock. Keep one bounded map for the session.
+function dailyIvRow_(report, symbol, archiveFile) {
+  if (report.status !== 'complete' || !report.nfo_session_validated) return null;
+  const first = report.records.filter(r => r.label.startsWith(symbol + '|') &&
+    /^\d{4}-\d{2}-\d{2}$/.test(r.label.slice(symbol.length+1)) && r.label.slice(symbol.length+1) > report.day)
+    .sort((a,b) => a.label.localeCompare(b.label))[0];
+  if (!first || !Array.isArray(first.data)) return null;
+  const stamp = first.chain_retrieved_at || first.retrieved_at;
+  const time = timestampMillis_(stamp);
+  if (!Number.isFinite(time) || day_(new Date(time)) !== report.day || !forwardQuoteFresh_(time,report.retrieved_at)) return null;
+  const spot = Number(first.data[0]?.underlying_spot_price);
+  if (!Number.isFinite(spot) || !(spot > 0)) return null;
+  let nearest = null;
+  for (const row of first.data) {
+    const strike = Number(row.strike_price);
+    if (!(strike > 0) || !Number.isFinite(strike)) continue;
+    const distance = Math.abs(strike - spot);
+    if (!nearest || distance < nearest.distance || (distance === nearest.distance && strike < nearest.strike)) {
+      nearest = {strike,distance,row};
+    }
+  }
+  if (!nearest) return null;
+  const legs = [nearest.row.call_options,nearest.row.put_options];
+  const ivs = legs.map(leg => Number(leg?.option_greeks?.iv));
+  if (!ivs.every(v => Number.isFinite(v) && v > 0)) return null;
+  const risk = report.risk_metrics?.[symbol];
+  const metric = key => Number.isFinite(risk?.[key]) ? risk[key] : null;
+  return {d:report.day,c:spot,iv:(ivs[0]+ivs[1])/2,expiry:first.label.split('|')[1],atm:nearest.strike,
+    snapshotId:new Date(time).toISOString(),ivSource:'Upstox option_greeks.iv',archiveFile,
+    h10:metric('hv10'),h20:metric('hv20'),h30:metric('hv30'),ew:metric('ewma'),riskAsOf:risk?.as_of || null};
+}
+
+function dailyIndexKey_(symbol, day) {
+  return 'DAILY_IV_' + symbol + '_' + day.slice(0,7) + '_' + (Number(day.slice(8)) <= 15 ? 'A' : 'B');
+}
+
+function dailyIndexCutoff_(day) {
+  return new Date(Date.parse(day + 'T00:00:00Z') - 365 * 86400000).toISOString().slice(0,10);
+}
+
+function updateDailyIndex_(properties, report, archiveFile) {
+  const last = readJsonProperty_(properties,'LAST_SNAPSHOT',null);
+  const prior = last?.daily_rows || {};
+  const rows = last?.day === report.day ? Object.assign({},prior) : {};
+  if (last?.day && last.day < report.day) {
+    const cutoff = dailyIndexCutoff_(report.day);
+    // Roll over idempotently before the existing LAST_SNAPSHOT write replaces prior.
+    for (const symbol of Object.keys(CONFIG.indices)) {
+      const row = prior[symbol];
+      if (!row || row.d !== last.day || row.d < cutoff) continue;
+      const key = dailyIndexKey_(symbol,row.d);
+      const days = readJsonProperty_(properties,key,{});
+      days[row.d] = row;
+      properties.setProperty(key,JSON.stringify(days));
+    }
+    for (const key of properties.getKeys()) {
+      const match = /^DAILY_IV_(NIFTY|BANKNIFTY)_(\d{4}-\d{2})_([AB])$/.exec(key);
+      if (match && match[2] + (match[3] === 'A' ? '-15' : '-31') < cutoff) properties.deleteProperty(key);
+    }
+  }
+  for (const symbol of Object.keys(CONFIG.indices)) {
+    const row = dailyIvRow_(report,symbol,archiveFile);
+    if (row && (!rows[symbol] || row.snapshotId >= rows[symbol].snapshotId)) rows[symbol] = row;
+  }
+  return rows;
+}
+
+function publishedDailyHistory_(properties, day) {
+  const values = properties.getProperties();
+  const latest = JSON.parse(values.LAST_SNAPSHOT || '{}').daily_rows || {};
+  const cutoff = dailyIndexCutoff_(day);
+  const result = {};
+  for (const symbol of Object.keys(CONFIG.indices)) {
+    const days = {};
+    for (const key of Object.keys(values)) {
+      if (!key.startsWith('DAILY_IV_' + symbol + '_')) continue;
+      try { Object.assign(days,JSON.parse(values[key])); } catch (err) {}
+    }
+    if (latest[symbol]) days[latest[symbol].d] = latest[symbol];
+    result[symbol] = Object.keys(days).filter(d => d >= cutoff && d <= day).sort().map(d => days[d]);
+  }
+  return result;
+}
+
 function attachStraddleAnchors_(report, properties) {
   const stored = readJsonProperty_(properties,'SESSION_STRADDLE_ANCHORS',null);
   const prior = stored && stored.day === report.day ? stored.strikes : {};
@@ -955,6 +1038,7 @@ function capture_(mode, recovery) {
   properties.setProperty(propertyKey, JSON.stringify({
     day: today,
     target_day: report.target_day || today,
+    daily_rows: mode === 'snapshot' ? updateDailyIndex_(properties,report,fileName + '.json.gz') : undefined,
     status: report.status,
     file_id: fileId,
     retrieved_at: report.retrieved_at,
@@ -1703,6 +1787,7 @@ function doGet(e) {
     if (calendar && Array.isArray(calendar.closed)) {
       payload.exchange_calendar = {year:calendar.year, closed:calendar.closed, special:calendar.special || {}};
     }
+    payload.daily_history = publishedDailyHistory_(properties,day_(new Date()));
     const outStr = JSON.stringify(payload);
     if (cache && fileId && file.getId() === fileId && outStr.length < 95000) {
       try { cache.put('DOGET_LATEST_SNAPSHOT_JSON_' + fileId, outStr, CONFIG.doGetCacheSeconds); } catch (e) {}

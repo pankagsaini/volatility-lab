@@ -3324,6 +3324,26 @@
         return NaN; // Do not extrapolate beyond observed deltas.
       }
 
+      function combineDailyCaptures(priorRows, archivedRows, sessionDay) {
+        const days = new Map(priorRows.map(row => [row.d, row]));
+        if (Array.isArray(archivedRows)) for (const row of archivedRows) {
+          if (!row || !/^\d{4}-\d{2}-\d{2}$/.test(row.d) || row.d > sessionDay || row.expiry <= row.d ||
+              row.ivSource !== 'Upstox option_greeks.iv' || !(Number.isFinite(row.iv) && row.iv > 0) ||
+              !(Number.isFinite(row.atm) && row.atm > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(row.expiry) ||
+              !/^\d{4}-\d{2}-\d{2}_snapshot_\d{6}_complete\.json\.gz$/.test(row.archiveFile) ||
+              !row.archiveFile.startsWith(row.d)) continue;
+          const time = Date.parse(row.snapshotId);
+          if (!Number.isFinite(time) || new Date(time+19800000).toISOString().slice(0,10) !== row.d) continue;
+          const prior = days.get(row.d);
+          if (prior && Date.parse(prior.snapshotId) > time && prior.iv > 0 && prior.expiry > row.d) continue;
+          const l = new Date(row.d+'T12:00:00Z').toLocaleDateString('en-GB',{day:'2-digit',month:'short',timeZone:'UTC'});
+          days.set(row.d,{...prior,d:row.d,l,c:prior?.c ?? row.c,iv:row.iv,ivSource:row.ivSource,
+            snapshotId:row.snapshotId,archiveFile:row.archiveFile,expiry:row.expiry,atm:row.atm,
+            h10:row.h10 ?? prior?.h10,h20:row.h20 ?? prior?.h20,h30:row.h30 ?? prior?.h30,ew:row.ew ?? prior?.ew});
+        }
+        return Array.from(days.values());
+      }
+
       function normalizeLiveSnapshot(payload) {
         var asOf = payload.retrieved_at;
         var captured = liveTimestamp(asOf);
@@ -3456,7 +3476,7 @@
           if (metadata && (metadata.option_expiries || []).some(function(exp) {
             return TradingSessions.expiryMillis(exp) > captured && !seen[sym + '|' + exp];
           })) throw new Error('Incomplete expiry membership');
-          history[sym] = (REAL_HISTORICAL_1Y[sym] || []).map(function(row) { return Object.assign({}, row); });
+          history[sym] = combineDailyCaptures(REAL_HISTORICAL_1Y[sym] || [], payload.daily_history?.[sym], sessionDay);
           var base = catalog[sym][0];
           var front = catalog[sym].find(item => item.expiry > sessionDay);
           var observation = { d: sessionDay, l: new Date(sessionDay + 'T00:00:00Z').toLocaleDateString('en-GB', {day: '2-digit', month: 'short', timeZone: 'UTC'}),
@@ -3465,7 +3485,8 @@
           if (index < 0) history[sym].push(observation);
           else {
             const prior = history[sym][index];
-            if (observation.iv === null && prior.expiry > sessionDay && prior.ivSource && prior.snapshotId && prior.iv > 0) {
+            if (prior.expiry > sessionDay && prior.ivSource && prior.snapshotId && prior.iv > 0 &&
+                (observation.iv === null || (observation.snapshotId === prior.snapshotId && observation.expiry === prior.expiry && observation.atm === prior.atm))) {
               for (const field of ['iv','ivSource','snapshotId','expiry','atm','archiveFile']) observation[field] = prior[field];
             }
             history[sym][index] = observation;
