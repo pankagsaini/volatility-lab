@@ -2,7 +2,7 @@
 
 ## Local desk
 
-Install the package and launch `python -m volatility_lab`. For Streamlit Community Cloud, choose `streamlit_app.py` and Python 3.11. Tested versions are 3.10, 3.11 and 3.12.
+Install the package and launch `python -m volatility_lab`. For Streamlit Community Cloud, choose `streamlit_app.py` and Python 3.11. Tested versions are 3.11, 3.12 and 3.13.
 
 The default bind address is loopback; LAN access requires `--lan`. Old launchers are wrappers and must contain no setup logic.
 

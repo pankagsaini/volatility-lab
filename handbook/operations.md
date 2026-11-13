@@ -16,9 +16,9 @@ Run `python -m volatility_lab --health` for local JSON diagnostics. Exit 0 means
 
 New local, test, staging and production stores default to per-profile directories in the user's application state directory. An existing local installation with a recognized database or archive manifest continues using its legacy storage. Set an absolute `VOL_LAB_DATA_DIR` to choose the destination explicitly. Stop writers before switching an existing workstation. Private Drive captures remain at their original location.
 
-The reference manifest records SHA-256 of each bundled text artifact with LF-normalized line endings. Startup checks the bundle and copies only missing files. Runtime files are never overwritten by seeding. Update the manifest together with an intentional reference release. Daily official-input deployment writes to a separate Pages artifact.
+The reference manifest records SHA-256 of each bundled text artifact with LF-normalized line endings. Startup checks the bundle and copies only missing files. Reference initialization preserves existing runtime files. Explicit archive replay rebuilds derived observations from their captured broker values. Update the manifest together with an intentional reference release. Daily official-input deployment writes to a separate Pages artifact.
 
-Run `python scripts/fetch_market_data.py --status` to inspect. Run `--seed` explicitly to initialize the observation schema and replay validated complete captures in filename order. The command reports the number of archives examined, invalid archives and processed rows. Summary JSON containing derived IV does not qualify as an IV archive.
+Run `python scripts/fetch_market_data.py --status` to inspect. Run `--seed` explicitly to initialize the observation schema and replay validated complete captures in filename order. The command reports the number of archives examined, invalid archives and processed rows. Replay accepts earlier captures without a session flag only within a verified regular session and checks the underlying quote timestamp. Current web captures require the collector session flag. Summary JSON containing derived IV does not qualify as an IV archive. Sync receipts record the importer version so older imports are reprocessed in batches when provenance logic changes.
 
 ## Configuration and credentials
 
@@ -27,3 +27,5 @@ The supported variables and defaults are in [.env.example](../.env.example). Exp
 ## Reproducible validation
 
 Install the recorded uv version and run `uv sync --locked --extra dev`. For a dependency update, regenerate `uv.lock`, inspect the changes and run the Python matrix, dependency audit and wheel checks. The initial 31% combined branch/statement coverage floor reflects the measured whole-package baseline. CI publishes coverage XML for each Python version.
+
+Python 3.11 is the minimum supported runtime. Python 3.10 resolves to vulnerable versions of Pillow and filelock whose available fixes require a newer interpreter. The CI matrix covers Python 3.11, 3.12 and 3.13.

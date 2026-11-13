@@ -65,3 +65,21 @@ class ExternalReads:
 
 
 external_reads = ExternalReads()
+
+
+def read_url(source, url, *, timeout=20, max_bytes=4_000_000):
+    """Fetch a bounded public response through the shared read policy."""
+    from urllib.request import Request, urlopen
+    from .settings import load_settings
+
+    if load_settings().offline:
+        raise SourceUnavailable("External reads disabled in offline mode")
+
+    def request():
+        with urlopen(Request(url, headers={"User-Agent": "Mozilla/5.0 VolatilityLab"}), timeout=timeout) as response:
+            raw = response.read(max_bytes + 1)
+        if len(raw) > max_bytes:
+            raise ValueError("External response exceeds size limit")
+        return raw
+
+    return external_reads.read(source, request)

@@ -8,7 +8,7 @@ The public website is **[volatilitylab.in](https://volatilitylab.in)**: a static
 
 ## Local development
 
-Python **3.10–3.12** is tested. Python 3.11 is the default development version.
+Python **3.11–3.13** is tested. Python 3.11 is the default development version.
 
 ```sh
 python -m venv .venv

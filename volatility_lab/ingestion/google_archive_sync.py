@@ -18,6 +18,7 @@ STORE=DATA/'google_archive'
 CONFIG=ROOT/'cloud'/'apps_script'/'sync_config.json'
 STREAM_SETTLE_SECONDS=3.0
 LIVE_QUOTE_MAX_AGE_SECONDS=120.0
+IMPORT_VERSION="broker-iv-v2"
 _pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='drive-import')
 _guard=threading.Lock()
 _future=None
@@ -388,16 +389,18 @@ def _sync_once(rate,dividend,spread,verify_receipt=False):
             if (time.time() - info.st_mtime) < STREAM_SETTLE_SECONDS:
                 continue
             known=manifest.get(path.name)
-            if known and known.get('size')==info.st_size and known.get('mtime')==info.st_mtime_ns and (STORE/path.name).is_file() and (STORE/path.name).stat().st_size==known['size']:
+            if known and known.get('import_version')==IMPORT_VERSION and known.get('size')==info.st_size and known.get('mtime')==info.st_mtime_ns and (STORE/path.name).is_file() and (STORE/path.name).stat().st_size==known['size']:
                 if not verify_receipt or hashlib.sha256((STORE/path.name).read_bytes()).hexdigest()==known['sha256']:continue
             raw=path.read_bytes();obj=validated(raw);digest=hashlib.sha256(raw).hexdigest()
             dest=STORE/path.name
             temp=dest.with_suffix('.tmp');temp.write_bytes(raw);os.replace(temp,dest)
             if hashlib.sha256(dest.read_bytes()).hexdigest()!=digest:raise ValueError('Local verification failed')
             with data_lock(timeout=120):import_report(obj,rate,dividend,spread,historical=True)
-            manifest[path.name]={'sha256':digest,'size':len(raw),'mtime':info.st_mtime_ns,'saved_at':pd.Timestamp.now(tz='UTC').isoformat()}
+            manifest[path.name]={'import_version':IMPORT_VERSION,'sha256':digest,'size':len(raw),'mtime':info.st_mtime_ns,'saved_at':pd.Timestamp.now(tz='UTC').isoformat()}
             atomic_json(STORE/'manifest.json',manifest);count+=1
             atomic_json(STORE/'status.json',{'status':'syncing','total_files':len(manifest),'updated':pd.Timestamp.now(tz='UTC').isoformat()})
+            if count >= 50:
+                return count
         except (EOFError, gzip.BadGzipFile, zlib.error, json.JSONDecodeError):
             # Transient Google Drive stream still flushing; retry on next cycle without error penalty
             continue
