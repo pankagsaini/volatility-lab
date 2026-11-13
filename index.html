@@ -2063,7 +2063,7 @@
       // REQUIREMENT 2 & 7: TAB 5 — TRADE IDENTIFICATION MATRIX (S1–S6)
       // ===================================================================
       var STRATEGY_CAPITAL_PER_LOT = {
-        NIFTY: { S1: 28037, S2: 37590, S3: 28037, S4: 56074, S5: 28037, S6: 56074, ALL: 56074 },
+        NIFTY: { S1: 28037, S2: 56074, S3: 28037, S4: 56074, S5: 28037, S6: 56074, ALL: 56074 },
         BANKNIFTY: { S1: 26570, S2: 46718, S3: 26570, S4: 53140, S5: 26570, S6: 53140, ALL: 53140 }
       };
 
@@ -2143,24 +2143,57 @@
           breakEvens: [...new Set(roots.map(k => Number(k.toFixed(4))))].sort((a, b) => a-b) };
       }
 
+      function brokerIvPercent(value) {
+        const iv = liveNumber(value);
+        if (!(iv > 0 && iv <= 500) || (iv > 1 && iv < 5)) return NaN;
+        return iv <= 1 ? iv * 100 : iv;
+      }
+
+      function brokerWingIv_(strikes, prefix, at) {
+        const grouped = new Map();
+        for (const node of strikes) {
+          const d = liveNumber(node[prefix === 'p' ? 'uPutDelta' : 'uCallDelta']) * (prefix === 'p' ? -1 : 1);
+          const iv = brokerIvPercent(node[prefix === 'p' ? 'uPutIv' : 'uCallIv']);
+          if (!(d > 0 && d < 1 && iv > 0) || !liveBookValid(node, prefix, at)) continue;
+          const group = grouped.get(d) || [];
+          group.push(iv);
+          grouped.set(d, group);
+        }
+        let previous;
+        for (const d of Array.from(grouped.keys()).sort((a,b) => a-b)) {
+          const group = grouped.get(d);
+          const iv = group.reduce((sum,v) => sum+v,0) / group.length;
+          if (Math.abs(d-0.25) <= 1e-12) return iv;
+          if (d > 0.25) return previous ? previous.iv + (iv-previous.iv)*(0.25-previous.d)/(d-previous.d) : NaN;
+          previous = {d, iv};
+        }
+        return NaN;
+      }
+
       function evaluateStrategiesForExpiry(item, sym, lots) {
         const K = item.atm, units = (sym === 'NIFTY' ? 65 : 30) * lots;
-        const vrp30 = item.iv - item.hv30, vrp10 = item.iv - item.hv10;
+        const reference = new Date().toISOString();
+        const atm = (item.chain || []).find(node => node.k === K);
+        if (!atm || !liveBookValid(atm, 'c', reference) || !liveBookValid(atm, 'p', reference)) return [];
+        const iv = (brokerIvPercent(atm.uCallIv) + brokerIvPercent(atm.uPutIv)) / 2;
+        if (!Number.isFinite(iv)) return [];
+        const c25 = brokerWingIv_(item.chain, 'c', reference), p25 = brokerWingIv_(item.chain, 'p', reference);
+        const rev25 = p25 - c25, bfly25 = (p25 + c25) / 2 - iv;
+        const vrp30 = iv - item.hv30, vrp10 = iv - item.hv10;
         const basis = item.syn - item.fut;
         const signals = [vrp30 >= 1.5 && item.hv30 <= 16.5 && item.dte >= 2 && item.dte <= 35,
-          vrp30 <= -0.25 || item.iv < item.hv10 || item.ivPct <= 30,
-          item.iv >= 15.2 && vrp30 >= 1 && item.dte <= 22, item.rev25 >= 1.5 && item.dte >= 5,
-          vrp10 >= 0.8 && item.dte <= 16, Math.abs(basis) >= (sym === 'NIFTY' ? 10 : 35) || Math.abs(item.bfly25) >= 0.25];
+          Number.isFinite(vrp30) && Number.isFinite(vrp10) && (vrp30 <= -0.25 || iv < item.hv10),
+          iv >= 15.2 && vrp30 >= 1 && item.dte <= 22, rev25 >= 1.5 && item.dte >= 5,
+          vrp10 >= 0.8 && item.dte <= 16, Math.abs(basis) >= (sym === 'NIFTY' ? 10 : 35) || Math.abs(bfly25) >= 0.25];
         const names = ['S1 · VRP Harvest Iron Condor', 'S2 · Gamma Expansion Long Straddle', 'S3 · Post-Event Front-Week Crush Fly', 'S4 · Steep Put Skew Ratio (1x2)', 'S5 · Intraday Theta Iron Butterfly', 'S6 · Synthetic Basis Skewed Condor'];
         const metrics = [
-          'IV ' + item.iv.toFixed(2) + '% · HV30 ' + item.hv30.toFixed(2) + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp',
-          'IV ' + item.iv.toFixed(2) + '% · HV10 ' + item.hv10.toFixed(2) + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp',
-          'ATM IV ' + item.iv.toFixed(2) + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp · DTE ' + item.dte.toFixed(0) + 'd',
-          'RR25 ' + (item.rev25 >= 0 ? '+' : '') + item.rev25.toFixed(2) + ' pp · BF25 ' + (item.bfly25 >= 0 ? '+' : '') + item.bfly25.toFixed(2) + ' pp',
-          'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp · HV10 ' + item.hv10.toFixed(2) + '% · PCR ' + (item.pcr || 1.0).toFixed(2),
-          'Basis ' + (isFinite(basis) ? (basis >= 0 ? '+' : '') + basis.toFixed(1) + ' pts' : 'unavailable') + ' · BF25 ' + (item.bfly25 >= 0 ? '+' : '') + item.bfly25.toFixed(2) + ' pp'];
-        const chain = new Map((item.chain || []).map(node => [node.k, node]));
-        const reference = new Date().toISOString();
+          'IV ' + iv.toFixed(2) + '% · HV30 ' + formatLiveNumber(item.hv30, 2) + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp',
+          'IV ' + iv.toFixed(2) + '% · HV10 ' + formatLiveNumber(item.hv10, 2) + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp',
+          'ATM IV ' + iv.toFixed(2) + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp · DTE ' + item.dte.toFixed(0) + 'd',
+          'RR25 ' + (rev25 >= 0 ? '+' : '') + formatLiveNumber(rev25, 2) + ' pp · BF25 ' + (bfly25 >= 0 ? '+' : '') + formatLiveNumber(bfly25, 2) + ' pp',
+          'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp · HV10 ' + formatLiveNumber(item.hv10, 2) + '% · PCR ' + (item.pcr || 1.0).toFixed(2),
+          'Basis ' + (isFinite(basis) ? (basis >= 0 ? '+' : '') + basis.toFixed(1) + ' pts' : 'unavailable') + ' · BF25 ' + (bfly25 >= 0 ? '+' : '') + formatLiveNumber(bfly25, 2) + ' pp'];
+        const chain = new Map(item.chain.map(node => [node.k, node]));
         const result = [];
         signals.forEach((signal, i) => {
           const code = 'S' + (i + 1), legs = buildStrategyLegs_(sym, K, code);
@@ -2168,7 +2201,7 @@
             const node = chain.get(leg.strike), prefix = leg.type === 'CE' ? 'c' : 'p';
             const side = leg.side > 0 ? 'Ask' : 'Bid';
             if (!node || !liveBookValid(node, prefix, reference) || node[prefix + side + 'Qty'] < units * leg.mult) return;
-            leg.entryPx = node[prefix + side];
+            leg.entryPx = Number(node[prefix + side].toFixed(2));
           }
           const payoff = expiryPayoff(legs, units);
           if (code === 'S2' ? payoff.netPremium >= 0 : payoff.netPremium <= 0) return;
@@ -2720,7 +2753,6 @@
 
       function buildStrategyLegsForItem(item, sym, stratCode) {
         throw new Error('Browser-side forward-trade construction is disabled; use the cloud ledger.');
-
       }
 
       function forwardNumber(value, fallback) {

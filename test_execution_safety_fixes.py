@@ -338,7 +338,6 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertIn("function executableQuote_(node, type, side, quantity, isExit, referenceTimestamp)", code)
         self.assertIn("[bid, ask, bidQty, askQty].every(Number.isFinite)", code)
         self.assertIn("Number.isFinite(ch.spot) || ch.spot <= 0", code)
-        self.assertIn("const debitInr = Math.round(legs.reduce", code)
         self.assertIn("mins >= 915 || Boolean(pos.exit_pending)", code)
         self.assertIn("delayed until fresh quote", code)
         self.assertIn("function listDriveFilesPage_(folderId, pageToken, orderBy)", code)

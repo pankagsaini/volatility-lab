@@ -494,23 +494,33 @@ def build_strategy_legs(symbol: str, atm_strike: int, strat_code: str) -> list[d
 
 def expiry_payoff(legs, units):
     """Expiry bounds (INR, before fees) on nonnegative spot. None denotes an unbounded tail."""
-    premium = -sum(l['side'] * l['mult'] * l['entryPx'] for l in legs)
-    strikes = sorted({0, *(l['strike'] for l in legs)})
+    premium = -sum(leg["side"] * leg.get("mult", 1) * leg["entryPx"] for leg in legs)
+    strikes = sorted({0, *(leg["strike"] for leg in legs)})
+
     def pnl(spot):
-        return premium + sum(l['side'] * l['mult'] * max(0, (spot - l['strike']) *
-                             (1 if l['type'] == 'CE' else -1)) for l in legs)
-    values = [pnl(k) for k in strikes]
-    roots = [k for k, value in zip(strikes, values) if abs(value) < 1e-9]
-    for a, b, x, y in zip(strikes, strikes[1:], values, values[1:]):
-        if x * y < 0:
-            roots.append(a - x * (b - a) / (y - x))
-    slope = sum(l['side'] * l['mult'] for l in legs if l['type'] == 'CE')
+        total = premium
+        for leg in legs:
+            direction = 1 if leg["type"] == "CE" else -1
+            intrinsic = max(0, direction * (spot - leg["strike"]))
+            total += leg["side"] * leg.get("mult", 1) * intrinsic
+        return total
+
+    values = [pnl(strike) for strike in strikes]
+    roots = [strike for strike, value in zip(strikes, values) if abs(value) < 1e-9]
+    for left, right, low, high in zip(strikes, strikes[1:], values, values[1:]):
+        if low * high < 0:
+            roots.append(left - low * (right - left) / (high - low))
+    slope = sum(leg["side"] * leg.get("mult", 1) for leg in legs if leg["type"] == "CE")
     if slope and -values[-1] / slope > 0:
         roots.append(strikes[-1] - values[-1] / slope)
-    return {'netPremiumPoints': round(premium, 8), 'netPremium': round(premium * units, 2),
-            'maxProfit': None if slope > 0 else round(max(0, max(values)) * units, 2),
-            'maxLoss': None if slope < 0 else round(max(0, -min(values)) * units, 2),
-            'breakEvens': sorted({round(k, 4) for k in roots})}
+    return {
+        "netPremiumPoints": round(premium, 8),
+        "netPremium": round(premium * units, 2),
+        "maxProfit": None if slope > 0 else round(max(0, max(values)) * units, 2),
+        "maxLoss": None if slope < 0 else round(max(0, -min(values)) * units, 2),
+        "breakEvens": sorted({round(strike, 4) for strike in roots}),
+    }
+
 
 
 def format_legs_summary(legs: list[dict[str, Any]], mode: str = "entry") -> str:
@@ -626,11 +636,13 @@ def evaluate_strategies_for_chain(
     sym = str(symbol).upper()
     step = 50 if sym == "NIFTY" else 100
     lot_qty = (65 if sym == "NIFTY" else 30) * max(1, int(lots))
-    K = int(round(float(spot) / step) * step)
+    if not np.isfinite(float(spot)) or float(spot) <= 0:
+        return []
+    K = int(np.floor(float(spot) / step + 0.5) * step)
 
     strike_map = _build_strike_quote_map(chain_rows)
 
-    if not np.isfinite(float(spot)) or float(spot) <= 0 or not strike_map or K not in strike_map:
+    if K not in strike_map:
         # Data integrity gate: cannot evaluate setups without valid ATM strikes
         return []
 
