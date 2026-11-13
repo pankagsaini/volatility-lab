@@ -75,12 +75,27 @@ def forecast_paths(history):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'docs/data/smile-forecasts.json')
+    parser.add_argument('--previous', type=Path, help='Previously deployed forecast artifact')
     parser.add_argument('--through', type=date.fromisoformat, default=datetime.now(IST).date() - timedelta(days=1))
     args = parser.parse_args()
     if args.through >= datetime.now(IST).date():
         parser.error('--through must be before the current IST date')
 
     artifact = {'schema': 1, 'source': 'Upstox daily index candles', 'models': {}}
+    for file in (args.previous, args.output):
+        if file is None or not file.is_file():
+            continue
+        try:
+            previous = json.loads(file.read_text(encoding='utf-8'))
+            if previous.get('schema') != artifact['schema'] or previous.get('source') != artifact['source']:
+                continue
+            for symbol in INDICES:
+                saved = artifact['models'].setdefault(symbol, {})
+                saved.update({day: values for day, values in previous['models'].get(symbol, {}).items()
+                              if date.fromisoformat(day) <= args.through})
+        except (OSError, ValueError, AttributeError, KeyError) as error:
+            print(f'Ignoring unreadable prior forecasts ({error})', file=sys.stderr)
+
     for symbol, instrument in INDICES.items():
         try:
             paths = forecast_paths(broker_history(instrument, args.through))
@@ -88,9 +103,15 @@ def main():
             print(f'{symbol} forecasts unavailable ({error})', file=sys.stderr)
             continue
         if paths:
-            artifact['models'][symbol] = paths
-            print(f'{symbol} fitted through {max(paths)}')
+            saved = artifact['models'].get(symbol, {})
+            for day, values in paths.items():
+                if values['garch_variances'] is not None or not saved.get(day, {}).get('garch_variances'):
+                    saved[day] = values
+            artifact['models'][symbol] = saved
+            print(f'{symbol} fetched through {max(paths)}, publishing through {max(saved)}')
 
+    artifact['models'] = {symbol: dict(sorted(paths.items())[-5:])
+                          for symbol, paths in artifact['models'].items() if paths}
     if not artifact['models']:
         raise SystemExit('No valid forecast origins. Retaining the previous artifact.')
     args.output.parent.mkdir(parents=True, exist_ok=True)
