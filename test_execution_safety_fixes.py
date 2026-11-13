@@ -18,12 +18,8 @@ import forward_test
 
 class TestExecutionSafetyFixes(unittest.TestCase):
     @staticmethod
-    def _read_docs_range(start, end):
-        path = ROOT / "docs" / "index.html"
-        with path.open(encoding="utf-8") as stream:
-            for _ in range(start - 1):
-                next(stream, None)
-            return "".join(next(stream, "") for _ in range(end - start + 1))
+    def _read_docs_html():
+        return (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
     @staticmethod
     def _chain_row(
@@ -404,7 +400,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the browser Black-76 helpers")
     def test_browser_black76_handles_expiry_and_keeps_missing_inputs_unpriced(self):
-        html = self._read_docs_range(1180, 1400)
+        html = self._read_docs_html()
 
         def function_source(name, next_name):
             start = html.index(f"function {name}(")
@@ -451,8 +447,8 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_browser_forward_workspace_never_recalculates_or_persists_cloud_ledger(self):
-        html = self._read_docs_range(675, 3400)
-        self.assertIn("CLOUD-AUTHORITATIVE FORWARD-TEST LEDGER", html)
+        html = self._read_docs_html()
+        self.assertIn("Cloud ledger · paper trading", html)
         self.assertIn("MTM WITHHELD — STALE MARK", html)
         self.assertIn("isFreshValidatedCloudSnapshot(payload)", html)
         self.assertIn("isFreshCloudForwardLedger(cloudLedger, snapshot)", html)
