@@ -46,7 +46,7 @@ jobs:
 
       - name: Run Automated Remediation & Audit Tests
         run: |
-          python -m pytest -ra --cov=volatility_lab --cov-branch --cov-report=term:skip-covered --cov-report=xml --cov-fail-under=31
+          python -m pytest -ra --cov=volatility_lab --cov-branch --cov-report=term:skip-covered --cov-report=xml --cov-fail-under=35
 
       - name: Audit installed dependencies
         run: python -m pip_audit --requirement "$RUNNER_TEMP/volatility-lock.txt" --require-hashes --disable-pip

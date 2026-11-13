@@ -26,6 +26,6 @@ The supported variables and defaults are in [.env.example](../.env.example). Exp
 
 ## Reproducible validation
 
-Install the recorded uv version and run `uv sync --locked --extra dev`. For a dependency update, regenerate `uv.lock`, inspect the changes and run the Python matrix, dependency audit and wheel checks. The initial 31% combined branch/statement coverage floor reflects the measured whole-package baseline. CI publishes coverage XML for each Python version.
+Install the recorded uv version and run `uv sync --locked --extra dev`. For a dependency update, regenerate `uv.lock`, inspect the changes and run the Python matrix, dependency audit and wheel checks. The combined branch/statement coverage floor is 35%, raised from the original 31% baseline after startup, replay and property tests were added. CI publishes coverage XML for each Python version.
 
 Python 3.11 is the minimum supported runtime. Python 3.10 resolves to vulnerable versions of Pillow and filelock whose available fixes require a newer interpreter. The CI matrix covers Python 3.11, 3.12 and 3.13.

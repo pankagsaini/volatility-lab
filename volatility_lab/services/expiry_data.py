@@ -109,7 +109,9 @@ def history(symbol,expiry,config):
 
         marks=','.join('?' for _ in keys)
 
-        frame=pd.read_sql_query(f"SELECT date AS Date,iv AS IV,spread AS Spread,source AS Source,config AS Config FROM expiry_observations WHERE symbol=? AND expiry=? AND source='Upstox supplied IV (Google Cloud)' AND config IN ({marks}) ORDER BY date",con,params=[symbol,str(expiry),*keys],parse_dates=['Date'])
+        frame=pd.read_sql_query(f"SELECT date AS Date,expiry AS Expiry,iv AS IV,spread AS Spread,source AS Source,config AS Config FROM expiry_observations WHERE symbol=? AND expiry=? AND source='Upstox supplied IV (Google Cloud)' AND config IN ({marks}) ORDER BY date",con,params=[symbol,str(expiry),*keys],parse_dates=['Date'])
+        from volatility_lab.storage.snapshot_history import exclude_modeled_daily
+        frame=exclude_modeled_daily(frame,con,symbol).drop(columns='Expiry')
 
         frame['_preferred']=frame.Config.eq(config)
 

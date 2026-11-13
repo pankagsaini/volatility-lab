@@ -140,3 +140,18 @@ def test_bundled_snapshot_matches_its_recorded_broker_chain():
         assert row['Source'] == 'Upstox supplied Greeks'
         assert row['Call IV'] == call and row['Put IV'] == put and row['IV'] == (call + put) / 2
         assert row['Archive SHA256'] == payload['archive_sha256']
+
+
+def test_legacy_modeled_daily_row_is_quarantined_until_replayed(tmp_path):
+    from volatility_lab.services.option_context import recorded_context
+
+    path = tmp_path / 'history.sqlite'
+    with sqlite3.connect(path) as con:
+        con.execute('CREATE TABLE expiry_observations(date,symbol,expiry,config,iv,spread,source)')
+        con.execute('CREATE TABLE intraday_observations(symbol,expiry,config,as_of,payload)')
+        con.execute('INSERT INTO expiry_observations VALUES(?,?,?,?,?,?,?)',
+                    ('2026-11-13', 'NIFTY', '2026-11-17', 'cfg', 99, 85, 'Upstox supplied IV (Google Cloud)'))
+        con.execute('INSERT INTO intraday_observations VALUES(?,?,?,?,?)',
+                    ('NIFTY', '2026-11-17', 'cfg', '2026-11-13T10:30:00+05:30',
+                     json.dumps({'IV': 99, 'Source': 'Upstox L1 LTP + Black-76 Forward Model'})))
+    assert recorded_context(path, 'NIFTY', 'cfg').empty
