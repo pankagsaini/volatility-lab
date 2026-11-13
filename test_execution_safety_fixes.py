@@ -50,6 +50,13 @@ class TestExecutionSafetyFixes(unittest.TestCase):
             },
         }
 
+    def _priced_row(self, strike, timestamp):
+        time_value = 200 / (1 + abs(strike - 25050) / 150)
+        call = time_value + max(0, 25050 - strike)
+        put = time_value + max(0, strike - 25050)
+        row = self._chain_row(strike, call - .5, call + .5, put - .5, put + .5, quote_time=timestamp)
+        return dict(row, underlying_spot_price=25050.0)
+
     @staticmethod
     def _position():
         return {
@@ -102,7 +109,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
 
         def payload(timestamp):
             rows = [
-                dict(self._chain_row(strike, quote_time=timestamp), underlying_spot_price=25050.0)
+                self._priced_row(strike, timestamp)
                 for strike in range(24000, 26100, 50)
             ]
             return {
@@ -136,7 +143,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
     def test_partial_snapshot_cannot_create_or_mark_forward_positions(self):
         timestamp = "2026-11-11T09:20:00+05:30"
         rows = [
-            dict(self._chain_row(strike, quote_time=timestamp), underlying_spot_price=25050.0)
+            self._priced_row(strike, timestamp)
             for strike in range(24000, 26100, 50)
         ]
         complete_payload = {

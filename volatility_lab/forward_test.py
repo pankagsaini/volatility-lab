@@ -14,14 +14,18 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import re
+import shutil
+from uuid import uuid4
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
+from collector_support import atomic_json, data_lock
 
 try:
     import broker_charges
@@ -152,6 +156,7 @@ def _build_strike_quote_map(chain_rows: list[dict[str, Any]]) -> dict[int, dict[
                 "cBidQty": cm.get("bid_qty"), "cAskQty": cm.get("ask_qty"),
                 "pBid": pm.get("bid_price"), "pAsk": pm.get("ask_price"),
                 "pBidQty": pm.get("bid_qty"), "pAskQty": pm.get("ask_qty"),
+                "cDelta": cg.get("delta"), "pDelta": pg.get("delta"),
                 "cIv": cg.get("iv"), "pIv": pg.get("iv"),
             }
             quote_timestamps = {
@@ -166,6 +171,7 @@ def _build_strike_quote_map(chain_rows: list[dict[str, Any]]) -> dict[int, dict[
                 "cBidQty": row.get("cBidQty"), "cAskQty": row.get("cAskQty"),
                 "pBid": row.get("pBid"), "pAsk": row.get("pAsk"),
                 "pBidQty": row.get("pBidQty"), "pAskQty": row.get("pAskQty"),
+                "cDelta": row.get("cDelta"), "pDelta": row.get("pDelta"),
                 "cIv": row.get("cIv") or row.get("iv"),
                 "pIv": row.get("pIv") or row.get("iv"),
             }
@@ -207,7 +213,7 @@ def _executable_quote(
     ask_qty = float(node.get(prefix + "AskQty", 0.0))
     if not all(np.isfinite(value) for value in (bid, ask, bid_qty, ask_qty)):
         return 0.0
-    if not (bid > 0.0 and ask >= bid and ask > 0.0):
+    if not (bid > 0.0 and ask >= bid and bid_qty > 0 and ask_qty > 0):
         return 0.0
     is_buy = (side < 0) if is_exit else (side > 0)
     depth = ask_qty if is_buy else bid_qty
@@ -403,6 +409,8 @@ def sanitize_forward_ledger(raw_ledger: dict[str, Any] | None) -> dict[str, Any]
     base["open_positions"] = open_pos
     base["closed_trades"] = closed_tr
     base["intraday_mtm_series"] = mtm_series
+    if "_ledger_revision" in raw_ledger:
+        base["_ledger_revision"] = raw_ledger["_ledger_revision"]
     if any(p.get("manual_reconciliation_required") for p in open_pos):
         base["status"] = "INTEGRITY_REVIEW_REQUIRED"
     elif open_pos or closed_tr:
@@ -484,6 +492,27 @@ def build_strategy_legs(symbol: str, atm_strike: int, strat_code: str) -> list[d
     raise ValueError(f"Unknown strategy code: {strat_code}")
 
 
+def expiry_payoff(legs, units):
+    """Expiry bounds (INR, before fees) on nonnegative spot. None denotes an unbounded tail."""
+    premium = -sum(l['side'] * l['mult'] * l['entryPx'] for l in legs)
+    strikes = sorted({0, *(l['strike'] for l in legs)})
+    def pnl(spot):
+        return premium + sum(l['side'] * l['mult'] * max(0, (spot - l['strike']) *
+                             (1 if l['type'] == 'CE' else -1)) for l in legs)
+    values = [pnl(k) for k in strikes]
+    roots = [k for k, value in zip(strikes, values) if abs(value) < 1e-9]
+    for a, b, x, y in zip(strikes, strikes[1:], values, values[1:]):
+        if x * y < 0:
+            roots.append(a - x * (b - a) / (y - x))
+    slope = sum(l['side'] * l['mult'] for l in legs if l['type'] == 'CE')
+    if slope and -values[-1] / slope > 0:
+        roots.append(strikes[-1] - values[-1] / slope)
+    return {'netPremiumPoints': round(premium, 8), 'netPremium': round(premium * units, 2),
+            'maxProfit': None if slope > 0 else round(max(0, max(values)) * units, 2),
+            'maxLoss': None if slope < 0 else round(max(0, -min(values)) * units, 2),
+            'breakEvens': sorted({round(k, 4) for k in roots})}
+
+
 def format_legs_summary(legs: list[dict[str, Any]], mode: str = "entry") -> str:
     """Format option legs into concise trader notation."""
     parts = []
@@ -502,39 +531,77 @@ def format_legs_summary(legs: list[dict[str, Any]], mode: str = "entry") -> str:
     return " / ".join(parts)
 
 
+def _validate_ledger(raw):
+    for field in ("open_positions", "closed_trades", "intraday_mtm_series"):
+        rows = raw.get(field) if isinstance(raw, dict) else None
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise ValueError(f"Invalid forward ledger field {field}")
+        for row in rows:
+            stamp = row.get("session_date") or row.get("date")
+            if field != "intraday_mtm_series" or stamp is not None:
+                datetime.strptime(str(stamp)[:10], "%Y-%m-%d")
+
+
+def _read_ledger(path):
+    content = path.read_bytes()
+    try:
+        raw = json.loads(content)
+        _validate_ledger(raw)
+    except (ValueError, UnicodeError) as exc:
+        raise ValueError(f"Invalid forward ledger at {path}. Restore a validated backup.") from exc
+    return raw, hashlib.sha256(content).hexdigest()
+
+
 def load_forward_ledger(data_dir: Path | None = None) -> dict[str, Any]:
-    """Load forward_test_ledger.json from data_dir and enforce clean-slate forward-only filter (>= 2026-11-11)."""
-    base = Path(data_dir) if data_dir is not None else DATA_DIR
-    candidates = [
-        base / LEDGER_FILENAME,
-        ROOT / "data" / LEDGER_FILENAME,
-        ROOT.parent / "data" / LEDGER_FILENAME,
-    ]
-    for path in candidates:
-        if path.is_file():
-            try:
-                raw = json.loads(path.read_text(encoding="utf-8"))
-                return sanitize_forward_ledger(raw)
-            except Exception:
-                pass
-    return copy.deepcopy(CLEAN_SLATE_LEDGER)
+    target = Path(data_dir or DATA_DIR) / LEDGER_FILENAME
+    try:
+        raw, revision = _read_ledger(target)
+    except FileNotFoundError:
+        if target.with_suffix(".bak").exists():
+            raise ValueError(f"Missing forward ledger at {target}. Restore the existing backup.")
+        return copy.deepcopy(CLEAN_SLATE_LEDGER)
+    return {**sanitize_forward_ledger(raw), "_ledger_revision": revision}
 
 
 def save_forward_ledger(ledger: dict[str, Any], data_dir: Path | None = None) -> Path:
-    """Persist sanitized forward_test_ledger.json to disk."""
+    """Reject stale writers and atomically preserve the previous validated version."""
+    _validate_ledger(ledger)
     clean = sanitize_forward_ledger(ledger)
-    base = Path(data_dir) if data_dir is not None else DATA_DIR
-    base.mkdir(parents=True, exist_ok=True)
-    target = base / LEDGER_FILENAME
-    target.write_text(json.dumps(clean, indent=2), encoding="utf-8")
+    expected = clean.pop("_ledger_revision", None)
+    target = Path(data_dir or DATA_DIR) / LEDGER_FILENAME
+    with data_lock(lock_path=target.with_suffix(".lock")):
+        try:
+            previous, revision = _read_ledger(target)
+        except FileNotFoundError:
+            if target.with_suffix(".bak").exists():
+                raise ValueError("Missing forward ledger. Restore the existing backup.")
+            previous, revision = None, None
+        if expected != revision:
+            raise RuntimeError("Forward ledger changed. Reload before saving.")
+        if previous is not None:
+            atomic_json(target.with_suffix(".bak"), previous)
+        atomic_json(target, clean)
+        ledger["_ledger_revision"] = hashlib.sha256(target.read_bytes()).hexdigest()
     return target
 
 
 def reset_forward_ledger(data_dir: Path | None = None) -> dict[str, Any]:
     """Reset forward_test_ledger.json to a clean-slate armed state for 2026-11-11 onwards."""
     clean = copy.deepcopy(CLEAN_SLATE_LEDGER)
+    clean["_ledger_revision"] = load_forward_ledger(data_dir).get("_ledger_revision")
     save_forward_ledger(clean, data_dir=data_dir)
     return clean
+
+
+def restore_forward_ledger(data_dir: Path | None = None) -> dict[str, Any]:
+    """Explicitly restore the validated backup, retaining any damaged original."""
+    target = Path(data_dir or DATA_DIR) / LEDGER_FILENAME
+    with data_lock(lock_path=target.with_suffix(".lock")):
+        previous, _ = _read_ledger(target.with_suffix(".bak"))
+        if target.exists():
+            shutil.copyfile(target, target.with_suffix(f".{uuid4().hex}.before-restore"))
+        atomic_json(target, previous)
+        return load_forward_ledger(data_dir)
 
 
 def evaluate_strategies_for_chain(
@@ -598,29 +665,23 @@ def evaluate_strategies_for_chain(
     if not np.isfinite(basis):
         basis = np.nan
 
-    w_short = 200 if sym == "NIFTY" else 400
-    p25_node = strike_map.get(K - w_short)
-    c25_node = strike_map.get(K + w_short)
-    p25_iv = _iv_percent(p25_node.get("pIv")) if p25_node else None
-    c25_iv = _iv_percent(c25_node.get("cIv")) if c25_node else None
-    wings_valid = p25_iv is not None and c25_iv is not None
-    if require_event_timestamps:
-        wings_valid = wings_valid and bool(p25_node and c25_node) and all(
-            _quote_timestamp_is_fresh(node.get(prefix + "QuoteTimestamp"), quote_reference)
-            for node, prefix in ((p25_node, "p"), (c25_node, "c"))
-        )
-    if rev25 is None:
-        rev25 = round(p25_iv - c25_iv, 2) if wings_valid else np.nan
-    if bfly25 is None:
-        bfly25 = round(0.5 * (p25_iv + c25_iv) - iv, 2) if wings_valid else np.nan
-    try:
-        rev25_value = float(rev25)
-    except (TypeError, ValueError, OverflowError):
-        rev25_value = np.nan
-    try:
-        bfly25_value = float(bfly25)
-    except (TypeError, ValueError, OverflowError):
-        bfly25_value = np.nan
+    # Broker-reported signed option delta; use absolute delta for interpolation.
+    from option_math import delta_iv
+    wing_rows = []
+    for node in strike_map.values():
+        for prefix, kind in [('c', 'CE'), ('p', 'PE')]:
+            delta = node[prefix + 'Delta']
+            wing_iv = _iv_percent(node[prefix + 'Iv'])
+            if not wing_iv or not (0 < delta * (1 if kind == 'CE' else -1) < 1):
+                continue
+            if require_event_timestamps and not _quote_timestamp_is_fresh(node[prefix + 'QuoteTimestamp'], quote_reference):
+                continue
+            wing_rows.append({'option_type': kind, 'delta': delta, 'iv': wing_iv})
+    surface = pd.DataFrame(wing_rows, columns=['option_type', 'delta', 'iv'])
+    p25_iv, c25_iv = (delta_iv(surface, kind, .25) for kind in ('PE', 'CE'))
+    wings_valid = np.isfinite(p25_iv) and np.isfinite(c25_iv)
+    rev25_value = p25_iv - c25_iv
+    bfly25_value = (p25_iv + c25_iv) / 2 - iv
 
     trig_defs = [
         ("S1", hv30_valid and vrp30 >= 1.50 and hv30_value <= 16.5 and 2 <= dte <= 35,
@@ -663,16 +724,11 @@ def evaluate_strategies_for_chain(
             continue
 
         cap_base = STRATEGY_CAPITAL_PER_LOT.get(sym, STRATEGY_CAPITAL_PER_LOT["NIFTY"])[s_code] * max(1, int(lots))
-        if s_code == "S2":
-            deb_inr = round(sum(l["entryPx"] * lot_qty * l["mult"] for l in legs), 2)
-            cap = max(cap_base, int(deb_inr))
-            max_cr = round(deb_inr * 0.65, 2)
-            max_loss = deb_inr
-        else:
-            cred_pts = max(15.0, sum((-l["side"]) * l["mult"] * l["entryPx"] for l in legs))
-            cap = cap_base
-            max_cr = round(cred_pts * (lot_qty // max(1, int(lots))) * max(1, int(lots)), 2)
-            max_loss = round((120 if sym == "NIFTY" else 300) * lot_qty, 2) if s_code in ("S4", "S6") else round(max(30.0, (300 if sym == "NIFTY" else 600) - cred_pts) * lot_qty, 2)
+        payoff = expiry_payoff(legs, lot_qty)
+        premium = payoff['netPremium']
+        if (s_code == 'S2' and premium >= 0) or (s_code != 'S2' and premium <= 0):
+            continue
+        cap = max(cap_base, -premium)
 
         chg = compute_position_charges(date_str, sym, legs, lots=lots, include_exit=True)
         results.append({
@@ -693,8 +749,9 @@ def evaluate_strategies_for_chain(
             "metrics": metrics_txt,
             "legs": legs,
             "capital": cap,
-            "maxCredit": max_cr,
-            "maxLoss": max_loss,
+            **payoff,
+            "lots": max(1, int(lots)),
+            "maxCredit": max(0.0, premium),
             "entryIv": iv,
             "curIv": iv,
             "grossMtm": 0.0,
@@ -741,7 +798,8 @@ def mark_open_positions_to_market(
             still_open.append(pos)
             continue
         exit_was_pending = bool(pos.get("exit_pending"))
-        lot_qty = 65 if sym == "NIFTY" else 30
+        position_lots = int(pos.get("lots", 1))
+        lot_qty = LOT_SIZES[sym] * position_lots
         key = f"{sym}|{exp}"
         chain_rows = live_chains.get(key) or live_chains.get((sym, exp)) or []  # type: ignore
         strike_map = _build_strike_quote_map(chain_rows)
@@ -785,7 +843,7 @@ def mark_open_positions_to_market(
                 qty = lot_qty * int(leg.get("mult", 1))
                 gross += (e_px - cur_px) * qty if int(leg["side"]) < 0 else (cur_px - e_px) * qty
             pos["grossMtm"] = round(gross, 2)
-            pos["estCharges"] = compute_position_charges(pos.get("date", MIN_FORWARD_DATE), sym, pos["legs"], lots=1, include_exit=True)
+            pos["estCharges"] = compute_position_charges(pos.get("date", MIN_FORWARD_DATE), sym, pos["legs"], lots=position_lots, include_exit=True)
             pos["netMtm"] = round(pos["grossMtm"] - pos["estCharges"], 2)
             pos["markedAt"] = current_time_ist
 
@@ -794,15 +852,17 @@ def mark_open_positions_to_market(
         pos["mtmPath"] = mtm_path
 
         cap = float(pos.get("capital", 28037))
-        max_cr = float(pos.get("maxCredit", 12000))
-        max_loss = float(pos.get("maxLoss", 9000))
+        bounds = expiry_payoff(legs, lot_qty)
+        pos.update(bounds)
+        max_cr = pos["maxCredit"] = max(0.0, bounds["netPremium"])
+        max_loss = bounds["maxLoss"]
 
         sl_thresh = None
         if sl_rule == "SL_25_CAP":
             sl_thresh = -0.25 * cap
-        elif sl_rule == "SL_50_MAXLOSS":
+        elif sl_rule == "SL_50_MAXLOSS" and max_loss is not None:
             sl_thresh = -0.50 * max_loss
-        elif sl_rule == "SL_30_IV":
+        elif sl_rule == "SL_30_IV" and max_loss is not None:
             sl_thresh = -0.35 * max_loss
 
         tp_thresh = None
@@ -841,6 +901,7 @@ def mark_open_positions_to_market(
                 "legsText": format_legs_summary(pos["legs"], mode="closed"),
                 "legs": pos["legs"],
                 "capital": cap,
+                **{k: pos[k] for k in ("netPremiumPoints", "netPremium", "maxProfit", "breakEvens", "lots") if k in pos},
                 "maxCredit": max_cr,
                 "maxLoss": max_loss,
                 "entryIv": pos.get("entryIv", 16.0),
@@ -1141,8 +1202,9 @@ def simulate_forward_portfolio(
         if strat_filter != "ALL" and pos["strat"] != strat_filter:
             continue
         p = copy.deepcopy(pos)
-        p["simCapital"] = round(float(p["capital"]) * lots, 2)
-        p["simGrossMtm"] = round(float(p["grossMtm"]) * lots, 2)
+        scale = lots / p.get("lots", 1)
+        p["simCapital"] = round(float(p["capital"]) * scale, 2)
+        p["simGrossMtm"] = round(float(p["grossMtm"]) * scale, 2)
         p["simCharges"] = compute_position_charges(p.get("date", MIN_FORWARD_DATE), p["sym"], p["legs"], lots=lots, include_exit=True)
         p["simNetMtm"] = round(p["simGrossMtm"] - p["simCharges"], 2)
         p["simRocPct"] = round((p["simNetMtm"] / p["simCapital"]) * 100.0, 2) if p["simCapital"] > 0 else 0.0
@@ -1155,17 +1217,19 @@ def simulate_forward_portfolio(
         if strat_filter != "ALL" and tr["strat"] != strat_filter:
             continue
         t = copy.deepcopy(tr)
-        cap = float(t["capital"]) * lots
-        max_cr = float(t.get("maxCredit", cap * 0.45)) * lots
-        max_loss = float(t.get("maxLoss", cap * 0.35)) * lots
+        scale = lots / t.get("lots", 1)
+        cap = float(t["capital"]) * scale
+        bounds = expiry_payoff(t["legs"], LOT_SIZES[t["sym"]] * lots)
+        max_cr = max(0, bounds["netPremium"])
+        max_loss = bounds["maxLoss"]
         chg = compute_position_charges(t.get("date", MIN_FORWARD_DATE), t["sym"], t["legs"], lots=lots, include_exit=True)
 
         sl_thresh = None
         if sl_rule == "SL_25_CAP":
             sl_thresh = -0.25 * cap
-        elif sl_rule == "SL_50_MAXLOSS":
+        elif sl_rule == "SL_50_MAXLOSS" and max_loss is not None:
             sl_thresh = -0.50 * max_loss
-        elif sl_rule == "SL_30_IV":
+        elif sl_rule == "SL_30_IV" and max_loss is not None:
             sl_thresh = -0.35 * max_loss
 
         tp_thresh = None
@@ -1174,12 +1238,12 @@ def simulate_forward_portfolio(
         elif tp_rule == "TP_75":
             tp_thresh = (0.50 * max_loss) if t["strat"] == "S2" else (0.75 * max_cr)
 
-        raw_gross = float(t["gross"]) * lots
+        raw_gross = float(t["gross"]) * scale
         exit_time = t.get("exitTime", "15:15 IST")
         exit_reason = t.get("exitReason", "15:15 IST Auto-Close")
 
         for pt in t.get("mtmPath", []):
-            g_val = float(pt["gross"]) * lots
+            g_val = float(pt["gross"]) * scale
             if sl_thresh is not None and g_val <= sl_thresh:
                 raw_gross = round(sl_thresh, 2)
                 exit_time = f"{pt['t']} IST" if "IST" not in str(pt["t"]) else str(pt["t"])

@@ -2067,164 +2067,119 @@
         BANKNIFTY: { S1: 26570, S2: 46718, S3: 26570, S4: 53140, S5: 26570, S6: 53140, ALL: 53140 }
       };
 
-      function evaluateStrategiesForExpiry(item, sym, lots) {
-        var step = sym === 'NIFTY' ? 50 : 100;
-        var lotSize = (sym === 'NIFTY' ? 65 : 30) * lots;
-        var K = item.atm || (Math.round(item.spot / step) * step);
-        var vrp30 = item.iv - item.hv30;
-        var vrp10 = item.iv - item.hv10;
-        var basis = (isFinite(item.syn) && isFinite(item.fut)) ? item.syn - item.fut : NaN;
-        var stradPts = item.strad;
-        var capMap = STRATEGY_CAPITAL_PER_LOT[sym] || STRATEGY_CAPITAL_PER_LOT.NIFTY;
-
-        var wShort = sym === 'NIFTY' ? 200 : 400;
-        var wLong = sym === 'NIFTY' ? 500 : 1000;
-        var flyWing = sym === 'NIFTY' ? 350 : 700;
-        var tightWing = sym === 'NIFTY' ? 250 : 500;
-
-        // Compute exact option credits/debits from real Upstox chain strikes when available
-        var chainMap = {};
-        (item.chain || []).forEach(function(n) { chainMap[n.k] = n; });
-        function legPx(kTarget, kind, fallbackPts) {
-          var node = chainMap[kTarget];
-          if (node) {
-            var v = kind === 'CE' ? node.cLtp : node.pLtp;
-            if (v && v > 0) return v;
-          }
-          return fallbackPts;
+      function buildStrategyLegs_(sym, K, stratCode) {
+        const wShort = sym === 'NIFTY' ? 200 : 400;
+        const wLong = sym === 'NIFTY' ? 500 : 1000;
+        const flyWing = sym === 'NIFTY' ? 350 : 700;
+        const tightWing = sym === 'NIFTY' ? 250 : 500;
+        const rShort = sym === 'NIFTY' ? 150 : 300;
+        const rLong = sym === 'NIFTY' ? 450 : 900;
+      
+        if (stratCode === 'S1') {
+          return [
+            { side: -1, mult: 1, strike: K + wShort, type: 'CE' },
+            { side: -1, mult: 1, strike: K - wShort, type: 'PE' },
+            { side:  1, mult: 1, strike: K + wLong,  type: 'CE' },
+            { side:  1, mult: 1, strike: K - wLong,  type: 'PE' }
+          ];
         }
-
-        var s1Trig = (vrp30 >= 1.50 && item.hv30 <= 16.5 && item.dte >= 2 && item.dte <= 35);
-        var s1CredPts = Number(Math.max(15.0, legPx(K + wShort, 'CE', stradPts * 0.26) + legPx(K - wShort, 'PE', stradPts * 0.26) - legPx(K + wLong, 'CE', stradPts * 0.09) - legPx(K - wLong, 'PE', stradPts * 0.09)).toFixed(1));
-        var s1CredInr = Math.round(s1CredPts * lotSize);
-        var s1MaxLossInr = Math.round(Math.max(20, (wLong - wShort) - s1CredPts) * lotSize);
-        var s1Cap = capMap.S1 * lots;
-
-        var s2Trig = (vrp30 <= -0.25 || item.iv < item.hv10 || item.ivPct <= 30);
-        var s2DebPts = Number(stradPts.toFixed(1));
-        var s2DebInr = Math.round(s2DebPts * lotSize);
-        var s2Cap = Math.max(s2DebInr, capMap.S2 * lots);
-        var s2TargetInr = Math.round(s2DebInr * 0.65);
-
-        var s3Trig = (item.iv >= 15.2 && vrp30 >= 1.0 && item.dte <= 22);
-        var s3CredPts = Number(Math.max(25.0, stradPts - legPx(K + flyWing, 'CE', stradPts * 0.18) - legPx(K - flyWing, 'PE', stradPts * 0.18)).toFixed(1));
-        var s3CredInr = Math.round(s3CredPts * lotSize);
-        var s3MaxLossInr = Math.round(Math.max(40, flyWing - s3CredPts) * lotSize);
-        var s3Cap = capMap.S3 * lots;
-
-        var s4Trig = (item.rev25 >= 1.50 && item.dte >= 5);
-        var s4CredPts = Number((stradPts * 0.22).toFixed(1));
-        var s4PeakPts = (sym === 'NIFTY' ? 200 : 400) + s4CredPts;
-        var s4MaxProfInr = Math.round(s4PeakPts * lotSize);
-        var s4MaxLossInr = Math.round((sym === 'NIFTY' ? 120 : 300) * lotSize);
-        var s4Cap = capMap.S4 * lots;
-
-        var s5Trig = (vrp10 >= 0.80 && item.dte <= 16);
-        var s5CredPts = Number(Math.max(20.0, stradPts - legPx(K + tightWing, 'CE', stradPts * 0.21) - legPx(K - tightWing, 'PE', stradPts * 0.21)).toFixed(1));
-        var s5CredInr = Math.round(s5CredPts * lotSize);
-        var s5MaxLossInr = Math.round(Math.max(35, tightWing - s5CredPts) * lotSize);
-        var s5Cap = capMap.S5 * lots;
-
-        var basisThresh = sym === 'NIFTY' ? 10.0 : 35.0;
-        var s6Trig = ((isFinite(basis) && Math.abs(basis) >= basisThresh) || Math.abs(item.bfly25) >= 0.25);
-        var s6CredPts = Number((stradPts * 0.36).toFixed(1));
-        var s6CredInr = Math.round(s6CredPts * lotSize);
-        var s6MaxLossInr = Math.round(Math.max(30, (wLong - wShort) - s6CredPts) * lotSize);
-        var s6Cap = capMap.S6 * lots;
-
-        var beLow1 = Math.round(K - wShort - s1CredPts);
-        var beHigh1 = Math.round(K + wShort + s1CredPts);
-        var beLow2 = Math.round(K - s2DebPts);
-        var beHigh2 = Math.round(K + s2DebPts);
-        var beLow3 = Math.round(K - s3CredPts);
-        var beHigh3 = Math.round(K + s3CredPts);
-        var beLow4 = Math.round(K - (sym === 'NIFTY' ? 450 : 900));
-        var beHigh4 = Math.round(K + (sym === 'NIFTY' ? 250 : 500));
-        var beLow5 = Math.round(K - s5CredPts);
-        var beHigh5 = Math.round(K + s5CredPts);
-        var beLow6 = Math.round(K - (sym === 'NIFTY' ? 250 : 500) - s6CredPts);
-        var beHigh6 = Math.round(K + (sym === 'NIFTY' ? 150 : 300) + s6CredPts);
-
+        if (stratCode === 'S2') {
+          return [
+            { side:  1, mult: 1, strike: K, type: 'CE' },
+            { side:  1, mult: 1, strike: K, type: 'PE' }
+          ];
+        }
+        if (stratCode === 'S3') {
+          return [
+            { side: -1, mult: 1, strike: K,           type: 'CE' },
+            { side: -1, mult: 1, strike: K,           type: 'PE' },
+            { side:  1, mult: 1, strike: K + flyWing, type: 'CE' },
+            { side:  1, mult: 1, strike: K - flyWing, type: 'PE' }
+          ];
+        }
+        if (stratCode === 'S4') {
+          return [
+            { side: -1, mult: 2, strike: K - rShort,  type: 'PE' },
+            { side:  1, mult: 2, strike: K - rLong,   type: 'PE' },
+            { side: -1, mult: 1, strike: K + tightWing, type: 'CE' },
+            { side:  1, mult: 1, strike: K + tightWing + (wLong - wShort), type: 'CE' }
+          ];
+        }
+        if (stratCode === 'S5') {
+          return [
+            { side: -1, mult: 1, strike: K,             type: 'CE' },
+            { side: -1, mult: 1, strike: K,             type: 'PE' },
+            { side:  1, mult: 1, strike: K + tightWing, type: 'CE' },
+            { side:  1, mult: 1, strike: K - tightWing, type: 'PE' }
+          ];
+        }
         return [
-          {
-            code: 'S1',
-            name: 'S1 · VRP Harvest Iron Condor',
-            triggered: s1Trig,
-            metrics: 'IV ' + item.iv.toFixed(2) + '% · HV30 ' + item.hv30.toFixed(2) + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp',
-            strikes: 'Sell ' + (K - wShort) + ' PE / ' + (K + wShort) + ' CE · Buy ' + (K - wLong) + ' PE / ' + (K + wLong) + ' CE',
-            premText: '+' + s1CredPts + ' pts (+₹' + s1CredInr.toLocaleString('en-IN') + ' Cr)',
-            capital: s1Cap,
-            beText: beLow1.toLocaleString('en-IN') + ' – ' + beHigh1.toLocaleString('en-IN') + ' (±' + (((beHigh1 - K) / item.spot) * 100).toFixed(2) + '%)',
-            maxProf: s1CredInr,
-            maxLoss: s1MaxLossInr,
-            rocPct: (s1CredInr / s1Cap) * 100.0
-          },
-          {
-            code: 'S2',
-            name: 'S2 · Gamma Expansion Long Straddle',
-            triggered: s2Trig,
-            metrics: 'IV ' + item.iv.toFixed(2) + '% · HV10 ' + item.hv10.toFixed(2) + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp',
-            strikes: 'Buy 1x ' + K + ' CE + Buy 1x ' + K + ' PE (ATM Straddle)',
-            premText: '-' + s2DebPts + ' pts (-₹' + s2DebInr.toLocaleString('en-IN') + ' Dr)',
-            capital: s2Cap,
-            beText: '< ' + beLow2.toLocaleString('en-IN') + ' or > ' + beHigh2.toLocaleString('en-IN') + ' (±' + ((s2DebPts / item.spot) * 100).toFixed(2) + '%)',
-            maxProf: s2TargetInr,
-            maxLoss: s2DebInr,
-            rocPct: (s2TargetInr / s2Cap) * 100.0
-          },
-          {
-            code: 'S3',
-            name: 'S3 · Post-Event Front-Week Crush Fly',
-            triggered: s3Trig,
-            metrics: 'ATM IV ' + item.iv.toFixed(2) + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp · DTE ' + item.dte.toFixed(0) + 'd',
-            strikes: 'Sell ' + K + ' CE & PE · Buy ' + (K - flyWing) + ' PE & ' + (K + flyWing) + ' CE',
-            premText: '+' + s3CredPts + ' pts (+₹' + s3CredInr.toLocaleString('en-IN') + ' Cr)',
-            capital: s3Cap,
-            beText: beLow3.toLocaleString('en-IN') + ' – ' + beHigh3.toLocaleString('en-IN') + ' (±' + ((s3CredPts / item.spot) * 100).toFixed(2) + '%)',
-            maxProf: s3CredInr,
-            maxLoss: s3MaxLossInr,
-            rocPct: (s3CredInr / s3Cap) * 100.0
-          },
-          {
-            code: 'S4',
-            name: 'S4 · Steep Put Skew Ratio (1x2)',
-            triggered: s4Trig,
-            metrics: 'RR25 ' + (item.rev25 >= 0 ? '+' : '') + item.rev25.toFixed(2) + ' pp · BF25 ' + (item.bfly25 >= 0 ? '+' : '') + item.bfly25.toFixed(2) + ' pp',
-            strikes: 'Sell 2x ' + (K - (sym === 'NIFTY' ? 150 : 300)) + ' PE · Buy 2x ' + (K - (sym === 'NIFTY' ? 450 : 900)) + ' PE · Bear Call Wing',
-            premText: '+' + s4CredPts + ' pts (+₹' + Math.round(s4CredPts * lotSize).toLocaleString('en-IN') + ' Cr)',
-            capital: s4Cap,
-            beText: beLow4.toLocaleString('en-IN') + ' – ' + beHigh4.toLocaleString('en-IN'),
-            maxProf: s4MaxProfInr,
-            maxLoss: s4MaxLossInr,
-            rocPct: (s4MaxProfInr / s4Cap) * 100.0
-          },
-          {
-            code: 'S5',
-            name: 'S5 · Intraday Theta Iron Butterfly',
-            triggered: s5Trig,
-            metrics: 'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp · HV10 ' + item.hv10.toFixed(2) + '% · PCR ' + (item.pcr || 1.0).toFixed(2),
-            strikes: 'Sell ' + K + ' CE & PE · Buy ' + (K - tightWing) + ' PE & ' + (K + tightWing) + ' CE',
-            premText: '+' + s5CredPts + ' pts (+₹' + s5CredInr.toLocaleString('en-IN') + ' Cr)',
-            capital: s5Cap,
-            beText: beLow5.toLocaleString('en-IN') + ' – ' + beHigh5.toLocaleString('en-IN') + ' (±' + ((s5CredPts / item.spot) * 100).toFixed(2) + '%)',
-            maxProf: s5CredInr,
-            maxLoss: s5MaxLossInr,
-            rocPct: (s5CredInr / s5Cap) * 100.0
-          },
-          {
-            code: 'S6',
-            name: 'S6 · Synthetic Basis Skewed Condor',
-            triggered: s6Trig,
-            metrics: 'Basis ' + (isFinite(basis) ? (basis >= 0 ? '+' : '') + basis.toFixed(1) + ' pts' : 'unavailable') + ' · BF25 ' + (item.bfly25 >= 0 ? '+' : '') + item.bfly25.toFixed(2) + ' pp',
-            strikes: 'Sell 2x ' + (K + (sym === 'NIFTY' ? 150 : 300)) + ' CE / Buy 2x ' + (K + (sym === 'NIFTY' ? 450 : 900)) + ' CE · Put Spread',
-            premText: '+' + s6CredPts + ' pts (+₹' + s6CredInr.toLocaleString('en-IN') + ' Cr)',
-            capital: s6Cap,
-            beText: beLow6.toLocaleString('en-IN') + ' – ' + beHigh6.toLocaleString('en-IN'),
-            maxProf: s6CredInr,
-            maxLoss: s6MaxLossInr,
-            rocPct: (s6CredInr / s6Cap) * 100.0
-          }
+          { side: -1, mult: 2, strike: K + rShort,  type: 'CE' },
+          { side:  1, mult: 2, strike: K + rLong,   type: 'CE' },
+          { side: -1, mult: 1, strike: K - tightWing, type: 'PE' },
+          { side:  1, mult: 1, strike: K - tightWing - (wLong - wShort), type: 'PE' }
         ];
+      }
+      
+      function expiryPayoff(legs, units) {
+        const premium = -legs.reduce((sum, leg) => sum + leg.side * leg.mult * leg.entryPx, 0);
+        const strikes = [...new Set([0, ...legs.map(leg => leg.strike)])].sort((a, b) => a - b);
+        const values = strikes.map(spot => legs.reduce((sum, leg) => {
+          const intrinsic = Math.max(0, (spot - leg.strike) * (leg.type === 'CE' ? 1 : -1));
+          return sum + leg.side * leg.mult * intrinsic;
+        }, premium));
+        const roots = [];
+        strikes.forEach((strike, i) => {
+          const y = values[i];
+          if (Math.abs(y) < 1e-9) roots.push(strike);
+          if (i && y * values[i-1] < 0) roots.push(strike - y * (strike - strikes[i-1]) / (y - values[i-1]));
+        });
+        const slope = legs.reduce((sum, leg) => sum + (leg.type === 'CE' ? leg.side * leg.mult : 0), 0);
+        const last = strikes.length - 1;
+        if (slope && -values[last] / slope > 0) roots.push(strikes[last] - values[last] / slope);
+        return { netPremiumPoints: Number(premium.toFixed(8)), netPremium: Number((premium * units).toFixed(2)),
+          maxProfit: slope > 0 ? null : Number((Math.max(0, ...values) * units).toFixed(2)),
+          maxLoss: slope < 0 ? null : Number((-Math.min(0, ...values) * units).toFixed(2)),
+          breakEvens: [...new Set(roots.map(k => Number(k.toFixed(4))))].sort((a, b) => a-b) };
+      }
+
+      function evaluateStrategiesForExpiry(item, sym, lots) {
+        const K = item.atm, units = (sym === 'NIFTY' ? 65 : 30) * lots;
+        const vrp30 = item.iv - item.hv30, vrp10 = item.iv - item.hv10;
+        const basis = item.syn - item.fut;
+        const signals = [vrp30 >= 1.5 && item.hv30 <= 16.5 && item.dte >= 2 && item.dte <= 35,
+          vrp30 <= -0.25 || item.iv < item.hv10 || item.ivPct <= 30,
+          item.iv >= 15.2 && vrp30 >= 1 && item.dte <= 22, item.rev25 >= 1.5 && item.dte >= 5,
+          vrp10 >= 0.8 && item.dte <= 16, Math.abs(basis) >= (sym === 'NIFTY' ? 10 : 35) || Math.abs(item.bfly25) >= 0.25];
+        const names = ['S1 · VRP Harvest Iron Condor', 'S2 · Gamma Expansion Long Straddle', 'S3 · Post-Event Front-Week Crush Fly', 'S4 · Steep Put Skew Ratio (1x2)', 'S5 · Intraday Theta Iron Butterfly', 'S6 · Synthetic Basis Skewed Condor'];
+        const metrics = [
+          'IV ' + item.iv.toFixed(2) + '% · HV30 ' + item.hv30.toFixed(2) + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp',
+          'IV ' + item.iv.toFixed(2) + '% · HV10 ' + item.hv10.toFixed(2) + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp',
+          'ATM IV ' + item.iv.toFixed(2) + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp · DTE ' + item.dte.toFixed(0) + 'd',
+          'RR25 ' + (item.rev25 >= 0 ? '+' : '') + item.rev25.toFixed(2) + ' pp · BF25 ' + (item.bfly25 >= 0 ? '+' : '') + item.bfly25.toFixed(2) + ' pp',
+          'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + formatLiveNumber(vrp10, 2) + ' pp · HV10 ' + item.hv10.toFixed(2) + '% · PCR ' + (item.pcr || 1.0).toFixed(2),
+          'Basis ' + (isFinite(basis) ? (basis >= 0 ? '+' : '') + basis.toFixed(1) + ' pts' : 'unavailable') + ' · BF25 ' + (item.bfly25 >= 0 ? '+' : '') + item.bfly25.toFixed(2) + ' pp'];
+        const chain = new Map((item.chain || []).map(node => [node.k, node]));
+        const reference = new Date().toISOString();
+        const result = [];
+        signals.forEach((signal, i) => {
+          const code = 'S' + (i + 1), legs = buildStrategyLegs_(sym, K, code);
+          for (const leg of legs) {
+            const node = chain.get(leg.strike), prefix = leg.type === 'CE' ? 'c' : 'p';
+            const side = leg.side > 0 ? 'Ask' : 'Bid';
+            if (!node || !liveBookValid(node, prefix, reference) || node[prefix + side + 'Qty'] < units * leg.mult) return;
+            leg.entryPx = node[prefix + side];
+          }
+          const payoff = expiryPayoff(legs, units);
+          if (code === 'S2' ? payoff.netPremium >= 0 : payoff.netPremium <= 0) return;
+          const capital = Math.max(STRATEGY_CAPITAL_PER_LOT[sym][code] * lots, -payoff.netPremium);
+          result.push({code, name: names[i], triggered: signal, metrics: metrics[i], capital, legs, ...payoff,
+            strikes: legs.map(l => (l.side > 0 ? 'Buy ' : 'Sell ') + l.mult + '× ' + l.strike + l.type).join(' / '),
+            premText: payoff.netPremiumPoints + ' pts (' + (payoff.netPremium < 0 ? 'debit' : 'credit') + ')',
+            beText: payoff.breakEvens.join(' / ') || '—', maxProf: payoff.maxProfit,
+            rocPct: payoff.maxProfit === null ? null : payoff.maxProfit / capital * 100});
+        });
+        return result;
       }
 
       function renderTab5TradeIdentification() {
@@ -2278,7 +2233,7 @@
                   '<td class="py-2.5 px-3 text-right font-bold ' + (s.code === 'S2' ? 'text-sky-300' : 'text-emerald-300') + ' whitespace-nowrap">' + s.premText + '</td>' +
                   '<td class="py-2.5 px-3 text-right font-bold text-sky-300 whitespace-nowrap">₹' + s.capital.toLocaleString('en-IN') + '</td>' +
                   '<td class="py-2.5 px-3 text-right text-slate-200 whitespace-nowrap">' + s.beText + '</td>' +
-                  '<td class="py-2.5 px-3 text-right whitespace-nowrap"><span class="text-emerald-400 font-bold">+₹' + s.maxProf.toLocaleString('en-IN') + '</span> / <span class="text-rose-400">-₹' + s.maxLoss.toLocaleString('en-IN') + '</span> <span class="text-sky-300 font-bold">(+' + s.rocPct.toFixed(1) + '% ROC)</span></td>' +
+                  '<td class="py-2.5 px-3 text-right whitespace-nowrap"><span class="text-emerald-400 font-bold">' + (s.maxProf === null ? 'Unbounded' : '+₹' + s.maxProf.toLocaleString('en-IN')) + '</span> / <span class="text-rose-400">-₹' + s.maxLoss.toLocaleString('en-IN') + '</span> <span class="text-sky-300 font-bold">' + (s.rocPct === null ? '' : '(+' + s.rocPct.toFixed(1) + '% ROC)') + '</span></td>' +
                   '<td class="py-2.5 px-3 text-center whitespace-nowrap space-x-1.5">' +
                     '<button type="button" onclick="window.testStrategyInBacktest(\'' + s.code + '\', \'' + symKey + '\')" class="px-2 py-1 rounded bg-[#16263d] hover:bg-sky-600 text-sky-200 hover:text-white border border-sky-400/50 font-bold text-[10.5px] transition">' +
                       'Test in Backtest →' +
@@ -2292,7 +2247,7 @@
           }
         }
 
-        tbody.innerHTML = html || '<tr><td colspan="10" class="py-6 text-center text-slate-400">No setups match the selected filter. Switch Filter to "All 6 Strategies (S1–S6)".</td></tr>';
+        tbody.innerHTML = html || '<tr><td colspan="10" class="py-6 text-center text-slate-400">No executable setups match the current quotes and filter.</td></tr>';
         var sub = document.getElementById('tradeIdSummarySub');
         if (sub) {
           var scopeLabel = targetSyms.join(' + ');
@@ -2765,31 +2720,7 @@
 
       function buildStrategyLegsForItem(item, sym, stratCode) {
         throw new Error('Browser-side forward-trade construction is disabled; use the cloud ledger.');
-        var step = sym === 'NIFTY' ? 50 : 100;
-        var K = item.atm || (Math.round(item.spot / step) * step);
-        var chainMap = {};
-        (item.chain || []).forEach(function(n) { chainMap[n.k] = n; });
-        var wShort = sym === 'NIFTY' ? 200 : 400;
-        var wLong = sym === 'NIFTY' ? 500 : 1000;
-        var flyWing = sym === 'NIFTY' ? 350 : 700;
-        var tightWing = sym === 'NIFTY' ? 250 : 500;
-        var rShort = sym === 'NIFTY' ? 150 : 300;
-        var rLong = sym === 'NIFTY' ? 450 : 900;
-        var rawLegs = [];
-        if (stratCode === 'S1') rawLegs = [{side:-1,mult:1,strike:K+wShort,type:'CE'},{side:-1,mult:1,strike:K-wShort,type:'PE'},{side:1,mult:1,strike:K+wLong,type:'CE'},{side:1,mult:1,strike:K-wLong,type:'PE'}];
-        else if (stratCode === 'S2') rawLegs = [{side:1,mult:1,strike:K,type:'CE'},{side:1,mult:1,strike:K,type:'PE'}];
-        else if (stratCode === 'S3') rawLegs = [{side:-1,mult:1,strike:K,type:'CE'},{side:-1,mult:1,strike:K,type:'PE'},{side:1,mult:1,strike:K+flyWing,type:'CE'},{side:1,mult:1,strike:K-flyWing,type:'PE'}];
-        else if (stratCode === 'S4') rawLegs = [{side:-1,mult:2,strike:K-rShort,type:'PE'},{side:1,mult:2,strike:K-rLong,type:'PE'},{side:-1,mult:1,strike:K+tightWing,type:'CE'},{side:1,mult:1,strike:K+tightWing+(wLong-wShort),type:'CE'}];
-        else if (stratCode === 'S5') rawLegs = [{side:-1,mult:1,strike:K,type:'CE'},{side:-1,mult:1,strike:K,type:'PE'},{side:1,mult:1,strike:K+tightWing,type:'CE'},{side:1,mult:1,strike:K-tightWing,type:'PE'}];
-        else rawLegs = [{side:-1,mult:2,strike:K+rShort,type:'CE'},{side:1,mult:2,strike:K+rLong,type:'CE'},{side:-1,mult:1,strike:K-tightWing,type:'PE'},{side:1,mult:1,strike:K-tightWing-(wLong-wShort),type:'PE'}];
 
-        rawLegs.forEach(function(l) {
-          var node = chainMap[l.strike];
-          var px = node ? (l.type === 'CE' ? node.cLtp : node.pLtp) : (item.strad * 0.22);
-          l.entryPx = Number((px || 25.0).toFixed(2));
-          l.curPx = l.entryPx;
-        });
-        return rawLegs;
       }
 
       function forwardNumber(value, fallback) {
