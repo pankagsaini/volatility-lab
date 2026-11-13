@@ -49,7 +49,7 @@ jobs:
           python -m pytest -ra --cov=volatility_lab --cov-branch --cov-report=term:skip-covered --cov-report=xml --cov-fail-under=31
 
       - name: Audit installed dependencies
-        run: python -m pip_audit --local --skip-editable --disable-pip
+        run: python -m pip_audit --requirement "$RUNNER_TEMP/volatility-lock.txt" --require-hashes --disable-pip
 
       - name: Retain coverage report
         if: always()

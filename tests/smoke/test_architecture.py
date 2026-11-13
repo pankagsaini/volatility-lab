@@ -61,3 +61,19 @@ def test_launcher_propagates_exit_status_and_defaults_to_loopback(monkeypatch):
     assert launcher.main(['--lan','--port','8502']) == 7
     assert '--server.address=0.0.0.0' in commands[1]
     assert '--server.port=8502' in commands[1]
+
+
+def test_real_streamlit_entry_starts_offline(tmp_path):
+    import os
+
+    # Isolate module-level paths and broker clients from other tests.
+    env = {**os.environ, 'VOL_LAB_OFFLINE': 'true', 'VOL_LAB_DATA_DIR': str(tmp_path)}
+    entry = PACKAGE_ROOT.parent / 'streamlit_app.py'
+    code = (
+        'from streamlit.testing.v1 import AppTest\n'
+        f'app = AppTest.from_file({str(entry)!r}, default_timeout=60).run()\n'
+        'assert not app.exception, [item.message for item in app.exception]\n'
+        'assert any("Volatility Lab" in md.value for md in app.markdown)\n'
+    )
+    result = subprocess.run([sys.executable, '-c', code], env=env, capture_output=True, text=True, timeout=90)
+    assert result.returncode == 0, result.stderr
