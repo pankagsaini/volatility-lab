@@ -82,7 +82,7 @@ def get_yields():
             if item.get('model_yield') is not None:
                 item['stale'] = True
                 item['model_yield'] = None
-                item['error'] = 'Factsheet older than 62 days; retaining last verified yield while background refresh runs.'
+                item['error'] = 'Factsheet outside its valid date window; model yield withheld pending refresh.'
             else:
                 item['model_yield'] = None
                 item['error'] = 'No recent verified dividend yield; background check in progress.'

@@ -1637,7 +1637,7 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
             self.assertIn("window.black76Iv", html)
             self.assertIn("window.computeBlack76ParityForward", html)
             self.assertIn("selectOptionPricing", html)
-            self.assertIn("Black-76 withheld pending validated bid/ask event timestamps", html)
+            self.assertIn("liveBookValid(node,prefix,item.snapshotId)", html)
             self.assertIn("VALIDATED_EVENT_TIME_TWO_SIDED_BOOK", html)
             self.assertIn("if (!(T > 0)", html)
             self.assertIn("const sigma = !valid ? NaN", html)

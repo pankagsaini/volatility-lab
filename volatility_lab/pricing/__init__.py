@@ -51,5 +51,5 @@ __all__ = [
     "compare_bsm_and_black76",
 ]
 
-from ..pricing_policy import select_model, price_observed_option
+from pricing_policy import select_model, price_observed_option
 __all__ += ["select_model", "price_observed_option"]

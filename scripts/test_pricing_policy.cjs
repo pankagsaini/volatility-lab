@@ -54,6 +54,18 @@ for (const call of [true,false]) {
   const delta=(web.bsmGreeks(S+.1,K,T,rate,q,vol,call).price-web.bsmGreeks(S-.1,K,T,rate,q,vol,call).price)/.2;
   assert(Math.abs(g.delta-delta)<1e-5,'Dividend-adjusted spot delta: '+g.delta+' vs '+delta);
 }
+// Re-rendering must retain an interpolated 25-delta skew for both option sides.
+r=item();delete r.futureBook;
+r.chain=Array.from({length:21},(_,i)=>{
+  const k=24500+50*i,node={...r.chain[0],k};
+  for(const [prefix,call] of [['c',true],['p',false]]) {
+    const px=web.black76Price(25000,k,r.dte/365,r.rate,.20,call);
+    node[prefix+'Bid']=px-.05;node[prefix+'Ask']=px+.05;
+  }
+  return node;
+});
+web.enrichItemWithBlack76(r);assert(Math.abs(r.rev25)<1e-5);assert(Math.abs(r.bfly25)<1e-5);
+web.enrichItemWithBlack76(r);assert(Number.isFinite(r.rev25),'Re-render must not discard skew');
 const source={schema:1,rate:{source:'https://www.rbi.org.in/',sha256:'fixture',checked_at:new Date(now).toISOString(),model_rate:.06},
   dividends:{NIFTY:{source:'https://www.niftyindices.com/Factsheet/ind_nifty50.pdf',sha256:'fixture',as_of:'2026-10-30',model_yield:.0142}}};
 web.pricingInputs=clone(source);assert.equal(web.currentPricingInputs('NIFTY',now).rate,.06);

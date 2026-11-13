@@ -1453,7 +1453,7 @@
         if (decision.model === 'black76') {
           item.b76CallIv = modelCall; item.b76PutIv = modelPut; item.b76AtmIv = item.modelAtmIv;
         }
-        const put25 = liveDeltaIv(item.chain,false,-.25), call25 = liveDeltaIv(item.chain,true,.25);
+        const put25 = liveDeltaIv(item.chain,'p',-.25), call25 = liveDeltaIv(item.chain,'c',.25);
         item.rev25 = Number.isFinite(put25) && Number.isFinite(call25) ? put25-call25 : NaN;
         item.bfly25 = Number.isFinite(put25) && Number.isFinite(call25) && item.modelAtmIv > 0
           ? (put25+call25)/2-item.modelAtmIv : NaN;
