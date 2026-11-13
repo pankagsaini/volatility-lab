@@ -38,7 +38,7 @@ for (const [, script] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) 
 assert.equal(html, fs.readFileSync(path.join(root, 'docs/index.html'), 'utf8'));
 const webAppUrl = html.match(/var CLOUD_EXEC_URL = '([^']+)'/)[1];
 for (const filename of ['manual_download_session.py', 'google_archive_sync.py']) {
-  const client = fs.readFileSync(path.join(root, 'volatility_lab', filename), 'utf8');
+  const client = fs.readFileSync(path.join(root, 'volatility_lab', 'ingestion', filename), 'utf8');
   assert(client.includes(webAppUrl), filename + ' and the website must use the same deployment');
 }
 

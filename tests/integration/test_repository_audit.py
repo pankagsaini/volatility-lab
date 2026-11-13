@@ -13,7 +13,7 @@ from volatility_lab import backtest_engine, forecast, forward_test, strategy_bac
 from volatility_lab.backtest.forward_test import evaluate_strategies_for_chain as legacy_evaluate
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 AT = "2026-11-13T10:00:00+05:30"
 
 

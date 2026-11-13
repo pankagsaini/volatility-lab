@@ -44,7 +44,7 @@ except ImportError:
 
 
 # Add patched directory to sys.path when running in sandbox or local repo
-HERE_DIR = Path(__file__).resolve().parent
+HERE_DIR = Path(__file__).resolve().parents[2]
 PATCH_DIR = (
     (HERE_DIR / "volatility_lab")
     if (HERE_DIR / "volatility_lab").exists()
@@ -240,7 +240,7 @@ class TestTrack2CloudAndDownloaders(unittest.TestCase):
             self.assertEqual(first, second)
 
     def test_backtest_download_db_pragmas_and_3_strike_isolation(self):
-        btd_code = (PATCH_DIR / "backtest_download.py").read_text(encoding="utf-8")
+        btd_code = (PATCH_DIR / "ingestion" / "backtest_download.py").read_text(encoding="utf-8")
         self.assertIn("PRAGMA busy_timeout=30000", btd_code)
         self.assertIn('WHERE state IN ("failed","running")', btd_code)
         self.assertNotIn("if attempts>=2:status(c,'paused_error',error_type=type(exc).__name__);return", btd_code)
@@ -383,9 +383,9 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
 
     def test_ui_theme_figure_styling_and_session_badge(self):
         import importlib.util
-        ui_p = Path(__file__).resolve().parent / "ui_theme.py"
+        ui_p = Path(__file__).resolve().parents[2] / "ui_theme.py"
         if not ui_p.exists():
-            ui_p = (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py")
+            ui_p = (Path(__file__).resolve().parents[2] / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parents[2] / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parents[2] / "Volatility Lab" / "ui_theme.py")
         spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
         ui_theme = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ui_theme)
@@ -411,7 +411,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         self.assertEqual(called["xaxes"]["griddash"], "dot")
 
     def test_requirements_txt_valid_pypi_specifiers(self):
-        req_path = Path(__file__).resolve().parent / "requirements.txt"
+        req_path = Path(__file__).resolve().parents[2] / "requirements.txt"
         if req_path.exists():
             req_text = req_path.read_text(encoding="utf-8")
             self.assertNotIn("streamlit==1.64.0", req_text)
@@ -491,15 +491,15 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
 
 
     def test_v6_any_device_network_binding_and_responsive_theme(self):
-        cfg_path = Path(__file__).resolve().parent / ".streamlit" / "config.toml"
+        cfg_path = Path(__file__).resolve().parents[2] / ".streamlit" / "config.toml"
         if cfg_path.exists():
             cfg_txt = cfg_path.read_text(encoding="utf-8")
             self.assertIn('address = "0.0.0.0"', cfg_txt)
             self.assertIn("headless = true", cfg_txt)
         import importlib.util
-        ui_p = Path(__file__).resolve().parent / "ui_theme.py"
+        ui_p = Path(__file__).resolve().parents[2] / "ui_theme.py"
         if not ui_p.exists():
-            ui_p = (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parent / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parent / "Volatility Lab" / "ui_theme.py")
+            ui_p = (Path(__file__).resolve().parents[2] / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parents[2] / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parents[2] / "Volatility Lab" / "ui_theme.py")
         spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
         ui_theme = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ui_theme)
@@ -792,7 +792,9 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
     def test_v9_zero_ast_signature_or_import_mismatches(self):
         import ast
         exports = {}
-        for py in VL_Sub.glob("*.py"):
+        for py in VL_Sub.rglob("*.py"):
+            if "install_alias(globals()," in py.read_text(encoding="utf-8"):
+                continue
             tree = ast.parse(py.read_text(encoding="utf-8"))
             names = set()
             for node in tree.body:
@@ -994,7 +996,7 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
 
     def test_v18_clean_repository_structure_and_entrypoints(self):
         """Verify repository structure and the permitted Workspace 3 markup range."""
-        repo_root = Path(__file__).resolve().parent
+        repo_root = Path(__file__).resolve().parents[2]
         vl_dir = (repo_root / "volatility_lab") if (repo_root / "volatility_lab").exists() else (repo_root / "Volatility Lab")
         desk_dir = repo_root / "streamlit_desk"
         if not vl_dir.is_dir():

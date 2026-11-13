@@ -44,7 +44,14 @@ jobs:
 
       - name: Run Automated Remediation & Audit Tests
         run: |
-          python -m pytest -ra
+          python -m pytest -ra --cov=volatility_lab --cov-branch --cov-report=term:skip-covered --cov-report=xml
+
+      - name: Retain coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-python-${{ matrix.python-version }}
+          path: coverage.xml
 
       - name: Build Wheel & Verify Distributable Package Data
         run: |

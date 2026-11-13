@@ -106,3 +106,8 @@ volatility_lab/data/backtest_runs/
 volatility_lab/data/daily_collector/
 volatility_lab/data/audit/
 volatility_lab/data/audit/**
+
+# Local coverage and operational outputs
+.coverage*
+coverage.xml
+htmlcov/
