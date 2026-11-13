@@ -500,7 +500,7 @@ async function main() {
   // leg's contemporaneous book, then recovers. The contract identity stays fixed.
   {
     const desk = vm.createContext({...web, window:{innerWidth:900}, activeScMode:'intraday', straddleChart:null});
-    for (const name of ['chartNumber','observedIv','chartOpts','shortExpiryDate','formatIv','renderTab4Straddle','formatLiveNumber','currentRow']) {
+    for (const name of ['chartNumber','observedIv','chartOpts','scenarioLegs','renderTab4Straddle','formatLiveNumber','currentRow']) {
       vm.runInContext(browserFunction(name),desk);
     }
     vm.runInContext(fs.readFileSync(path.join(root,'scripts/options-charts.js'),'utf8'),desk);
@@ -536,7 +536,7 @@ async function main() {
         assert.equal(mark.strad === null,missing);
         desk.marketCatalog = web.marketCatalog;
         desk.renderTab4Straddle();
-        assert(desk.straddleChart.data.datasets[0].label.includes('midpoints'));
+        assert(desk.straddleChart.data.datasets[0].label.includes('book midpoints'));
         assert.equal(desk.straddleChart.data.datasets[0].data.length,minute + 1);
         assert.equal(desk.straddleChart.data.datasets[0].data.at(-1).y,mark.strad);
         assert(els.straddleSummaryBadge.textContent.includes('25,000 CE + PE'));

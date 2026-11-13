@@ -16,7 +16,7 @@ vm.runInContext(gs, cloud);
 const web = vm.createContext({Date: Clock});
 vm.runInContext(html.match(/var STRATEGY_CAPITAL_PER_LOT = \{[\s\S]*?\};/)[0], web);
 for (const name of ['formatLiveNumber', 'liveNumber', 'liveTimestamp', 'liveBookValid', 'brokerIvPercent',
-                    'brokerWingIv_', 'buildStrategyLegs_', 'expiryPayoff', 'setupQuoteReady', 'evaluateStrategiesForExpiry']) {
+                    'brokerWingIv_', 'buildStrategyLegs_', 'expiryPayoff', 'evaluateStrategiesForExpiry']) {
   const start = html.indexOf('      function ' + name + '(');
   assert(start >= 0, name);
   vm.runInContext(html.slice(start, html.indexOf('\n      }', start) + 8), web);

@@ -12,14 +12,14 @@ const element = id => {
 const web = vm.createContext({console, window:{innerWidth:390}, document:{getElementById:element},
   activeSymbol:'NIFTY', activeExpiryIdx:0, activeScMode:'payoff', activeRange:'1M', activeMetric:'levels',
   B76_RISK_FREE_RATE:.066, B76_INV_SQRT_2PI:1/Math.sqrt(2*Math.PI),
-  straddleChart:null, scenarioChart:null, smileChart:null, smileForecasts:null, regimeChart:null, termChart:null});
+  straddleChart:null, regimeChart:null, termChart:null});
 const optionsAsset = fs.readFileSync(path.join(__dirname, 'options-charts.js'), 'utf8');
 assert.equal(optionsAsset, fs.readFileSync(path.join(__dirname, '../docs/scripts/options-charts.js'), 'utf8'));
 vm.runInContext(optionsAsset,web);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8'),web);
 for (const name of ['chartNumber','observedIv','observedSpread','observedMean','distribution','formatLiveNumber',
   'forwardInterval','scenarioLegs','black76Price','normCdf','normPdf','currentRow','chartOpts',
-  'formatIv','shortExpiryDate','expiryPayoff','renderTab1Regime','renderTab2Term','renderTab3Smile','renderTab4Straddle','renderScenarios']) {
+  'renderTab1Regime','renderTab2Term','renderTab4Straddle']) {
   const start = html.indexOf('      function '+name+'(');
   assert(start>=0, name);
   vm.runInContext(html.slice(start, html.indexOf('\n      }',start)+8),web);
@@ -53,23 +53,23 @@ web.marketCatalog={NIFTY:[{atm:25000,spot:25000,syn:25000,dte:1,expiry:'2026-11-
   hv10:null,hv20:15,hv30:15,intraday:[{...observation,t:'09:15',strad:200,snapshotId:'2026-11-12T03:45:00Z'},{...observation,t:'11:30',iv:null,strad:null,snapshotId:'2026-11-12T06:00:00Z'},{...observation,t:'13:30',iv:19,strad:160,snapshotId:'2026-11-12T08:00:00Z'}]}]};
 element('stressLotsInput').value='1';
 element('stressStructureSelect').value='SHORT_STRADDLE';
-web.renderScenarios();
-let curve=web.scenarioChart.data.datasets;
+web.renderTab4Straddle();
+let curve=web.straddleChart.data.datasets;
 assert.equal(curve.length,1,'Only the real expiry payoff should be plotted');
 assert.equal(curve[0].data.find(pt=>pt.x===25000).y,13000);
 assert.equal(curve[0].data.find(pt=>pt.x===24250).y,-35750);
-assert.equal(web.scenarioChart.options.scales.x.type,'linear');
+assert.equal(web.straddleChart.options.scales.x.type,'linear');
 // One calendar day before expiry, unchanged spot and any IV shift must settle to intrinsic.
 const centerRow=element('stressMatrixTableBody').innerHTML.match(/<tr><th[^>]*>0%<\/th>(.*?)<\/tr>/)[1];
 assert.equal((centerRow.match(/>13000</g)||[]).length,5);
-element('stressLotsInput').value='2';web.renderScenarios();
-assert.equal(web.scenarioChart.data.datasets[0].data.find(pt=>pt.x===25000).y,26000);
-element('stressStructureSelect').value='PUT_RATIO';web.renderScenarios();
+element('stressLotsInput').value='2';web.renderTab4Straddle();
+assert.equal(web.straddleChart.data.datasets[0].data.find(pt=>pt.x===25000).y,26000);
+element('stressStructureSelect').value='PUT_RATIO';web.renderTab4Straddle();
 assert.deepEqual(Array.from(web.scenarioLegs(web.marketCatalog.NIFTY[0],'NIFTY','PUT_RATIO'),l=>l.qty),[1,-2]);
-assert(web.scenarioChart.data.datasets[0].data.some(pt=>pt.x===24850),'Keep the ratio strike kink');
+assert(web.straddleChart.data.datasets[0].data.some(pt=>pt.x===24850),'Keep the ratio strike kink');
 // A missing entry must not produce a zero-valued payoff or stress matrix.
 chain.find(n=>n.k===24850).pLtp=null;
-web.renderScenarios();assert.equal(web.scenarioChart.data.datasets[0].data.length,0);
+web.renderTab4Straddle();assert.equal(web.straddleChart.data.datasets[0].data.length,0);
 assert(element('stressMatrixTableBody').innerHTML.includes('—'));
 web.activeScMode='intra_iv';web.renderTab4Straddle();
 assert.equal(web.straddleChart.data.datasets[0].data[1].y,null);
@@ -100,7 +100,7 @@ web.renderTab2Term();
 assert.equal(web.termChart.options.scales.x.type,'linear');
 assert.equal(web.termChart.data.datasets.length,1);
 assert.equal(web.termChart.data.datasets[0].pointValueLabels,'expiry');
-assert.equal(web.termChart.options.scales.x.ticks.display,false,'Dates are labeled at each point');
+assert.equal(web.termChart.options.scales.x.ticks.callback(43),'2026-12-29');
 assert.equal(web.termChart.data.datasets[0].data[1].y,null,'model IV cannot replace missing broker ATM IV');
 assert.equal(web.termChart.data.datasets[0].data[1].x,43);
 
@@ -125,22 +125,6 @@ assert.deepEqual(Array.from(sessions.history([{d:'2026-11-06'},{d:'2026-11-12'}]
   ['2026-11-06','2026-11-08','2026-11-09','2026-11-11','2026-11-12']);
 assert.equal(sessions.session('2026-11-13').endMins,940);
 assert.equal(sessions.expiryMillis('2026-12-29'),Date.parse('2026-12-29T15:30:00+05:30'));
-const quote = {snapshotId:'2026-11-13T12:27:30+05:30',expiry:'2026-11-17'};
-const variance = {ewma:18,garch_variances:[100,400,900]};
-const models = {'2026-11-12':variance,'2026-11-13':{ewma:42}};
-assert.deepEqual(JSON.parse(JSON.stringify(charts.expiryForecast(models,quote,sessions))),
-  {trainedThrough:'2026-11-12',garch:Math.sqrt((.5*100+400+900)/2.5),ewma:18});
-assert.equal(charts.expiryForecast({'2026-11-13':models['2026-11-13']},quote,sessions),null,'No look-ahead');
-assert.equal(charts.expiryForecast(models,{...quote,expiry:'2026-11-13'},sessions),null);
-assert.equal(charts.expiryForecast(models,{...quote,expiry:'2026-11-18'},sessions).garch,null,'Do not extrapolate the variance path');
-web.smileForecasts = {NIFTY:models};
-Object.assign(web.marketCatalog.NIFTY[0],quote);
-web.renderTab3Smile();
-assert.deepEqual(Array.from(web.smileChart.data.datasets,series=>series.label),['Broker IV','GARCH(1,1)','EWMA']);
-assert.deepEqual(Array.from(web.smileChart.data.datasets[2].data),[18,18,18,18,18]);
-assert.equal((element('smilePointsBody').innerHTML.match(/<tr/g) || []).length,5);
-assert.equal(element('smileMainTableBody').innerHTML,'');
-assert.equal(web.smileChart.data.datasets[0].data[0],null,'Forecast must never fill missing broker IV');
 const embedded=JSON.parse(html.match(/var REAL_HISTORICAL_1Y = (.*);/)[1]);
 for(const rows of Object.values(embedded)) for(const row of rows) {
   if(row.iv!==null) {assert.equal(web.observedIv(row),row.iv);assert(row.archiveFile);}
