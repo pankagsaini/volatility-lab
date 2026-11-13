@@ -1886,7 +1886,7 @@ function validateLedger_(value) {
       const day = row.session_date || row.date;
       if (field === 'intraday_mtm_series' && day == null) continue;
       const date = String(day).slice(0, 10);
-      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) ||
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) ||
           new Date(date).toISOString().slice(0, 10) !== date) throw new Error('Invalid ledger date: ' + field);
     }
   }
