@@ -44,11 +44,22 @@ const VL = {
   indices: CONFIG.indices
 };
 
-/**
- * Confirmed Muhurat block (NSE/FAOP/76940).
- */
+// NSE/FAOP/71777 and the additional closure in NSE/FAOP/72262.
+const NSE_FO_HOLIDAYS = {
+  '2026': [
+    '2026-01-15', '2026-01-26', '2026-03-03', '2026-03-26', '2026-03-31', '2026-04-03',
+    '2026-04-14', '2026-05-01', '2026-05-28', '2026-06-26', '2026-09-14', '2026-10-02',
+    '2026-10-20', '2026-11-10', '2026-11-24', '2026-12-25'
+  ]
+};
+
+// Exact normal-market hours from the separate NSE special-session circulars.
 const SPECIAL_SESSIONS = {
-  '2026-11-08': {
+  '2026-02-01': { // NSE/FAOP/72352
+    label: 'Union Budget live session',
+    startMins: 555, endMins: 930, eodStartMins: 935, eodEndMins: 1320
+  },
+  '2026-11-08': { // NSE/FAOP/76940
     label: 'Diwali Muhurat Trading (Samvat 2083 - Sunday)',
     startMins: 14 * 60 + 20,
     endMins: 15 * 60 + 40,
@@ -454,7 +465,6 @@ function marketWindow_(dateObj) {
   try {
     customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
   } catch (e) {}
-  let calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
   const configuredSpecial = customSpecial[targetDay] || SPECIAL_SESSIONS[targetDay];
   if (configuredSpecial) {
     return {
@@ -469,7 +479,11 @@ function marketWindow_(dateObj) {
   }
 
   const todayStr = targetDay;
-  if (!calendar || calendar.checked !== todayStr || !calendar.special) {
+  let calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
+  const healthy = calendar?.year === year && calendar.checked === todayStr && Array.isArray(calendar.closed) && calendar.special;
+  const lastFailure = Number(properties.getProperty('MARKET_CALENDAR_RETRY_AT') || 0);
+  if (!healthy && (!lastFailure || Date.now() >= lastFailure)) {
+    let refreshed = false;
     try {
       const response = UrlFetchApp.fetch('https://api.upstox.com/v2/market/holidays', {
         headers: {
@@ -503,23 +517,30 @@ function marketWindow_(dateObj) {
               .map(r => r.date)
           };
           properties.setProperty('MARKET_CALENDAR', JSON.stringify(calendar));
+          refreshed = true;
         }
       }
     } catch (err) {}
+    if (refreshed && lastFailure) properties.deleteProperty('MARKET_CALENDAR_RETRY_AT');
+    if (!refreshed) properties.setProperty('MARKET_CALENDAR_RETRY_AT', String(Date.now() + 5 * 60000));
   }
 
-  if (!calendar || calendar.year !== year || !Array.isArray(calendar.closed)
-      || !Number.isFinite(Date.parse(calendar.checked)) || Date.parse(todayStr) - Date.parse(calendar.checked) > 7 * 86400000) {
-    return { closed: true, special: false, label: 'Market calendar unavailable' };
-  }
-
-  const special = calendarSpecial_(calendar,targetDay);
+  const saved = calendar?.year === year && Array.isArray(calendar.closed) &&
+    Number.isFinite(Date.parse(calendar.checked)) && calendar.checked <= targetDay ? calendar : null;
+  const exchangeHolidays = NSE_FO_HOLIDAYS[year] || [];
+  // A saved full-year calendar keeps announced dates through a failed refresh.
+  // Fresh broker dates can include additional closures issued after the annual circular.
+  const special = calendarSpecial_(saved,targetDay);
   if (special) return Object.assign({closed:false, special:true},special);
-  if (weekday > 5) return {closed:true, special:false, label:'Weekend'};
-  if (calendar.closed.includes(targetDay)) {
+  if (weekday > 5) return {closed:true, special:false,label:saved?.checked === targetDay ? 'Weekend' : 'Market calendar unavailable'};
+  if (saved?.closed.includes(targetDay) || exchangeHolidays.includes(targetDay)) {
     return { closed: true, special: false, label: 'Trading Holiday' };
   }
 
+  const recent = saved && Date.parse(targetDay) - Date.parse(saved.checked) <= 7 * 86400000;
+  if (!recent && !NSE_FO_HOLIDAYS[year]) {
+    return {closed:true, special:false, label:'Market calendar unavailable'};
+  }
   return {
     closed: false,
     special: false,
@@ -1251,16 +1272,22 @@ function scheduledCapture() {
   try {
     customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
   } catch (e) {}
-  let sp = customSpecial[today] || SPECIAL_SESSIONS[today] || calendarSpecial_(readJsonProperty_(properties,'MARKET_CALENDAR',null),today);
-  if (!sp && mins >= 420 && mins < 540 && readJsonProperty_(properties,'MARKET_CALENDAR',{}).checked !== today) {
+  const calendar = readJsonProperty_(properties,'MARKET_CALENDAR',null);
+  let sp = customSpecial[today] || SPECIAL_SESSIONS[today] ||
+    (calendar?.checked <= today ? calendarSpecial_(calendar,today) : null);
+  const weekend = weekday > 5;
+  // Refresh before selecting a window, including after a failed premarket lookup.
+  // Unknown weekends can still discover an announced afternoon session.
+  if (!sp && mins >= 420 && mins < CONFIG.eodEndMins &&
+      (calendar?.checked !== today || !calendar.special)) {
     const session = marketWindow_(now);
     if (session.special) sp = session;
+    else if (weekend && session.label === 'Market calendar unavailable' && mins >= 540) {
+      const status = 'Weekend session unverified · NSE F&O calendar unavailable · ' + today;
+      if (properties.getProperty('COLLECTOR_STATUS') !== status) properties.setProperty('COLLECTOR_STATUS',status);
+    }
   }
-
-  // Skip weekends (Saturday=6, Sunday=7) before any reconciliation or capture (unless special session)
-  if (weekday > 5) {
-    if (!sp) return;
-  }
+  if (weekend && !sp) return;
 
   // Pre-market reconciliation & 7-day snapshot pruning window: 07:00 - 09:00 IST (minutes 420 to 540)
   if (mins >= 420 && mins < 540) {

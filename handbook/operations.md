@@ -30,6 +30,10 @@ Install the recorded uv version and run `uv sync --locked --extra dev`. For a de
 
 Python 3.11 is the minimum supported runtime. Python 3.10 resolves to vulnerable versions of Pillow and filelock whose available fixes require a newer interpreter. The CI matrix covers Python 3.11, 3.12 and 3.13.
 
+## NSE derivatives calendar
+
+The collector uses confirmed F&O special-session circulars ahead of the weekend rule. Its bundled 2026 holiday fallback is based on NSE/FAOP/71777 and the amendment NSE/FAOP/72262. The daily Upstox refresh supplies additional closures and special-session hours. A temporary outage preserves announced dates already in the same-year cache, and a failed refresh retries after five minutes. On an unverified weekend, the scheduler continues looking for a published session and surfaces the unavailable calendar without assuming normal hours. Add each year's official F&O holiday circular to `NSE_FO_HOLIDAYS` and use exact hours from the separate circular for each special session in `SPECIAL_SESSIONS`. The operational override is `SPECIAL_SESSIONS_JSON`. [Annual NSE circular](https://nsearchives.nseindia.com/content/circulars/FAOP71777.pdf) · [January amendment](https://nsearchives.nseindia.com/content/circulars/FAOP72262.pdf) · [Muhurat hours](https://archives.nseindia.com/content/circulars/FAOP76940.pdf)
+
 ## Collector runtime
 
 Google allows 90 minutes of trigger runtime per user per day for consumer accounts and six hours for eligible Google Workspace accounts. The provider's quota resets 24 hours after the first request and is shared with other triggers owned by the same user. Trial Workspace accounts have additional restrictions. The collector measures its own work in a 24-hour window, so its estimate can differ from Google’s usage. [Google Apps Script quotas](https://developers.google.com/apps-script/guides/services/quotas)
