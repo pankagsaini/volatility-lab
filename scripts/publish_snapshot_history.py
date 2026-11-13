@@ -117,6 +117,10 @@ def build(archive, day):
                      "iv":front["iv"], "ivSource":SOURCE, "atm":front["atm"], "expiry":front["expiry"],
                      "snapshotId":front["ivCapturedAt"], "archiveFile":front["archiveFile"],
                      **{k:front[v] for k,v in (("h10","hv10"),("h20","hv20"),("h30","hv30"),("ew","ewma"))}}
+            if old.get("hvCloseDate") == day:
+                point.update({key: old[key] for key in ("c", "h10", "h20", "h30", "hvCloseDate")})
+            if "closingEstimate" in old:
+                point["closingEstimate"] = old["closingEstimate"]
             history[sym] = sorted([r for r in history[sym] if r["d"] != day]+[point], key=lambda r:r["d"])
         # On expiry day use the nearest later listed expiry in the very same original capture.
         for point in history[sym]:

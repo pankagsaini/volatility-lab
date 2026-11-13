@@ -29,7 +29,6 @@ const CONFIG = {
   timeZone: 'Asia/Kolkata',
   riskFreeRate: 0.066,
   regularStartMins: 555, // 09:15 IST (9 * 60 + 15)
-  eodStartMins: 18 * 60,         // 18:00 IST (1080)
   eodEndMins: 22 * 60,           // 22:00 IST (1320)
   completedEodMaxDays: 30,
   snapshotRetentionDays: SNAPSHOT_RETENTION_DAYS,
@@ -442,7 +441,7 @@ function calendarSpecial_(calendar, day) {
   const entry = calendar && calendar.special && calendar.special[day];
   if (!entry) return null;
   return {startMins:minute_(new Date(entry.start_time)), endMins:minute_(new Date(entry.end_time)),
-    eodStartMins:CONFIG.eodStartMins, eodEndMins:CONFIG.eodEndMins, label:'Broker NFO special session'};
+    eodStartMins:minute_(new Date(entry.end_time)) + 5, eodEndMins:CONFIG.eodEndMins, label:'Broker NFO special session'};
 }
 
 function marketWindow_(dateObj) {
@@ -527,7 +526,7 @@ function marketWindow_(dateObj) {
     label: 'Regular session ' + regularWindowLabel_(targetDay) + ' IST',
     startMins: CONFIG.regularStartMins, // 555 (09:15 IST)
     endMins: regularCloseMinutes_(targetDay),
-    eodStartMins: CONFIG.eodStartMins,  // 1080 (18:00 IST)
+    eodStartMins: regularCloseMinutes_(targetDay) + 5,
     eodEndMins: CONFIG.eodEndMins       // 1320 (22:00 IST)
   };
 }
@@ -543,13 +542,13 @@ function marketClosed_(now) {
 
 // Full quotes supply feed timestamps and executable depth absent from option/chain.
 // Never substitute the HTTP retrieval time or last-trade time for the feed time.
-function snapshotRiskMetrics_(candles, sessionDay, instrumentKey) {
+function snapshotRiskMetrics_(candles, sessionDay, instrumentKey, includeSession) {
   if (!Array.isArray(candles)) throw new Error('Missing daily candles');
   const closes = new Map();
   candles.forEach(c => {
     const date = String(c && c[0] || '').slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Invalid daily candle date');
-    if (date >= sessionDay) return; // Only completed sessions are eligible.
+    if (date > sessionDay || (date === sessionDay && !includeSession)) return;
     const close = Number(c[4]);
     if (!Number.isFinite(close) || close <= 0 || closes.has(date)) throw new Error('Invalid or duplicate daily close');
     closes.set(date, close);
@@ -558,7 +557,7 @@ function snapshotRiskMetrics_(candles, sessionDay, instrumentKey) {
   if (days.length < 31) throw new Error('Need 31 completed daily closes for HV30');
   const asOf = days[days.length - 1];
   const age = (Date.parse(sessionDay) - Date.parse(asOf)) / 86400000;
-  if (age <= 0 || age > 5) throw new Error('Historical volatility inputs are stale');
+  if (includeSession ? asOf !== sessionDay : age <= 0 || age > 5) throw new Error('Historical volatility inputs are stale');
   const returns = days.slice(1).map((d, i) => Math.log(closes.get(d) / closes.get(days[i])));
   const hv = n => {
     const values = returns.slice(-n);
@@ -568,10 +567,47 @@ function snapshotRiskMetrics_(candles, sessionDay, instrumentKey) {
   const variance = returns.reduce((v, r, i) => i ? 0.94 * v + 0.06 * r * r : r * r, 0);
   return { as_of: asOf, hv10: hv(10), hv20: hv(20), hv30: hv(30), ewma: Math.sqrt(variance * 245) * 100,
     units: 'annualized_percent', annualization_sessions: 245, method: 'sample_std_log_close_returns',
-    source: 'Upstox historical-candle v3 days/1', instrument_key: instrumentKey, observations: days.length };
+    source: 'Upstox historical-candle v3 days/1', instrument_key: instrumentKey, observations: days.length, close:closes.get(asOf) };
 }
 
 // Snapshot callers hold the capture lock. Keep one bounded map for the session.
+function closingRiskRows_(report, day) {
+  const rows = {};
+  for (const [symbol, key] of Object.entries(CONFIG.indices)) {
+    const record = report.records.find(r => r.label === key);
+    if (!record) continue;
+    try {
+      const {close,hv10,hv20,hv30,ewma} = snapshotRiskMetrics_(record.data.candles,day,key,true);
+      rows[symbol] = [close,hv10,hv20,hv30,ewma];
+    } catch (err) {
+      if (!report.pending.includes(key)) report.pending.push(key);
+    }
+  }
+  return rows;
+}
+
+function saveClosingRisk_(properties, day, rows) {
+  if (!Object.keys(rows).length) return;
+  const prefix = 'CLOSING_HV_', key = prefix + day.slice(0,7);
+  const days = readJsonProperty_(properties,key,{});
+  days[day] = Object.assign({},days[day],rows);
+  properties.setProperty(key, JSON.stringify(days));
+  // Retain the same one-year horizon as the captured IV index.
+  const cutoff = dailyIndexCutoff_(day).slice(0,7);
+  for (const other of properties.getKeys()) {
+    if (other.startsWith(prefix) && other.slice(prefix.length) < cutoff) properties.deleteProperty(other);
+  }
+}
+
+function publishedClosingRisk_(values) {
+  const days = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (!key.startsWith('CLOSING_HV_')) continue;
+    try { Object.assign(days,JSON.parse(value)); } catch (err) {}
+  }
+  return days;
+}
+
 function dailyIvRow_(report, symbol, archiveFile) {
   if (report.status !== 'complete' || !report.nfo_session_validated) return null;
   const first = report.records.filter(r => r.label.startsWith(symbol + '|') &&
@@ -638,8 +674,8 @@ function updateDailyIndex_(properties, report, archiveFile) {
   return rows;
 }
 
-function publishedDailyHistory_(properties, day) {
-  const values = properties.getProperties();
+function publishedDailyHistory_(properties, day, values) {
+  values = values || properties.getProperties();
   const latest = JSON.parse(values.LAST_SNAPSHOT || '{}').daily_rows || {};
   const cutoff = dailyIndexCutoff_(day);
   const result = {};
@@ -894,8 +930,10 @@ function capture_(mode, recovery) {
       : [{ label: 'quotes', path: '/v2/market-quote/quotes', params: { instrument_key: keys.join(',') } }];
 
     if (mode === 'eod') {
-      const fromDay = day_(new Date(Date.parse(targetDay + 'T12:00:00+05:30') - 10 * 86400000));
+      const targetMs = Date.parse(targetDay + 'T12:00:00+05:30');
       keys.forEach(key => {
+        const lookback = Object.values(CONFIG.indices).includes(key) ? 100 : 10;
+        const fromDay = day_(new Date(targetMs - lookback * 86400000));
         requests.push({
           label: key,
           path: '/v3/historical-candle/' + encodeURIComponent(key) + '/days/1/' + targetDay + '/' + fromDay
@@ -989,6 +1027,7 @@ function capture_(mode, recovery) {
         report.input_diagnostics = (report.input_diagnostics || []).concat([{item:'enrichment',reason:safeError_(err)}]);
       }
     }
+    if (mode === 'eod') report.closing_risk = closingRiskRows_(report,targetDay);
     report.status = (report.errors.length || report.pending.length) ? 'partial' : 'complete';
   } catch (err) {
     report.errors.push({ item: 'catalogue', reason: safeError_(err) });
@@ -1055,6 +1094,7 @@ function capture_(mode, recovery) {
   if (mode === 'eod') {
     const pending = loadPendingEod_();
     const target = report.target_day || today;
+    if (report.closing_risk) saveClosingRisk_(properties,target,report.closing_risk);
     if (report.status === 'complete') {
       delete pending[target];
       let completedMap = readJsonProperty_(properties, 'COMPLETED_EOD_DAYS', {});
@@ -1163,7 +1203,7 @@ function installIntradaySchedule() {
   properties.setProperty('INTERVAL_MINUTES', '1');
   properties.setProperty('SCHEDULE_MODE', 'intraday');
 
-  console.log('Enabled: one-minute snapshots, weekdays exchange session hours; EOD retries 18:00-22:00 IST; raw snapshots retained indefinitely; watchdog enabled.');
+  console.log('Enabled: one-minute snapshots, weekdays exchange session hours; EOD candle polling five minutes after close through 22:00 IST; raw snapshots retained indefinitely; watchdog enabled.');
 }
 
 /**
@@ -1230,11 +1270,11 @@ function scheduledCapture() {
 
   const snapStart = sp ? sp.startMins : CONFIG.regularStartMins; // 555 (09:15 IST)
   const snapEnd = sp ? sp.endMins : regularCloseMinutes_(today);
-  const eodStart = sp ? sp.eodStartMins : CONFIG.eodStartMins;   // 1080 (18:00 IST)
+  const eodStart = sp ? sp.eodStartMins : snapEnd + 5;
   const eodEnd = sp ? sp.eodEndMins : CONFIG.eodEndMins;         // 1320 (22:00 IST)
 
   // Intraday snapshots: regular or published special session, inclusive
-  // EOD candle retries: 18:00 - 22:00 IST (1080 to 1320)
+  // EOD candle polling begins five minutes after the regular session closes.
   const mode = (mins >= snapStart && mins <= snapEnd)
     ? 'snapshot'
     : (mins >= eodStart && mins < eodEnd)
@@ -1310,7 +1350,7 @@ function scheduledCapture() {
     if (mode === 'eod') {
       const alreadySucceeded = properties.getProperty('SUCCESS_EOD') === today;
       const lastAttempt = Number(properties.getProperty('ATTEMPT_eod') || 0);
-      if (alreadySucceeded || now.getTime() - lastAttempt < 30 * 60000) {
+      if (alreadySucceeded || now.getTime() - lastAttempt < (mins < eodStart+30 ? 5 : 30) * 60000) {
         return;
       }
     }
@@ -1724,6 +1764,11 @@ function doGet(e) {
       return ContentService.createTextOutput(statusJson).setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === 'closing_risk') {
+      return ContentService.createTextOutput(JSON.stringify(publishedClosingRisk_(properties.getProperties())))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     if (action === 'forward_ledger') {
       if (cache) {
         const cachedLedger = cache.get('DOGET_FWD_LEDGER_JSON');
@@ -1787,7 +1832,9 @@ function doGet(e) {
     if (calendar && Array.isArray(calendar.closed)) {
       payload.exchange_calendar = {year:calendar.year, closed:calendar.closed, special:calendar.special || {}};
     }
-    payload.daily_history = publishedDailyHistory_(properties,day_(new Date()));
+    const values = properties.getProperties();
+    payload.daily_history = publishedDailyHistory_(properties,day_(new Date()),values);
+    payload.closing_risk = publishedClosingRisk_(values);
     const outStr = JSON.stringify(payload);
     if (cache && fileId && file.getId() === fileId && outStr.length < 95000) {
       try { cache.put('DOGET_LATEST_SNAPSHOT_JSON_' + fileId, outStr, CONFIG.doGetCacheSeconds); } catch (e) {}

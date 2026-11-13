@@ -29,7 +29,7 @@ const web = vm.createContext({ Date: Clock, console, window: {}, B76_RISK_FREE_R
 vm.runInContext(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8'),web);
 for (const name of ['normPdf', 'normCdf', 'computeBlack76ParityForward', 'black76Greeks', 'black76Price',
   'black76IvDec', 'black76Iv', 'bsmIvDec', 'bsmGreeks', 'currentPricingInputs', 'relativeBookSpread', 'selectOptionPricing', 'enrichItemWithBlack76', 'liveNumber', 'liveTimestamp', 'liveBookValid',
-  'liveDeltaIv', 'capturedDeltaIv','validCloudCapture','showCaptureState','combineDailyCaptures','normalizeLiveSnapshot', 'currentRow', 'isFreshValidatedCloudSnapshot', 'syncLiveCloudSnapshot']) {
+  'liveDeltaIv', 'capturedDeltaIv','validCloudCapture','showCaptureState','combineDailyCaptures','applyClosingRisk','normalizeLiveSnapshot', 'currentRow', 'isFreshValidatedCloudSnapshot', 'syncLiveCloudSnapshot']) {
   vm.runInContext(browserFunction(name), web);
 }
 web.pricingInputs = {schema:1,rate:{model_rate:.066,source:'https://www.rbi.org.in/',sha256:'fixture',checked_at:new Date(now).toISOString()},
@@ -151,8 +151,11 @@ cloud.apiAll_ = requests => requests.map(req => {
   lockedUsage = null;
   budgetAt(79.99);
   scheduler.scheduledCapture();
-  minute = 1100;
+  minute = 944; // The derivatives market closes at 15:40 on this date.
   budgetAt(84.99);
+  scheduler.scheduledCapture();
+  assert.deepEqual(attempts,['snapshot']);
+  minute = 945;
   scheduler.scheduledCapture();
   budgetAt(85); settings.delete('SUCCESS_EOD'); settings.delete('ATTEMPT_eod');
   scheduler.scheduledCapture();
@@ -398,6 +401,21 @@ async function main() {
   assert.throws(() => cloud.snapshotRiskMetrics_(riskRows.concat([riskRows[1]]), '2026-11-13', 'key'), /duplicate/);
   assert.throws(() => cloud.snapshotRiskMetrics_(riskRows.slice(0, 10), '2026-11-13', 'key'), /31/);
 
+  // The same-day index close is used for reporting only after EOD, while live signals use prior closes.
+  const finalCandle = ['2026-11-13T00:00:00+05:30',26000,26000,26000,26000,0,0];
+  const closeInput = riskRows.filter(r => r[0].slice(0,10) < '2026-11-13').concat([finalCandle]);
+  assert.equal(cloud.snapshotRiskMetrics_(closeInput,'2026-11-13','NSE_INDEX|Nifty 50').as_of,'2026-11-12');
+  const closing = cloud.snapshotRiskMetrics_(closeInput,'2026-11-13','NSE_INDEX|Nifty 50',true);
+  assert.equal(closing.as_of,'2026-11-13');
+  assert.equal(closing.close,26000);
+  assert.notEqual(closing.hv30,report.risk_metrics.NIFTY.hv30);
+  assert.throws(() => cloud.snapshotRiskMetrics_(closeInput.slice(0,-1),'2026-11-13','key',true),/stale/);
+  const display = {NIFTY:[{d:'2026-11-13',iv:20,closingEstimate:{iv:21}}],BANKNIFTY:[]};
+  assert.equal(web.applyClosingRisk(display,{'2026-11-13':{NIFTY:[26000,11,15,17,16]}}),true);
+  assert.equal(display.NIFTY[0].iv,20);
+  assert.equal(display.NIFTY[0].closingEstimate.iv,21);
+  assert.equal(display.NIFTY[0].h30,17);
+  assert.equal(display.NIFTY[0].hvCloseDate,'2026-11-13');
   // Replay two sessions with new ATM, chain prices and expiry membership.
   report.capture_integrity = {age_seconds: 0};
   // A missed historical slot must not reject a later complete, fresh snapshot.
