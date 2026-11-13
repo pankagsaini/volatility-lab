@@ -5,7 +5,7 @@ import hashlib,io,json,re,threading
 from urllib.request import Request,urlopen
 from pypdf import PdfReader
 from collector_support import atomic_json
-from market_data import IST
+from collector_support import IST
 
 ROOT=Path(__file__).resolve().parent/'data'
 SOURCES={'NIFTY':'https://www.niftyindices.com/Factsheet/ind_nifty50.pdf','BANKNIFTY':'https://www.niftyindices.com/Factsheet/ind_nifty_bank.pdf'}

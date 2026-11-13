@@ -1,0 +1,32 @@
+{
+  "checked_at": "2026-11-13T06:34:25.377642+00:00",
+  "dividends": {
+    "BANKNIFTY": {
+      "as_of": "2026-10-30",
+      "basis": "Published index dividend yield proxy; not expiry-specific expected dividends",
+      "checked_at": "2026-11-13T06:34:25.377642+00:00",
+      "model_yield": 0.011399999999999999,
+      "sha256": "e2f07b6a30e07fc29f8cd2f4f27476b6e0af9709830d6e4d37c1affb89c379e5",
+      "source": "https://www.niftyindices.com/Factsheet/ind_nifty_bank.pdf",
+      "yield_percent": 1.14
+    },
+    "NIFTY": {
+      "as_of": "2026-10-30",
+      "basis": "Published index dividend yield proxy; not expiry-specific expected dividends",
+      "checked_at": "2026-11-13T06:34:25.377642+00:00",
+      "model_yield": 0.014199999999999999,
+      "sha256": "3c98909d1e06ec7887f9288250edf7f88b20d069e84748eb1dfbbd998246c642",
+      "source": "https://www.niftyindices.com/Factsheet/ind_nifty50.pdf",
+      "yield_percent": 1.42
+    }
+  },
+  "rate": {
+    "basis": "RBI 91-day T-bill latest auction cutoff; simple ACT/365 converted to continuous ACT/365",
+    "checked_at": "2026-11-13T06:34:25.377642+00:00",
+    "model_rate": 0.0582558880557722,
+    "sha256": "1612038c54d5179c823d55758007a240311094620ec0bdfe08c5e36cc8f7d1c2",
+    "source": "https://www.rbi.org.in/",
+    "yield_percent": 5.8681
+  },
+  "schema": 1
+}

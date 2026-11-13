@@ -87,15 +87,15 @@ def _unavailable_forward():
     }
 
 
-def implied_forward(strike: float, call_price: float, put_price: float, years: float = 0.0, rate: float = 0.066) -> float:
+def implied_forward(strike: float, call_price: float, put_price: float, years: float = 0.0, rate: float | None = None) -> float:
     """Return F = K + exp(r * T) * (C - P)."""
-    return float(parity_implied_forward(strike, call_price, put_price, max(0.0, float(years)), float(rate)))
+    return float(parity_implied_forward(strike, call_price, put_price, max(0.0, float(years)), float(rate) if rate is not None else float('nan')))
 
 
 def calculate(
     chain: pd.DataFrame | list[dict[str, Any]],
     spot: float | None = None,
-    rate: float = 0.066,
+    rate: float | None = None,
     years: float = 7.0 / 365.0,
     future_quote: dict[str, Any] | float | None = None,
     *,
@@ -104,6 +104,7 @@ def calculate(
     spot_timestamp: Any = None,
     future_contract: dict[str, Any] | None = None,
     max_quote_age_seconds: float = 60.0,
+    dividend: float | None = None,
 ) -> dict[str, Any]:
     """Use fresh, exact-expiry two-sided quote books; LTP-only data is never used."""
     if isinstance(chain, list):
@@ -231,38 +232,40 @@ def calculate(
             'Pricing model': MODEL_NAME,
         }
 
-    syn_f = implied_forward(atm_k, c_px, p_px, t_years, r_val) if (np.isfinite(c_px) and np.isfinite(p_px)) else np.nan
-    b76_c_iv = solve_black76_iv(c_px, syn_f, atm_k, t_years, r_val, 'CE') if np.isfinite(syn_f) else np.nan
-    b76_p_iv = solve_black76_iv(p_px, syn_f, atm_k, t_years, r_val, 'PE') if np.isfinite(syn_f) else np.nan
-    b76_atm_iv = float(0.5 * (b76_c_iv + b76_p_iv) * 100.0) if (np.isfinite(b76_c_iv) and np.isfinite(b76_p_iv)) else None
-
-    fut_ltp = None
-    if isinstance(future_quote, dict) and future_contract:
-        contract_expiry = str(future_contract.get('expiry') or '')[:10]
-        quote_expiry = str(future_quote.get('expiry') or '')[:10]
-        if (contract_expiry and quote_expiry == contract_expiry
-                and _same_expiry_month(contract_expiry, expected_expiry)
-                and _fresh_quote(future_quote, as_of, max_quote_age_seconds)):
-            fut_ltp = _book_mid(future_quote)
-
-    basis = (float(syn_f) - fut_ltp) if np.isfinite(syn_f) and fut_ltp is not None else None
+    from pricing_policy import select_model, price_observed_option
+    if future_contract and str(future_contract.get('expiry'))[:10] != str((future_quote or {}).get('expiry'))[:10]:
+        future_quote = None
+    selected = select_model(
+        [{'expiry': expected_expiry, 'strike_price': atm_k,
+          'call_options': {'market_data': ce_row.to_dict()}, 'put_options': {'market_data': pe_row.to_dict()}}],
+        spot=spot_f, expiry=expected_expiry, as_of=as_of, spot_timestamp=spot_timestamp,
+        years=t_years, rate=r_val, dividend=dividend, future_quote=future_quote,
+        max_quote_age_seconds=max_quote_age_seconds,
+    )
+    c_iv = price_observed_option(c_px, atm_k, t_years, 'CE', selected, spot=spot_f)['iv']
+    p_iv = price_observed_option(p_px, atm_k, t_years, 'PE', selected, spot=spot_f)['iv']
+    model_iv = (c_iv+p_iv)*50 if c_iv is not None and p_iv is not None else None
+    syn_f = selected['synthetic_forward']
+    fut_ltp = selected['forward'] if selected['source'] == 'listed_future' else None
+    basis = syn_f-fut_ltp if syn_f is not None and fut_ltp is not None else None
     return {
         'ATM strike': float(atm_k),
         'ATM call LTP': float(c_px) if np.isfinite(c_px) else None,
         'ATM put LTP': float(p_px) if np.isfinite(p_px) else None,
-        'Synthetic future': round(float(syn_f), 2) if np.isfinite(syn_f) else None,
-        'Month future LTP': round(float(fut_ltp), 2) if fut_ltp is not None else None,
-        'Basis': round(float(basis), 2) if basis is not None else None,
-        'Black-76 ATM IV': round(b76_atm_iv, 2) if b76_atm_iv is not None else None,
-        'Quote method': 'Bid/ask midpoint' if np.isfinite(syn_f) else 'Unavailable',
-        'Synthetic status': 'Ready (Black-76 Put-Call Parity F = K + e^{rT}(C − P))' if np.isfinite(syn_f) else 'Unavailable',
-        'Pricing model': MODEL_NAME,
+        'Synthetic future': round(syn_f, 2) if syn_f is not None else None,
+        'Month future LTP': round(fut_ltp, 2) if fut_ltp is not None else None,
+        'Basis': round(basis, 2) if basis is not None else None,
+        'Black-76 ATM IV': round(model_iv, 2) if model_iv is not None and selected['model'] == 'black76' else None,
+        'Model ATM IV': round(model_iv, 2) if model_iv is not None else None,
+        'Quote method': 'Bid/ask midpoint' if model_iv is not None else 'Unavailable',
+        'Synthetic status': selected['reason'],
+        'Pricing model': {'black76':'Black-76', 'bsm':'BSM'}.get(selected['model'], 'Unavailable'),
     }
 
 
-def theoretical_forward(spot: float, years: float, rate: float = 0.065, dividend: float = 0.0) -> float:
+def theoretical_forward(spot: float, years: float, rate: float | None = None, dividend: float | None = None) -> float:
     """Compute cost-of-carry theoretical forward F = S * exp((r - q) * T)."""
-    if spot is None or spot <= 0:
+    if spot is None or spot <= 0 or rate is None or dividend is None:
         return float("nan")
     t = max(0.0, float(years or 0.0))
     return float(spot * math.exp((float(rate or 0.0) - float(dividend or 0.0)) * t))
@@ -272,8 +275,8 @@ def determine_forward(
     chain_rows: list[dict[str, Any]],
     spot: float | None = None,
     future_quote: dict[str, Any] | None = None,
-    rate: float = 0.065,
-    dividend: float = 0.0,
+    rate: float | None = None,
+    dividend: float | None = None,
     years: float = 7.0 / 365.0,
     r: float | None = None,
     dte_days: float | None = None,
@@ -282,86 +285,11 @@ def determine_forward(
     spot_timestamp: Any = None,
     max_quote_age_seconds: float = 60.0,
 ) -> dict[str, Any]:
-    """Determine forward price using 3-tier precedence."""
-    if r is not None:
-        rate = r
-    try:
-        spot = float(spot) if spot is not None else None
-        t_years = float(dte_days) / 365.0 if dte_days is not None else float(years)
-        r_val = float(0.0 if rate is None else rate)
-        q_val = float(0.0 if dividend is None else dividend)
-    except (TypeError, ValueError):
-        return _unavailable_forward()
-    if (not np.isfinite(t_years) or t_years < 0.0
-            or not np.isfinite(r_val) or not np.isfinite(q_val)
-            or (spot is not None and not np.isfinite(spot))):
-        return _unavailable_forward()
-
-    observed_expiries = {
-        str(item.get('expiry') or item.get('Expiry') or '')[:10]
-        for item in chain_rows if item.get('expiry') or item.get('Expiry')
-    }
-    expected_expiry = str(expiry)[:10] if expiry is not None else (
-        next(iter(observed_expiries)) if len(observed_expiries) == 1 else None
+    """Select a matched future, tight same-expiry parity, or explicit BSM carry."""
+    from pricing_policy import select_model
+    return select_model(
+        chain_rows, spot=spot, expiry=expiry, as_of=as_of, spot_timestamp=spot_timestamp,
+        years=float(dte_days)/365 if dte_days is not None else years,
+        rate=r if r is not None else rate, dividend=dividend, future_quote=future_quote,
+        max_quote_age_seconds=max_quote_age_seconds,
     )
-
-    # Tier 1: Accept only a timestamped, two-sided future book from the option-expiry month.
-    if future_quote is not None and isinstance(future_quote, dict):
-        fut_expiry = str(future_quote.get('expiry') or '')[:10]
-        fut_px = _book_mid(future_quote)
-        if (fut_px is not None and fut_expiry and expected_expiry
-                and _same_expiry_month(fut_expiry, expected_expiry)
-                and _fresh_quote(future_quote, as_of, max_quote_age_seconds)):
-            fut_val = float(fut_px)
-            basis = (fut_val - spot) if (spot is not None and spot > 0) else 0.0
-            return {
-                "forward": fut_val,
-                "source": "listed_future",
-                "basis": basis if _fresh_quote({'timestamp': spot_timestamp}, as_of, max_quote_age_seconds) else None,
-                "is_synthetic": False,
-                "confidence": "VALIDATED_BOOK",
-                "expiry": fut_expiry,
-            }
-
-    # Tier 2: ATM parity from a fresh, two-sided matched-expiry option pair.
-    spot_is_fresh = _fresh_quote({'timestamp': spot_timestamp}, as_of, max_quote_age_seconds)
-    if (chain_rows and spot is not None and spot > 0 and expected_expiry and spot_is_fresh
-            and observed_expiries == {expected_expiry} and as_of is not None):
-        step = 50.0 if spot < 35000 else 100.0
-        atm_k = round(spot / step) * step
-        atm_node = None
-        for item in chain_rows:
-            k = item.get("strike_price") or item.get("strike")
-            if (k is not None and str(item.get('expiry') or item.get('Expiry') or '')[:10] == expected_expiry
-                    and abs(float(k) - atm_k) < 1e-4):
-                atm_node = item
-                break
-        if atm_node is not None:
-            c_data = (atm_node.get("call_options") or atm_node.get("call") or {}).get("market_data", {}) or (atm_node.get("call_options") or atm_node.get("call") or {})
-            p_data = (atm_node.get("put_options") or atm_node.get("put") or {}).get("market_data", {}) or (atm_node.get("put_options") or atm_node.get("put") or {})
-            c_mid = _book_mid(c_data) if _fresh_quote(c_data, as_of, max_quote_age_seconds) else None
-            p_mid = _book_mid(p_data) if _fresh_quote(p_data, as_of, max_quote_age_seconds) else None
-            if c_mid is not None and p_mid is not None:
-                fwd_val = implied_forward(atm_k, c_mid, p_mid, t_years, r_val)
-                basis = fwd_val - spot
-                return {
-                    "forward": fwd_val,
-                    "source": "synthetic_forward",
-                    "basis": basis,
-                    "is_synthetic": True,
-                    "atm_strike": atm_k,
-                    "confidence": "VALIDATED_OPTION_BOOKS",
-                    "expiry": expected_expiry,
-                }
-
-    # Tier 3: Cost-of-carry theoretical forward
-    spot_is_fresh = _fresh_quote({'timestamp': spot_timestamp}, as_of, max_quote_age_seconds)
-    fwd_theo = theoretical_forward(spot, t_years, r_val, q_val) if (spot is not None and spot > 0 and spot_is_fresh) else float("nan")
-    basis = (fwd_theo - spot) if np.isfinite(fwd_theo) else None
-    return {
-        "forward": fwd_theo if np.isfinite(fwd_theo) else None,
-        "source": "cost_of_carry_forward" if np.isfinite(fwd_theo) else "unavailable",
-        "basis": basis,
-        "is_synthetic": False,
-        "confidence": "THEORETICAL" if np.isfinite(fwd_theo) else "UNAVAILABLE",
-    }

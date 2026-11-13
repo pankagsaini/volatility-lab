@@ -1,4 +1,4 @@
-"""Quantitative pricing & Greeks modules: BSM (primary default) and Black-76 (second model)."""
+"""Quantitative pricing & Greeks modules: Black-76 (default) and BSM (spot fallback)."""
 import numpy as np
 import option_math
 
@@ -50,3 +50,6 @@ __all__ = [
     "calculate_iv",
     "compare_bsm_and_black76",
 ]
+
+from pricing_policy import select_model, price_observed_option
+__all__ += ["select_model", "price_observed_option"]

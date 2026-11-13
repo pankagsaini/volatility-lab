@@ -243,10 +243,10 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
     matched_exp = next((e for e in available if e['expiry'] == expiry), None)
     dte_val = float(matched_exp['dte']) if matched_exp else 0.0
 
-    def same_expiry_month(left, right):
+    def same_expiry(left, right):
         try:
             left_stamp, right_stamp = pd.Timestamp(left), pd.Timestamp(right)
-            return (left_stamp.year, left_stamp.month) == (right_stamp.year, right_stamp.month)
+            return left_stamp.date() == right_stamp.date()
         except (TypeError, ValueError):
             return False
 
@@ -254,10 +254,10 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
         contract for contract in content.get('contracts', [])
         if isinstance(contract, dict)
         and str(contract.get('instrument_type', '')).upper() == 'FUT'
-        and same_expiry_month(contract.get('expiry'), expiry)
+        and same_expiry(contract.get('expiry'), expiry)
     ]
     # A forward reference is valid only when the archive identifies exactly one
-    # listed future in the option expiry month; never choose an arbitrary FUT.
+    # listed future with the exact option expiry; never borrow a monthly forward for a weekly.
     future_contract = matching_futures[0] if len(matching_futures) == 1 else None
     future_quote = None
     if future_contract:
@@ -280,9 +280,13 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
             dte_for_pricing = max(0.0, (expiry_close - valuation).total_seconds() / 86400.0)
         except (TypeError, ValueError):
             pass
+    # Archive valuations use inputs recorded alongside that capture; never today's inputs.
+    from pricing_policy import recorded_inputs
+    rate, dividend = recorded_inputs(content.get('pricing_inputs') or {}, symbol, valuation)
     fwd_res = determine_forward(
         raw_chain, spot, future_quote=future_quote, dte_days=dte_for_pricing,
         expiry=expiry, as_of=valuation, spot_timestamp=spot_timestamp,
+        rate=rate, dividend=dividend,
     )
     forward_value = fwd_res.get('forward')
     forward_source = fwd_res.get('source')
@@ -318,10 +322,8 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
         'forward_confidence': fwd_res.get('confidence'),
         'forward_status': 'Validated forward available' if observed_forward is not None else 'No validated forward available',
         'theoretical_forward': theoretical_forward,
-        # Preserve the public model label for existing clients.  Consumers must
-        # use forward_price / forward_status rather than treating this label as
-        # proof that a usable live forward was available.
-        'pricing_model': 'Black-76 (Forward Anchored)',
+        'pricing_model': {'black76': 'Black-76', 'bsm': 'BSM'}.get(fwd_res.get('model'), 'Broker IV only'),
+        'pricing_reason': fwd_res.get('reason'),
         'atm_strike': atm_strike,
         'straddle_ltp': round(atm_straddle, 2),
         'atm_straddle': round(atm_straddle, 2),

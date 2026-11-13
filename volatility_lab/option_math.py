@@ -806,7 +806,7 @@ def reversal_values(chain, symbol=None):
     }
 
 
-DEFAULT_PRICING_MODEL = "bsm"
+DEFAULT_PRICING_MODEL = "black76"
 
 # Sensibull and unified model aliases
 sensibull_greeks = black76_greeks
@@ -818,13 +818,13 @@ def sensibull_dte_years(dte_days: float) -> float:
     return max(0.0, float(dte_days or 0.0)) / 365.0
 
 def calculate_greeks(underlying, strike, years, rate, vol, kind, model=DEFAULT_PRICING_MODEL, dividend=0.0):
-    """Calculate Greeks using specified model (default: BSM, or 'black76' / 'sensibull')."""
+    """Calculate Greeks using specified model (default: Black-76 with a forward input; explicitly select 'bsm' for spot)."""
     if str(model).lower() in ("black76", "black-76", "sensibull", "forward"):
         return black76_greeks(underlying, strike, years, rate, vol, kind)
     return bsm_greeks(underlying, strike, years, rate, vol, kind, dividend=dividend)
 
 def calculate_iv(price, underlying, strike, years, rate, kind, model=DEFAULT_PRICING_MODEL, dividend=0.0, bounds=(1e-4, 5.0), tol=1e-8):
-    """Calculate IV using specified model (default: BSM, or 'black76' / 'sensibull')."""
+    """Calculate IV using specified model (default: Black-76 with a forward input; explicitly select 'bsm' for spot)."""
     if str(model).lower() in ("black76", "black-76", "sensibull", "forward"):
         return solve_black76_iv(price, underlying, strike, years, rate, kind, bounds=bounds, tol=tol)
     return solve_iv(price, underlying, strike, years, rate, kind, dividend=dividend, bounds=bounds, tol=tol)

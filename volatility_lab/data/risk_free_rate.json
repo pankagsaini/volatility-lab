@@ -1,6 +1,8 @@
 {
-  "as_of": "2026-11-11",
-  "model_rate": 0.0585407108,
-  "source": "FBIL / RBI 91-Day Treasury Bill Benchmark",
-  "stale": false
+  "basis": "RBI 91-day T-bill latest auction cutoff; simple ACT/365 converted to continuous ACT/365",
+  "checked_at": "2026-11-13T06:34:25.377642+00:00",
+  "model_rate": 0.0582558880557722,
+  "sha256": "1612038c54d5179c823d55758007a240311094620ec0bdfe08c5e36cc8f7d1c2",
+  "source": "https://www.rbi.org.in/",
+  "yield_percent": 5.8681
 }

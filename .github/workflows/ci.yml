@@ -103,6 +103,9 @@ jobs:
       - name: Verify chart and scenario regressions
         run: node scripts/test_frontend.cjs
 
+      - name: Verify model selection and official input guards
+        run: node scripts/test_pricing_policy.cjs
+
       - name: Verify Web Asset SHA-256 Parity
         run: |
           python -c "
