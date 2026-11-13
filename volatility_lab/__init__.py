@@ -17,6 +17,7 @@ from pathlib import Path
 
 __version__ = "18.0.0"
 
-_PKG_DIR = Path(__file__).resolve().parent
+PACKAGE_ROOT = Path(__file__).resolve().parent
+_PKG_DIR = PACKAGE_ROOT
 if str(_PKG_DIR) not in sys.path:
     sys.path.insert(0, str(_PKG_DIR))

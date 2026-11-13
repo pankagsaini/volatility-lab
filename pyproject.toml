@@ -32,6 +32,9 @@ dependencies = [
     "arch>=6.3.0",
 ]
 
+[project.scripts]
+volatility-lab = "volatility_lab.runtime.launcher:main"
+
 [project.optional-dependencies]
 dev = [
     "ruff>=0.8.0",
@@ -84,5 +87,5 @@ ignore = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["."]
+testpaths = ["tests"]
 python_files = ["test_*.py"]

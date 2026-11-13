@@ -1,31 +1,11 @@
-"""Algorithmic strategy backtesting engine, point-in-time signals, and broker fees.
+"""Backtest implementation modules; imports are lazy."""
+from importlib import import_module
 
-Semantic facade layer providing clean subpackage re-exports of core backtesting modules.
-"""
-from .. import (
-    backtest_common,
-    backtest_engine,
-    backtest_jobs,
-    backtest_report,
-    backtest_signals,
-    broker_charges,
-    broker_options,
-    forward_test,
-    futures_backtest,
-    strategy_backtest,
-    trade_review,
-)
+__all__ = ['backtest_common', 'backtest_engine', 'backtest_jobs', 'backtest_report', 'backtest_signals', 'backtest_index', 'broker_charges', 'broker_options', 'forward_test', 'futures_backtest', 'strategy_backtest', 'trade_review']
 
-__all__ = [
-    "backtest_common",
-    "backtest_engine",
-    "backtest_jobs",
-    "backtest_report",
-    "backtest_signals",
-    "broker_charges",
-    "broker_options",
-    "forward_test",
-    "futures_backtest",
-    "strategy_backtest",
-    "trade_review",
-]
+def __getattr__(name):
+    if name in __all__:
+        value = import_module("volatility_lab.backtest." + name)
+        globals()[name] = value
+        return value
+    raise AttributeError(name)
