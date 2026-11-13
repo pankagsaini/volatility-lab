@@ -176,6 +176,59 @@ cloud.apiAll_ = requests => requests.map(req => {
   settings.set('COLLECTOR_QUOTA_TIER', 'workspace');
   assert.equal(policy().total_minutes, 85);
 }
+// The exchange schedule wins during a broker outage. An unlisted weekend can recover
+// from a failed premarket lookup without treating ordinary weekends as open.
+{
+  let stamp, reads = 0, available = false, attempts = [];
+  class CalendarClock extends Date {
+    constructor(...args) {super(...(args.length ? args : [stamp]));}
+    static now() {return stamp;}
+  }
+  const state = new Map([['SCHEDULE_MODE','intraday']]);
+  const properties = {getProperty:k=>state.get(k) || null, setProperty:(k,v)=>state.set(k,v), deleteProperty:k=>state.delete(k)};
+  const sessionDate = '2026-11-21';
+  const start = Date.parse(sessionDate + 'T14:20:00+05:30'), end = Date.parse(sessionDate + 'T15:40:00+05:30');
+  const calendar = vm.createContext({Date:CalendarClock, console:{log(){}}, LockService:{
+    getScriptLock:()=>({tryLock:()=>true,releaseLock(){}})}, Utilities:{formatDate(d,tz,f) {
+      const ist = new Date(d.getTime()+19800000);
+      if (f === 'u') return String(ist.getUTCDay() || 7);
+      if (f === 'H') return String(ist.getUTCHours());
+      if (f === 'm') return String(ist.getUTCMinutes());
+      return ist.toISOString().slice(0,10);
+    }}, UrlFetchApp:{fetch() {
+      reads++;
+      return {getResponseCode:()=>available ? 200 : 503, getContentText:()=>JSON.stringify({status:'success',data:[
+        {date:sessionDate, holiday_type:'SPECIAL_TIMING', open_exchanges:[{exchange:'NFO',start_time:start,end_time:end}]},
+        {date:'2026-11-27',holiday_type:'TRADING_HOLIDAY',closed_exchanges:['NFO']}
+      ]})};
+    }}});
+  vm.runInContext(gs,calendar);
+  calendar.props_ = () => properties;
+  calendar.reconcilePriorSession = () => {};
+  calendar.capture_ = mode => {attempts.push(mode);return {status:'complete'};};
+  const run = (day,time) => {stamp=Date.parse(day+'T'+time+':41+05:30');calendar.scheduledCapture();};
+  run('2026-11-08','14:19'); run('2026-11-08','14:20');
+  assert.deepEqual(attempts,['snapshot']); assert.equal(reads,0);
+  run('2026-11-10','09:15');
+  assert.deepEqual(attempts,['snapshot'],'annual NSE holiday stays closed during outage');
+  run('2026-11-16','09:15');
+  assert.deepEqual(attempts,['snapshot','snapshot'],'annual NSE calendar allows normal weekdays');
+  run(sessionDate,'07:00'); const failedAttempts = reads;
+  run(sessionDate,'07:01'); assert.equal(reads,failedAttempts);
+  run(sessionDate,'14:14');
+  assert.match(state.get('COLLECTOR_STATUS'),/Weekend session unverified/);
+  available = true;
+  run(sessionDate,'14:18'); assert.deepEqual(attempts,['snapshot','snapshot']);
+  run(sessionDate,'14:20'); assert.deepEqual(attempts,['snapshot','snapshot','snapshot']);
+  assert.equal(JSON.parse(state.get('MARKET_CALENDAR')).special[sessionDate].start_time,start);
+  assert.equal(state.has('MARKET_CALENDAR_RETRY_AT'),false);
+  available = false;
+  run('2026-11-27','09:15');
+  assert.deepEqual(attempts,['snapshot','snapshot','snapshot'],'saved later NSE closure survives broker outage');
+  run('2026-11-28','14:20');
+  assert.deepEqual(attempts,['snapshot','snapshot','snapshot'],'unknown weekend remains closed');
+}
+
 // Exercise the real enrichment loop independently of the capture fixtures.
 {
   const batching = vm.createContext({Date: Clock, console, Utilities: {
