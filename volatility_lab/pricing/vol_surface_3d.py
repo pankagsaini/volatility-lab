@@ -2,14 +2,11 @@
 
 from datetime import datetime, date
 import json
-import math
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
 import numpy as np
-import pandas as pd
 import plotly.graph_objects as go
-import streamlit as st
 
 try:
     from market_data import IST
@@ -17,14 +14,13 @@ except ImportError:
     from zoneinfo import ZoneInfo
     IST = ZoneInfo('Asia/Kolkata')
 
-import option_math
+from volatility_lab.pricing.pricing_policy import number, timestamp
 
-SURFACE_VERSION = 'vol-surface-3d-v3-broker-iv'
+SURFACE_VERSION = 'vol-surface-3d-v4-broker-iv'
 
 
 def load_expiry_chains(symbol: str, data_dir: Path, today: Optional[date] = None, rate=None):
     """Read archived chains with explicit broker provenance and real capture timestamps."""
-    from volatility_lab.pricing.pricing_policy import number, timestamp
     today = today or datetime.now(IST).date()
     result = []
     for path in sorted(data_dir.glob(f'{symbol.lower()}_option_quotes_*.json')):
@@ -58,7 +54,6 @@ def load_expiry_chains(symbol: str, data_dir: Path, today: Optional[date] = None
 
 
 def captured_iv(row, side):
-    from volatility_lab.pricing.pricing_policy import number
     leg = row.get(side)
     greeks = leg.get('option_greeks') if isinstance(leg,dict) else None
     value = number(greeks.get('iv')) if isinstance(greeks,dict) else None
@@ -86,110 +81,83 @@ def extract_surface_mesh(
     if not filtered:
         return np.array([]), np.array([]), np.empty((0, 0)), [], {}
 
-    ref_spot = filtered[0]['spot']
-    ref_forward = filtered[0].get('forward', ref_spot)
-
-    if space_mode == 'moneyness':
-        x_grid = np.linspace(100.0 - moneyness_range_pct, 100.0 + moneyness_range_pct, n_strikes)
-    else:
-        raw_strikes = sorted({float(item['strike_price']) for item in filtered[0].get('chain', []) if item.get('strike_price')})
-        strike_step = float(np.median(np.diff(raw_strikes))) if len(raw_strikes) >= 2 else (50.0 if ref_spot < 35000 else 100.0)
-        atm_strike = round(ref_spot / strike_step) * strike_step
-        half_span = ref_spot * (moneyness_range_pct / 100.0)
-        x_grid = np.linspace(atm_strike - half_span, atm_strike + half_span, n_strikes)
-
-    y_grid = []
-    expiry_labels = []
-    z_rows = []
-    raw_point_counts = []
-    included_expiries = []
-
-    for entry in filtered:
-        dte = entry['dte']
-        years = entry.get('years', max(0.2, dte) / 365.0)
-        spot = entry['spot']
-        chain = entry['chain']
-        extracted_strikes = []
-        extracted_ivs = []
-
-        for item in chain:
-            k = item.get('strike_price')
-            if k is None or not np.isfinite(k):
+    if iv_mode not in ('otm', 'call', 'put', 'mid'):
+        raise ValueError(f'Unknown IV selection {iv_mode}')
+    curves = []
+    for entry in sorted(filtered, key=lambda item: item['dte']):
+        spot = number(entry['spot'])
+        if spot is None or spot <= 0:
+            continue
+        quotes = {}
+        listed = set()
+        for item in entry['chain']:
+            strike = number(item.get('strike_price'))
+            if strike is None or strike <= 0:
                 continue
-            k_f = float(k)
-
-            m_pct = (k_f / spot) * 100.0
-            if abs(m_pct - 100.0) > (moneyness_range_pct * 1.35):
+            listed.add(strike)
+            if abs(strike - spot) > spot * moneyness_range_pct / 100:
                 continue
-
-            c_iv = captured_iv(item,'call_options')
-            p_iv = captured_iv(item,'put_options')
-            if iv_mode == 'otm':
-                chosen_iv = p_iv if k_f < spot else c_iv
-            elif iv_mode == 'call':
-                chosen_iv = c_iv
-            elif iv_mode == 'put':
-                chosen_iv = p_iv
-            elif iv_mode == 'mid':
-                valid = [v for v in (c_iv, p_iv) if v > 0]
-                chosen_iv = sum(valid) / len(valid) if valid else 0.0
+            if iv_mode == 'mid':
+                call = captured_iv(item, 'call_options')
+                put = captured_iv(item, 'put_options')
+                if not (call <= iv_cap and put <= iv_cap):
+                    continue
+                iv = (call + put) / 2
             else:
-                chosen_iv = p_iv if k_f < spot else c_iv
-
-            if 0 < chosen_iv <= iv_cap and np.isfinite(chosen_iv):
-                capped_iv = min(float(chosen_iv), iv_cap)
-                x_val = m_pct if space_mode == 'moneyness' else k_f
-                extracted_strikes.append(x_val)
-                extracted_ivs.append(capped_iv)
-
-        if len(extracted_strikes) < 3:
+                side = ('put' if strike < spot else 'call') if iv_mode == 'otm' else iv_mode
+                iv = captured_iv(item, side + '_options')
+            if 0 < iv <= iv_cap:
+                quotes.setdefault(strike, iv)
+        if len(quotes) < 3:
             continue
+        strikes = sorted(quotes)
+        atm = min(listed, key=lambda strike: (abs(strike - spot), strike))
+        curves.append({
+            'expiry': entry['expiry'], 'dte': float(entry['dte']), 'spot': spot,
+            'as_of': entry.get('as_of'), 'strikes': strikes, 'ivs': [quotes[k] for k in strikes],
+            'atm_strike': atm, 'atm_iv': quotes.get(atm),
+        })
 
-        order = np.argsort(extracted_strikes)
-        s_arr = np.array(extracted_strikes)[order]
-        iv_arr = np.array(extracted_ivs)[order]
+    if not curves:
+        return np.array([]), np.array([]), np.empty((0, 0)), [], {}
+    front, back = curves[0], curves[-1]
+    ref_spot = front['spot']
+    if space_mode == 'moneyness':
+        x_grid = np.linspace(100 - moneyness_range_pct, 100 + moneyness_range_pct, n_strikes)
+    else:
+        x_grid = np.linspace(min(c['strikes'][0] for c in curves),
+                             max(c['strikes'][-1] for c in curves), n_strikes)
+    z_rows = []
+    expiry_labels = []
+    for curve in curves:
+        xs = np.array(curve['strikes'])
+        if space_mode == 'moneyness':
+            xs = xs / curve['spot'] * 100
+        z_rows.append(np.interp(x_grid, xs, curve['ivs'], left=np.nan, right=np.nan))
+        expiry_labels.append(f"{curve['expiry']} ({curve['dte']:.1f}d)")
 
-        s_unique, idx_unique = np.unique(s_arr, return_index=True)
-        iv_unique = iv_arr[idx_unique]
-
-        if len(s_unique) < 3:
-            continue
-        z_interp = np.interp(x_grid, s_unique, iv_unique, left=np.nan, right=np.nan)
-        included_expiries.append(entry['expiry'])
-        z_rows.append(z_interp)
-        y_grid.append(dte)
-        expiry_labels.append(f"{entry['expiry']} ({dte:.1f}d)")
-        raw_point_counts.append(len(s_unique))
-
-    if not z_rows:
-        return x_grid, np.array([]), np.empty((0, len(x_grid))), [], {}
-
-    y_arr = np.array(y_grid)
+    y_arr = np.array([c['dte'] for c in curves])
     z_matrix = np.array(z_rows)
-
-    target_atm = 100.0 if space_mode == 'moneyness' else ref_spot
-    atm_idx = int(np.argmin(np.abs(x_grid - target_atm)))
-    front_atm_iv = float(z_matrix[0, atm_idx])
-    back_atm_iv = float(z_matrix[-1, atm_idx])
-    term_slope = back_atm_iv - front_atm_iv
-
-    target_left = 96.0 if space_mode == 'moneyness' else ref_spot * 0.96
-    target_right = 104.0 if space_mode == 'moneyness' else ref_spot * 1.04
-    iv_left, iv_right = np.interp([target_left, target_right], x_grid, z_matrix[0])
-    front_skew = float(iv_left - iv_right)
-
+    front_atm_iv = front['atm_iv']
+    back_atm_iv = back['atm_iv']
+    term_slope = float('nan')
+    if len(curves) == len(filtered) and len(curves) >= 2 and all(c['atm_iv'] is not None for c in curves):
+        term_slope = back_atm_iv - front_atm_iv
+    left, right = np.interp([ref_spot * .96, ref_spot * 1.04], front['strikes'], front['ivs'],
+                            left=np.nan, right=np.nan)
     diagnostics = {
         'pricing_model': 'Captured broker IV',
-        'expiries': included_expiries,
-        'num_expiries': len(y_arr),
+        'expiries': [c['expiry'] for c in curves],
+        'curves': curves,
+        'num_expiries': len(curves),
         'min_dte': float(y_arr.min()),
         'max_dte': float(y_arr.max()),
-        'ref_spot': float(ref_spot),
-        'front_atm_iv': front_atm_iv,
-        'back_atm_iv': back_atm_iv,
+        'ref_spot': ref_spot,
+        'front_atm_iv': front_atm_iv if front_atm_iv is not None else float('nan'),
+        'back_atm_iv': back_atm_iv if back_atm_iv is not None else float('nan'),
         'term_slope': term_slope,
-        'front_skew': front_skew,
-        'total_raw_points': sum(raw_point_counts)
+        'front_skew': float(left - right),
+        'total_raw_points': sum(len(c['strikes']) for c in curves),
     }
 
     return x_grid, y_arr, z_matrix, expiry_labels, diagnostics
@@ -211,7 +179,7 @@ def build_surface_figure(
         '<b>%{text}</b><br>' +
         f'{x_title}: %{{x:.1f}}<br>' +
         'DTE: %{y:.1f} days<br>' +
-        'Broker IV: <b>%{z:.2f}%</b>' +
+        'Interpolated IV: <b>%{z:.2f}%</b>' +
         '<extra></extra>'
     )
 
@@ -308,6 +276,8 @@ def build_surface_figure(
 
 def render_vol_surface_3d(symbol: str, selected_row: Dict[str, Any], result: Dict[str, Any], data_dir: Path):
     """Interactive Streamlit component to render the 3D Volatility Surface."""
+    import streamlit as st
+
     st.markdown("""
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div>
@@ -334,7 +304,7 @@ def render_vol_surface_3d(symbol: str, selected_row: Dict[str, Any], result: Dic
             options=['otm', 'mid', 'call', 'put'],
             format_func=lambda x: {
                 'otm': 'OTM broker IV',
-                'mid': 'Mid-Market (Avg Call/Put)',
+                'mid': 'Average of call and put broker IV',
                 'call': 'Calls Only',
                 'put': 'Puts Only'
             }.get(x, x),
@@ -427,15 +397,21 @@ def render_vol_surface_3d(symbol: str, selected_row: Dict[str, Any], result: Dic
 
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True})
 
+    st.caption("Capture times by expiry · " + " · ".join(
+        f"{curve['expiry']} at {curve['as_of']}" for curve in diag['curves']
+    ))
+    def metric_iv(value, fmt):
+        return format(value, fmt) + '%' if np.isfinite(value) else 'Unavailable'
+
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     with m_col1:
         st.metric("Expiries Mesh", f"{diag['num_expiries']} Expiries", f"{diag['min_dte']:.1f}d to {diag['max_dte']:.1f}d DTE")
     with m_col2:
-        st.metric("Front ATM IV", f"{diag['front_atm_iv']:.2f}%")
+        st.metric("Front ATM IV", metric_iv(diag['front_atm_iv'], '.2f'))
     with m_col3:
-        st.metric("Term Structure Slope", f"{diag['term_slope']:+.2f}%", help="Back ATM IV minus Front ATM IV")
+        st.metric("Term Structure Slope", metric_iv(diag['term_slope'], '+.2f'), help="Back ATM IV minus Front ATM IV")
     with m_col4:
-        st.metric("Front Skew (96%-104%)", f"{diag['front_skew']:+.2f}%", help="Front expiry OTM Put IV minus OTM Call IV")
+        st.metric("Front Skew (96%-104%)", metric_iv(diag['front_skew'], '+.2f'), help="Interpolated front-expiry IV at 96% minus 104% moneyness using the selected sides")
 
 
 build_surface = build_surface_figure

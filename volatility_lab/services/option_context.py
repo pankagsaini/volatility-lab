@@ -2,12 +2,17 @@
 import sqlite3
 from contextlib import closing
 import pandas as pd
+from pathlib import Path
 from history_policy import compatible
 
 def recorded_context(path,symbol,config,max_iv=150.0):
     if isinstance(config, dict):
         max_iv = float(config.get('max_iv', max_iv))
-    with closing(sqlite3.connect(path, timeout=15)) as con:
+    if not Path(path).is_file():
+        return pd.DataFrame()
+    with closing(sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True, timeout=15)) as con:
+        if not con.execute("SELECT 1 FROM sqlite_master WHERE name='expiry_observations'").fetchone():
+            return pd.DataFrame()
         frame=pd.read_sql_query("SELECT rowid AS Revision,date AS Date,expiry AS Expiry,iv AS IV,spread AS Spread,source AS Source,config AS Config FROM expiry_observations WHERE symbol=? AND source='Upstox supplied IV (Google Cloud)'",con,params=[symbol],parse_dates=['Date'])
     if frame.empty:return frame
 

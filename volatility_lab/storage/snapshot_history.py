@@ -5,20 +5,29 @@ import sqlite3
 import pandas as pd
 
 
+def broker_sourced(row):
+    sources = ('Upstox supplied Greeks', 'Upstox supplied IV', 'Upstox supplied IV (Google Cloud)')
+    return (isinstance(row, dict) and row.get('Source') in sources
+            and row.get('Greeks source') in (None, 'Upstox supplied Greeks'))
+
+
+def historical_fields(row):
+    if broker_sourced(row):
+        return row
+    # Earlier snapshots sometimes stored model output alongside genuine spot quotes.
+    fields = ('IV', 'Call IV', 'Put IV', '25 Delta reversal', 'IV-RV Spread',
+              'Reversal put delta', 'Reversal call delta', 'IV - GARCH', 'IV - EWMA')
+    return {**row, **{name: None for name in fields if name in row}}
+
+
 def save(path, config, row):
-    if not row.get('As of') or row.get('Capture source')!='Google Drive':return
+    if not broker_sourced(row) or not row.get('As of') or row.get('Capture source')!='Google Drive':return
     with closing(sqlite3.connect(path)) as con,con:
         con.execute('CREATE TABLE IF NOT EXISTS intraday_observations (symbol TEXT, expiry TEXT, config TEXT, as_of TEXT, payload TEXT, PRIMARY KEY(symbol,expiry,config,as_of))')
         key=(row['Instrument'],row['Expiry'],config,row['As of'])
-        existing=con.execute('SELECT payload FROM intraday_observations WHERE symbol=? AND expiry=? AND config=? AND as_of=?',key).fetchone()
-        if existing:
-            try:trusted=json.loads(existing[0]).get('Capture source')=='Google Drive'
-            except (TypeError,ValueError):trusted=False
-            if trusted:return
-            con.execute('UPDATE intraday_observations SET payload=? WHERE symbol=? AND expiry=? AND config=? AND as_of=?',
-                        (json.dumps(row),*key))
-        else:
-            con.execute('INSERT INTO intraday_observations VALUES (?,?,?,?,?)',(*key,json.dumps(row)))
+        con.execute('INSERT INTO intraday_observations VALUES (?,?,?,?,?) '
+                    'ON CONFLICT(symbol,expiry,config,as_of) DO UPDATE SET payload=excluded.payload',
+                    (*key,json.dumps(row)))
 
 
 def load(path, symbol, expiry, config=None):
@@ -37,7 +46,7 @@ def load(path, symbol, expiry, config=None):
         try:row=json.loads(raw)
         except (TypeError,ValueError):continue
         if row.get('Capture source') in ('Google Drive', 'Google Cloud', 'Local') or 'Upstox' in str(row.get('Source', '')):
-            records.append(row)
+            records.append(historical_fields(row))
     frame=pd.DataFrame(records)
     if len(frame):
         from market_table import aligned_spread

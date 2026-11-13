@@ -95,7 +95,7 @@ MODULES=(
 import monitor_ui
 
 if os.environ.get('VOL_LAB_DEV') == '1':
-    revision=tuple((ROOT/(name+'.py')).stat().st_mtime_ns for name in MODULES if (ROOT/(name+'.py')).exists())
+    revision=tuple(Path(importlib.import_module(name).__file__).stat().st_mtime_ns for name in MODULES)
     if getattr(monitor_ui,'_revision',None)!=revision:
         if getattr(monitor_ui,'_revision',None) is not None:
             import sys
@@ -122,14 +122,17 @@ has_upstox_token = not settings.offline and (TOKEN_PATH.exists() or settings.ups
 
 if has_upstox_token:
     token_mtime = TOKEN_PATH.stat().st_mtime_ns if TOKEN_PATH.exists() else 1
-    version=(token_mtime,(ROOT/'upstox_data.py').stat().st_mtime_ns,(ROOT/'upstox_adapter.py').stat().st_mtime_ns)
+    version=(token_mtime,(ROOT/'ingestion/upstox_data.py').stat().st_mtime_ns,(ROOT/'ingestion/upstox_adapter.py').stat().st_mtime_ns)
     if st.session_state.get('_upstox_version')!=version:
         try:
             st.session_state.data_client=market_client()
             st.session_state._upstox_version=version
         except MarketDataError as error:st.error(str(error))
 
-client=st.session_state.get('data_client')
+client=st.session_state.get('data_client') if has_upstox_token else None
+if not has_upstox_token:
+    st.session_state.pop('data_client', None)
+    st.session_state.pop('_upstox_version', None)
 if client is not None:
     from upstox_adapter import UpstoxAdapter
     client.__class__=UpstoxAdapter

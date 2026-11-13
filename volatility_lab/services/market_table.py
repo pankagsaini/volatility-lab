@@ -242,7 +242,8 @@ def atm_values(
 
     pairs = valid.groupby(strike_col)[type_col].agg(set)
     paired = [float(k) for k, kinds in pairs.items() if kinds == {'CE', 'PE'}]
-    candidates = paired if paired else (sorted(float(x) for x in strikes) if strikes else sorted(valid[strike_col].unique()))
+    listed = sorted(float(x) for x in strikes) if strikes is not None and len(strikes) else sorted(valid[strike_col].unique())
+    candidates = paired if use_black76 and paired else listed
     if not candidates:
         return (np.nan, np.nan, np.nan)
 
@@ -250,6 +251,13 @@ def atm_values(
     atm_k = min(candidates, key=lambda k: (abs(k - ref_px), k))
     ce_sub = valid[(valid[strike_col] == atm_k) & (valid[type_col] == 'CE')]
     pe_sub = valid[(valid[strike_col] == atm_k) & (valid[type_col] == 'PE')]
+    if not use_black76:
+        # chain_from_response stores broker percentages as fractions, including IV above 150%.
+        call = float(ce_sub['iv'].iloc[0]) * 100 if len(ce_sub) == 1 else np.nan
+        put = float(pe_sub['iv'].iloc[0]) * 100 if len(pe_sub) == 1 else np.nan
+        call = call if np.isfinite(call) and call > 0 else np.nan
+        put = put if np.isfinite(put) and put > 0 else np.nan
+        return call, put, (call + put) / 2
     if ce_sub.empty or pe_sub.empty:
         return (np.nan, np.nan, np.nan)
 

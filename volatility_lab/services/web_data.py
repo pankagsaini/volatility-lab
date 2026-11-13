@@ -348,7 +348,7 @@ def get_vol_surface_payload(
     selected_expiry: Optional[str] = None
 ) -> Dict[str, Any]:
     """3D Volatility Surface, 2D Multi-Expiry Smile Overlay, and Term Structure."""
-    from vol_surface_3d import load_expiry_chains, extract_surface_mesh, captured_iv
+    from vol_surface_3d import load_expiry_chains, extract_surface_mesh
 
     chains = load_expiry_chains(symbol, DATA)
     if not chains:
@@ -368,76 +368,24 @@ def get_vol_surface_payload(
         return {'symbol': symbol, 'error': 'Insufficient expiries to construct 3D surface (min 2 required)'}
 
     ref_spot = diags['ref_spot']
-    by_expiry = {entry['expiry']: entry for entry in chains}
-    included = [by_expiry[expiry] for expiry in diags['expiries']]
     def finite(value):
         return float(value) if np.isfinite(value) else None
 
-    # 1. ATM Ridge (The exact Term Structure spine along ATM across expiries)
-    target_atm = 100.0 if space_mode == 'moneyness' else ref_spot
-    atm_idx = int(np.argmin(np.abs(np.array(x_grid) - target_atm)))
-    atm_ridge_x = []
-    atm_ridge_y = []
-    atm_ridge_z = []
-    atm_ridge_expiries = []
-    for i, entry in enumerate(included):
-        if i < len(y_grid):
-            atm_ridge_x.append(float(x_grid[atm_idx]))
-            atm_ridge_y.append(float(y_grid[i]))
-            atm_ridge_z.append(finite(z_matrix[i, atm_idx]))
-            atm_ridge_expiries.append(entry['expiry'])
-    atm_ridge = {
-        'x': atm_ridge_x,
-        'y': atm_ridge_y,
-        'z': atm_ridge_z,
-        'expiries': atm_ridge_expiries
-    }
-
-    # 2. 2D Smile Curves for every listed expiry
-    smile_curves = []
+    smile_curves = diags['curves']
     colors = ['#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6', '#14b8a6']
-    
-    for i, entry in enumerate(included):
-        if i < len(y_grid):
-            # Extract raw strikes within range for clean curve
-            extracted_s = []
-            extracted_iv = []
-            spot = entry['spot']
-            for item in entry['chain']:
-                k = item.get('strike_price')
-                if not k or abs(k - spot) / spot > (range_pct / 100.0 * 1.15):
-                    continue
-                c_iv = captured_iv(item,'call_options')
-                p_iv = captured_iv(item,'put_options')
-                val = p_iv if k < spot else c_iv
-                if val > 0:
-                    extracted_s.append(float(k))
-                    extracted_iv.append(min(float(val), 120.0))
-            
-            if len(extracted_s) >= 4:
-                order = np.argsort(extracted_s)
-                smile_curves.append({
-                    'expiry': entry['expiry'],
-                    'label': f"{entry['expiry']} ({entry['dte']:.1f}d)",
-                    'dte': float(entry['dte']),
-                    'color': colors[i % len(colors)],
-                    'strikes': [float(x) for x in np.array(extracted_s)[order]],
-                    'ivs': [float(y) for y in np.array(extracted_iv)[order]]
-                })
+    for i, curve in enumerate(smile_curves):
+        curve['color'] = colors[i % len(colors)]
+        curve['label'] = expiry_labels[i]
 
-    # 3. Term Structure Curve (ATM IV vs DTE)
-    ts_dtes = []
-    ts_ivs = []
-    ts_expiries = []
-    for sc in smile_curves:
-        atm_iv_ts = next(
-            (iv for s, iv in zip(sc['strikes'], sc['ivs']) if abs(s - ref_spot) < 150),
-            sc['ivs'][len(sc['ivs']) // 2] if sc['ivs'] else 0.0
-        )
-        ts_dtes.append(float(sc['dte']))
-        ts_ivs.append(float(atm_iv_ts))
-        ts_expiries.append(sc['expiry'])
-
+    atm = [curve for curve in smile_curves if curve['atm_iv'] is not None]
+    ts_dtes = [curve['dte'] for curve in atm]
+    ts_ivs = [curve['atm_iv'] for curve in atm]
+    ts_expiries = [curve['expiry'] for curve in atm]
+    atm_ridge = {
+        'x': [curve['atm_strike'] / curve['spot'] * 100 if space_mode == 'moneyness'
+              else curve['atm_strike'] for curve in atm],
+        'y': ts_dtes, 'z': ts_ivs, 'expiries': ts_expiries,
+    }
     term_regime = 'Unavailable' if not np.isfinite(diags['term_slope']) else 'Contango (Normal)' if diags['term_slope'] > 0.5 else (
         'Backwardation (Inverted)' if diags['term_slope'] < -0.5 else 'Flat Term'
     )
@@ -458,6 +406,7 @@ def get_vol_surface_payload(
         'ref_spot': ref_spot,
         'selected_expiry': selected_expiry,
         'selected_dte': selected_dte,
+        'as_of_by_expiry': {curve['expiry']: curve['as_of'] for curve in smile_curves},
         'space_mode': space_mode,
         'x_grid': [float(x) for x in x_grid],
         'y_grid': [float(y) for y in y_grid],

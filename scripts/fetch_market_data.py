@@ -5,6 +5,7 @@ from contextlib import closing
 from pathlib import Path
 import json
 import sys
+import zlib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from volatility_lab.runtime.settings import load_settings
@@ -36,11 +37,11 @@ def hydrate_database(settings):
             try:
                 with path.open("rb") as handle:
                     report = validated(handle.read(20_000_001))
-            except (OSError, EOFError, ValueError, TypeError):
+            except (OSError, EOFError, ValueError, TypeError, zlib.error):
                 rejected += 1
                 continue
             if report["mode"] == "snapshot":
-                imported += import_report(report, rate=None, dividend=None, spread=3.0)
+                imported += import_report(report, rate=None, dividend=None, spread=3.0, historical=True)
     return {"archives_examined": len(files), "invalid_archives": rejected, "broker_rows_processed": imported}
 
 
