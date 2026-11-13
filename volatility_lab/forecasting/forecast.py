@@ -9,15 +9,13 @@ from vol_lib import validate_ohlc, rolling_rv_suite
 
 
 def _scipy_garch11_fallback(r: np.ndarray, max_h: int):
-    """Exact Gaussian zero-mean GARCH(1,1) MLE via SciPy L-BFGS-B when `arch` package is absent."""
+    """Gaussian zero-mean GARCH(1,1) MLE with an explicit stationarity constraint."""
     r2 = r * r
     n = len(r)
     var0 = float(np.var(r))
 
     def neg_loglik(params):
         omega, alpha, beta = params
-        if omega <= 1e-8 or alpha < 0 or beta < 0 or (alpha + beta) >= 0.9995:
-            return 1e12
         sigma2 = np.empty(n, dtype=float)
         sigma2[0] = var0
         for t in range(1, n):
@@ -26,11 +24,13 @@ def _scipy_garch11_fallback(r: np.ndarray, max_h: int):
 
     x0 = np.array([max(var0 * 0.05, 1e-4), 0.08, 0.87])
     bounds = [(1e-6, var0 * 5.0 + 10.0), (1e-4, 0.50), (0.10, 0.995)]
-    res = minimize(neg_loglik, x0, method='L-BFGS-B', bounds=bounds)
-    if not res.success or not np.isfinite(res.fun) or res.fun >= 1e12:
+    res = minimize(neg_loglik, x0, method='SLSQP', bounds=bounds,
+                   constraints=[{'type': 'ineq', 'fun': lambda p: 0.9995 - p[1] - p[2]}],
+                   options={'maxiter': 500, 'ftol': 1e-9})
+    if not res.success or not np.isfinite(res.fun):
         raise ValueError(f'SciPy GARCH optimizer failed (status {res.status}); forecasts withheld.')
     omega, alpha, beta = (float(v) for v in res.x)
-    if not all(np.isfinite(x) and lo <= x <= hi for x, (lo, hi) in zip(res.x, bounds)) or alpha + beta >= 0.9995:
+    if not all(np.isfinite(x) and lo <= x <= hi for x, (lo, hi) in zip(res.x, bounds)) or alpha + beta > 0.9995 + 1e-9:
         raise ValueError('SciPy GARCH parameters violate fit constraints.')
     persistence = alpha + beta
     sigma2 = np.empty(n, dtype=float)
@@ -101,7 +101,7 @@ def _cached_garch_mle(returns_digest: str, returns_bytes: bytes, n_obs: int):
         return _scipy_garch11_fallback(r_arr, max_h)
 
 
-def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=245, min_observations=250):
+def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=245, min_observations=250, *, stationary_retry=False):
     if not horizons or any(isinstance(h, bool) or not isinstance(h, int) or not 1 <= h <= 245 for h in horizons):
         raise ValueError('Forecast horizons must be integers from 1 to 245 sessions.')
     if not np.isfinite(ann_factor) or ann_factor <= 0:
@@ -117,7 +117,12 @@ def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=245, min_observati
     r_bytes = r_contig.tobytes()
     r_digest = hashlib.blake2b(r_bytes, digest_size=16).hexdigest()
 
-    cached = _cached_garch_mle(r_digest, r_bytes, len(r_contig))
+    try:
+        cached = _cached_garch_mle(r_digest, r_bytes, len(r_contig))
+    except ValueError:
+        if not stationary_retry:
+            raise
+        cached = _scipy_garch11_fallback(r_contig, 245)
     parameters = cached['params']
     max_req = max(horizons)
     daily_variance = cached['daily_variance'][:max_req]

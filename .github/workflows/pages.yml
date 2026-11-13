@@ -1,4 +1,4 @@
-name: Publish website and official pricing inputs
+name: Publish website, forecasts, and official pricing inputs
 
 on:
   push:
@@ -31,11 +31,14 @@ jobs:
           node scripts/test_frontend.cjs
           node scripts/test_pricing_policy.cjs
           cmp index.html docs/index.html
-      - name: Install locked PDF reader
+      - name: Install locked publishing and model dependencies
         run: |
           python -m pip install uv==0.13.8
-          uv export --locked --only-group publishing --no-emit-project --output-file "$RUNNER_TEMP/pricing-reader.txt"
-          python -m pip install --require-hashes -r "$RUNNER_TEMP/pricing-reader.txt"
+          uv export --locked --group publishing --no-emit-project --output-file "$RUNNER_TEMP/publishing.txt"
+          python -m pip install --require-hashes -r "$RUNNER_TEMP/publishing.txt"
+      - name: Publish forecasts from completed Upstox index candles
+        continue-on-error: true
+        run: python scripts/publish_smile_forecasts.py
       - name: Refresh RBI and NSE inputs in the deployment artifact
         id: pricing
         continue-on-error: true
