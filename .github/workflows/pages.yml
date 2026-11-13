@@ -38,7 +38,11 @@ jobs:
           python -m pip install --require-hashes -r "$RUNNER_TEMP/publishing.txt"
       - name: Publish forecasts from completed Upstox index candles
         continue-on-error: true
-        run: python scripts/publish_smile_forecasts.py
+        run: |
+          previous="$RUNNER_TEMP/previous-smile-forecasts.json"
+          curl --fail --silent --show-error --location --max-time 10 \
+            https://volatilitylab.in/data/smile-forecasts.json --output "$previous" || true
+          python scripts/publish_smile_forecasts.py --previous "$previous"
       - name: Refresh RBI and NSE inputs in the deployment artifact
         id: pricing
         continue-on-error: true
