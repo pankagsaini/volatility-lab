@@ -1211,7 +1211,7 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
 
         code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
         self.assertIn("const lotQty = sym === 'NIFTY' ? 65 : 30;", code_gs)
-        self.assertIn("const lotQty = pos.sym === 'NIFTY' ? 65 : 30;", code_gs)
+        self.assertIn("const lotQty = (pos.sym === 'NIFTY' ? 65 : 30) * lots;", code_gs)
         self.assertNotIn("sym === 'NIFTY' ? 75 : 30", code_gs)
         self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", code_gs)
 

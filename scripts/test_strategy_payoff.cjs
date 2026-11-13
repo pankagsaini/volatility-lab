@@ -41,6 +41,8 @@ for (const {sym, spot, lots, rows, setups} of JSON.parse(fs.readFileSync(0, 'utf
       assert.deepEqual(plain(bounds[field]), setup[field], sym + ' ' + setup.strat + ' cloud ' + field);
       assert.deepEqual(plain(displayed[field]), setup[field], sym + ' ' + setup.strat + ' browser ' + field);
     }
+    const policy = cloud.forwardExitThresholds_(setup.strat, bounds);
+    assert.deepEqual([policy.stop, policy.target], setup.exitThresholds);
     assert.equal(displayed.capital, setup.capital);
   }
   for (const prefix of ['c', 'p']) {

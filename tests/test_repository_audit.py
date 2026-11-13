@@ -46,6 +46,8 @@ def test_expiry_payoff_and_execution_across_engines():
             setups = evaluate(sym, spot, rows, lots)
             assert len(setups) == 6
             for setup in setups:
+                setup["exitThresholds"] = forward_test.exit_thresholds(
+                    setup["strat"], setup["capital"], setup["maxCredit"], setup["maxLoss"], "SL_50_MAXLOSS", "TP_50_30")
                 legs = setup["legs"]
 
                 def pnl(price):

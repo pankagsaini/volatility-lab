@@ -2074,7 +2074,7 @@
         const tightWing = sym === 'NIFTY' ? 250 : 500;
         const rShort = sym === 'NIFTY' ? 150 : 300;
         const rLong = sym === 'NIFTY' ? 450 : 900;
-      
+
         if (stratCode === 'S1') {
           return [
             { side: -1, mult: 1, strike: K + wShort, type: 'CE' },
@@ -2120,7 +2120,7 @@
           { side:  1, mult: 1, strike: K - tightWing - (wLong - wShort), type: 'PE' }
         ];
       }
-      
+
       function expiryPayoff(legs, units) {
         const premium = -legs.reduce((sum, leg) => sum + leg.side * (leg.mult || 1) * leg.entryPx, 0);
         const strikes = [...new Set([0, ...legs.map(leg => leg.strike)])].sort((a, b) => a - b);

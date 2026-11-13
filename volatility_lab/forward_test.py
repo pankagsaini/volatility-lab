@@ -773,6 +773,27 @@ def evaluate_strategies_for_chain(
     return results
 
 
+def exit_thresholds(strategy, cap, max_cr, max_loss, sl_rule, tp_rule):
+    """Gross P&L levels for the selected exit policy, in rupees."""
+    sl_thresh = None
+    if sl_rule == "SL_25_CAP":
+        sl_thresh = -0.25 * cap
+    elif sl_rule == "SL_50_MAXLOSS" and max_loss is not None:
+        sl_thresh = -0.50 * max_loss
+    elif sl_rule == "SL_30_IV" and max_loss is not None:
+        sl_thresh = -0.35 * max_loss
+
+    tp_thresh = None
+    if strategy == "S2" and max_loss is None:
+        return sl_thresh, None
+    if tp_rule in ("TP_50_30", "TP_50_75"):
+        tp_thresh = (0.30 * max_loss) if strategy == "S2" else (0.50 * max_cr)
+    elif tp_rule == "TP_75":
+        tp_thresh = (0.50 * max_loss) if strategy == "S2" else (0.75 * max_cr)
+
+    return sl_thresh, tp_thresh
+
+
 def mark_open_positions_to_market(
     open_positions: list[dict[str, Any]],
     live_chains: dict[str, list[dict[str, Any]]],
@@ -869,19 +890,7 @@ def mark_open_positions_to_market(
         max_cr = pos["maxCredit"] = max(0.0, bounds["netPremium"])
         max_loss = bounds["maxLoss"]
 
-        sl_thresh = None
-        if sl_rule == "SL_25_CAP":
-            sl_thresh = -0.25 * cap
-        elif sl_rule == "SL_50_MAXLOSS" and max_loss is not None:
-            sl_thresh = -0.50 * max_loss
-        elif sl_rule == "SL_30_IV" and max_loss is not None:
-            sl_thresh = -0.35 * max_loss
-
-        tp_thresh = None
-        if tp_rule in ("TP_50_30", "TP_50_75"):
-            tp_thresh = (0.30 * max_loss) if pos["strat"] == "S2" else (0.50 * max_cr)
-        elif tp_rule == "TP_75":
-            tp_thresh = (0.50 * max_loss) if pos["strat"] == "S2" else (0.75 * max_cr)
+        sl_thresh, tp_thresh = exit_thresholds(pos["strat"], cap, max_cr, max_loss, sl_rule, tp_rule)
 
         close_reason = None
         # OPERATIONAL SAFETY: Stale marks CANNOT drive automated SL/TP exits!
@@ -1236,19 +1245,7 @@ def simulate_forward_portfolio(
         max_loss = bounds["maxLoss"]
         chg = compute_position_charges(t.get("date", MIN_FORWARD_DATE), t["sym"], t["legs"], lots=lots, include_exit=True)
 
-        sl_thresh = None
-        if sl_rule == "SL_25_CAP":
-            sl_thresh = -0.25 * cap
-        elif sl_rule == "SL_50_MAXLOSS" and max_loss is not None:
-            sl_thresh = -0.50 * max_loss
-        elif sl_rule == "SL_30_IV" and max_loss is not None:
-            sl_thresh = -0.35 * max_loss
-
-        tp_thresh = None
-        if tp_rule in ("TP_50_30", "TP_50_75"):
-            tp_thresh = (0.30 * max_loss) if t["strat"] == "S2" else (0.50 * max_cr)
-        elif tp_rule == "TP_75":
-            tp_thresh = (0.50 * max_loss) if t["strat"] == "S2" else (0.75 * max_cr)
+        sl_thresh, tp_thresh = exit_thresholds(t["strat"], cap, max_cr, max_loss, sl_rule, tp_rule)
 
         raw_gross = float(t["gross"]) * scale
         exit_time = t.get("exitTime", "15:15 IST")

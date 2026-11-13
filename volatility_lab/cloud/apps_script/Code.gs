@@ -1717,6 +1717,14 @@ function timestampMillis_(timestamp) {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
+function forwardExitThresholds_(strategy, bounds) {
+  return {
+    stop: bounds.maxLoss === null ? -Infinity : -0.50 * bounds.maxLoss,
+    target: strategy === 'S2' ? (bounds.maxLoss === null ? Infinity : 0.30 * bounds.maxLoss)
+                             : 0.50 * Math.max(0, bounds.netPremium)
+  };
+}
+
 function forwardQuoteTimestamp_(marketData) {
   if (!marketData || typeof marketData !== 'object') return null;
   for (const key of ['quote_timestamp', 'feed_timestamp', 'currentTs', 'ts']) {
@@ -2247,8 +2255,7 @@ function evaluateForwardTest_(report) {
     // Reprice legacy open positions from their recorded fills before applying exits.
     const bounds = expiryPayoff(pos.legs, lotQty);
     Object.assign(pos, bounds, {maxCredit: Math.max(0, bounds.netPremium)});
-    const slThresh = bounds.maxLoss === null ? -Infinity : -0.50 * bounds.maxLoss;
-    const tpThresh = pos.strat === 'S2' ? 0.30 * bounds.maxLoss : 0.50 * pos.maxCredit;
+    const {stop: slThresh, target: tpThresh} = forwardExitThresholds_(pos.strat, bounds);
     const isIntradayExit = positionMkt.mins >= 915 || Boolean(pos.exit_pending);
 
     if (pos.grossMtm <= slThresh || pos.grossMtm >= tpThresh || isIntradayExit) {
