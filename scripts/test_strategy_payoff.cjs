@@ -55,6 +55,13 @@ for (const {sym, spot, lots, rows, setups} of JSON.parse(fs.readFileSync(0, 'utf
 }
 
 // An unreadable authoritative Drive file must stop both reads and writes.
+const archived = JSON.parse(fs.readFileSync(path.join(root, 'volatility_lab/data/forward_test_ledger.json'), 'utf8'));
+assert(archived.closed_trades.length > 0);
+assert.deepEqual(plain(cloud.readLedgerContent_(JSON.stringify(archived))), archived);
+for (const day of ['2026-02-30', '2026-1-02', 'not-a-date']) {
+  const invalid = {...archived, open_positions: [{session_date: day}]};
+  assert.throws(() => cloud.readLedgerContent_(JSON.stringify(invalid)), /Invalid forward ledger/);
+}
 const corrupt = {getBlob: () => ({getDataAsString: () => '{'}), setContent: assert.fail};
 cloud.ledgerFile_ = name => name.endsWith('.json') ? corrupt : null;
 assert.throws(() => cloud.loadForwardLedger_(), /Invalid forward ledger/);
