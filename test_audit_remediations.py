@@ -41,8 +41,6 @@ except ImportError:
     sys.modules["plotly"] = plotly_stub
     sys.modules["plotly.graph_objects"] = graph_objects_stub
     sys.modules["plotly.subplots"] = subplots_stub
-if "msvcrt" not in sys.modules:
-    sys.modules["msvcrt"] = SimpleNamespace(LK_NBLCK=1, LK_UNLCK=2, locking=lambda *a, **kw: None)
 
 
 # Add patched directory to sys.path when running in sandbox or local repo
@@ -1112,13 +1110,16 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
         def live_payload(day, timestamp):
             rows = []
             for strike in range(24000, 26100, 50):
+                time_value = 200 / (1 + abs(strike - 25050) / 150)
+                call = time_value + max(0, 25050 - strike)
+                put = time_value + max(0, strike - 25050)
                 call_book = {
-                    "ltp": 100.0, "bid_price": 99.5, "ask_price": 100.5,
+                    "ltp": call, "bid_price": call - .5, "ask_price": call + .5,
                     "bid_qty": 10000, "ask_qty": 10000, "volume": 10000,
                     "quote_timestamp": timestamp,
                 }
                 put_book = {
-                    "ltp": 90.0, "bid_price": 89.5, "ask_price": 90.5,
+                    "ltp": put, "bid_price": put - .5, "ask_price": put + .5,
                     "bid_qty": 10000, "ask_qty": 10000, "volume": 10000,
                     "quote_timestamp": timestamp,
                 }
@@ -1161,7 +1162,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
             self.assertEqual(pos["date"], "2026-11-11")
             self.assertEqual(pos["session_date"], "2026-11-11")
             if pos["sym"] == "NIFTY" and pos["strat"] == "S6":
-                self.assertEqual(pos["maxLoss"], 7800)  # 120 max loss pts * 65 NIFTY lot size
+                self.assertAlmostEqual(pos["maxLoss"], 600 * 65 - pos["netPremium"], places=2)
 
         # 4. Simulate mid-day mark-to-market at 2026-11-11T12:30:00+05:30 and auto-close at 2026-11-11T15:15:00+05:30
         snap_11_1230 = live_payload("2026-11-11", "2026-11-11T12:30:00+05:30")
@@ -1210,7 +1211,7 @@ class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
 
         code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
         self.assertIn("const lotQty = sym === 'NIFTY' ? 65 : 30;", code_gs)
-        self.assertIn("const lotQty = pos.sym === 'NIFTY' ? 65 : 30;", code_gs)
+        self.assertIn("const lotQty = (pos.sym === 'NIFTY' ? 65 : 30) * lots;", code_gs)
         self.assertNotIn("sym === 'NIFTY' ? 75 : 30", code_gs)
         self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", code_gs)
 

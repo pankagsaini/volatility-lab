@@ -8,7 +8,7 @@ from backtest_common import record_skip
 
 ROOT = Path(__file__).resolve().parent / 'data/backtest_1minute'
 DATA_DIR = Path(__file__).resolve().parent / 'data'
-EXECUTION_MODEL_VERSION = 'v2_quote_validated'
+EXECUTION_MODEL_VERSION = 'v3_prior_minute_required'
 _CACHE_LOCK = threading.RLock()
 _FILE_CACHE = OrderedDict()
 _MAX_CACHE_FILES = 128
@@ -279,9 +279,12 @@ def simulate(contracts,series,spotkey,start,end,entry='09:20',exit='15:15',offse
   if day not in captured_days:
    record_skip(skips,day,'No real captured intraday option data for session');continue
   decision=(datetime.fromisoformat(day+' '+entry)-timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M')
-  bar=spot.get(decision) or spot.get(day+' '+entry)
-  if not bar:record_skip(skips,day,'Missing preceding spot minute');continue
-  price=float(bar[3])
+  bar=spot.get(decision)
+  try:
+   price=float(bar[3])
+  except (IndexError, KeyError, TypeError, ValueError, OverflowError):
+   price=math.nan
+  if not math.isfinite(price) or price<=0:record_skip(skips,day,'Missing preceding spot minute');continue
   eligible=[r for r in contracts if min_dte<=(pd.Timestamp(r['expiry'])-pd.Timestamp(day)).days<=max_dte]
   if not eligible:record_skip(skips,day,'No eligible expiry in catalogue');continue
   exp=min(r['expiry'] for r in eligible)

@@ -895,6 +895,7 @@ function capture_(mode, recovery) {
 
 function safeError_(err) {
   const message = String(err.message || '');
+  if (message === 'Invalid forward ledger. Restore a validated backup.') return message;
   const isWhitelisted = /^(Broker HTTP \d{3}|Empty broker data|Invalid broker JSON|Incomplete quote response|Wrong option expiry|Instrument master unavailable|(Three futures unavailable|Futures contracts unavailable) for (NIFTY|BANKNIFTY)|No option expiries for (NIFTY|BANKNIFTY)|Set UPSTOX_TOKEN in Script Properties)$/.test(message);
   return isWhitelisted ? message : 'Capture failed; check permissions, network or quota';
 }
@@ -1610,8 +1611,8 @@ function upstoxOptionCharge_(price, qty, isSell) {
   return brokerage + stt + exch + sebi + ipft + stamp + gst;
 }
 
-function positionCharges_(legs, sym, includeExit) {
-  const lotQty = sym === 'NIFTY' ? 65 : 30;
+function positionCharges_(legs, sym, includeExit, lots = 1) {
+  const lotQty = (sym === 'NIFTY' ? 65 : 30) * lots;
   let total = 0.0;
   (legs || []).forEach(l => {
     const qty = lotQty * Number(l.mult || 1);
@@ -1680,6 +1681,28 @@ function buildStrategyLegs_(sym, K, stratCode) {
   ];
 }
 
+function expiryPayoff(legs, units) {
+  const premium = -legs.reduce((sum, leg) => sum + leg.side * (leg.mult || 1) * leg.entryPx, 0);
+  const strikes = [...new Set([0, ...legs.map(leg => leg.strike)])].sort((a, b) => a - b);
+  const values = strikes.map(spot => legs.reduce((sum, leg) => {
+    const intrinsic = Math.max(0, (spot - leg.strike) * (leg.type === 'CE' ? 1 : -1));
+    return sum + leg.side * (leg.mult || 1) * intrinsic;
+  }, premium));
+  const roots = [];
+  strikes.forEach((strike, i) => {
+    const y = values[i];
+    if (Math.abs(y) < 1e-9) roots.push(strike);
+    if (i && y * values[i-1] < 0) roots.push(strike - y * (strike - strikes[i-1]) / (y - values[i-1]));
+  });
+  const slope = legs.reduce((sum, leg) => sum + (leg.type === 'CE' ? leg.side * (leg.mult || 1) : 0), 0);
+  const last = strikes.length - 1;
+  if (slope && -values[last] / slope > 0) roots.push(strikes[last] - values[last] / slope);
+  return { netPremiumPoints: Number(premium.toFixed(8)), netPremium: Number((premium * units).toFixed(2)),
+    maxProfit: slope > 0 ? null : Number((Math.max(0, ...values) * units).toFixed(2)),
+    maxLoss: slope < 0 ? null : Number((-Math.min(0, ...values) * units).toFixed(2)),
+    breakEvens: [...new Set(roots.map(k => Number(k.toFixed(4))))].sort((a, b) => a-b) };
+}
+
 const MIN_FORWARD_DATE = '2026-11-11';
 const MAX_FORWARD_QUOTE_AGE_MS = 120000;
 
@@ -1692,6 +1715,14 @@ function timestampMillis_(timestamp) {
   if (/^\d{10}$/.test(value)) return Number(value) * 1000;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function forwardExitThresholds_(strategy, bounds) {
+  return {
+    stop: bounds.maxLoss === null ? -Infinity : -0.50 * bounds.maxLoss,
+    target: strategy === 'S2' ? (bounds.maxLoss === null ? Infinity : 0.30 * bounds.maxLoss)
+                             : 0.50 * Math.max(0, bounds.netPremium)
+  };
 }
 
 function forwardQuoteTimestamp_(marketData) {
@@ -1727,7 +1758,7 @@ function executableQuote_(node, type, side, quantity, isExit, referenceTimestamp
   const bidQty = Number(node[prefix + 'BidQty'] || 0);
   const askQty = Number(node[prefix + 'AskQty'] || 0);
   if (![bid, ask, bidQty, askQty].every(Number.isFinite)) return 0;
-  if (!(bid > 0 && ask >= bid && ask > 0)) return 0;
+  if (!(bid > 0 && ask >= bid && bidQty > 0 && askQty > 0)) return 0;
   const buy = isExit ? Number(side) < 0 : Number(side) > 0;
   const depth = buy ? askQty : bidQty;
   if (!Number.isFinite(depth) || depth < quantity) return 0;
@@ -1833,62 +1864,120 @@ function sanitizeForwardLedger_(raw) {
   return base;
 }
 
-function loadForwardLedger_() {
-  const properties = props_();
-  const folder = folder_();
-  let file = null;
-  const cachedId = properties.getProperty('FORWARD_LEDGER_FILE_ID');
-  if (cachedId) {
-    try {
-      const f = DriveApp.getFileById(cachedId);
-      if (f && !f.isTrashed()) file = f;
-    } catch (e) {}
+function ledgerFile_(name) {
+  const id = name === 'forward_test_ledger.json' && props_().getProperty('FORWARD_LEDGER_FILE_ID');
+  if (id) {
+    const file = DriveApp.getFileById(id);
+    if (file.isTrashed()) throw new Error('Forward ledger was trashed. Restore it before capture.');
+    return file;
   }
-  if (!file) {
-    const it = folder.getFilesByName('forward_test_ledger.json');
-    if (it.hasNext()) {
-      file = it.next();
-      properties.setProperty('FORWARD_LEDGER_FILE_ID', file.getId());
+  const files = folder_().getFilesByName(name);
+  if (!files.hasNext()) return null;
+  const file = files.next();
+  if (files.hasNext()) throw new Error('Ambiguous forward ledger files: ' + name);
+  return file;
+}
+
+function validateLedger_(value) {
+  for (const field of ['open_positions', 'closed_trades', 'intraday_mtm_series']) {
+    if (!value || !Array.isArray(value[field])) throw new Error('Invalid ledger field: ' + field);
+    for (const row of value[field]) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('Invalid ledger row: ' + field);
+      const day = row.session_date || row.date;
+      if (field === 'intraday_mtm_series' && day == null) continue;
+      const date = String(day).slice(0, 10);
+      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) ||
+          new Date(date).toISOString().slice(0, 10) !== date) throw new Error('Invalid ledger date: ' + field);
     }
   }
-  if (file) {
-    try {
-      const parsed = JSON.parse(file.getBlob().getDataAsString());
-      return sanitizeForwardLedger_(parsed);
-    } catch (e) {}
+  return value;
+}
+
+function readLedgerContent_(content) {
+  try {
+    return validateLedger_(JSON.parse(content));
+  } catch (error) {
+    throw new Error('Invalid forward ledger. Restore a validated backup.');
   }
+}
+
+function loadForwardLedger_() {
+  const file = ledgerFile_('forward_test_ledger.json');
+  if (file) return sanitizeForwardLedger_(readLedgerContent_(file.getBlob().getDataAsString()));
+  if (ledgerFile_('forward_test_ledger.bak')) throw new Error('Forward ledger missing. Restore the backup.');
   return cleanSlateForwardLedger_();
 }
 
 function saveForwardLedger_(ledger) {
-  const properties = props_();
-  const folder = folder_();
-  const clean = sanitizeForwardLedger_(ledger);
+  // All state-changing callers hold the script lock from load through save.
+  const clean = sanitizeForwardLedger_(validateLedger_(ledger));
   clean.updated_at = new Date().toISOString();
   const content = JSON.stringify(clean, null, 2);
-  let file = null;
-  const cachedId = properties.getProperty('FORWARD_LEDGER_FILE_ID');
-  if (cachedId) {
-    try {
-      const f = DriveApp.getFileById(cachedId);
-      if (f && !f.isTrashed()) file = f;
-    } catch (e) {}
-  }
-  if (!file) {
-    const it = folder.getFilesByName('forward_test_ledger.json');
-    if (it.hasNext()) file = it.next();
-  }
+  let file = ledgerFile_('forward_test_ledger.json');
+  const backup = ledgerFile_('forward_test_ledger.bak');
   if (file) {
+    const previous = file.getBlob().getDataAsString();
+    readLedgerContent_(previous);
+    if (backup) backup.setContent(previous);
+    else folder_().createFile('forward_test_ledger.bak', previous, MimeType.PLAIN_TEXT);
     file.setContent(content);
   } else {
-    file = folder.createFile('forward_test_ledger.json', content, MimeType.PLAIN_TEXT);
+    if (backup) throw new Error('Forward ledger missing. Restore the backup.');
+    file = folder_().createFile('forward_test_ledger.json', content, MimeType.PLAIN_TEXT);
   }
-  properties.setProperty('FORWARD_LEDGER_FILE_ID', file.getId());
+  props_().setProperty('FORWARD_LEDGER_FILE_ID', file.getId());
   const cache = scriptCache_();
-  if (cache) {
-    try { cache.remove('DOGET_FWD_LEDGER_JSON'); } catch (e) {}
-  }
+  if (cache) cache.remove('DOGET_FWD_LEDGER_JSON');
   return file.getId();
+}
+
+// Explicit operator recovery from the Apps Script editor. Preserve the old file for inspection.
+function restoreForwardLedgerFromBackup() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const backup = ledgerFile_('forward_test_ledger.bak');
+    if (!backup) throw new Error('Forward ledger backup missing.');
+    const content = backup.getBlob().getDataAsString();
+    readLedgerContent_(content);
+    let file = null;
+    const id = props_().getProperty('FORWARD_LEDGER_FILE_ID');
+    if (id) file = DriveApp.getFileById(id);
+    else file = ledgerFile_('forward_test_ledger.json');
+    if (file && !file.isTrashed()) {
+      file.makeCopy('forward_test_ledger.before-restore-' + Date.now(), folder_());
+      file.setContent(content);
+    } else {
+      file = folder_().createFile('forward_test_ledger.json', content, MimeType.PLAIN_TEXT);
+    }
+    props_().setProperty('FORWARD_LEDGER_FILE_ID', file.getId());
+    const cache = scriptCache_();
+    if (cache) cache.remove('DOGET_FWD_LEDGER_JSON');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Interpolate broker IV in absolute signed broker delta. Never extrapolate a missing wing.
+function brokerWingIv_(strikes, prefix, at) {
+  const grouped = new Map();
+  for (const node of Object.values(strikes)) {
+    const d = Number(node[prefix + 'Delta']) * (prefix === 'p' ? -1 : 1);
+    const iv = node[prefix + 'Iv'];
+    if (!(d > 0 && d < 1 && iv > 0) || !forwardQuoteFresh_(node[prefix + 'QuoteAt'], at)) continue;
+    const group = grouped.get(d) || [];
+    group.push(iv);
+    grouped.set(d, group);
+  }
+  let previous;
+  for (const d of Array.from(grouped.keys()).sort((a,b) => a-b)) {
+    const group = grouped.get(d);
+    const iv = group.reduce((sum,v) => sum+v,0) / group.length;
+    if (Math.abs(d-0.25) <= 1e-12) return iv;
+    if (d > 0.25) return previous ? previous.iv + (iv-previous.iv)*(0.25-previous.d)/(d-previous.d) : NaN;
+    previous = {d, iv};
+  }
+  return NaN;
 }
 
 function forwardRiskMetrics_(report, sym, snapshotDay) {
@@ -1982,6 +2071,7 @@ function evaluateForwardTest_(report) {
         pAsk: Number(pm.ask_price || 0),
         pBidQty: Number(pm.bid_qty || 0),
         pAskQty: Number(pm.ask_qty || 0),
+        cDelta: cg.delta, pDelta: pg.delta,
         cIv: forwardIvPercent_(cg.iv),
         pIv: forwardIvPercent_(pg.iv),
         cQuoteAt: forwardQuoteTimestamp_(cm),
@@ -2038,16 +2128,11 @@ function evaluateForwardTest_(report) {
       if (!hv10Valid || !hv30Valid) reject(key, 'HV10/HV30 unavailable or stale; dependent strategies withheld');
       const vrp30 = hv30Valid ? Number((iv - hv30).toFixed(2)) : NaN;
       const vrp10 = hv10Valid ? Number((iv - hv10).toFixed(2)) : NaN;
-      const wShort = sym === 'NIFTY' ? 200 : 400;
-      const p25Node = ch.strikes[K - wShort];
-      const c25Node = ch.strikes[K + wShort];
-      const wingsFresh = Boolean(p25Node && c25Node
-        && Number.isFinite(p25Node.pIv) && p25Node.pIv > 0
-        && Number.isFinite(c25Node.cIv) && c25Node.cIv > 0
-        && forwardQuoteFresh_(p25Node.pQuoteAt, ch.retrievedAt)
-        && forwardQuoteFresh_(c25Node.cQuoteAt, ch.retrievedAt));
-      const rev25 = wingsFresh ? Number((p25Node.pIv - c25Node.cIv).toFixed(2)) : NaN;
-      const bfly25 = wingsFresh ? Number((0.5 * (p25Node.pIv + c25Node.cIv) - iv).toFixed(2)) : NaN;
+      const call25 = brokerWingIv_(ch.strikes, 'c', ch.retrievedAt);
+      const put25 = brokerWingIv_(ch.strikes, 'p', ch.retrievedAt);
+      const wingsFresh = Number.isFinite(call25) && Number.isFinite(put25);
+      const rev25 = put25 - call25;
+      const bfly25 = (put25 + call25) / 2 - iv;
       const metricsItem = riskMetrics.item;
       const basisExpiry = metricsItem ? String(metricsItem.forward_basis_expiry || '').slice(0, 10) : '';
       const basisTime = metricsItem ? metricsItem.forward_basis_timestamp : null;
@@ -2081,10 +2166,11 @@ function evaluateForwardTest_(report) {
         });
         if (invalidQuote) { reject(key + '|' + sCode, 'Missing, stale, one-sided or insufficient-depth leg quote'); return; }
         const cap = (STRATEGY_CAPITAL_PER_LOT[sym] || STRATEGY_CAPITAL_PER_LOT.NIFTY)[sCode];
-        const credPts = Math.max(15.0, legs.reduce((acc, l) => acc + (-l.side) * l.mult * l.entryPx, 0));
-        const debitInr = Math.round(legs.reduce((acc, l) => acc + l.entryPx * lotQty * l.mult, 0));
-        const maxCr = sCode === 'S2' ? Math.round(debitInr * 0.65) : Math.round(credPts * lotQty);
-        const maxLoss = sCode === 'S2' ? debitInr : Math.round((sym === 'NIFTY' ? 120 : 300) * lotQty);
+        const payoff = expiryPayoff(legs, lotQty);
+        if (sCode === 'S2' ? payoff.netPremium >= 0 : payoff.netPremium <= 0) {
+          reject(key + '|' + sCode, 'Unexpected signed premium: ' + payoff.netPremiumPoints + ' pts');
+          return;
+        }
         const chg = positionCharges_(legs, sym, true);
 
         ledger.open_positions.push({
@@ -2103,9 +2189,9 @@ function evaluateForwardTest_(report) {
           stratName: STRATEGY_NAMES[sCode],
           metrics: metricsTxt,
           legs: legs,
-          capital: cap,
-          maxCredit: maxCr,
-          maxLoss: maxLoss,
+          capital: Math.max(cap, -payoff.netPremium),
+          ...payoff,
+          maxCredit: Math.max(0, payoff.netPremium),
           entryIv: iv,
           curIv: iv,
           grossMtm: 0.0,
@@ -2130,10 +2216,12 @@ function evaluateForwardTest_(report) {
     const key = pos.sym + '|' + pos.exp;
     const ch = chainMap[key];
     const positionMkt = ch && ch.mkt ? ch.mkt : mkt;
-    const lotQty = pos.sym === 'NIFTY' ? 65 : 30;
+    const lots = Number(pos.lots || 1);
+    const lotQty = (pos.sym === 'NIFTY' ? 65 : 30) * lots;
     const legs = Array.isArray(pos.legs) ? pos.legs : [];
     let allLegsFresh = Boolean(ch && ch.fresh && legs.length);
     let gross = 0.0;
+    const marks = [];
     legs.forEach(l => {
       const node = ch && ch.strikes ? ch.strikes[l.strike] : null;
       const qty = lotQty * Number(l.mult || 1);
@@ -2142,7 +2230,7 @@ function evaluateForwardTest_(report) {
         allLegsFresh = false;
         return;
       }
-      l.curPx = Number(px.toFixed(2));
+      marks.push(Number(px.toFixed(2)));
       const ePx = Number(l.entryPx || 0);
       gross += (Number(l.side) < 0 ? (ePx - px) : (px - ePx)) * qty;
     });
@@ -2155,22 +2243,25 @@ function evaluateForwardTest_(report) {
       return;
     }
 
+    legs.forEach((leg, index) => { leg.curPx = marks[index]; });
     pos.freshness = 'FRESH';
     delete pos.staleReason;
     pos.integrity_status = 'VALIDATED_FRESH_EXECUTABLE_MARK';
     pos.grossMtm = Number(gross.toFixed(2));
-    pos.estCharges = positionCharges_(pos.legs, pos.sym, true);
+    pos.estCharges = positionCharges_(pos.legs, pos.sym, true, lots);
     pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
     pos.markedAt = positionMkt.timeIstLabel;
 
-    const slThresh = -0.50 * Number(pos.maxLoss || 9000);
-    const tpThresh = pos.strat === 'S2' ? 0.30 * Number(pos.maxLoss || 37590) : 0.50 * Number(pos.maxCredit || 12000);
+    // Reprice legacy open positions from their recorded fills before applying exits.
+    const bounds = expiryPayoff(pos.legs, lotQty);
+    Object.assign(pos, bounds, {maxCredit: Math.max(0, bounds.netPremium)});
+    const {stop: slThresh, target: tpThresh} = forwardExitThresholds_(pos.strat, bounds);
     const isIntradayExit = positionMkt.mins >= 915 || Boolean(pos.exit_pending);
 
     if (pos.grossMtm <= slThresh || pos.grossMtm >= tpThresh || isIntradayExit) {
       const reason = pos.grossMtm <= slThresh
         ? 'Stop-Loss Hit (-50% MaxLoss)'
-        : (pos.grossMtm >= tpThresh ? 'Profit Target Hit (+50% Cr)' : (pos.exit_pending ? '15:15 IST Auto-Close (delayed until fresh quote)' : '15:15 IST Auto-Close (fresh quote)'));
+        : (pos.grossMtm >= tpThresh ? 'Profit Target Hit' : (pos.exit_pending ? '15:15 IST Auto-Close (delayed until fresh quote)' : '15:15 IST Auto-Close (fresh quote)'));
       (pos.legs || []).forEach(l => { l.exitPx = l.curPx; });
       ledger.closed_trades.unshift({
         id: String(pos.id || '').replace('OPEN-', 'FWD-'),
@@ -2189,8 +2280,9 @@ function evaluateForwardTest_(report) {
         legsText: (pos.legs || []).map(l => (l.side < 0 ? 'S' : 'B') + (l.mult > 1 ? l.mult : '') + ' ' + l.strike + l.type + ' (' + l.entryPx + '→' + l.curPx + ')').join(' / '),
         legs: pos.legs,
         capital: pos.capital,
+        lots: lots,
+        ...bounds,
         maxCredit: pos.maxCredit,
-        maxLoss: pos.maxLoss,
         entryIv: pos.entryIv || 16.0,
         gross: pos.grossMtm,
         charges: pos.estCharges,

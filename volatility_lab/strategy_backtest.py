@@ -354,7 +354,7 @@ def simulate(s, contracts, ticks, signals=None, callback=None):
             record_skip(skips, day, 'No real captured intraday option data for session')
             continue
         decision_ts = (datetime.fromisoformat(f'{day} {entry_time}') - timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M')
-        spot_bar = spot_bars.get(decision_ts) or spot_bars.get(f'{day} {entry_time}')
+        spot_bar = spot_bars.get(decision_ts)
         if not valid_price(spot_bar, 3, fill=False):
             record_skip(skips, day, 'Missing preceding spot minute')
             continue

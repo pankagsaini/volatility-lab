@@ -27,8 +27,12 @@ def _scipy_garch11_fallback(r: np.ndarray, max_h: int):
     x0 = np.array([max(var0 * 0.05, 1e-4), 0.08, 0.87])
     bounds = [(1e-6, var0 * 5.0 + 10.0), (1e-4, 0.50), (0.10, 0.995)]
     res = minimize(neg_loglik, x0, method='L-BFGS-B', bounds=bounds)
+    if not res.success or not np.isfinite(res.fun) or res.fun >= 1e12:
+        raise ValueError(f'SciPy GARCH optimizer failed (status {res.status}); forecasts withheld.')
     omega, alpha, beta = (float(v) for v in res.x)
-    persistence = min(alpha + beta, 0.999)
+    if not all(np.isfinite(x) and lo <= x <= hi for x, (lo, hi) in zip(res.x, bounds)) or alpha + beta >= 0.9995:
+        raise ValueError('SciPy GARCH parameters violate fit constraints.')
+    persistence = alpha + beta
     sigma2 = np.empty(n, dtype=float)
     sigma2[0] = var0
     for t in range(1, n):
@@ -39,10 +43,13 @@ def _scipy_garch11_fallback(r: np.ndarray, max_h: int):
     for h in range(1, max_h):
         f_var[h] = omega + persistence * f_var[h - 1]
 
+    if not all(np.isfinite(x).all() and (x > 0).all() for x in (f_var, sigma2)):
+        raise ValueError('Invalid SciPy GARCH variance path.')
     ll = -float(res.fun)
     aic = 2 * 3 - 2 * ll
     bic = 3 * np.log(n) - 2 * ll
     return {
+        'backend': 'scipy', 'converged': bool(res.success),
         'nobs': n,
         'params': {'omega': omega, 'alpha[1]': alpha, 'beta[1]': beta},
         'daily_variance': f_var / 10000.0,
@@ -73,8 +80,14 @@ def _cached_garch_mle(returns_digest: str, returns_bytes: bytes, n_obs: int):
         nobs = int(fit.nobs)
         ll, aic, bic = float(fit.loglikelihood), float(fit.aic), float(fit.bic)
         cond_vol = np.asarray(fit.conditional_volatility, dtype=float)
+        omega, alpha, beta = (parameters[k] for k in ('omega', 'alpha[1]', 'beta[1]'))
+        if not (np.isfinite([omega, alpha, beta, ll, aic, bic]).all() and omega > 0 and alpha >= 0
+                and beta >= 0 and alpha + beta < 1 and np.isfinite(cond_vol).all() and (cond_vol > 0).all()
+                and np.isfinite(daily_variance).all() and (daily_variance > 0).all()):
+            raise ValueError('Invalid arch GARCH parameters or variance path; forecasts withheld.')
         notes = sorted(set(type(w.message).__name__ for w in caught))
         return {
+            'backend': 'arch', 'converged': fit.convergence_flag == 0,
             'nobs': nobs,
             'params': parameters,
             'daily_variance': daily_variance,
@@ -122,7 +135,8 @@ def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=245, min_observati
     ])
     diagnostics = {
         'observations': cached['nobs'],
-        'converged': True,
+        'converged': cached['converged'],
+        'backend': cached['backend'],
         'omega_pct_squared': parameters['omega'],
         'alpha': parameters['alpha[1]'],
         'beta': parameters['beta[1]'],

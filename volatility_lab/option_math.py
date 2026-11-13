@@ -808,23 +808,6 @@ def reversal_values(chain, symbol=None):
 
 DEFAULT_PRICING_MODEL = "bsm"
 
-def compare_bsm_and_black76(spot, strike, years, rate, vol, kind, div_yield=0.0):
-    """Compare spot BSM against forward Black-76 when F = S * exp((r - q) * T)."""
-    fwd = forward_from_spot(spot, years, rate, div_yield=div_yield)
-    bsm = bsm_greeks(spot, strike, years, rate, vol, kind, dividend=div_yield)
-    b76 = black76_greeks(fwd, strike, years, rate, vol, kind)
-    return {
-        "spot": spot,
-        "forward": fwd,
-        "bsm_price": bsm["price"],
-        "black76_price": b76["price"],
-        "price_diff": abs(bsm["price"] - b76["price"]),
-        "bsm_vega": bsm["vega"],
-        "black76_vega": b76["vega"],
-        "vega_diff": abs(bsm["vega"] - b76["vega"]),
-    }
-
-
 # Sensibull and unified model aliases
 sensibull_greeks = black76_greeks
 sensibull_greeks_vec = black76_greeks_vec

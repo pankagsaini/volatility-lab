@@ -4,7 +4,7 @@ No network credentials; Google Drive desktop supplies the authenticated filesyst
 from pathlib import Path
 from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
-import gzip,hashlib,json,os,sqlite3,threading,time,zlib,zlib
+import gzip,hashlib,json,os,sqlite3,threading,time,zlib
 import pandas as pd
 import numpy as np
 from collector_support import atomic_json,read_json,data_lock,STATE

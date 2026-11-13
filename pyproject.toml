@@ -80,9 +80,7 @@ ignore = [
     "E702", # Multiple statements on one line (semicolon)
     "F401", # Imported but unused (common in __init__ and test mocks)
     "F841", # Local variable assigned but never used
-    "F811", # Redefinition of unused name
     "F541", # f-string without placeholders
-    "F821", # Temporary ignore for forward references/ast dynamic mocks until phase 4
 ]
 
 [tool.pytest.ini_options]

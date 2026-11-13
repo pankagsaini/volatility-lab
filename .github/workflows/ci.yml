@@ -29,6 +29,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Install package & dependencies in editable mode
         run: |
           python -m pip install --upgrade pip
@@ -40,7 +44,7 @@ jobs:
 
       - name: Run Automated Remediation & Audit Tests
         run: |
-          python test_audit_remediations.py
+          python -m pytest -ra
 
       - name: Build Wheel & Verify Distributable Package Data
         run: |
@@ -63,10 +67,18 @@ jobs:
           python -m venv clean_env
           clean_env/bin/python -m pip install --upgrade pip
           clean_env/bin/python -m pip install dist/*.whl
-          clean_env/bin/python -c "
+          wheel_python="$PWD/clean_env/bin/python"
+          cd "$RUNNER_TEMP"
+          "$wheel_python" -I -c "
+          from pathlib import Path
+          import sysconfig
           import volatility_lab
           from volatility_lab.forward_test import load_forward_test_ledger, LOT_SIZES
           from volatility_lab.market_calendar import is_trading_day
+          from volatility_lab.backtest.forward_test import evaluate_strategies_for_chain as compat
+          from volatility_lab.forward_test import evaluate_strategies_for_chain
+          assert compat is evaluate_strategies_for_chain
+          assert Path(volatility_lab.__file__).resolve().is_relative_to(Path(sysconfig.get_path('purelib')).resolve())
           ledger = load_forward_test_ledger()
           assert ledger['version'] == 'forward-test-v20.1-event-time-gated', 'Bad ledger version'
           assert LOT_SIZES['NIFTY'] == 65, 'Bad NIFTY lot size'
