@@ -1261,17 +1261,216 @@ function auditStatus() {
  * Public Web API endpoint for Streamlit Cloud & volatilitylab.in.
  * Caches responses in CacheService for 55 seconds to eliminate redundant Drive/Gzip reads.
  */
+function manualDownloadSession(targetDay) {
+  const day = targetDay || '2026-11-08';
+  console.log('Starting manual 1-minute download for session: ' + day);
+
+  const keys = [
+    CONFIG.indices.NIFTY,
+    CONFIG.indices.BANKNIFTY,
+    'NSE_INDEX|India VIX'
+  ];
+
+  let catalogue = null;
+  try {
+    catalogue = catalogue_(new Date(Date.parse(day + 'T12:00:00+05:30')));
+    Object.values(catalogue.indices).forEach(idx => {
+      idx.futures.forEach(f => keys.push(f.instrument_key));
+    });
+  } catch (err) {
+    console.warn('Catalogue discovery fallback: ' + safeError_(err));
+  }
+
+  const results = {};
+  const errors = [];
+
+  keys.forEach(key => {
+    try {
+      const path = '/v3/historical-candle/' + encodeURIComponent(key) + '/minutes/1/' + day + '/' + day;
+      const data = api_(path);
+      results[key] = data.candles || [];
+    } catch (err) {
+      errors.push({ instrument: key, error: safeError_(err) });
+    }
+  });
+
+  const minutesSet = new Set();
+  Object.values(results).forEach(candles => {
+    candles.forEach(c => {
+      if (c && c[0]) {
+        minutesSet.add(String(c[0]));
+      }
+    });
+  });
+
+  const timestamps = [...minutesSet].sort();
+  console.log('Discovered ' + timestamps.length + ' 1-minute bars for ' + day);
+
+  if (!timestamps.length) {
+    console.log('No minute bars found; running EOD reconciliation for ' + day);
+    return capture_('eod', { target_day: day, catalogue: catalogue });
+  }
+
+  let savedCount = 0;
+  timestamps.forEach(stamp => {
+    const timePart = stamp.slice(11, 19).replace(/:/g, '');
+    const quotes = {};
+
+    Object.keys(results).forEach(key => {
+      const match = results[key].find(c => c[0] === stamp);
+      if (match) {
+        quotes[key] = {
+          instrument_token: key,
+          timestamp: stamp,
+          last_trade_time: stamp,
+          last_price: match[4],
+          ohlc: { open: match[1], high: match[2], low: match[3], close: match[4] },
+          volume: match[5]
+        };
+      }
+    });
+
+    const snapshot = {
+      schema: 1,
+      provider: 'Upstox',
+      day: day,
+      mode: 'snapshot',
+      retrieved_at: stamp,
+      status: 'complete',
+      records: [
+        { label: 'quotes', retrieved_at: stamp, data: quotes }
+      ],
+      errors: [],
+      pending: [],
+      catalogue: catalogue,
+      fetch_seconds: 0.05,
+      source: 'manual_historical_download'
+    };
+
+    save_(day + '_snapshot_' + timePart + '_complete', snapshot);
+    savedCount++;
+  });
+
+  const consolidated = {
+    schema: 1,
+    provider: 'Upstox',
+    day: day,
+    type: '1minute_historical_session',
+    downloaded_at: new Date().toISOString(),
+    instruments: results,
+    minutes_count: timestamps.length,
+    errors: errors
+  };
+  const consolidatedId = save_(day + '_1minute_consolidated_complete', consolidated);
+
+  return {
+    day: day,
+    saved_snapshots: savedCount,
+    consolidated_file_id: consolidatedId,
+    minutes: timestamps.length,
+    errors: errors
+  };
+}
+
+
+
+/**
+ * Backfill missing EOD archives for Nov 4 to Nov 8.
+ */
+function backfillAllMissingEod_2026_11_04_to_08() {
+  const missingDays = ['2026-11-04', '2026-11-05', '2026-11-06', '2026-11-08'];
+  const results = {};
+  missingDays.forEach(day => {
+    try {
+      console.log('Backfilling EOD for ' + day);
+      results[day] = capture_('eod', { target_day: day, catalogue: catalogue_(new Date(day + 'T12:00:00+05:30')) });
+    } catch (err) {
+      results[day] = { error: safeError_(err) };
+    }
+  });
+  return results;
+}
+
 function doGet(e) {
   try {
     const properties = props_();
     const requiredKey = properties.getProperty('WEBHOOK_KEY');
     const providedKey = e && e.parameter ? e.parameter.key : null;
-    if (requiredKey && providedKey !== requiredKey) {
+    const action = e && e.parameter ? e.parameter.action : null;
+    const mutation = ['manual_download', 'download_muhurat', 'backfill_eod'].includes(action);
+    if ((mutation && !requiredKey) || (requiredKey && providedKey !== requiredKey)) {
       return ContentService.createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
         .setMimeType(ContentService.MimeType.JSON);
     }
-    const action = e && e.parameter ? e.parameter.action : null;
     const cache = scriptCache_();
+    if (action === 'backfill_eod') {
+      const result = backfillAllMissingEod_2026_11_04_to_08();
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'manual_download' || action === 'download_muhurat') {
+      const targetDay = (e && e.parameter && e.parameter.day) ? e.parameter.day : '2026-11-08';
+      const result = manualDownloadSession(targetDay);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'candles') {
+      const instrument = (e && e.parameter && e.parameter.instrument) ? e.parameter.instrument : 'NSE_INDEX|Nifty 50';
+      const interval = (e && e.parameter && e.parameter.interval) ? e.parameter.interval : 'minutes/1';
+      const toDate = (e && e.parameter && e.parameter.to_date) ? e.parameter.to_date : '2026-11-08';
+      const fromDate = (e && e.parameter && e.parameter.from_date) ? e.parameter.from_date : toDate;
+      const path = '/v3/historical-candle/' + encodeURIComponent(instrument) + '/' + interval + '/' + toDate + '/' + fromDate;
+      const data = api_(path);
+      return ContentService.createTextOutput(JSON.stringify(data))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'list_days') {
+      const folder = folder_();
+      const files = folder.getFiles();
+      const days = new Set();
+      let count = 0;
+      while (files.hasNext() && count < 200) {
+        const f = files.next();
+        count++;
+        const name = f.getName();
+        if ((name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
+          const match = name.match(/^(\d{4}-\d{2}-\d{2})/);
+          if (match) days.add(match[1]);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        days: Array.from(days).sort().reverse()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const requestedDay = e && e.parameter && e.parameter.day;
+    if (requestedDay) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDay)) throw new Error('Invalid archive date');
+      let file = null;
+      const folder = folder_();
+      const files = folder.getFiles();
+      let latestTime = 0;
+      let count = 0;
+      while (files.hasNext() && count < 150) {
+        const f = files.next();
+        count++;
+        const name = f.getName();
+        if (name.startsWith(requestedDay) && (name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
+          const time = f.getLastUpdated().getTime();
+          if (time > latestTime) {
+            latestTime = time;
+            file = f;
+          }
+        }
+      }
+      if (!file) throw new Error('No complete archive for ' + requestedDay);
+      return ContentService.createTextOutput(Utilities.ungzip(file.getBlob()).getDataAsString())
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
 
     if (action === 'status') {
       if (cache) {
