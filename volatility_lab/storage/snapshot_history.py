@@ -83,10 +83,13 @@ def load(path, symbol, expiry, config=None):
         from market_table import aligned_spread
         try:prices=pd.read_csv(path.parent/f'{symbol.lower()}_one_year.csv')
         except (OSError,ValueError):prices=None
-        # RV alignment depends on session/source, not on each intraday quote's IV.
+        from expiry_forecast import completed_cutoff
+        # Crossing the actual session close changes the available daily candles.
         alignments={}
         for i,row in frame.iterrows():
-            key=(str(pd.Timestamp(row['As of']).date()),row.get('Source',''))
+            stamp=pd.Timestamp(row['As of'])
+            cutoff=completed_cutoff(stamp.tz_convert('Asia/Kolkata')) if stamp.tzinfo else str(stamp)
+            key=(str(cutoff),row.get('Source',''))
             if key not in alignments:alignments[key]=aligned_spread(0.,row['As of'],key[1],prices)
             values=dict(alignments[key])
             iv=pd.to_numeric(row.get('IV'),errors='coerce')

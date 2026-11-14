@@ -35,9 +35,12 @@ def assess_quote(quote,now,max_spread,closing=False):
     def reject(reason):
         result['reason']=reason
         return result
+    max_spread=number(max_spread)
+    if max_spread is None or max_spread<0:return reject('invalid_spread_limit')
     try:
         now=timestamp(now);stamp=timestamp(quote.get('timestamp'))
         age=(now-stamp).total_seconds();result['quote_age_seconds']=age
+        if age < -5:return reject('stale_or_future_quote')
         if closing:
             if stamp.date()!=now.date() or stamp.hour<15:return reject('wrong_closing_session')
         elif not -5<=age<=60:return reject('stale_or_future_quote')

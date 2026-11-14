@@ -17,7 +17,9 @@ _MAX_CACHE_FILES = 128
 
 
 def _read_gzip_json(path):
-    key = str(path)
+    path = Path(path)
+    stat = path.stat()
+    key = (str(path.resolve()), stat.st_mtime_ns, stat.st_size)
     with _CACHE_LOCK:
         if key in _FILE_CACHE:
             _FILE_CACHE.move_to_end(key)
@@ -61,7 +63,7 @@ def _expected_trading_days(start, end, existing_days=()):
 
 
 def _fallback_from_monitor_sqlite(symbol, start, end):
-    """Build tradable intraday option contracts & series ONLY from real captured intraday snapshots
+    """Build non-executable marks ONLY from real captured intraday snapshots
     (>= 2 timestamps covering morning entry and afternoon exit) in data/google_archive or data/monitor.sqlite.
     Zero synthetic daily-OHLC-to-1-minute interpolation is performed."""
     mon_db = DATA_DIR / 'monitor.sqlite'
@@ -90,7 +92,8 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
             try:
                 obj = _read_gzip_json(gz_p)
                 ts = pd.Timestamp(obj['retrieved_at']).tz_convert('Asia/Kolkata')
-                parsed_snaps.append((ts, obj))
+                if ts.strftime('%Y-%m-%d') == day_str:
+                    parsed_snaps.append((ts, obj))
             except Exception:
                 continue
         if len(parsed_snaps) < 2:
@@ -98,8 +101,7 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
         parsed_snaps.sort(key=lambda x: x[0])
         # Populate real captured option prices from the snapshots across the session minutes
         for ts, obj in parsed_snaps:
-            m_of_day = max(0, min(375, (ts.hour * 60 + ts.minute) - 555))
-            stamp_key = (datetime.fromisoformat(f"{day_str} 09:15") + timedelta(minutes=m_of_day)).strftime('%Y-%m-%d %H:%M')
+            stamp_key = ts.strftime('%Y-%m-%d %H:%M')
             for rec in obj.get('records', []):
                 lbl = rec.get('label', '')
                 if not lbl.startswith(symbol + '|') or not isinstance(rec.get('data'), list) or not rec['data']:
@@ -193,15 +195,10 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
                         'lot_size': lot_size,
                     }
 
-        anchor_mins = []
-        for ts_a, sp_a, iv_a, rec_a in snaps:
-            m_of_day = max(0, min(375, (ts_a.hour * 60 + ts_a.minute) - 555))
-            anchor_mins.append((m_of_day, sp_a, iv_a, rec_a))
         # Keep only observed timestamps; never extrapolate or interpolate quote bars.
-        anchors_by_minute = {anchor[0]: anchor for anchor in anchor_mins}
-        for minute in sorted(anchors_by_minute):
-            _minute, spot_px, _iv_px, rec = anchors_by_minute[minute]
-            stamp_key = (datetime.fromisoformat(f"{day_str} 09:15") + timedelta(minutes=minute)).strftime('%Y-%m-%d %H:%M')
+        anchors_by_minute = {s[0].strftime('%Y-%m-%d %H:%M'): s for s in snaps}
+        for stamp_key in sorted(anchors_by_minute):
+            _timestamp, spot_px, _iv_px, rec = anchors_by_minute[stamp_key]
             spot_mark = _nontradable_mark_bar(spot_px)
             if spot_mark is not None:
                 series.setdefault(spot_key, {})[stamp_key] = spot_mark

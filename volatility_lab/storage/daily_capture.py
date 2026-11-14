@@ -1,7 +1,7 @@
 """Local scheduled collection; session secrets stay Windows-encrypted."""
 from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from pathlib import Path
 import math
 import os
@@ -13,14 +13,31 @@ from contextlib import contextmanager
 
 from collector_support import atomic_json, read_json, STATE
 from market_data import IST, MarketDataError, history_cutoff
-from market_calendar import HOLIDAYS,SPECIAL_SESSIONS,last_trading_day_on_or_before
+from market_calendar import CalendarHorizonError, last_trading_day_on_or_before, session_window
 
 ROOT=PACKAGE_ROOT
 STATUS=STATE/'status.json'
 
 
 def expected_day(now):
-    return last_trading_day_on_or_before(history_cutoff(now))
+    return last_trading_day_on_or_before(history_cutoff(now), include_special=True)
+
+
+def capture_stage(now):
+    """Use the sourced session window, including special weekend sessions."""
+    local = now.replace(tzinfo=IST) if now.tzinfo is None else now.astimezone(IST)
+    try:
+        window = session_window(local.date())
+    except CalendarHorizonError:
+        return None
+    if window is None or local < window[0]:
+        return None
+    # Preserve the provider's conservative daily-candle availability buffer.
+    eod_start = max(datetime.combine(local.date(), time(16, 30), tzinfo=IST),
+                    window[1] + timedelta(minutes=50))
+    if local >= eod_start:
+        return 'eod'
+    return 'closing_quotes' if local >= window[1] - timedelta(minutes=10) else 'history_catchup'
 
 
 def verify_history(root,day):
@@ -67,14 +84,9 @@ def run(now=None):
 
 def _run(now=None):
     now=now or datetime.now(IST)
-    mins=now.hour*60+now.minute
-    if now.date() in SPECIAL_SESSIONS:
-        info=SPECIAL_SESSIONS[now.date()]
-        if not (info.get('snap_start_min',1080)<=mins<=info.get('eod_end_min',1320)):return 0
-        stage='eod' if mins>=1170 else 'closing_quotes' if mins>=1155 else 'history_catchup'
-    elif now.weekday()>4 or now.date() in HOLIDAYS:return 0
-    else:
-        stage='eod' if now.time().replace(tzinfo=None)>=time(16,30) else 'closing_quotes' if now.time().replace(tzinfo=None)>=time(15,20) else 'history_catchup' 
+    now=now.replace(tzinfo=IST) if now.tzinfo is None else now.astimezone(IST)
+    stage=capture_stage(now)
+    if stage is None:return 0
     key=str(now.date())+'_'+stage
     previous=read_json(STATUS)
     completed=previous.get('completed',{})
@@ -96,7 +108,7 @@ def _run(now=None):
             from upstox_archive import incremental_capture
             try:incremental_capture()
             except MarketDataError as error:errors.append(str(error))
-        # Live options calculations run during closing_quotes (15:20-16:30 IST).
+        # Closing calculations follow the date's actual session window.
         # EOD IV is captured autonomously via Google Cloud under IV DATA POLICY.md.
         if stage == 'closing_quotes':
             state['step'] = 'Options calculations'; atomic_json(STATUS, state)

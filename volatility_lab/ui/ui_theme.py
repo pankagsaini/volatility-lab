@@ -1,7 +1,7 @@
 """Classic & Modern Institutional UI Theme Engine for Volatility Lab.
 
 Provides:
-1. Cohesive Obsidian Slate & Sovereign Gold / Emerald / Cyan CSS design system
+1. Cohesive Obsidian Slate & Violet / Emerald / Cyan CSS design system
    with classic editorial masthead typography (Instrument Serif / Plus Jakarta Sans)
    and strict tabular numerals (JetBrains Mono) for all quantitative metrics.
 2. Automatic transparent wrapper around `st.plotly_chart` (`install_classic_modern_theme`)
@@ -13,21 +13,23 @@ Provides:
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from zoneinfo import ZoneInfo
 import streamlit as st
+
+from volatility_lab.core.market_calendar import CalendarHorizonError, SPECIAL_SESSIONS, session_window
 
 IST = ZoneInfo("Asia/Kolkata")
 
 # Classic & Modern Institutional Palette for Plotly Traces
 TRACE_PALETTE = [
     "#38BDF8",  # Crisp Institutional Cyan (Primary IV / ATM series)
-    "#D4AF37",  # Classic Sovereign Gold (GARCH / Benchmark / Forward IV)
+    "#A78BFA",  # Classic Violet (GARCH / Benchmark / Forward IV)
     "#10B981",  # Emerald (EWMA / Positive Carry / Bullish Edge)
     "#A78BFA",  # Royal Violet (Secondary Surface / Put Wing)
     "#F43F5E",  # Rose Crimson (Drawdown / Put Skew / Risk Alert)
-    "#F59E0B",  # Amber (Warning / Pre-Open / Neutral Band)
+    "#94A3B8",  # Amber (Warning / Pre-Open / Neutral Band)
 ]
 
 CLASSIC_MODERN_CSS = """
@@ -35,15 +37,15 @@ CLASSIC_MODERN_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
 :root {
-    --vl-bg: #090d16;
-    --vl-bg-elevated: #0d1320;
+    --vl-bg: #070b12;
+    --vl-bg-elevated: #0d1522;
     --vl-surface: #111827;
     --vl-surface-hover: #162033;
     --vl-surface-glass: rgba(17, 24, 39, 0.78);
     --vl-border: #1e293b;
     --vl-border-strong: #334155;
-    --vl-gold: #d4af37;
-    --vl-gold-soft: rgba(212, 175, 55, 0.14);
+    --vl-violet: #a78bfa;
+    --vl-violet-soft: rgba(167, 139, 250, 0.14);
     --vl-cyan: #38bdf8;
     --vl-cyan-soft: rgba(56, 189, 248, 0.12);
     --vl-emerald: #10b981;
@@ -56,7 +58,7 @@ CLASSIC_MODERN_CSS = """
     --vl-font-serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
     --vl-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     /* Backwards-compatible aliases used by backtest_ui.py */
-    --bg: #090d16;
+    --bg: #070b12;
     --panel: #111827;
     --panel-soft: #162033;
     --border: #1e293b;
@@ -70,7 +72,7 @@ CLASSIC_MODERN_CSS = """
     background-color: var(--vl-bg) !important;
     background-image:
         radial-gradient(1100px 420px at 12% -6%, rgba(56, 189, 248, 0.07), transparent 70%),
-        radial-gradient(900px 380px at 88% -4%, rgba(212, 175, 55, 0.05), transparent 70%) !important;
+        radial-gradient(900px 380px at 88% -4%, rgba(167, 139, 250, 0.05), transparent 70%) !important;
     color: var(--vl-text) !important;
     font-family: var(--vl-font-sans) !important;
 }
@@ -144,7 +146,7 @@ div[data-testid="stMetric"] {
 
 div[data-testid="stMetric"]:hover {
     border-color: var(--vl-border-strong) !important;
-    border-top-color: var(--vl-gold) !important;
+    border-top-color: var(--vl-violet) !important;
 }
 
 div[data-testid="stMetricLabel"] {
@@ -170,7 +172,7 @@ div[data-testid="stCaptionContainer"] {
 
 /* Segmented Control (Primary Workspace Switcher) */
 [data-testid="stSegmentedControl"] {
-    background: #0d1320 !important;
+    background: #0d1522 !important;
     padding: 4px !important;
     border-radius: 11px !important;
     border: 1px solid var(--vl-border) !important;
@@ -223,8 +225,8 @@ div[data-testid="stRadio"] label:hover {
 }
 
 div[data-testid="stRadio"] label:has(input:checked) {
-    border-color: rgba(212, 175, 55, 0.65) !important;
-    background: linear-gradient(135deg, rgba(212, 175, 55, 0.16) 0%, rgba(16, 185, 129, 0.14) 100%) !important;
+    border-color: rgba(167, 139, 250, 0.65) !important;
+    background: linear-gradient(135deg, rgba(167, 139, 250, 0.16) 0%, rgba(16, 185, 129, 0.14) 100%) !important;
     color: #fef08a !important;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
 }
@@ -316,7 +318,7 @@ div[data-testid="stAlert"] {
     margin-bottom: 12px;
     background: linear-gradient(90deg, rgba(17, 24, 39, 0.95) 0%, rgba(15, 23, 42, 0.85) 100%);
     border: 1px solid rgba(51, 65, 85, 0.65);
-    border-left: 3px solid #d4af37;
+    border-left: 3px solid #a78bfa;
     border-radius: 12px;
     box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.45);
 }
@@ -382,13 +384,13 @@ details.vl-app-qr-dropdown summary::-webkit-details-marker {
     width: 270px;
     background: #0f172a;
     border: 1px solid #334155;
-    border-top: 2px solid #d4af37;
+    border-top: 2px solid #a78bfa;
     border-radius: 12px;
     padding: 12px;
     box-shadow: 0 14px 32px rgba(0, 0, 0, 0.65);
 }
-.vl-brand-gold {
-    color: #d4af37;
+.vl-brand-violet {
+    color: #a78bfa;
     margin-right: 6px;
 }
 .vl-brand-sub {
@@ -610,18 +612,21 @@ def market_session_badge_html(now: datetime | None = None) -> str:
         current = current.replace(tzinfo=IST)
     else:
         current = current.astimezone(IST)
-    minute = current.hour * 60 + current.minute
-    if current.weekday() < 5 and 555 <= minute <= 930:
-        label = "● NSE LIVE · REGULAR SESSION"
+    try:
+        window = session_window(current.date())
+    except CalendarHorizonError:
+        return "<span>NSE · session calendar unavailable</span>"
+    if window and window[0] <= current < window[1]:
+        label = "● NSE LIVE · SPECIAL SESSION" if current.date() in SPECIAL_SESSIONS else "● NSE LIVE · REGULAR SESSION"
         style = (
             "background:rgba(16,185,129,0.14); color:#34d399; "
             "border:1px solid rgba(16,185,129,0.45); box-shadow:0 0 12px rgba(16,185,129,0.18);"
         )
-    elif current.weekday() < 5 and 540 <= minute < 555:
+    elif window and current.date() not in SPECIAL_SESSIONS and window[0] - timedelta(minutes=15) <= current < window[0]:
         label = "◐ NSE · PRE-OPEN SESSION"
         style = (
-            "background:rgba(245,158,11,0.14); color:#fbbf24; "
-            "border:1px solid rgba(245,158,11,0.45);"
+            "background:rgba(167,139,250,0.14); color:#a78bfa; "
+            "border:1px solid rgba(167,139,250,0.45);"
         )
     else:
         label = "○ NSE CLOSED · ARCHIVE / EOD"
@@ -672,7 +677,7 @@ def render_any_device_access_popover() -> None:
             f'<div style="display:flex; align-items:center; gap:14px; background:rgba(15,23,42,0.85); border:1px solid #1e293b; border-radius:10px; padding:10px 12px; margin-bottom:10px;">'
             f'<img src="{qr_api}" width="96" height="96" style="border-radius:6px; border:1px solid #334155;" alt="Scan QR Code" />'
             f'<div style="font-size:0.78rem; color:#cbd5e1; line-height:1.45;">'
-            f'<b style="color:#d4af37;">Scan with Phone Camera</b><br/>'
+            f'<b style="color:#a78bfa;">Scan with Phone Camera</b><br/>'
             f'Opens your live Volatility Lab directly on iOS / Android Chrome or Safari (<a href="{cloud_url}" target="_blank" style="color:#38bdf8;">open link</a>).'
             f'</div></div>',
             unsafe_allow_html=True,

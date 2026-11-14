@@ -35,6 +35,19 @@ def report(stamp='2026-11-13T10:30:00+05:30'):
     }
 
 
+def test_historical_replay_uses_dated_late_close_and_special_session():
+    for stamp in ('2026-11-13T15:39:00+05:30', '2026-11-08T14:30:00+05:30'):
+        saved = report(stamp)
+        saved['day'] = stamp[:10]
+        saved.pop('nfo_session_validated')
+        validate_report(saved, historical=True)
+    saved = report('2026-11-08T13:50:00+05:30')
+    saved['day'] = '2026-11-08'
+    saved.pop('nfo_session_validated')
+    with pytest.raises(ValueError, match='session'):
+        validate_report(saved, historical=True)
+
+
 def test_seed_replays_missing_greeks_and_replaces_legacy_model_rows(tmp_path):
     archives = tmp_path / 'archives'
     archives.mkdir()

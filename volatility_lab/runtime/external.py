@@ -5,6 +5,7 @@ from time import monotonic, sleep
 from urllib.error import HTTPError
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
+from math import isfinite
 from .events import emit
 
 
@@ -20,6 +21,8 @@ class ExternalReads:
         self.state = {}
 
     def read(self, source, operation, *, attempts=3):
+        if isinstance(attempts, bool) or not isinstance(attempts, int) or attempts < 1:
+            raise ValueError("attempts must be a positive integer")
         with self.lock:
             failures, until, probe = self.state.get(source, (0, 0, False))
             if until > self.clock() or probe:
@@ -38,7 +41,9 @@ class ExternalReads:
                         raw = (error.headers or {}).get("Retry-After")
                         if raw:
                             try:
-                                delay = max(delay, float(raw))
+                                seconds = float(raw)
+                                if isfinite(seconds) and seconds >= 0:
+                                    delay = max(delay, seconds)
                             except ValueError:
                                 try:
                                     delay = max(

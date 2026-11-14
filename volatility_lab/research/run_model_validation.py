@@ -1,7 +1,7 @@
 """One-year out-of-sample origins, independently refitted rolling-year models."""
 from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
-from pathlib import Path
+from dataclasses import asdict
 from datetime import datetime,timezone
 import hashlib,json
 import pandas as pd
@@ -13,7 +13,7 @@ MODELS=('GARCH','EWMA','Yang–Zhang baseline')
 def predict(training,config):
     result=forecast_origin(training,config)
     for h in config.horizons:
-        yz=rv_snapshot(training,h)['yang_zhang_rv']
+        yz=rv_snapshot(training,h,ann_factor=config.annualization)['yang_zhang_rv']
         result['Yang–Zhang baseline',h]=(yz**2/config.annualization,'Trailing-H-session YZ held constant; historical baseline, not fitted forward model')
     return result
 
@@ -30,10 +30,12 @@ def run(symbol,years=None):
     raw=frame.to_csv(index=False).encode();(folder/'input.csv').write_bytes(raw)
     meta={'status':'running','symbol':symbol,'evaluation_start':str(start.date()),'data_through':str(end.date()),
           'training':'Rolling calendar year, minimum 200 returns; no future observations',
-          'target':'Mean future squared daily log returns; annualized at 252',
+          'target':f'Mean future squared daily log returns; annualized at {config.annualization}',
+          'config':asdict(config),
           'models':MODELS,'horizons':config.horizons,'input_sha256':hashlib.sha256(raw).hexdigest(),
           'code_sha256':{name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in
-                         ['forecast.py','forecast_validation.py','vol_lib.py','run_model_validation.py']}}
+                         ['forecasting/forecast.py','research/forecast_validation.py',
+                          'core/vol_lib.py','research/run_model_validation.py']}}
     atomic_json(folder/'metadata.json',meta)
     try:
         rows=walk_forward(frame,symbol,config,predictor=predict,models=MODELS,origin_start=start)

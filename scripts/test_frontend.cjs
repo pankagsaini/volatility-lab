@@ -98,11 +98,17 @@ assert.deepEqual(Array.from(web.regimeChart.data.datasets[0].data),[6,null,7]);
 web.marketCatalog.NIFTY.push({...web.marketCatalog.NIFTY[0],expiry:'2026-12-29',dte:43,iv:25,brokerAtmIv:null});
 web.renderTab2Term();
 assert.equal(web.termChart.options.scales.x.type,'linear');
-assert.equal(web.termChart.data.datasets.length,1);
+assert.equal(web.termChart.data.datasets.length,3);
 assert.equal(web.termChart.data.datasets[0].pointValueLabels,'expiry');
 assert.equal(web.termChart.options.scales.x.ticks.callback(43),'2026-12-29');
 assert.equal(web.termChart.data.datasets[0].data[1].y,null,'model IV cannot replace missing broker ATM IV');
 assert.equal(web.termChart.data.datasets[0].data[1].x,43);
+assert.equal(web.termChart.data.datasets[1].data[0].y,null,'Missing forecast cannot be replaced by broker IV');
+web.window.VL_PUBLIC_STATE = {forecasts:{NIFTY:{expiries:[{expiry:'2026-11-17',as_of:'2026-11-11T15:40:00+05:30',training_through:'2026-11-11',garch:17,ewma:16}]}}};
+web.renderTab2Term();
+assert.equal(web.termChart.data.datasets[1].data[0].y,17);
+assert.equal(web.termChart.data.datasets[2].data[0].y,16);
+assert(element('termMainTableBody').innerHTML.includes('0.000110'),'Total variance must contain numeric annual variance times DTE');
 
 // The shipped history may contain IV only with provenance; pre-capture years stay empty.
 const charts = vm.runInContext('OptionsCharts',web);
@@ -119,6 +125,14 @@ const stable = charts.straddleSeries({atm:25000,expiry:base.expiry,sessionDate:'
   intraday:[base,{...base,atm:25100},{...base,expiry:'2026-11-24'},{...base,snapshotId:'2026-11-11T10:00:00Z'}]});
 assert.equal(stable.length,1); assert.equal(stable[0].strad,200);
 assert.equal(charts.straddleSeries({atm:25000,expiry:base.expiry,intraday:[{...base,markSource:null} ]})[0].strad,null);
+assert.equal(charts.straddleSeries({atm:25000,expiry:base.expiry,intraday:[{...base,snapshotId:'invalid'}]}).length,0,'Malformed timestamp cannot crash chart');
+assert.equal(charts.straddleSeries({atm:25000,expiry:base.expiry,intraday:[]}).length,0);
+assert.equal(charts.surface([{spot:100,atm:100,dte:2,chain:[{k:100,uCallIv:20,uPutIv:22},{k:130,uCallIv:25},{k:90,modelPutIv:15}]}],true).length,1);
+assert.equal(charts.surface([{spot:100,atm:100,dte:2,chain:[{k:100,uCallIv:20,uPutIv:22},{k:130,uCallIv:25}]}],false).length,2);
+assert.equal(charts.auditedTrade({date:'2026-11-02',gross:1,charges:1,capital:100}),false,'Legacy display rows lack execution evidence');
+const verified = {provenance_status:'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK',decision_at:'2026-11-11T09:20:00+05:30',available_at:'2026-11-09T16:00:00+05:30',entry_source:'capture-a',exit_source:'capture-b',unitLegs:260,gross:20,charges:10,capital:1000};
+assert.equal(charts.auditedTrade(verified),true);
+assert.equal(charts.auditedTrade({...verified,available_at:'2026-11-11T15:40:00+05:30'}),false,'Same-day EOD cannot become a morning entry signal');
 const sessions = vm.runInContext('TradingSessions',web);
 assert.equal(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8'),fs.readFileSync(path.join(__dirname,'../docs/scripts/trading-sessions.js'),'utf8'));
 assert.deepEqual(Array.from(sessions.history([{d:'2026-11-06'},{d:'2026-11-12'}]),r=>r.d),

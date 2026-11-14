@@ -185,7 +185,7 @@ st.markdown(
     f"""
     <div class="vl-masthead">
       <div class="vl-masthead-left">
-        <span class="vl-brand-crest"><span class="vl-brand-gold">❖</span>Volatility Lab</span>
+        <span class="vl-brand-crest"><span class="vl-brand-violet">❖</span>Volatility Lab</span>
         <span class="vl-brand-sub">NSE Index Volatility &amp; Relative Value</span>
       </div>
       <div class="vl-pill-row">
@@ -193,7 +193,7 @@ st.markdown(
           <details class="vl-app-qr-dropdown">
             <summary class="vl-icon-action" title="Open on any phone, tablet, or app">📱 App</summary>
             <div class="vl-app-qr-card">
-              <div style="font-size:0.74rem; font-weight:700; color:#d4af37; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">📱 Open on Any Device</div>
+              <div style="font-size:0.74rem; font-weight:700; color:#a78bfa; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">📱 Open on Any Device</div>
               <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
                 <img src="{qr_url}" width="78" height="78" style="border-radius:6px; border:1px solid #334155; flex-shrink:0;" alt="QR" onerror="this.style.display='none'" />
                 <div style="font-size:0.72rem; color:#cbd5e1; line-height:1.38;">
@@ -201,7 +201,7 @@ st.markdown(
                   <span style="color:#94a3b8; font-size:0.68rem;">Tip: Tap <b>Add to Home Screen</b> in Safari/Chrome to install as an app.</span>
                 </div>
               </div>
-              <div style="font-family:var(--vl-font-mono, monospace); font-size:0.68rem; color:#94a3b8; background:#090d16; border:1px solid #1e293b; border-radius:6px; padding:5px 8px;">
+              <div style="font-family:var(--vl-font-mono, monospace); font-size:0.68rem; color:#94a3b8; background:#070b12; border:1px solid #1e293b; border-radius:6px; padding:5px 8px;">
                 Wi-Fi LAN: <span style="color:#38bdf8;">{lan_url}</span>
               </div>
             </div>

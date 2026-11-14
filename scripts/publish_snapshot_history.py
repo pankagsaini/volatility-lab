@@ -3,12 +3,17 @@ import argparse
 from datetime import datetime, timedelta, timezone
 import gzip
 import json
+import math
 from pathlib import Path
 import re
+import sys
 
 IST = timezone(timedelta(hours=5, minutes=30))
 SOURCE = "Upstox option_greeks.iv"
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from volatility_lab.core.market_calendar import expiry_close
+from volatility_lab.ingestion.google_archive_sync import validate_report
 
 
 def timestamp(value):
@@ -18,22 +23,23 @@ def timestamp(value):
 def snapshot(path):
     with gzip.open(path, "rt", encoding="utf-8") as reader:
         payload = json.load(reader)
-    if (payload.get("provider") != "Upstox" or payload.get("status") != "complete"
-            or payload.get("errors") or payload.get("pending") or payload.get("mode") != "snapshot"):
+    if validate_report(payload, historical=True)["mode"] != "snapshot":
         raise ValueError(f"Invalid archive {path.name}")
     return payload
 
 
 def pair(row):
-    return [row[side]["option_greeks"].get("iv") for side in ("call_options", "put_options")]
+    return [((row.get(side) or {}).get("option_greeks") or {}).get("iv")
+            for side in ("call_options", "put_options")]
 
 
 def average(values):
-    return sum(values) / len(values) if all(isinstance(x, (int, float)) and x > 0 for x in values) else None
+    return (sum(values) / len(values) if values and
+            all(type(x) in (int, float) and math.isfinite(x) and x > 0 for x in values) else None)
 
 
 def anchor_point(row, rec, raw, path):
-    books = [row[side]["market_data"] for side in ("call_options", "put_options")]
+    books = [(row.get(side) or {}).get("market_data") or {} for side in ("call_options", "put_options")]
     mark_at = timestamp(raw["retrieved_at"])
     def valid(book):
         bid, ask = book.get("bid_price"), book.get("ask_price")
@@ -81,18 +87,19 @@ def build(archive, day):
             for row in rows:
                 node = {"k": row["strike_price"]}
                 for side, prefix, name in (("call_options","c","Call"), ("put_options","p","Put")):
-                    leg = row[side]
-                    node["u"+name+"Iv"] = node[prefix+"Iv"] = leg["option_greeks"].get("iv")
-                    node["u"+name+"Delta"] = node[prefix+"Delta"] = leg["option_greeks"].get("delta")
-                    node[prefix+"Ltp"] = leg["market_data"].get("ltp")
-                    oi = leg["market_data"].get("oi")
+                    leg = row.get(side) or {}
+                    greeks = leg.get("option_greeks") or {}
+                    market = leg.get("market_data") or {}
+                    node["u"+name+"Iv"] = node[prefix+"Iv"] = greeks.get("iv")
+                    node["u"+name+"Delta"] = node[prefix+"Delta"] = greeks.get("delta")
+                    node[prefix+"Ltp"] = market.get("ltp")
+                    oi = market.get("oi")
                     node[prefix+"Oi"] = oi / 1000 if oi is not None else None
                 node["mktIv"] = node["pIv"] if node["k"] < spot else node["cIv"]
                 chain.append(node)
             calls = sum(n["cOi"] or 0 for n in chain)
-            prices = [atm[s]["market_data"].get("ltp") for s in ("call_options","put_options")]
-            expiry_close = "15:40" if "2026-08-03" <= expiry < "2026-12-07" else "15:30"
-            end = timestamp(expiry+"T"+expiry_close+":00+05:30")
+            prices = [((atm.get(s) or {}).get("market_data") or {}).get("ltp") for s in ("call_options","put_options")]
+            end = expiry_close(expiry)
             opt = {"expiry": expiry, "kind": "Monthly" if future else "Weekly", "sessionDate": day,
                    "dte": (end-timestamp(raw["retrieved_at"])).total_seconds()/86400, "spot": spot, "atm": atm["strike_price"],
                    "straddleStrike": strike, "intraday": points, "chain": chain, "brokerAtmIv": average(pair(atm)),
@@ -113,7 +120,7 @@ def build(archive, day):
         # The day may have an underlying close recorded by a separate historical source.
         if front:
             old = next((r for r in history[sym] if r["d"] == day), {})
-            point = {"d":day, "l":timestamp(day).strftime("%d %b"), "c":old.get("c", front["spot"]),
+            point = {"d":day, "l":timestamp(day).strftime("%d %b"), "c":old.get("c"),
                      "iv":front["iv"], "ivSource":SOURCE, "atm":front["atm"], "expiry":front["expiry"],
                      "snapshotId":front["ivCapturedAt"], "archiveFile":front["archiveFile"],
                      **{k:front[v] for k,v in (("h10","hv10"),("h20","hv20"),("h30","hv30"),("ew","ewma"))}}

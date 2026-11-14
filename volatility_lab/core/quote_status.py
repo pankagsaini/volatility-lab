@@ -1,6 +1,7 @@
 """Display-time checks; never mutate archived observations."""
 import pandas as pd
 from market_data import IST
+from volatility_lab.core.market_calendar import CalendarHorizonError, session_window
 
 
 def snapshot_status(stamp, source, connected, now=None, max_age=60, retrieved_at=None):
@@ -32,7 +33,12 @@ def snapshot_status(stamp, source, connected, now=None, max_age=60, retrieved_at
         return f'Saved {captured:%d %b %H:%M} · option timestamp unavailable'
     if not connected:return 'Saved snapshot'
     if 'clos' in str(source).lower():return 'Closing estimate'
-    if not (current.weekday()<5 and 555<=current.hour*60+current.minute<=940):return 'Saved snapshot'
+    try:
+        window = session_window(current.date())
+    except CalendarHorizonError:
+        return 'Saved snapshot'
+    if window is None or not window[0] <= current.floor('min') <= window[1]:
+        return 'Saved snapshot'
     return 'Recent snapshot' if age<=max_age else 'Stale - refresh'
 
 

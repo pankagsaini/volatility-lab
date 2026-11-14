@@ -67,7 +67,7 @@ def _book_mid(value):
         bid, ask = float(bid), float(ask)
     except (TypeError, ValueError):
         return None
-    if not np.isfinite(bid) or not np.isfinite(ask) or bid <= 0 or ask <= bid:
+    if not np.isfinite(bid) or not np.isfinite(ask) or bid <= 0 or ask < bid:
         return None
     return (bid + ask) / 2.0
 
@@ -233,6 +233,8 @@ def calculate(
         }
 
     from pricing_policy import select_model, price_observed_option
+    if not isinstance(future_quote, dict):
+        future_quote = None
     if future_contract and str(future_contract.get('expiry'))[:10] != str((future_quote or {}).get('expiry'))[:10]:
         future_quote = None
     selected = select_model(

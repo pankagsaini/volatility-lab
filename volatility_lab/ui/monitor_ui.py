@@ -117,7 +117,7 @@ def render_trade_decision_radar(selected_rows):
 
     st.markdown(
         '<div style="margin-top:4px; margin-bottom:10px; display:flex; align-items:center; gap:8px;">'
-        '<span style="color:#d4af37; font-size:0.95rem;">◈</span>'
+        '<span style="color:#a78bfa; font-size:0.95rem;">◈</span>'
         '<span style="font-family:var(--vl-font-sans, sans-serif); font-size:0.80rem; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#e2e8f0;">Volatility Radar</span>'
         '</div>',
         unsafe_allow_html=True,
@@ -194,7 +194,7 @@ def render_trade_decision_radar(selected_rows):
             syn_txt = f"{syn:,.1f}" if syn is not None else "-"
 
             card_html = (
-                f'<div style="background:linear-gradient(180deg, rgba(22,32,51,0.78) 0%, rgba(17,24,39,0.95) 100%); border:1px solid #1e293b; border-top:2px solid #d4af37; border-radius:12px; padding:15px 18px; margin-bottom:12px; box-shadow:0 6px 22px -6px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04);">'
+                f'<div style="background:linear-gradient(180deg, rgba(22,32,51,0.78) 0%, rgba(17,24,39,0.95) 100%); border:1px solid #1e293b; border-top:2px solid #a78bfa; border-radius:12px; padding:15px 18px; margin-bottom:12px; box-shadow:0 6px 22px -6px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04);">'
                 f'<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(30,41,59,0.9); padding-bottom:9px; margin-bottom:11px;">'
                 f'<div><span style="font-family:var(--vl-font-serif, Georgia, serif); font-weight:400; font-size:1.35rem; color:#f8fafc; letter-spacing:0.01em;">{symbol}</span><span style="font-family:var(--vl-font-mono, monospace); color:#94a3b8; font-size:0.76rem; margin-left:8px;">{exp} · {dte:.1f}d</span></div>'
                 f'<span style="font-family:var(--vl-font-mono, monospace); background:{bias_bg}; color:{bias_color}; border:1px solid {bias_border}; font-size:0.70rem; font-weight:600; padding:3px 10px; border-radius:999px; letter-spacing:0.05em;">{bias_badge}</span>'
@@ -203,12 +203,12 @@ def render_trade_decision_radar(selected_rows):
                 f'<div style="background:rgba(9,13,22,0.75); border:1px solid #1e293b; border-radius:9px; padding:9px 13px;">'
                 f'<div style="display:flex; justify-content:space-between; align-items:center;"><span style="color:#94a3b8; font-size:0.69rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:600;">Spot &amp; IV</span><span style="font-family:var(--vl-font-mono, monospace); color:#38bdf8; font-size:0.74rem; font-weight:600;">IV: {iv:.2f}%</span></div>'
                 f'<div style="font-family:var(--vl-font-mono, monospace); font-size:1.24rem; font-weight:600; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:3px;">{spot:,.1f}</div>'
-                f'<div style="display:flex; justify-content:space-between; font-family:var(--vl-font-mono, monospace); font-size:0.72rem; color:#94a3b8; margin-top:4px;"><span>Fut: <b style="color:#38bdf8;">{fut_txt}</b></span><span>Syn: <b style="color:#d4af37;">{syn_txt}</b></span></div>'
+                f'<div style="display:flex; justify-content:space-between; font-family:var(--vl-font-mono, monospace); font-size:0.72rem; color:#94a3b8; margin-top:4px;"><span>Fut: <b style="color:#38bdf8;">{fut_txt}</b></span><span>Syn: <b style="color:#a78bfa;">{syn_txt}</b></span></div>'
                 f'</div>'
                 f'<div style="background:rgba(9,13,22,0.75); border:1px solid #1e293b; border-radius:9px; padding:9px 13px;">'
                 f'<div style="color:#94a3b8; font-size:0.69rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:600;">Expected Expiry Move</div>'
                 f'<div style="font-family:var(--vl-font-mono, monospace); font-size:1.24rem; font-weight:600; color:#f8fafc; font-variant-numeric:tabular-nums; margin-top:3px;">±{move_pts:.0f} pts</div>'
-                f'<div style="font-family:var(--vl-font-mono, monospace); color:#d4af37; font-size:0.73rem; font-weight:600; margin-top:4px;">±{move_pct:.2f}% <span style="color:#64748b; font-weight:400;">({lower_range:,.0f} – {upper_range:,.0f})</span></div>'
+                f'<div style="font-family:var(--vl-font-mono, monospace); color:#a78bfa; font-size:0.73rem; font-weight:600; margin-top:4px;">±{move_pct:.2f}% <span style="color:#64748b; font-weight:400;">({lower_range:,.0f} – {upper_range:,.0f})</span></div>'
                 f'</div>'
                 f'</div>'
                 f'<div style="font-size:0.78rem; line-height:1.45; color:#cbd5e1; background:rgba(13,19,32,0.85); border-left:3px solid {bias_color}; border-radius:4px; padding:7px 12px; margin-bottom:8px;">{bias_text}</div>'
@@ -327,7 +327,7 @@ def history_figure(symbol,expiry,hv,iv,period,relative=False,spread_only=False):
 
     spread_name='Relative spread · 5-session %' if relative else 'IV-RV Spread'
 
-    series=[(spread_name,'#f43f5e',1,'% ' if relative else ' pp')] if spread_only else [('IV','#d4af37',1,'%')]
+    series=[(spread_name,'#f43f5e',1,'% ' if relative else ' pp')] if spread_only else [('IV','#a78bfa',1,'%')]
     for name,color,row,unit in series:
         observed=iv.copy()
         if len(observed):
@@ -707,7 +707,7 @@ def render_term_structure(symbol,result):
                             view.get('Training through',pd.Series('',index=view.index)).fillna(''),
                             view['Forecast as of'].fillna(''),view['Forecast basis']])
     series=[('IV','IV','solid','#38bdf8','top center'),
-            ('GARCH FRV %','GARCH FRV','solid','#d4af37','bottom right'),
+            ('GARCH FRV %','GARCH FRV','solid','#a78bfa','bottom right'),
             ('EWMA FRV %','EWMA FRV','solid','#10b981','top left')]
     plotted=[]
     for field,label,dash,color,text_position in series:
@@ -801,7 +801,7 @@ def render_smile(symbol,selected,config):
 
     fig=go.Figure(go.Scatter(x=points.Point,y=points.IV,mode='lines+markers+text',connectgaps=False,
         text=[f'{v:.2f}%' if pd.notna(v) and np.isfinite(v) else '' for v in points.IV],textposition='top center',cliponaxis=False,
-        line={'color':'#38bdf8','width':2.4},marker={'color':'#d4af37','size':7},hovertemplate='%{x}: %{y:.2f}%<extra></extra>'))
+        line={'color':'#38bdf8','width':2.4},marker={'color':'#a78bfa','size':7},hovertemplate='%{x}: %{y:.2f}%<extra></extra>'))
 
     fig.update_layout(height=320,template='plotly_dark',paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(13, 19, 32, 0.55)',
         margin={'l':46,'r':20,'t':38,'b':34},yaxis_title='IV %',yaxis_tickformat='.2f')
@@ -844,7 +844,7 @@ def render_relative_value(symbol,selected,config):
 
     st.markdown(
         '<div style="margin-top:16px; margin-bottom:8px; display:flex; align-items:center; gap:8px;">'
-        '<span style="color:#d4af37; font-size:0.95rem;">◈</span>'
+        '<span style="color:#a78bfa; font-size:0.95rem;">◈</span>'
         '<span style="font-family:var(--vl-font-sans, sans-serif); font-size:0.80rem; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#e2e8f0;">Historical Volatility Regime &amp; Maturity Relative Value</span>'
         '</div>',
         unsafe_allow_html=True,
