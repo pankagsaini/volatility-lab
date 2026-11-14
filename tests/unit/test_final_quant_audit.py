@@ -1,5 +1,6 @@
 """Regressions for numerical, provenance and point-in-time audit findings."""
 from datetime import date
+from contextlib import closing
 from unittest.mock import patch
 import json
 import math
@@ -247,7 +248,7 @@ def test_intraday_hv_alignment_recomputes_when_session_completes(tmp_path):
 def test_recorded_context_chooses_front_expiry_independently_each_day(tmp_path):
     from volatility_lab.services.option_context import recorded_context
     path = tmp_path / 'monitor.sqlite'
-    with sqlite3.connect(path) as con:
+    with closing(sqlite3.connect(path)) as con, con:
         con.execute('CREATE TABLE expiry_observations (symbol TEXT,date TEXT,expiry TEXT,iv REAL,spread REAL,source TEXT,config TEXT)')
         rows = [('2026-11-11', '2026-11-11', 20),
                 ('2026-11-12', '2026-11-12', 19),
