@@ -2,6 +2,7 @@
 from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import date, datetime, timedelta
+from contextlib import closing
 from pathlib import Path
 from urllib.error import URLError, HTTPError
 import argparse
@@ -65,7 +66,7 @@ def save_to_research_db(instrument: str, candles: list):
     """Store 1-minute bars into local SQLite research cache."""
     db_path = DATA / 'upstox' / 'research.sqlite'
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db_path, timeout=30) as con:
+    with closing(sqlite3.connect(db_path, timeout=30)) as con, con:
         con.execute('PRAGMA journal_mode=WAL')
         con.execute(
             'CREATE TABLE IF NOT EXISTS candles(instrument TEXT, interval TEXT, stamp TEXT, '

@@ -9,7 +9,7 @@ import sqlite3
 import sys
 import json
 import msvcrt
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 
 from collector_support import atomic_json, read_json, STATE
 from market_data import IST, MarketDataError, history_cutoff
@@ -42,7 +42,7 @@ def capture_stage(now):
 
 def verify_history(root,day):
     errors=[]
-    with sqlite3.connect(root/'futures.sqlite') as con:
+    with closing(sqlite3.connect(root/'futures.sqlite')) as con:
         for symbol in ('NIFTY','BANKNIFTY'):
             tails=dict(con.execute('SELECT rank,MAX(day) FROM continuous WHERE symbol=? GROUP BY rank',(symbol,)))
             if any(tails.get(rank,'')<str(day) for rank in (1,2,3)):

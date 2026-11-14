@@ -2,7 +2,7 @@
 
 14 November 2026 · baseline `cd7a9986eebc4a03cde5cd1550e1f70b768fca33` · local branch `codex/final-systems-audit`
 
-The audit corrected confirmed pricing, provenance, collector, API and presentation defects in place. **214 Python tests passed with warnings treated as errors.** All five JavaScript/browser checks, Ruff, wheel build and an installed-wheel smoke test passed. The changes remain local and uncommitted; the website and Apps Script deployment have not been replaced by this audit.
+The audit corrected confirmed pricing, provenance, collector, API and presentation defects in place. **214 Python tests passed with warnings treated as errors.** All five JavaScript/browser checks, Ruff, wheel build and an installed-wheel smoke test passed. At report issuance, the changes were local and uncommitted. Publication and subsequent Python 3.13 database-cleanup fixes are tracked in [PR #15](https://github.com/pankagsaini/volatility-lab/pull/15); Apps Script deployment remains a separate operation.
 
 This is a verified remediation report, not a certification that every execution path is suitable for live trading. Package-wide statement/branch coverage is **42.67%**. Full HTML/payload parsing, targeted source review and executable checks were completed; an exhaustive manual reading of every repository line was not established. Actual `monitor.sqlite` and `upstox/research.sqlite` files were unavailable in the inspected stores, so their real contents could not be certified. Database behavior was tested with isolated fixtures. No live broker order was placed.
 
@@ -57,7 +57,7 @@ The fee comparison used the [Upstox tariff](https://upstox.com/brokerage-charges
 
 ## Repository footprint
 
-Counts include regular working-tree files, hidden files and this report/evidence, excluding `.git`. Baseline counts included generated caches; after-cleanup counts exclude the relocated caches/build outputs. The separate source inventory follows Git's nonignored file list, counts only files that exist, and includes proposed new files before staging.
+These are the recorded pre-publication footprint counts. They include regular working-tree files, hidden files and the report/evidence at issuance, excluding `.git`. Baseline counts included generated caches; after-cleanup counts exclude the relocated caches/build outputs. The source inventory follows Git's nonignored file list, counts only files that exist, and includes proposed new files before staging. Subsequent CI fixes are outside this inventory snapshot.
 
 | Inventory | Before | After |
 | --- | ---: | ---: |

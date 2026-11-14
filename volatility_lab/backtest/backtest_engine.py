@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
 import json, gzip, sqlite3, math, threading
 from collections import OrderedDict
+from contextlib import closing
 import pandas as pd
 from backtest_common import record_skip
 
@@ -139,7 +140,7 @@ def _fallback_from_monitor_sqlite(symbol, start, end):
     by_day_exp = {}
     if mon_db.exists():
         try:
-            with sqlite3.connect(mon_db, timeout=15) as con:
+            with closing(sqlite3.connect(mon_db, timeout=15)) as con:
                 has_intra = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='intraday_observations'").fetchone()
                 if has_intra:
                     rows = con.execute(
@@ -226,7 +227,7 @@ def load(symbol, start, end):
     conflicts = set()
     if q_path.exists():
         try:
-            with sqlite3.connect(q_path, timeout=30) as con:
+            with closing(sqlite3.connect(q_path, timeout=30)) as con:
                 has_jobs = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jobs'").fetchone()
                 jobs = con.execute('SELECT kind,meta,file FROM jobs WHERE state="done" AND kind IN ("contracts","minute")').fetchall() if has_jobs else []
             for kind, metastr, file in jobs:

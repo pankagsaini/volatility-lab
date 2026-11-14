@@ -1,4 +1,5 @@
 from datetime import date, time, timedelta
+from contextlib import closing
 import json
 import sqlite3
 import pandas as pd
@@ -28,7 +29,7 @@ def _default_backtest_date_window(symbol: str = 'NIFTY') -> tuple[date, date, st
     q_path = ROOT / 'queue.sqlite'
     if q_path.exists():
         try:
-            with sqlite3.connect(q_path, timeout=5) as con:
+            with closing(sqlite3.connect(q_path, timeout=5)) as con:
                 has_jobs = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jobs'").fetchone()
                 if has_jobs:
                     rows = con.execute("SELECT meta FROM jobs WHERE state='done' AND kind='minute' AND json_extract(meta, '$.symbol')=? ORDER BY rowid DESC LIMIT 500", (symbol,)).fetchall()
@@ -59,7 +60,7 @@ def _default_backtest_date_window(symbol: str = 'NIFTY') -> tuple[date, date, st
     mon_db = DATA_DIR / 'monitor.sqlite'
     if mon_db.exists():
         try:
-            with sqlite3.connect(mon_db, timeout=5) as con:
+            with closing(sqlite3.connect(mon_db, timeout=5)) as con:
                 has_tbl = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='intraday_observations'").fetchone()
                 if has_tbl:
                     cq_row = con.execute(

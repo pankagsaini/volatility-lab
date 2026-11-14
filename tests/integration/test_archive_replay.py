@@ -1,4 +1,5 @@
 import copy
+from contextlib import closing
 import gzip
 import json
 import os
@@ -66,7 +67,7 @@ def test_seed_replays_missing_greeks_and_replaces_legacy_model_rows(tmp_path):
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout.splitlines()[0])['broker_rows_processed'] == 2
     database = store / 'monitor.sqlite'
-    with sqlite3.connect(database) as con:
+    with closing(sqlite3.connect(database)) as con, con:
         rows = con.execute('SELECT as_of,payload FROM intraday_observations ORDER BY as_of').fetchall()
         assert len(rows) == 2
         assert json.loads(rows[0][1])['IV'] == 21
@@ -78,7 +79,7 @@ def test_seed_replays_missing_greeks_and_replaces_legacy_model_rows(tmp_path):
         con.execute('UPDATE expiry_observations SET iv=99')
     rerun = subprocess.run(command, env=env, capture_output=True, text=True, timeout=45)
     assert rerun.returncode == 0, rerun.stderr
-    with sqlite3.connect(database) as con:
+    with closing(sqlite3.connect(database)) as con, con:
         assert con.execute('SELECT COUNT(*) FROM intraday_observations').fetchone()[0] == 2
         assert con.execute('SELECT iv FROM expiry_observations').fetchall() == [(21.0,)]
         assert json.loads(con.execute('SELECT payload FROM intraday_observations ORDER BY as_of').fetchone()[0])['IV'] == 21
@@ -159,7 +160,7 @@ def test_legacy_modeled_daily_row_is_quarantined_until_replayed(tmp_path):
     from volatility_lab.services.option_context import recorded_context
 
     path = tmp_path / 'history.sqlite'
-    with sqlite3.connect(path) as con:
+    with closing(sqlite3.connect(path)) as con, con:
         con.execute('CREATE TABLE expiry_observations(date,symbol,expiry,config,iv,spread,source)')
         con.execute('CREATE TABLE intraday_observations(symbol,expiry,config,as_of,payload)')
         con.execute('INSERT INTO expiry_observations VALUES(?,?,?,?,?,?,?)',

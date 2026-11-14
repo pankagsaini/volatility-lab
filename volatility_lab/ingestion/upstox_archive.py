@@ -2,6 +2,7 @@
 from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
+from contextlib import closing
 from datetime import datetime,timedelta
 import json,sqlite3
 import pandas as pd
@@ -25,7 +26,7 @@ def connect():
     return con
 
 def record_contracts(rows,symbol):
-    with connect() as con:
+    with closing(connect()) as con, con:
         for r in rows:
             expiry=r.get('expiry')
             if isinstance(expiry,(int,float)):expiry=str(pd.to_datetime(expiry,unit='ms',utc=True).tz_convert(IST).date())
@@ -41,7 +42,7 @@ class Collector:
         chunk=28 if interval=='1minute' else 299
         while start<=end:
             stop=min(start+timedelta(days=chunk),end)
-            with connect() as con:
+            with closing(connect()) as con, con:
                 done=con.execute('SELECT rows FROM downloads WHERE instrument=? AND interval=? AND start=? AND end=?',(key,interval,str(start),str(stop))).fetchone()
             if done is not None:start=stop+timedelta(days=1);continue
             from urllib.parse import quote
@@ -57,7 +58,7 @@ class Collector:
                 import math
                 if not all(math.isfinite(x) for x in vals) or min(vals[:4])<=0 or vals[1]<max(vals[0],vals[2],vals[3]) or vals[2]>min(vals[0],vals[1],vals[3]):raise ValueError('Invalid OHLC')
                 if start<=stamp.date()<=stop:rows.append((key,interval,stamp.isoformat(),*vals,float(c[6]) if len(c)>6 and c[6] is not None else None))
-            with connect() as con:
+            with closing(connect()) as con, con:
                 con.executemany('INSERT OR REPLACE INTO candles VALUES (?,?,?,?,?,?,?,?,?)',rows)
                 con.execute('INSERT OR REPLACE INTO downloads VALUES (?,?,?,?,?,?)',(key,interval,str(start),str(stop),len(rows),datetime.now(IST).isoformat()))
             self.downloads+=1;start=stop+timedelta(days=1)
@@ -97,7 +98,7 @@ class Collector:
                 self.candles(r['instrument_key'],'day',max(end-timedelta(days=1100),exp-timedelta(days=120)),min(end,exp),expired)
                 if exp>=end-timedelta(days=93):self.candles(r['instrument_key'],'1minute',max(end-timedelta(days=93),exp-timedelta(days=100)),min(end,exp),expired)
             self.status(symbol+' historical ATM option candles')
-            with connect() as con:
+            with closing(connect()) as con, con:
                 spots=pd.read_sql_query("SELECT stamp,close FROM candles WHERE instrument=? AND interval='day' ORDER BY stamp",con,params=(key,))
                 opts=pd.read_sql_query("SELECT instrument,expiry,strike,kind FROM contracts WHERE symbol=? AND kind IN ('CE','PE') ORDER BY expiry",con,params=(symbol,))
             spots['day']=pd.to_datetime(spots.stamp).dt.date
@@ -114,7 +115,7 @@ class Collector:
             for i,(key2,(first,last,expiry)) in enumerate(selected.items()):
                 self.candles(key2,'day',first,last, pd.Timestamp(expiry).date()<datetime.now(IST).date())
                 if i%10==0:self.status(symbol+f' historical ATM candles {i+1}/{len(selected)}')
-        with connect() as con:
+        with closing(connect()) as con, con:
             coverage=[dict(zip(('interval','instruments','rows','first','last'),r)) for r in con.execute('SELECT interval,COUNT(DISTINCT instrument),COUNT(*),MIN(stamp),MAX(stamp) FROM candles GROUP BY interval')]
         atomic_json(STATUS,{'status':'complete','updated':datetime.now(IST).isoformat(),'downloads':self.downloads,'coverage':coverage,'note':'Raw OHLC/OI archive. Historical option candles are ATM research samples, not historical bid/ask or IV.'})
 
@@ -132,10 +133,10 @@ def incremental_capture():
     adapter=market_client();adapter.master();rows=read_json(ROOT/'master.json')['instruments']
     for symbol,key in INDICES.items():
         for interval,days in [('day',1100),('1minute',365)]:
-            with connect() as con:last=con.execute('SELECT MAX(stamp) FROM candles WHERE instrument=? AND interval=?',(key,interval)).fetchone()[0]
+            with closing(connect()) as con, con:last=con.execute('SELECT MAX(stamp) FROM candles WHERE instrument=? AND interval=?',(key,interval)).fetchone()[0]
             start=pd.Timestamp(last).date()-timedelta(days=2) if last else end-timedelta(days=days)
             # Tail requests are rechecked so upstream corrections can be ingested.
-            with connect() as con:con.execute('DELETE FROM downloads WHERE instrument=? AND interval=? AND start>=?',(key,interval,str(start)))
+            with closing(connect()) as con, con:con.execute('DELETE FROM downloads WHERE instrument=? AND interval=? AND start>=?',(key,interval,str(start)))
             c.candles(key,interval,start,end)
         active=[r for r in rows if r.get('underlying_key')==key]
         record_contracts(active,symbol)
@@ -143,9 +144,9 @@ def incremental_capture():
             if r['instrument_type']!='FUT':continue
             key2=r['instrument_key']
             for interval in ('day','1minute'):
-                with connect() as con:last=con.execute('SELECT MAX(stamp) FROM candles WHERE instrument=? AND interval=?',(key2,interval)).fetchone()[0]
+                with closing(connect()) as con, con:last=con.execute('SELECT MAX(stamp) FROM candles WHERE instrument=? AND interval=?',(key2,interval)).fetchone()[0]
                 start=pd.Timestamp(last).date()-timedelta(days=2) if last else end-timedelta(days=100 if interval=='day' else 93)
-                with connect() as con:con.execute('DELETE FROM downloads WHERE instrument=? AND interval=? AND start>=?',(key2,interval,str(start)))
+                with closing(connect()) as con, con:con.execute('DELETE FROM downloads WHERE instrument=? AND interval=? AND start>=?',(key2,interval,str(start)))
                 c.candles(key2,interval,start,end)
         contracts=c.client.contracts(key)
         record_contracts(contracts,symbol)
@@ -157,7 +158,7 @@ def incremental_capture():
                 if not expired_options:
                     expired_options=c.call('/v2/expired-instruments/option/contract',{'instrument_key':key,'expiry_date':expiry});atomic_json(path,expired_options)
                 record_contracts(expired_options,symbol)
-        with connect() as con:
+        with closing(connect()) as con, con:
             spots=pd.read_sql_query("SELECT stamp,close FROM candles WHERE instrument=? AND interval='day' AND stamp>=? ORDER BY stamp",con,params=(key,str(end-timedelta(days=3))))
             opts=pd.read_sql_query("SELECT instrument,expiry,strike FROM contracts WHERE symbol=? AND kind IN ('CE','PE')",con,params=(symbol,))
         opts=opts[(opts.expiry>=str(now.date())) | (opts.instrument.str.count(r'\|')==2)]
@@ -173,7 +174,7 @@ def incremental_capture():
                 atomic_json(ROOT/'chains'/f'{symbol}_{expiry}_{now.strftime("%Y%m%dT%H%M%S")}.json',{'provider':'Upstox','retrieved_at':now.isoformat(),'data':c.call('/v2/option/chain',{'instrument_key':key,'expiry_date':expiry})})
     expected=last_trading_day_on_or_before(end)
     missing=[]
-    with connect() as con:
+    with closing(connect()) as con, con:
         for symbol,key in INDICES.items():
             for interval in ('day','1minute'):
                 tail=con.execute('SELECT MAX(stamp) FROM candles WHERE instrument=? AND interval=?',(key,interval)).fetchone()[0]
