@@ -1,8 +1,4 @@
-"""Manual downloader for historical trading sessions (e.g. Diwali Muhurat Trading 1-minute snapshots).
-
-Discovers and downloads 1-minute OHLCV candles, synthesizes intraday snapshots,
-saves them to Google Drive and local backtest caches, and synchronizes monitor.sqlite.
-"""
+"""Download broker historical minute candles without reconstructing live captures."""
 from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from datetime import date, datetime, timedelta
@@ -11,6 +7,7 @@ from urllib.error import URLError, HTTPError
 import argparse
 import gzip
 import json
+import os
 import sqlite3
 import sys
 import urllib.parse
@@ -40,6 +37,9 @@ def load_sync_config():
 
 def query_cloud_endpoint(url: str, params: dict, timeout: int = 45):
     """Query Google Apps Script Web App endpoint with error handling and redirects."""
+    params = dict(params)
+    if os.environ.get('VOL_LAB_CLOUD_KEY'):
+        params['key'] = os.environ['VOL_LAB_CLOUD_KEY']
     query = urllib.parse.urlencode(params)
     full_url = f"{url}?{query}" if query else url
     req = urllib.request.Request(full_url, headers={'User-Agent': 'VolatilityLab-ManualDownloader/1.0'})
@@ -48,7 +48,7 @@ def query_cloud_endpoint(url: str, params: dict, timeout: int = 45):
             data = resp.read().decode('utf-8')
             return json.loads(data)
     except Exception as exc:
-        return {"error": str(exc)}
+        return {"error": type(exc).__name__}
 
 
 def save_to_drive_archive(filename: str, payload: dict, drive_folder: Path):
@@ -86,7 +86,7 @@ def save_to_research_db(instrument: str, candles: list):
 
 def download_session(target_day: str | None = None, verbose: bool = True):
     """Execute manual 1-minute download and synchronization for a specified session date."""
-    day = target_day or str((datetime.now(IST) - timedelta(days=1)).date())
+    day = date.fromisoformat(target_day or str((datetime.now(IST) - timedelta(days=1)).date())).isoformat()
     if verbose:
         print(f"=== Volatility Lab: Manual 1-Minute Session Downloader ===")
         print(f"Target Session Date: {day}")
@@ -104,14 +104,19 @@ def download_session(target_day: str | None = None, verbose: bool = True):
         print("\nRequesting session 1-minute capture from Google Apps Script...")
     result = query_cloud_endpoint(web_app_url, {"action": "manual_download", "day": day}, timeout=60)
 
-    saved_snapshots = 0
     minute_bars_count = 0
+    downloaded_status = 'error'
+    if not isinstance(result, dict):
+        result = {'error': 'Invalid cloud response'}
 
     if "error" not in result:
-        saved_snapshots = result.get("saved_snapshots", 0)
-        minute_bars_count = result.get("minutes", 0)
+        raw_count = result.get('minutes')
+        minute_bars_count = raw_count if type(raw_count) is int and raw_count >= 0 else 0
+        downloaded_status = result.get('status') if result.get('status') in ('available', 'partial', 'empty') else 'error'
+        if minute_bars_count == 0 and downloaded_status != 'error':
+            downloaded_status = 'empty'
         if verbose:
-            print(f"Cloud capture successful: {saved_snapshots} snapshots saved in Drive.")
+            print(f"Historical candles: {minute_bars_count} distinct minutes, status {result.get('status', 'unknown')}.")
     else:
         if verbose:
             print(f"Cloud notice: {result.get('error')}")
@@ -131,43 +136,50 @@ def download_session(target_day: str | None = None, verbose: bool = True):
                 "to_date": day,
                 "from_date": day
             }, timeout=30)
-            candles = res.get("data", {}).get("candles", []) if isinstance(res, dict) else []
+            payload = res.get('data', res) if isinstance(res, dict) else {}
+            candles = payload.get('candles', []) if isinstance(payload, dict) else []
             if candles:
                 count = save_to_research_db(ikey, candles)
                 minute_bars_count += count
                 if verbose:
                     print(f"  - {name} ({ikey}): {count} 1-minute candles saved to research.sqlite")
+        if minute_bars_count:
+            downloaded_status = 'partial'  # Index-only fallback is not a complete session archive.
 
     # 3. Synchronize local monitor sqlite from Google Drive archive
     if verbose:
         print("\nSynchronizing monitor.sqlite with latest Drive snapshots...")
+    sync_status, imported = 'error', 0
     try:
         import google_archive_sync
-        imported = google_archive_sync.sync_all(verbose=False)
+        imported = google_archive_sync.sync_once(None, None, 3.0)
+        sync_status = 'completed'
         if verbose:
             print(f"Google Archive Sync completed: {imported} records imported.")
     except Exception as exc:
         if verbose:
-            print(f"Sync warning: {exc}")
+            print(f"Sync warning: {type(exc).__name__}")
 
     summary = {
-        "status": "success",
+        "status": downloaded_status,
         "day": day,
         "minute_bars": minute_bars_count,
-        "saved_snapshots": saved_snapshots,
+        "saved_snapshots": 0,
+        "archive_sync": {"status": sync_status, "imported": imported},
         "timestamp": datetime.now(IST).isoformat()
     }
     if verbose:
-        print(f"\nCompleted successfully: {summary}")
+        print(f"\nDownload result: {summary}")
     return summary
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Manual 1-minute session snapshot downloader.")
+    parser = argparse.ArgumentParser(description="Broker historical minute-candle downloader.")
     parser.add_argument("--day", type=str, default=None, help="Session date in YYYY-MM-DD format (defaults to yesterday)")
     args = parser.parse_args()
-    download_session(args.day)
+    result = download_session(args.day)
+    return 0 if result['status'] == 'available' and result['archive_sync']['status'] == 'completed' else 1
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

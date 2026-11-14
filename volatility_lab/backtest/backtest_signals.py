@@ -6,6 +6,7 @@ import math
 import sqlite3
 from contextlib import closing
 from pathlib import Path
+from volatility_lab.core.market_calendar import session_window
 import numpy as np
 import pandas as pd
 try:
@@ -76,11 +77,16 @@ def load_signals(symbol, path=None, start=None, end=None):
                     r = json.loads(payload)
                 except Exception:
                     continue
+                if not isinstance(r, dict):
+                    continue
                 t1 = pd.to_datetime(r.get('As of') or as_of, errors='coerce', utc=True)
                 t2 = pd.to_datetime(r.get('Retrieved at') or as_of, errors='coerce', utc=True)
+                available = pd.to_datetime(r.get('AvailableAt') or r.get('Available at'), errors='coerce', utc=True)
+                if (r.get('AvailableAt') or r.get('Available at')) and pd.isna(available):
+                    continue
                 if pd.isna(t1) and pd.isna(t2):
                     continue
-                t = max(x for x in (t1, t2) if not pd.isna(x)).tz_convert('Asia/Kolkata')
+                t = max(x for x in (t1, t2, available) if not pd.isna(x)).tz_convert('Asia/Kolkata')
                 day_key = str(t.date())
                 if r.get('HV30') is None and day_key in hv_map:
                     r['HV30'] = hv_map[day_key]
@@ -104,17 +110,19 @@ def decide(rows, expiry, day, entry, filters):
     at = pd.Timestamp(day_str + ' ' + str(entry), tz='Asia/Kolkata')
     try:
         previous_session = last_trading_day_on_or_before(
-            pd.Timestamp(day_str).date() - pd.Timedelta(days=1)
+            pd.Timestamp(day_str).date() - pd.Timedelta(days=1), include_special=True
         )
+        previous_window = session_window(previous_session)
     except ValueError:
         previous_session = None
+        previous_window = None
 
     # Prefer a same-day observation; otherwise allow only the prior session's EOD record.
     candidates = [
         (t, r) for exp, t, r in rows
         if exp == exp_str and t <= at and (
             (t.date().isoformat() == day_str and 0 <= (at - t).total_seconds() <= 9600)
-            or (previous_session is not None and t.date() == previous_session and t.time() >= pd.Timestamp('15:30').time())
+            or (previous_window is not None and t.date() == previous_session and t >= previous_window[1])
         )
     ]
     if not candidates:

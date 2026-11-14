@@ -19,14 +19,13 @@ def recorded_context(path,symbol,config,max_iv=150.0):
     if frame.empty:return frame
 
     valid = frame[pd.to_numeric(frame.IV, errors='coerce').gt(0) & pd.to_numeric(frame.IV, errors='coerce').le(max_iv)].copy()
-    unexpired = valid[pd.to_datetime(valid.Expiry) > valid.Date].copy()
-    if not unexpired.empty:
-        frame = unexpired
-    else:
-        frame = valid[(pd.to_datetime(valid.Expiry) >= valid.Date) & pd.to_numeric(valid.IV).le(max_iv)].copy()
+    expiry_dates = pd.to_datetime(valid.Expiry)
+    frame = valid[expiry_dates >= valid.Date].copy()
+    frame['Unexpired'] = pd.to_datetime(frame.Expiry) > frame.Date
 
     frame['Current']=frame.Config.eq(config)
-    frame=frame.sort_values(['Date','Expiry','Current','Revision'],ascending=[True,True,False,False]).drop_duplicates('Date').sort_values('Date')
+    frame=frame.sort_values(['Date','Unexpired','Expiry','Current','Revision'],ascending=[True,False,True,False,False]).drop_duplicates('Date').sort_values('Date')
+    frame=frame.drop(columns='Unexpired')
     families={value:min(compatible(path,value)) for value in frame.Config.unique()}
     frame['Series']=frame.Expiry+' | '+frame.Config.map(families)+' | '+frame.Source
     frame['Source']=frame.Source+' · expiry '+frame.Expiry+' · '+frame.Config.where(~frame.Current,'current settings')

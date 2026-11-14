@@ -7,6 +7,8 @@ import math
 import statistics
 import pandas as pd
 from synthetic_future import calculate as synthetic_future
+from market_calendar import expiry_close
+from pricing_policy import recorded_inputs
 
 
 def finite(value):
@@ -89,12 +91,12 @@ def check_row(row,payload,prices):
         future_quote['expiry'] = str(future.get('expiry') or '')[:10]
     as_of = payload.get('broker_received_at') or payload.get('valuation')
     spot_quote = payload.get('spot_quote') or {}
-    years = 7.0 / 365.0
+    years = float('nan')
     try:
         valuation = pd.Timestamp(as_of)
-        expiry_close = pd.Timestamp(expiry).tz_localize('Asia/Kolkata') + pd.Timedelta(hours=15, minutes=30)
+        end = pd.Timestamp(expiry_close(expiry))
         if valuation.tzinfo is not None:
-            years = max(0.0, (expiry_close - valuation.tz_convert('Asia/Kolkata')).total_seconds() / (365.0 * 86400.0))
+            years = (end - valuation.tz_convert('Asia/Kolkata')).total_seconds() / (365.0 * 86400.0)
     except (TypeError, ValueError):
         pass
     # Reconstruct only explicitly timestamped two-sided books.  Nested broker
@@ -115,8 +117,10 @@ def check_row(row,payload,prices):
                 'ask':market.get('ask_price'),
                 'timestamp':market.get('quote_timestamp') or market.get('timestamp'),
             })
+    rate, dividend = recorded_inputs(payload.get('pricing_inputs') or payload, row.get('Instrument'), as_of)
     synthetic=synthetic_future(
         normalized_quotes, spot, years=years, future_quote=future_quote, future_contract=future,
+        rate=rate, dividend=dividend,
         expiry=expiry, as_of=as_of,
         spot_timestamp=spot_quote.get('timestamp'),
     )

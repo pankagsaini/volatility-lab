@@ -36,7 +36,7 @@ jobs:
       - name: Install package & dependencies in editable mode
         run: |
           python -m pip install uv==0.13.8
-          uv export --locked --extra dev --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/volatility-lock.txt"
+          uv export --locked --extra dev --extra web --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/volatility-lock.txt"
           python -m pip install --require-hashes -r "$RUNNER_TEMP/volatility-lock.txt"
           python -m pip install --no-deps -e .
 
@@ -46,7 +46,7 @@ jobs:
 
       - name: Run Automated Remediation & Audit Tests
         run: |
-          python -m pytest -ra --cov=volatility_lab --cov-branch --cov-report=term:skip-covered --cov-report=xml --cov-fail-under=35
+          python -m pytest -ra -W error --cov=volatility_lab --cov-branch --cov-report=term:skip-covered --cov-report=xml --cov-fail-under=35
 
       - name: Audit installed dependencies
         run: python -m pip_audit --requirement "$RUNNER_TEMP/volatility-lock.txt" --require-hashes --disable-pip
@@ -109,13 +109,20 @@ jobs:
           node-version: "22"
 
       - name: Verify collector and browser live connection
-        run: node scripts/test_live_connection.cjs
+        run: |
+          node scripts/test_live_connection.cjs
+          node scripts/test_collector_audit.cjs
 
       - name: Verify chart and scenario regressions
         run: node scripts/test_frontend.cjs
 
       - name: Verify model selection and official input guards
         run: node scripts/test_pricing_policy.cjs
+
+      - name: Exercise the published desk in Chrome
+        run: |
+          npm install --prefix "$RUNNER_TEMP/desk-browser" --no-save --ignore-scripts playwright@1.62.1
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/desk-browser/node_modules/playwright" CHROME_PATH="$(command -v google-chrome)" node scripts/test_frontend_dom.cjs
 
       - name: Verify Web Asset SHA-256 Parity
         run: |

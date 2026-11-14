@@ -10,6 +10,8 @@ Broker tokens are optional for saved research. Direct collection requires an Ups
 
 ## Website
 
+For the optional local HTTP API, install `python -m pip install ".[web]"` and run `python -m volatility_lab.web_server`. The checkout serves the desk from `docs/`. The installed wheel exposes API documentation at `http://127.0.0.1:8000/docs`.
+
 Pages uses **GitHub Actions**, not legacy branch deployment. `.github/workflows/pages.yml` checks browser tests/parity, fetches RBI/NSE inputs into the deployment artifact, uploads `docs/` and deploys with scoped Pages/OIDC permissions.
 
 It runs on master pushes, manual dispatch and weekdays at 03:00 UTC (08:30 IST). Source failure retains dated committed inputs. The browser withholds model calculations after seven days without a verified rate check or after a factsheet ages beyond 62 days. Broker observations remain separate.

@@ -4,7 +4,8 @@
 ANNUAL CALENDAR MAINTENANCE PROTOCOL:
 ================================================================================
 1. Horizon Verification:
-   - This calendar strictly verifies NSE trading days across 2023-01-01 to 2028-12-31.
+   - Calendar entries cover 2023-2028. The 2027-2028 entries are provisional
+     and require replacement with the annual NSE circular when published.
    - Any query outside MIN_SUPPORTED_YEAR..MAX_SUPPORTED_YEAR raises `CalendarHorizonError`
      to prevent synthetic or silent calculation errors.
 
@@ -17,14 +18,16 @@ ANNUAL CALENDAR MAINTENANCE PROTOCOL:
    e. Run `python test_audit_remediations.py` to assert calendar continuity and leap-year rules.
 ================================================================================
 """
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 MIN_SUPPORTED_YEAR = 2023
 MAX_SUPPORTED_YEAR = 2028
+LAST_SOURCED_HOLIDAY_YEAR = 2026
 
 
 class CalendarHorizonError(ValueError):
-    """Raised when a date query falls outside the verified NSE holiday calendar horizon."""
+    """Raised when a date query falls outside the configured NSE holiday calendar horizon."""
     pass
 
 
@@ -49,11 +52,11 @@ HOLIDAYS = {
     date(2026, 3, 31), date(2026, 4, 3), date(2026, 4, 14), date(2026, 5, 1),
     date(2026, 5, 28), date(2026, 6, 26), date(2026, 9, 14), date(2026, 10, 2),
     date(2026, 10, 20), date(2026, 11, 10), date(2026, 11, 24), date(2026, 12, 25),
-    # 2027 NSE Weekday Holidays (Full 1-Year Offline Coverage)
+    # 2027 provisional weekday holidays, awaiting the annual NSE circular
     date(2027, 1, 26), date(2027, 3, 10), date(2027, 3, 22), date(2027, 3, 26),
     date(2027, 4, 14), date(2027, 4, 15), date(2027, 4, 19), date(2027, 5, 17),
     date(2027, 6, 15), date(2027, 10, 11), date(2027, 10, 29), date(2027, 11, 1),
-    # 2028 NSE Weekday Holidays (Leap Year Coverage)
+    # 2028 provisional weekday holidays, awaiting the annual NSE circular
     date(2028, 1, 26), date(2028, 2, 23), date(2028, 3, 13), date(2028, 3, 27),
     date(2028, 4, 4), date(2028, 4, 7), date(2028, 4, 14), date(2028, 5, 1),
     date(2028, 5, 5), date(2028, 8, 15), date(2028, 8, 23), date(2028, 9, 27),
@@ -65,10 +68,54 @@ HOLIDAYS = {
 SPECIAL_SESSIONS = {
     date(2024, 11, 1),
     date(2025, 10, 21),
+    date(2026, 2, 1),
     date(2026, 11, 8),
     date(2027, 10, 29),
     date(2028, 10, 17),
 }
+
+IST = ZoneInfo('Asia/Kolkata')
+# Exchange continuous-session windows, excluding pre-open and trade modification.
+# NSE/FAOP/70320, NSE/CMTR/72349 and NSE/FAOP/76940.
+SPECIAL_SESSION_TIMES = {
+    date(2025, 10, 21): (time(13, 45), time(14, 45)),
+    date(2026, 2, 1): (time(9, 15), time(15, 30)),
+    date(2026, 11, 8): (time(14, 20), time(15, 40)),
+}
+
+
+def session_window(d):
+    """Return aware IST equity-derivative open/close, or None on a closed day.
+
+    Special dates without a sourced timing schedule are withheld; their presence
+    in the day calendar alone must never imply a regular daytime session.
+    """
+    cur = _coerce_date(d)
+    if not is_trading_day(cur, include_special=True):
+        return None
+    if cur in SPECIAL_SESSIONS:
+        times = SPECIAL_SESSION_TIMES.get(cur)
+        if times is None:
+            return None
+    else:
+        # NSE/FAOP/75472 (CAS go-live) and NSE/FAOP/77356 (CAS revision).
+        closing = time(15, 30) if cur < date(2026, 8, 3) else (
+            time(15, 40) if cur < date(2026, 12, 7) else time(15, 45))
+        times = (time(9, 15), closing)
+    return tuple(datetime.combine(cur, t, tzinfo=IST) for t in times)
+
+
+def expiry_close(d):
+    """Sourced close for expiring NSE index derivatives (ACT/365 valuation)."""
+    cur = _coerce_date(d)
+    window = session_window(cur)
+    if window is None:
+        raise ValueError(f'No verified expiry session timing for {cur}.')
+    # From 7 Dec 2026 expiring index contracts cease at 15:30, while other
+    # index derivatives continue to 15:45 (NSE/FAOP/77356).
+    if cur >= date(2026, 12, 7) and cur not in SPECIAL_SESSIONS:
+        return datetime.combine(cur, time(15, 30), tzinfo=IST)
+    return window[1]
 
 
 def _coerce_date(value) -> date:
@@ -82,7 +129,7 @@ def _coerce_date(value) -> date:
 def is_trading_day(d, include_special: bool = False) -> bool:
     cur = _coerce_date(d)
     if cur.year < MIN_SUPPORTED_YEAR or cur.year > MAX_SUPPORTED_YEAR:
-        raise CalendarHorizonError(f"Date {cur} falls outside verified NSE holiday calendar horizon ({MIN_SUPPORTED_YEAR}-{MAX_SUPPORTED_YEAR}).")
+        raise CalendarHorizonError(f"Date {cur} falls outside configured NSE holiday calendar horizon ({MIN_SUPPORTED_YEAR}-{MAX_SUPPORTED_YEAR}).")
     if include_special and cur in SPECIAL_SESSIONS:
         return True
     return cur.weekday() < 5 and cur not in HOLIDAYS
@@ -91,7 +138,7 @@ def is_trading_day(d, include_special: bool = False) -> bool:
 def last_trading_day_on_or_before(d, include_special: bool = False) -> date:
     cur = _coerce_date(d)
     if cur.year < MIN_SUPPORTED_YEAR or cur.year > MAX_SUPPORTED_YEAR:
-        raise CalendarHorizonError(f"Date {cur} falls outside verified NSE holiday calendar horizon ({MIN_SUPPORTED_YEAR}-{MAX_SUPPORTED_YEAR}).")
+        raise CalendarHorizonError(f"Date {cur} falls outside configured NSE holiday calendar horizon ({MIN_SUPPORTED_YEAR}-{MAX_SUPPORTED_YEAR}).")
     while not is_trading_day(cur, include_special=include_special):
         cur -= timedelta(days=1)
     return cur

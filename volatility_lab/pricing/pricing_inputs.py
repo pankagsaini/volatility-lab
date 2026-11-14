@@ -94,19 +94,22 @@ def get_yields():
         else:
             item['stale'] = False
         expected = 'https://www.niftyindices.com/Factsheet/' + ('ind_nifty50.pdf' if symbol == 'NIFTY' else 'ind_nifty_bank.pdf')
-        if item.get('source') != expected or not item.get('sha256'):
+        try:
+            valid_yield = 0 <= float(item['model_yield']) <= .15
+            checked = datetime.fromisoformat(item['checked_at'])
+            valid_yield = valid_yield and checked.tzinfo is not None and checked <= datetime.now(IST)
+        except (ValueError, TypeError, KeyError):
+            valid_yield = False
+        if item.get('source') != expected or not item.get('sha256') or not valid_yield:
             item['model_yield'] = None
     return saved
 
 
 def compute_parity_forward(strike: float, call_price: float, put_price: float, years: float, rate: float | None = None) -> float:
     """Compute Black-76 Put-Call Parity Implied Forward F = K + exp(r * T) * (C - P)."""
+    from volatility_lab.pricing.option_math import parity_implied_forward
     r = get_rate().get('model_rate') if rate is None else rate
-    if r is None or not math.isfinite(float(r)):
-        return float('nan')
-    r = float(r)
-    t = max(0.0, float(years))
-    return float(strike) + math.exp(r * t) * (float(call_price) - float(put_price))
+    return parity_implied_forward(strike, call_price, put_price, years, r)
 
 
 def get_pricing_model_config() -> dict:

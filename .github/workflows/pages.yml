@@ -28,6 +28,7 @@ jobs:
       - name: Verify browser calculations and source parity
         run: |
           node scripts/test_live_connection.cjs
+          node scripts/test_collector_audit.cjs
           node scripts/test_frontend.cjs
           node scripts/test_pricing_policy.cjs
           cmp index.html docs/index.html

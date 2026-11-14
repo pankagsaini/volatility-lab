@@ -1,0 +1,469 @@
+Final audit verification evidence | 14 November 2026
+Baseline cd7a9986eebc4a03cde5cd1550e1f70b768fca33
+Python 3.12.14; warnings-as-errors; isolated offline test data.
+COVERAGE_CORE=pytrace. The four unittest suites are subsets of the full pytest run.
+For unittest imports: PYTHONPATH includes repository, tests/integration, tests/unit.
+Frontend uses Chrome and Playwright 1.62.1; cloud reads are deliberately aborted in the offline DOM test.
+
+
+COMMAND: python -W error -m unittest -v test_audit_remediations
+test_bsm_scalar_and_vector_expiry_return_intrinsic_and_zero_greeks (test_audit_remediations.TestIndependentQuantitativeAuditRegressions.test_bsm_scalar_and_vector_expiry_return_intrinsic_and_zero_greeks) ... ok
+test_prior_session_eod_signal_is_eligible_but_other_expiry_is_not (test_audit_remediations.TestIndependentQuantitativeAuditRegressions.test_prior_session_eod_signal_is_eligible_but_other_expiry_is_not) ... ok
+test_sharpe_and_sortino_use_daily_returns_and_daily_sessions (test_audit_remediations.TestIndependentQuantitativeAuditRegressions.test_sharpe_and_sortino_use_daily_returns_and_daily_sessions) ... ok
+test_synthetic_forward_rejects_stale_ltp_unmatched_expiry_and_bad_book (test_audit_remediations.TestIndependentQuantitativeAuditRegressions.test_synthetic_forward_rejects_stale_ltp_unmatched_expiry_and_bad_book) ... ok
+test_yang_zhang_uses_open_to_close_variance (test_audit_remediations.TestIndependentQuantitativeAuditRegressions.test_yang_zhang_uses_open_to_close_variance) ... ok
+test_35_parity_between_python_and_apps_script_constants (test_audit_remediations.TestTrack10DataIntegrityAndPackaging.test_35_parity_between_python_and_apps_script_constants)
+Assert Python and Apps Script engines agree on lot sizes, capital and constants. ... ok
+test_36_quote_absence_and_no_price_fabrication (test_audit_remediations.TestTrack10DataIntegrityAndPackaging.test_36_quote_absence_and_no_price_fabrication)
+Verify evaluate_strategies_for_chain never fabricates fill prices when leg quotes are missing. ... ok
+test_37_stale_marks_prevent_automated_exits (test_audit_remediations.TestTrack10DataIntegrityAndPackaging.test_37_stale_marks_prevent_automated_exits)
+Verify that stale or missing quotes flag freshness='STALE' and do NOT trigger automated SL/TP exits. ... ok
+test_38_wheel_build_and_package_data (test_audit_remediations.TestTrack10DataIntegrityAndPackaging.test_38_wheel_build_and_package_data)
+Verify pyproject.toml package-data inclusion for wheel distribution. ... ok
+test_39_market_calendar_horizon_boundary_and_warning (test_audit_remediations.TestTrack10DataIntegrityAndPackaging.test_39_market_calendar_horizon_boundary_and_warning)
+Verify market calendar boundary protections and horizon warning protocol. ... ok
+test_40_sensibull_standard_black76_and_greeks_parity (test_audit_remediations.TestTrack10DataIntegrityAndPackaging.test_40_sensibull_standard_black76_and_greeks_parity)
+Verify Black-76 pricing engine, Greeks parity, and Black-76 primary model selection. ... ok
+test_41_black76_forward_determination_and_weekly_synthetic_parity (test_audit_remediations.TestTrack10DataIntegrityAndPackaging.test_41_black76_forward_determination_and_weekly_synthetic_parity)
+Verify Black-76 forward determination across listed futures and weekly synthetic forward. ... ok
+test_42_black76_edge_cases_and_bsm_equivalence (test_audit_remediations.TestTrack10DataIntegrityAndPackaging.test_42_black76_edge_cases_and_bsm_equivalence)
+Verify Black-76 edge cases: T=0 intrinsic value, invalid inputs, and exact BSM equivalence. ... ok
+test_bsm_greeks_and_iv_solver_roundtrip (test_audit_remediations.TestTrack1MathAndForecasting.test_bsm_greeks_and_iv_solver_roundtrip) ... ok
+test_expiry_forecast_variance_bridge_and_sessions_boundary (test_audit_remediations.TestTrack1MathAndForecasting.test_expiry_forecast_variance_bridge_and_sessions_boundary) ... ok
+test_smile_and_reversal_formatting_and_empty_strikes (test_audit_remediations.TestTrack1MathAndForecasting.test_smile_and_reversal_formatting_and_empty_strikes) ... ok
+test_term_structure_forward_iv_and_calendar_arbitrage (test_audit_remediations.TestTrack1MathAndForecasting.test_term_structure_forward_iv_and_calendar_arbitrage) ... ok
+test_validate_ohlc_idempotent_flag_and_rv_estimators (test_audit_remediations.TestTrack1MathAndForecasting.test_validate_ohlc_idempotent_flag_and_rv_estimators) ... ok
+test_backtest_download_db_pragmas_and_3_strike_isolation (test_audit_remediations.TestTrack2CloudAndDownloaders.test_backtest_download_db_pragmas_and_3_strike_isolation) ... ok
+test_code_gs_weekend_guard_and_budget_fixes (test_audit_remediations.TestTrack2CloudAndDownloaders.test_code_gs_weekend_guard_and_budget_fixes) ... ok
+test_futures_backtest_download_cache_hit_has_data_key (test_audit_remediations.TestTrack2CloudAndDownloaders.test_futures_backtest_download_cache_hit_has_data_key) ... ok
+test_strategy_backtest_quiet_minute_carry_forward_and_som_margin (test_audit_remediations.TestTrack3BacktestEngines.test_strategy_backtest_quiet_minute_carry_forward_and_som_margin) ... ok
+test_background_refresh_ttl_and_atomic_collect (test_audit_remediations.TestTrack4UIAndCloudCaching.test_background_refresh_ttl_and_atomic_collect) ... ok
+test_refresh_policy_utc_to_ist_normalization (test_audit_remediations.TestTrack4UIAndCloudCaching.test_refresh_policy_utc_to_ist_normalization) ... ok
+test_futures_view_cache_no_st_ino_and_defensive_copy (test_audit_remediations.TestTrack5SecondaryModulesAndClassicModernUI.test_futures_view_cache_no_st_ino_and_defensive_copy) ... ok
+test_option_context_configurable_150_iv_ceiling (test_audit_remediations.TestTrack5SecondaryModulesAndClassicModernUI.test_option_context_configurable_150_iv_ceiling) ... ok
+test_options_context_cache_lock_free_disk_read (test_audit_remediations.TestTrack5SecondaryModulesAndClassicModernUI.test_options_context_cache_lock_free_disk_read) ... ok
+test_requirements_txt_valid_pypi_specifiers (test_audit_remediations.TestTrack5SecondaryModulesAndClassicModernUI.test_requirements_txt_valid_pypi_specifiers) ... ok
+test_ui_theme_figure_styling_and_session_badge (test_audit_remediations.TestTrack5SecondaryModulesAndClassicModernUI.test_ui_theme_figure_styling_and_session_badge) ... ok
+test_v4_vectorized_intraday_greeks_and_garch_horizon_cache (test_audit_remediations.TestTrack5SecondaryModulesAndClassicModernUI.test_v4_vectorized_intraday_greeks_and_garch_horizon_cache) ... ok
+test_v5_six_trade_scenario_presets_and_signal_filters (test_audit_remediations.TestTrack5SecondaryModulesAndClassicModernUI.test_v5_six_trade_scenario_presets_and_signal_filters) ... ok
+test_v6_any_device_network_binding_and_responsive_theme (test_audit_remediations.TestTrack5SecondaryModulesAndClassicModernUI.test_v6_any_device_network_binding_and_responsive_theme) ... ok
+test_v7_end_to_end_backtest_with_monitor_sqlite_cloud_fallback_and_header_actions (test_audit_remediations.TestTrack5SecondaryModulesAndClassicModernUI.test_v7_end_to_end_backtest_with_monitor_sqlite_cloud_fallback_and_header_actions) ... ok
+test_v8_year_long_offline_end_to_end_audit (test_audit_remediations.TestTrack5SecondaryModulesAndClassicModernUI.test_v8_year_long_offline_end_to_end_audit) ... ok
+test_v10_startup_recovery_and_full_export_parity (test_audit_remediations.TestTrack9MasterAuditAnd6StrategyBacktest.test_v10_startup_recovery_and_full_export_parity)
+Verify all v10.0 startup crash fixes: collector_support, trade_review, broker_charges, backtest_common, strategy_backtest, and requirements.txt. ... ok
+test_v16_zero_synthetic_data_strict_real_captures_only (test_audit_remediations.TestTrack9MasterAuditAnd6StrategyBacktest.test_v16_zero_synthetic_data_strict_real_captures_only)
+Verify strict 100% real data policy: ... ok
+test_v18_clean_repository_structure_and_entrypoints (test_audit_remediations.TestTrack9MasterAuditAnd6StrategyBacktest.test_v18_clean_repository_structure_and_entrypoints)
+Verify repository structure and the permitted Workspace 3 markup range. ... ok
+test_v9_all_6_scenarios_empirical_backtest_and_summarize (test_audit_remediations.TestTrack9MasterAuditAnd6StrategyBacktest.test_v9_all_6_scenarios_empirical_backtest_and_summarize) ... ok
+test_v9_backtest_signals_strict_no_future_lookahead (test_audit_remediations.TestTrack9MasterAuditAnd6StrategyBacktest.test_v9_backtest_signals_strict_no_future_lookahead) ... ok
+test_v9_collector_support_and_backtest_common_exports (test_audit_remediations.TestTrack9MasterAuditAnd6StrategyBacktest.test_v9_collector_support_and_backtest_common_exports) ... ok
+test_v9_futures_backtest_charge_and_expiry_rollover (test_audit_remediations.TestTrack9MasterAuditAnd6StrategyBacktest.test_v9_futures_backtest_charge_and_expiry_rollover) ... ok
+test_v9_market_calendar_2027_2028_holidays_and_horizon_265 (test_audit_remediations.TestTrack9MasterAuditAnd6StrategyBacktest.test_v9_market_calendar_2027_2028_holidays_and_horizon_265) ... ok
+test_v9_option_math_t_zero_and_mixed_kind_vec (test_audit_remediations.TestTrack9MasterAuditAnd6StrategyBacktest.test_v9_option_math_t_zero_and_mixed_kind_vec) ... ok
+test_v9_zero_ast_signature_or_import_mismatches (test_audit_remediations.TestTrack9MasterAuditAnd6StrategyBacktest.test_v9_zero_ast_signature_or_import_mismatches) ... ok
+test_32_website_forward_test_workspace_and_controls (test_audit_remediations.TestV19AutomatedForwardTesting.test_32_website_forward_test_workspace_and_controls) ... ok
+test_33_python_forward_test_clean_slate_and_2026_11_11_simulation (test_audit_remediations.TestV19AutomatedForwardTesting.test_33_python_forward_test_clean_slate_and_2026_11_11_simulation) ... ok
+test_34_cloud_code_gs_forward_test_24x7_hooks (test_audit_remediations.TestV19AutomatedForwardTesting.test_34_cloud_code_gs_forward_test_24x7_hooks) ... ok
+test_43_v20_black76_pricing_and_iv_parity (test_audit_remediations.TestV20Black76AndQuotaOptimizations.test_43_v20_black76_pricing_and_iv_parity)
+Verify Black-76 pricing, Greeks, BSM carry parity, ATM call/put symmetry, and IV round-trip. ... ok
+test_44_v20_black76_invalid_inputs_and_expiry_edge_cases (test_audit_remediations.TestV20Black76AndQuotaOptimizations.test_44_v20_black76_invalid_inputs_and_expiry_edge_cases)
+Verify Black-76 safe validation for invalid inputs and T <= 0 / near-zero expiry edge cases. ... ok
+test_45_v20_code_gs_quota_optimizations_and_website_black76 (test_audit_remediations.TestV20Black76AndQuotaOptimizations.test_45_v20_code_gs_quota_optimizations_and_website_black76)
+Verify Code.gs free-tier quota optimizations and website Black-76 option chain enrichment. ... ok
+
+----------------------------------------------------------------------
+Ran 50 tests in 2.388s
+
+OK
+
+
+COMMAND: python -W error -m unittest -v test_quant_audit_fixes
+test_black76_zero_vol_is_valid_at_or_after_expiry (test_quant_audit_fixes.TestQuantAuditFixes.test_black76_zero_vol_is_valid_at_or_after_expiry) ... ok
+test_bsm_scalar_and_vector_agree_for_live_contracts (test_quant_audit_fixes.TestQuantAuditFixes.test_bsm_scalar_and_vector_agree_for_live_contracts) ... ok
+test_bsm_scalar_and_vector_keep_expiry_intrinsic_and_reject_invalid_inputs (test_quant_audit_fixes.TestQuantAuditFixes.test_bsm_scalar_and_vector_keep_expiry_intrinsic_and_reject_invalid_inputs) ... ok
+test_forward_session_gate_uses_the_central_holiday_calendar (test_quant_audit_fixes.TestQuantAuditFixes.test_forward_session_gate_uses_the_central_holiday_calendar) ... ok
+test_independent_check_does_not_promote_raw_ltp_to_parity_input (test_quant_audit_fixes.TestQuantAuditFixes.test_independent_check_does_not_promote_raw_ltp_to_parity_input) ... ok
+test_margin_floor_is_an_explicit_calibration_parameter (test_quant_audit_fixes.TestQuantAuditFixes.test_margin_floor_is_an_explicit_calibration_parameter) ... ok
+test_quote_freshness_accepts_explicit_epoch_milliseconds (test_quant_audit_fixes.TestQuantAuditFixes.test_quote_freshness_accepts_explicit_epoch_milliseconds) ... ok
+test_risk_ratios_use_daily_capital_returns_and_requested_sessions (test_quant_audit_fixes.TestQuantAuditFixes.test_risk_ratios_use_daily_capital_returns_and_requested_sessions) ... ok
+test_signal_loader_does_not_fabricate_eod_availability (test_quant_audit_fixes.TestQuantAuditFixes.test_signal_loader_does_not_fabricate_eod_availability) ... ok
+test_strategy_does_not_fill_zero_or_insufficient_volume_exit (test_quant_audit_fixes.TestQuantAuditFixes.test_strategy_does_not_fill_zero_or_insufficient_volume_exit) ... ok
+test_strategy_entry_volume_must_cover_requested_contract_quantity (test_quant_audit_fixes.TestQuantAuditFixes.test_strategy_entry_volume_must_cover_requested_contract_quantity) ... ok
+test_synthetic_future_withholds_nested_broker_chain_not_normalized_quotes (test_quant_audit_fixes.TestQuantAuditFixes.test_synthetic_future_withholds_nested_broker_chain_not_normalized_quotes) ... ok
+test_upstox_option_charge_sides_and_gst_base (test_quant_audit_fixes.TestQuantAuditFixes.test_upstox_option_charge_sides_and_gst_base) ... ok
+test_yang_zhang_uses_open_to_close_variance (test_quant_audit_fixes.TestQuantAuditFixes.test_yang_zhang_uses_open_to_close_variance) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.076s
+
+OK
+
+
+COMMAND: python -W error -m unittest -v test_execution_safety_fixes
+test_apps_script_guards_property_size_and_never_fabricates_entry_price (test_execution_safety_fixes.TestExecutionSafetyFixes.test_apps_script_guards_property_size_and_never_fabricates_entry_price) ... ok
+test_apps_script_option_gst_matches_python_charge_schedule (test_execution_safety_fixes.TestExecutionSafetyFixes.test_apps_script_option_gst_matches_python_charge_schedule) ... ok
+test_apps_script_runtime_budget_uses_a_rolling_24_hour_window (test_execution_safety_fixes.TestExecutionSafetyFixes.test_apps_script_runtime_budget_uses_a_rolling_24_hour_window) ... ok
+test_backtest_defaults_to_dated_upstox_fee_schedule (test_execution_safety_fixes.TestExecutionSafetyFixes.test_backtest_defaults_to_dated_upstox_fee_schedule) ... ok
+test_backtest_snapshot_marks_cannot_pass_execution_volume_gate (test_execution_safety_fixes.TestExecutionSafetyFixes.test_backtest_snapshot_marks_cannot_pass_execution_volume_gate) ... ok
+test_browser_black76_handles_expiry_and_keeps_missing_inputs_unpriced (test_execution_safety_fixes.TestExecutionSafetyFixes.test_browser_black76_handles_expiry_and_keeps_missing_inputs_unpriced) ... ok
+test_browser_forward_workspace_never_recalculates_or_persists_cloud_ledger (test_execution_safety_fixes.TestExecutionSafetyFixes.test_browser_forward_workspace_never_recalculates_or_persists_cloud_ledger) ... ok
+test_empty_close_snapshot_marks_open_position_exit_pending (test_execution_safety_fixes.TestExecutionSafetyFixes.test_empty_close_snapshot_marks_open_position_exit_pending) ... ok
+test_forward_entry_rejects_ltp_without_executable_book (test_execution_safety_fixes.TestExecutionSafetyFixes.test_forward_entry_rejects_ltp_without_executable_book) ... ok
+test_forward_quote_helper_rejects_nonfinite_prices_and_depth (test_execution_safety_fixes.TestExecutionSafetyFixes.test_forward_quote_helper_rejects_nonfinite_prices_and_depth) ... ok
+test_live_forward_gate_entries_mtm_and_scheduled_exit_are_consistent (test_execution_safety_fixes.TestExecutionSafetyFixes.test_live_forward_gate_entries_mtm_and_scheduled_exit_are_consistent) ... ok
+test_package_collectors_import_shared_monitor_base (test_execution_safety_fixes.TestExecutionSafetyFixes.test_package_collectors_import_shared_monitor_base)
+Facade imports must not fail after the market-table collector rewrite. ... ok
+test_partial_snapshot_cannot_create_or_mark_forward_positions (test_execution_safety_fixes.TestExecutionSafetyFixes.test_partial_snapshot_cannot_create_or_mark_forward_positions) ... ok
+test_stale_open_position_withholds_aggregate_mtm_instead_of_carrying_a_mark (test_execution_safety_fixes.TestExecutionSafetyFixes.test_stale_open_position_withholds_aggregate_mtm_instead_of_carrying_a_mark) ... ok
+test_stale_quote_defers_1515_close_until_fresh_two_sided_depth (test_execution_safety_fixes.TestExecutionSafetyFixes.test_stale_quote_defers_1515_close_until_fresh_two_sided_depth) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 3.198s
+
+OK
+
+
+COMMAND: python -W error -m unittest -v test_quant_runtime_safety
+test_invalid_slippage_and_margin_inputs_are_rejected (test_quant_runtime_safety.BacktestAssumptionAndRiskMetricTests.test_invalid_slippage_and_margin_inputs_are_rejected) ... ok
+test_sharpe_sortino_use_daily_returns_and_zero_return_sessions (test_quant_runtime_safety.BacktestAssumptionAndRiskMetricTests.test_sharpe_sortino_use_daily_returns_and_zero_return_sessions) ... ok
+test_spot_alias_uses_intrinsic_for_expired_scalar_and_vector_lanes (test_quant_runtime_safety.Black76BoundaryTests.test_spot_alias_uses_intrinsic_for_expired_scalar_and_vector_lanes) ... ok
+test_zero_volatility_positive_time_is_deterministic_and_finite_except_kink_gamma (test_quant_runtime_safety.Black76BoundaryTests.test_zero_volatility_positive_time_is_deterministic_and_finite_except_kink_gamma) ... ok
+test_fresh_mid_quotes_drive_iv_instead_of_ltp (test_quant_runtime_safety.ChainQuoteValidationTests.test_fresh_mid_quotes_drive_iv_instead_of_ltp) ... ok
+test_string_epoch_timestamps_and_expiry_scope_are_checked (test_quant_runtime_safety.ChainQuoteValidationTests.test_string_epoch_timestamps_and_expiry_scope_are_checked) ... ok
+test_unvalidated_or_stale_quotes_do_not_produce_iv (test_quant_runtime_safety.ChainQuoteValidationTests.test_unvalidated_or_stale_quotes_do_not_produce_iv) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.053s
+
+OK
+
+
+COMMAND: python -m pytest -ra -W error --cov=volatility_lab --cov-branch --cov-report=term:skip-covered --cov-report=xml --cov-fail-under=35
+============================= test session starts =============================
+platform win32 -- Python 3.12.14, pytest-9.2.0, pluggy-1.7.0
+rootdir: D:\volatility-lab
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.16.0, hypothesis-6.170.15, platformdirs-4.14.5, cov-7.1.0
+collected 214 items
+
+tests\integration\test_archive_replay.py .........                       [  4%]
+tests\integration\test_audit_remediations.py ........................... [ 16%]
+.......................                                                  [ 27%]
+tests\integration\test_execution_safety_fixes.py ...............         [ 34%]
+tests\integration\test_repository_audit.py ............                  [ 40%]
+tests\integration\test_snapshot_publisher.py ......                      [ 42%]
+tests\smoke\test_architecture.py .......                                 [ 46%]
+tests\unit\test_backtest_rules.py .........                              [ 50%]
+tests\unit\test_collector_audit_fixes.py ...............                 [ 57%]
+tests\unit\test_final_quant_audit.py .....................               [ 67%]
+tests\unit\test_frontend_publishing.py ...                               [ 68%]
+tests\unit\test_manual_download.py .....                                 [ 71%]
+tests\unit\test_pricing_policy.py ......                                 [ 73%]
+tests\unit\test_pricing_properties.py ...                                [ 75%]
+tests\unit\test_quant_audit_fixes.py ..............                      [ 81%]
+tests\unit\test_quant_runtime_safety.py .......                          [ 85%]
+tests\unit\test_runtime.py ................                              [ 92%]
+tests\unit\test_validation_provenance.py ..                              [ 93%]
+tests\unit\test_web_api.py ..............                                [100%]
+
+=============================== tests coverage ================================
+______________ coverage: platform win32, python 3.12.14-final-0 _______________
+
+Name                                                    Stmts   Miss Branch BrPart  Cover
+-----------------------------------------------------------------------------------------
+volatility_lab\__init__.py                                  8      0      2      1    90%
+volatility_lab\__main__.py                                  3      3      2      0     0%
+volatility_lab\_compat.py                                  11      2      2      1    77%
+volatility_lab\archive_coverage.py                          5      5      0      0     0%
+volatility_lab\backtest\__init__.py                         8      5      2      0    30%
+volatility_lab\backtest\backtest_common.py                 47     17     18      6    62%
+volatility_lab\backtest\backtest_engine.py                271     76    144     29    66%
+volatility_lab\backtest\backtest_index.py                  33     33     12      0     0%
+volatility_lab\backtest\backtest_jobs.py                  131     98     30      0    20%
+volatility_lab\backtest\backtest_report.py                 82     82     22      0     0%
+volatility_lab\backtest\backtest_signals.py                97     22     34      9    76%
+volatility_lab\backtest\broker_charges.py                  58     13     14      3    75%
+volatility_lab\backtest\broker_options.py                  20      0      8      1    96%
+volatility_lab\backtest\forward_test.py                   879    196    342     75    75%
+volatility_lab\backtest\futures_backtest.py               172     50     60      9    69%
+volatility_lab\backtest\strategy_backtest.py              339     56    122     29    81%
+volatility_lab\backtest\trade_review.py                   190     37     60     16    74%
+volatility_lab\backtest_index.py                            5      5      0      0     0%
+volatility_lab\backtest_report.py                           5      5      0      0     0%
+volatility_lab\backtest_ui.py                               5      5      0      0     0%
+volatility_lab\broker_options.py                            5      5      0      0     0%
+volatility_lab\candle_validation.py                         5      5      0      0     0%
+volatility_lab\catalogue_fetch.py                           5      5      0      0     0%
+volatility_lab\core\__init__.py                             8      5      2      0    30%
+volatility_lab\core\candle_validation.py                  138    138     48      0     0%
+volatility_lab\core\corporate_event_calendar.py           430    430    162      0     0%
+volatility_lab\core\history_policy.py                      39     21     18      3    37%
+volatility_lab\core\market_calendar.py                     59      5     26      5    88%
+volatility_lab\core\market_data.py                         34     20     12      1    33%
+volatility_lab\core\quote_quality.py                       62     12     34      9    70%
+volatility_lab\core\quote_status.py                        54     33     34      7    32%
+volatility_lab\core\refresh_policy.py                      23      3      8      1    87%
+volatility_lab\core\vol_lib.py                             55      6     18      6    84%
+volatility_lab\corporate_event_calendar.py                  5      5      0      0     0%
+volatility_lab\daily_capture.py                             5      5      0      0     0%
+volatility_lab\dashboard.py                                 5      5      0      0     0%
+volatility_lab\dashboard_cache.py                           5      5      0      0     0%
+volatility_lab\data\__init__.py                             6      6      2      0     0%
+volatility_lab\dividend_yield.py                            5      5      0      0     0%
+volatility_lab\download_control.py                          5      5      0      0     0%
+volatility_lab\experimental_models.py                       5      5      0      0     0%
+volatility_lab\forecasting\__init__.py                      8      5      2      0    30%
+volatility_lab\forecasting\expiry_forecast.py             139     36     46     15    68%
+volatility_lab\forecasting\forecast.py                    100     30     30      7    64%
+volatility_lab\forecasting\har_research.py                 48     48     26      0     0%
+volatility_lab\forecasting\term_structure.py               68     19     30     11    67%
+volatility_lab\forecasting\volatility_regime.py            38     38     18      0     0%
+volatility_lab\futures_backtest_ui.py                       5      5      0      0     0%
+volatility_lab\futures_sync.py                              5      5      0      0     0%
+volatility_lab\futures_ui.py                                5      5      0      0     0%
+volatility_lab\har_research.py                              5      5      0      0     0%
+volatility_lab\ingestion\__init__.py                        8      1      2      1    80%
+volatility_lab\ingestion\backtest_download.py             181    152     68      1    12%
+volatility_lab\ingestion\catalogue_fetch.py                52     52     14      0     0%
+volatility_lab\ingestion\futures_backtest_download.py      49     20      6      1    58%
+volatility_lab\ingestion\futures_sync.py                   16     16      2      0     0%
+volatility_lab\ingestion\google_archive_sync.py           407    315    190     20    22%
+volatility_lab\ingestion\manual_download_session.py       132     49     46     12    61%
+volatility_lab\ingestion\upstox_adapter.py                102     78     38      1    18%
+volatility_lab\ingestion\upstox_archive.py                170    146     74      3    11%
+volatility_lab\ingestion\upstox_data.py                   189    120     58      7    32%
+volatility_lab\ingestion\upstox_rate_limit.py              23     14      2      0    36%
+volatility_lab\ingestion\upstox_research.py                66     66     20      0     0%
+volatility_lab\ingestion\upstox_rolling.py                 37     37     12      0     0%
+volatility_lab\input_provenance.py                          5      5      0      0     0%
+volatility_lab\launch_dashboard.py                          6      6      2      0     0%
+volatility_lab\manual_download_session.py                   5      5      0      0     0%
+volatility_lab\model_comparison.py                          5      5      0      0     0%
+volatility_lab\model_view.py                                5      5      0      0     0%
+volatility_lab\pricing\__init__.py                         24      6     10      2    71%
+volatility_lab\pricing\dividend_yield.py                   69     69     30      0     0%
+volatility_lab\pricing\option_math.py                     497     54    112     24    87%
+volatility_lab\pricing\pricing_inputs.py                   95     47     18      2    48%
+volatility_lab\pricing\pricing_policy.py                  108      7     48      7    91%
+volatility_lab\pricing\pricing_sources.py                  24     24      6      0     0%
+volatility_lab\pricing\risk_free.py                        41     41     10      0     0%
+volatility_lab\pricing\smile.py                           110     15     46     15    81%
+volatility_lab\pricing\synthetic_future.py                133     32     46     14    73%
+volatility_lab\pricing\vol_surface_3d.py                  167     66     56     12    63%
+volatility_lab\pricing_sources.py                           5      5      0      0     0%
+volatility_lab\research\__init__.py                         8      1      2      1    80%
+volatility_lab\research\experimental_models.py             44     44     18      0     0%
+volatility_lab\research\forecast_validation.py             77     55     36      4    23%
+volatility_lab\research\relative_value.py                 172     53     48     16    65%
+volatility_lab\research\research_extensions.py             75     75     46      0     0%
+volatility_lab\research\restored_lab.py                   202    113     38      2    40%
+volatility_lab\research\run_experiments.py                 41     41     10      0     0%
+volatility_lab\research\run_model_validation.py            42      5      8      2    82%
+volatility_lab\research_extensions.py                       5      5      0      0     0%
+volatility_lab\research_health.py                           5      5      0      0     0%
+volatility_lab\research_ui.py                               5      5      0      0     0%
+volatility_lab\risk_free.py                                 5      5      0      0     0%
+volatility_lab\run_experiments.py                           5      5      0      0     0%
+volatility_lab\run_model_validation.py                      5      5      0      0     0%
+volatility_lab\runtime\events.py                           33      5     16      4    78%
+volatility_lab\runtime\external.py                         71     13     24      4    78%
+volatility_lab\runtime\health.py                           47      6     16      4    84%
+volatility_lab\runtime\launcher.py                         31      9      6      2    70%
+volatility_lab\runtime\settings.py                         90     14     28      6    81%
+volatility_lab\runtime\streamlit_entry.py                   3      3      2      0     0%
+volatility_lab\services\__init__.py                         8      1      2      1    80%
+volatility_lab\services\background_refresh.py              69     37     22      3    41%
+volatility_lab\services\expiry_data.py                    287    192     94     11    32%
+volatility_lab\services\futures_data.py                   166    115     58      5    26%
+volatility_lab\services\futures_rolling.py                112     90     38      0    15%
+volatility_lab\services\futures_view_cache.py              37     11      4      1    66%
+volatility_lab\services\market_table.py                   205    121     52      8    38%
+volatility_lab\services\option_context.py                  30      3      8      2    87%
+volatility_lab\services\options_context_cache.py           61     12     20      8    73%
+volatility_lab\services\web_data.py                       362    121    100     20    64%
+volatility_lab\storage\__init__.py                          8      1      2      1    80%
+volatility_lab\storage\archive_coverage.py                 65     65     16      0     0%
+volatility_lab\storage\collector_support.py               180     59     56     13    59%
+volatility_lab\storage\daily_capture.py                   116     73     24      2    35%
+volatility_lab\storage\data_accuracy.py                   102     29     24      7    68%
+volatility_lab\storage\input_provenance.py                 54     23     14      5    47%
+volatility_lab\storage\references.py                       40      5     14      3    85%
+volatility_lab\storage\snapshot_history.py                 75      7     32     10    84%
+volatility_lab\trade_review_ui.py                           5      5      0      0     0%
+volatility_lab\ui\__init__.py                               8      1      2      1    80%
+volatility_lab\ui\backtest_ui.py                          247    247     72      0     0%
+volatility_lab\ui\dashboard.py                            176    176     48      0     0%
+volatility_lab\ui\dashboard_cache.py                       29     29      2      0     0%
+volatility_lab\ui\download_control.py                      77     77     20      0     0%
+volatility_lab\ui\futures_backtest_ui.py                   29     29      8      0     0%
+volatility_lab\ui\futures_ui.py                           272    272     70      0     0%
+volatility_lab\ui\model_comparison.py                      24     24     14      0     0%
+volatility_lab\ui\model_view.py                            40     40     12      0     0%
+volatility_lab\ui\monitor_ui.py                           751    689    236      0     6%
+volatility_lab\ui\research_health.py                       38     38     10      0     0%
+volatility_lab\ui\research_ui.py                           56     56     10      0     0%
+volatility_lab\ui\trade_review_ui.py                       79     79     22      0     0%
+volatility_lab\ui\ui_theme.py                             115     72     32      3    34%
+volatility_lab\ui\web_server.py                           138     70     12      5    49%
+volatility_lab\upstox_research.py                           5      5      0      0     0%
+volatility_lab\upstox_rolling.py                            5      5      0      0     0%
+volatility_lab\volatility_regime.py                         5      5      0      0     0%
+volatility_lab\web_server.py                                5      5      0      0     0%
+-----------------------------------------------------------------------------------------
+TOTAL                                                   11803   6449   3760    520    43%
+
+51 files skipped due to complete coverage.
+Coverage XML written to file coverage.xml
+Required test coverage of 35% reached. Total coverage: 42.67%
+======================= 214 passed in 88.07s (0:01:28) ========================
+
+
+COMMAND: ruff check volatility_lab/ scripts/ tests/ pyproject.toml
+All checks passed!
+
+
+COMMAND: node scripts/test_live_connection.cjs
+Live connection regressions passed: collector contract, event-time gates, HV provenance, atomic refresh, session/expiry transitions, deduplication and parity.
+
+
+COMMAND: node scripts/test_collector_audit.cjs
+Starting manual 1-minute download for session: 2026-11-13
+Starting manual 1-minute download for session: 2026-11-13
+Collector audit regressions passed: aliases, shared cache, JSONP, legacy provenance and fees.
+
+
+COMMAND: node scripts/test_frontend.cjs
+Frontend regressions passed: missing data, sourced IV, statistics, forward variance, actual payoff legs and capture times.
+
+
+COMMAND: node scripts/test_pricing_policy.cjs
+Pricing policy passed: exact expiry, spread boundary, freshness, sources, BSM inversion/Greeks and immutable broker IV.
+
+
+COMMAND: node scripts/test_frontend_dom.cjs
+DOM passed: all workspaces/tabs, 10 expiries, 60 setups, real Chart.js reuse, captured 3D points, archive provenance, mobile stress table, zero missing IDs or JS errors.
+
+
+COMMAND: Installed wheel smoke: python -I -W error, clean venv, outside checkout
+Installed wheel smoke passed outside repository: 26 reference hashes, alias identity, lot sizes, optional API, and truthful degraded health.
+
+
+COMMAND: python scripts/verify_dashboard_iv.py <private Upstox archive>
+Verified 2396 IV observations and every embedded option-chain IV against Upstox archives.
+
+
+COMMAND: python -m pip_audit --requirement <locked requirements> --require-hashes --disable-pip
+No known vulnerabilities found
+
+
+COMMAND: Source AST / payload / HTML parity check
+Parsed source/payload inventory: {"python": 219, "json": 32, "csv": 4}
+Root and docs HTML SHA-256: fef68e8445d325c7392b37de3cec6c12066097dace5f0890bb46e1b183137940
+HTML byte parity, structured payloads and prohibited-gold scan passed. devcontainer.json is intentional JSONC.
+
+
+COMMAND: python -m build --wheel --no-isolation --outdir <temporary wheel directory>
+adding 'volatility_lab-18.0.0.dist-info/RECORD'
+removing build\bdist.win-amd64\wheel
+Successfully built volatility_lab-18.0.0-py3-none-any.whl
+
+COMMAND: git status -s (after cleanup; before staging)
+ M .devcontainer/devcontainer.json
+ M .github/workflows/ci.yml
+ M .github/workflows/pages.yml
+ M .gitignore
+ D data/banknifty_one_year.csv
+ D data/banknifty_option_quotes_2026-11-23.json
+ D data/banknifty_option_quotes_2026-12-29.json
+ D data/banknifty_option_quotes_2027-01-25.json
+ D data/dividend_yields.json
+ D data/expiry_latest.json
+ D data/forward_test_ledger.json
+ D data/nifty_daily.csv
+ D data/nifty_one_year.csv
+ D data/nifty_option_quotes_2026-11-17.json
+ D data/nifty_option_quotes_2026-11-23.json
+ D data/nifty_option_quotes_2026-12-01.json
+ D data/nifty_option_quotes_2026-12-08.json
+ D data/nifty_option_quotes_2026-12-29.json
+ D data/nifty_option_quotes_2027-01-25.json
+ D data/risk_free_rate.json
+ D data/underlying_history/banknifty_one_year.csv
+ D data/underlying_history/nifty_one_year.csv
+ M docs/index.html
+ M docs/scripts/options-charts.js
+ M handbook/deployment.md
+ M index.html
+ M pyproject.toml
+ M requirements-dev.txt
+ M scripts/audit_derived_prices.py
+ M scripts/options-charts.js
+ M scripts/publish_snapshot_history.py
+ M scripts/test_frontend.cjs
+ M scripts/test_live_connection.cjs
+ M tests/integration/test_archive_replay.py
+ M tests/integration/test_audit_remediations.py
+ M tests/unit/test_quant_audit_fixes.py
+ M tests/unit/test_runtime.py
+ M uv.lock
+ M volatility_lab/backtest/backtest_engine.py
+ M volatility_lab/backtest/backtest_report.py
+ M volatility_lab/backtest/backtest_signals.py
+ M volatility_lab/backtest/broker_charges.py
+ M volatility_lab/backtest/forward_test.py
+ M volatility_lab/cloud/apps_script/Code.gs
+ M volatility_lab/core/market_calendar.py
+ M volatility_lab/core/quote_quality.py
+ M volatility_lab/core/quote_status.py
+ M volatility_lab/core/refresh_policy.py
+ M volatility_lab/core/vol_lib.py
+ M volatility_lab/forecasting/expiry_forecast.py
+ M volatility_lab/forecasting/forecast.py
+ M volatility_lab/forecasting/term_structure.py
+ M volatility_lab/forecasting/volatility_regime.py
+ M volatility_lab/ingestion/google_archive_sync.py
+ M volatility_lab/ingestion/manual_download_session.py
+ M volatility_lab/pricing/option_math.py
+ M volatility_lab/pricing/pricing_inputs.py
+ M volatility_lab/pricing/pricing_policy.py
+ M volatility_lab/pricing/smile.py
+ M volatility_lab/pricing/synthetic_future.py
+ M volatility_lab/pricing/vol_surface_3d.py
+ M volatility_lab/research/forecast_validation.py
+ M volatility_lab/research/relative_value.py
+ M volatility_lab/research/research_extensions.py
+ M volatility_lab/research/restored_lab.py
+ M volatility_lab/research/run_model_validation.py
+ M volatility_lab/runtime/external.py
+ M volatility_lab/services/expiry_data.py
+ M volatility_lab/services/futures_data.py
+ M volatility_lab/services/market_table.py
+ M volatility_lab/services/option_context.py
+ M volatility_lab/services/web_data.py
+ M volatility_lab/storage/daily_capture.py
+ M volatility_lab/storage/data_accuracy.py
+ M volatility_lab/storage/input_provenance.py
+ M volatility_lab/storage/snapshot_history.py
+ M volatility_lab/ui/backtest_ui.py
+ M volatility_lab/ui/dashboard.py
+ M volatility_lab/ui/monitor_ui.py
+ M volatility_lab/ui/ui_theme.py
+ M volatility_lab/ui/web_server.py
+?? docs/live_state.json
+?? handbook/audit-evidence.txt
+?? handbook/final-audit-report.md
+?? scripts/publish_live_state.py
+?? scripts/test_collector_audit.cjs
+?? scripts/test_frontend_dom.cjs
+?? tests/integration/test_snapshot_publisher.py
+?? tests/unit/test_collector_audit_fixes.py
+?? tests/unit/test_final_quant_audit.py
+?? tests/unit/test_frontend_publishing.py
+?? tests/unit/test_manual_download.py
+?? tests/unit/test_validation_provenance.py
+?? tests/unit/test_web_api.py
+
+COMMAND: git -c core.autocrlf=false -c core.whitespace=cr-at-eol diff --check
+Exit 0; no output.

@@ -21,9 +21,31 @@ const OptionsCharts = (() => {
     const points = (row.intraday || []).filter(p => p.expiry === row.expiry && p.atm === (row.straddleStrike || row.atm) &&
       Number.isFinite(Date.parse(p.markAt || p.snapshotId)) && p.ivSource === 'Upstox option_greeks.iv')
       .sort((a,b) => Date.parse(a.markAt || a.snapshotId) - Date.parse(b.markAt || b.snapshotId));
-    const session = String(row.sessionDate || new Date(Date.parse(row.ivCapturedAt || points.at(-1)?.snapshotId) + 19800000).toJSON() || '').slice(0,10);
-    return points.filter(p => new Date(Date.parse(p.snapshotId || p.markAt) + 19800000).toISOString().startsWith(session))
+    const day = stamp => Number.isFinite(Date.parse(stamp)) ? new Date(Date.parse(stamp) + 19800000).toISOString().slice(0,10) : '';
+    const session = String(row.sessionDate || day(row.ivCapturedAt) || day(points.at(-1)?.snapshotId || points.at(-1)?.markAt)).slice(0,10);
+    return points.filter(p => session && day(p.snapshotId || p.markAt) === session)
       .map(p => ({...p, strad:p.markSource === 'paired_book_mid' && p.cQuoteAt && p.pQuoteAt ? p.strad : null}));
   }
-  return {smile, straddleSeries};
+  function surface(rows, near) {
+    // Plot captured OTM observations only; no surface fitting or gap interpolation.
+    return rows.flatMap(row => (row.chain || []).filter(n => positive(n.k) && positive(row.spot)
+      && (!near || Math.abs(n.k / row.spot - 1) <= .10)).flatMap(n => {
+        const iv = n.k === row.atm && positive(n.uCallIv) && positive(n.uPutIv)
+          ? (n.uCallIv + n.uPutIv) / 2 : n.k < row.spot ? n.uPutIv : n.uCallIv;
+        return positive(iv) && positive(row.dte) ? [{strike:n.k, dte:row.dte, iv, expiry:row.expiry, asOf:row.ivCapturedAt || row.archivedAsOf || ''}] : [];
+      }));
+  }
+  function forecast(state, symbol, row) {
+    const record = state?.forecasts?.[symbol]?.expiries?.find(item => item.expiry === row.expiry);
+    // Forecast context is never copied into broker IV or historical observations.
+    return record && Number.isFinite(Date.parse(record.as_of)) && record.training_through ? record : null;
+  }
+  function auditedTrade(row) {
+    const decision = Date.parse(row.decision_at), available = Date.parse(row.available_at);
+    return row.provenance_status === 'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK'
+      && Number.isFinite(decision) && Number.isFinite(available) && available <= decision
+      && row.entry_source && row.exit_source && positive(row.unitLegs)
+      && [row.gross,row.charges,row.capital].every(Number.isFinite) && row.capital > 0;
+  }
+  return {smile, straddleSeries, surface, forecast, auditedTrade};
 })();
