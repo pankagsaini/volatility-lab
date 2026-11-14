@@ -4,13 +4,14 @@ from datetime import time,timedelta
 import numpy as np
 import pandas as pd
 from vol_lib import validate_ohlc
+from expiry_forecast import completed_cutoff
 
 
 def completed(frame,as_of):
     stamp=pd.Timestamp(as_of)
     if pd.isna(stamp) or stamp.tzinfo is None:raise ValueError('Timezone-aware valuation required')
     stamp=stamp.tz_convert('Asia/Kolkata')
-    cutoff=stamp.date() if stamp.time()>=time(15,40) else stamp.date()-timedelta(days=1)
+    cutoff=completed_cutoff(stamp)
     data=validate_ohlc(frame)
     return data[data.index.date<=cutoff]
 
@@ -59,7 +60,8 @@ def upcoming(events,symbol,as_of,expiry):
     records=[]
     now=pd.Timestamp(as_of)
     if now.tzinfo is None:raise ValueError('Timezone-aware valuation required')
-    end=pd.Timestamp(str(expiry)+'T15:40:00+05:30')
+    from market_calendar import expiry_close
+    end=pd.Timestamp(expiry_close(expiry))
     for row in events.itertuples():
         if row.Instrument not in ('ALL',symbol):continue
         start=pd.Timestamp(row.Date).tz_localize(row.Timezone)

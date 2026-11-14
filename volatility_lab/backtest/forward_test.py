@@ -28,6 +28,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from collector_support import atomic_json, data_lock
+from volatility_lab.core.market_calendar import CalendarHorizonError, expiry_close, session_window
 
 try:
     import broker_charges
@@ -225,12 +226,6 @@ def _executable_quote(
 # partial second copy that can silently open an exchange holiday.
 NSE_HOLIDAYS: set[str] = {day.isoformat() for day in CALENDAR_HOLIDAYS}
 
-SPECIAL_SESSIONS: dict[str, dict[str, Any]] = {
-    "2026-11-08": {"start_mins": 13 * 60 + 45, "end_mins": 15 * 60 + 30, "label": "MUHURAT"},
-    "2027-10-29": {"start_mins": 18 * 60, "end_mins": 19 * 60 + 30, "label": "MUHURAT"},
-    "2028-10-17": {"start_mins": 18 * 60, "end_mins": 19 * 60 + 30, "label": "MUHURAT"},
-}
-
 LOT_SIZES: dict[str, int] = {"NIFTY": 65, "BANKNIFTY": 30}
 
 STRATEGY_CAPITAL_PER_LOT: dict[str, dict[str, int]] = {
@@ -259,6 +254,7 @@ ARMED_TOAST_MESSAGE = (
 CLEAN_SLATE_LEDGER: dict[str, Any] = {
     "schema": 2,
     "version": "forward-test-v20.1-event-time-gated",
+    "provenance_schema": "event-quotes-v1",
     "inception_date": "2026-11-11",
     "min_trigger_date": "2026-11-11",
     "updated_at": "2026-11-10T13:15:00+05:30",
@@ -297,24 +293,14 @@ def get_nse_market_status_ist(now_dt: datetime | str | None = None) -> dict[str,
     hm_str = ist_now.strftime("%H:%M")
     time_label = ist_now.strftime("%d %b %H:%M IST")
 
-    if iso_day in SPECIAL_SESSIONS:
-        sp = SPECIAL_SESSIONS[iso_day]
-        is_open = sp["start_mins"] <= mins <= sp["end_mins"]
-        return {
-            "open": is_open,
-            "isOpen": is_open,
-            "isoDay": iso_day,
-            "day": iso_day,
-            "mins": mins,
-            "hm": hm_str,
-            "time_label": time_label,
-            "reason": sp["label"] if is_open else "CLOSED_SPECIAL",
-        }
-
     is_weekend = ist_now.weekday() >= 5
     is_holiday = iso_day in NSE_HOLIDAYS
-    in_hours = (9 * 60 + 15) <= mins <= (15 * 60 + 30)
-    is_open = (not is_weekend) and (not is_holiday) and in_hours
+    try:
+        window = session_window(ist_now.date())
+    except CalendarHorizonError:
+        window = None
+    in_hours = window is not None and window[0] <= ist_now.replace(second=0, microsecond=0) <= window[1]
+    is_open = in_hours
     return {
         "open": is_open,
         "isOpen": is_open,
@@ -344,6 +330,8 @@ def _forward_record_session_date(item: dict[str, Any]) -> str | None:
 
 def is_valid_forward_record(item: dict[str, Any]) -> bool:
     """Accept only correctly dated, in-session forward entries from 09:20 through 15:14 IST."""
+    if item.get('integrity_status') == 'UNVERIFIED_RECORD' or item.get('provenance_status') == 'LEGACY_UNVERIFIED':
+        return False
     s_date = _forward_record_session_date(item)
     if s_date is None:
         return False
@@ -403,17 +391,30 @@ def sanitize_forward_ledger(raw_ledger: dict[str, Any] | None) -> dict[str, Any]
         return base
     open_pos = _retain_forward_records(raw_ledger.get("open_positions"), open_position=True)
     closed_tr = _retain_forward_records(raw_ledger.get("closed_trades"), open_position=False)
+    # Legacy entries predate feed-time gating. A session timestamp is not evidence
+    # of executable entry/exit books; keep the archive without upgrading that claim.
+    legacy = (raw_ledger.get('schema') == 1
+              or str(raw_ledger.get('version', '')).startswith('forward-test-v19')
+              or raw_ledger.get('provenance_schema') != 'event-quotes-v1')
+    if legacy:
+        for row in open_pos + closed_tr:
+            row.update(integrity_status='UNVERIFIED_RECORD', provenance_status='LEGACY_UNVERIFIED',
+                       freshness='STALE', staleReason='Legacy ledger lacks verifiable entry/exit quote evidence.')
+        for row in open_pos:
+            row['manual_reconciliation_required'] = True
     mtm_series = [
         pt for pt in (raw_ledger.get("intraday_mtm_series") or [])
         if isinstance(pt, dict) and str(pt.get("session_date") or pt.get("date") or MIN_FORWARD_DATE)[:10] >= MIN_FORWARD_DATE
     ]
+    if legacy:
+        mtm_series = [dict(pt, gross_mtm=None, net_mtm=None, integrity_status='UNVERIFIED_RECORD') for pt in mtm_series]
     base["updated_at"] = str(raw_ledger.get("updated_at") or base["updated_at"])
     base["open_positions"] = open_pos
     base["closed_trades"] = closed_tr
     base["intraday_mtm_series"] = mtm_series
     if "_ledger_revision" in raw_ledger:
         base["_ledger_revision"] = raw_ledger["_ledger_revision"]
-    if any(p.get("manual_reconciliation_required") for p in open_pos):
+    if any(p.get("integrity_status") == 'UNVERIFIED_RECORD' for p in open_pos + closed_tr):
         base["status"] = "INTEGRITY_REVIEW_REQUIRED"
     elif open_pos or closed_tr:
         base["status"] = str(raw_ledger.get("status") or "ACTIVE_FORWARD_TESTING")
@@ -729,6 +730,8 @@ def evaluate_strategies_for_chain(
             if not px:
                 has_missing_quote = True
                 break
+            if require_event_timestamps:
+                l['entryQuoteAt'] = _parse_aware_timestamp(node['cQuoteTimestamp' if l['type'] == 'CE' else 'pQuoteTimestamp']).isoformat()
             l["entryPx"] = round(px, 2)
             l["curPx"] = round(px, 2)
 
@@ -860,6 +863,9 @@ def mark_open_positions_to_market(
         if all_legs_fresh:
             for leg, px in zip(legs, exit_prices):
                 leg["curPx"] = round(px, 2)
+                if require_event_timestamps:
+                    node = strike_map[int(leg["strike"])]
+                    leg["markQuoteAt"] = _parse_aware_timestamp(node["cQuoteTimestamp" if leg["type"] == "CE" else "pQuoteTimestamp"]).isoformat()
 
         pos["freshness"] = "FRESH" if all_legs_fresh else "STALE"
         if not all_legs_fresh:
@@ -882,8 +888,12 @@ def mark_open_positions_to_market(
             pos["netMtm"] = round(pos["grossMtm"] - pos["estCharges"], 2)
             pos["markedAt"] = current_time_ist
 
-        mtm_path = list(pos.get("mtmPath") or [{"t": "09:20 IST", "gross": 0.0, "iv": pos.get("entryIv", 16.0), "fresh": True}])
-        mtm_path.append({"t": current_time_ist, "gross": pos.get("grossMtm", 0.0), "iv": pos.get("curIv", pos.get("entryIv", 16.0)), "fresh": all_legs_fresh})
+        mtm_path = list(pos.get("mtmPath") or [])
+        mtm_path.append({"t": current_time_ist, "gross": pos.get("grossMtm") if all_legs_fresh else None,
+                         "iv": pos.get("curIv") if all_legs_fresh else None, "fresh": all_legs_fresh})
+        if all_legs_fresh and require_event_timestamps:
+            mtm_path[-1]["exit_prices"] = [leg["curPx"] for leg in legs]
+            mtm_path[-1]["quote_times"] = [leg["markQuoteAt"] for leg in legs]
         pos["mtmPath"] = mtm_path
 
         cap = float(pos.get("capital", 28037))
@@ -906,6 +916,8 @@ def mark_open_positions_to_market(
         if close_reason:
             for l in pos["legs"]:
                 l["exitPx"] = l.get("curPx", l["entryPx"])
+                if l.get("markQuoteAt"):
+                    l["exitQuoteAt"] = l["markQuoteAt"]
             s_day = pos.get("session_date") or pos.get("date") or MIN_FORWARD_DATE
             newly_closed.append({
                 "id": pos["id"].replace("OPEN-", "FWD-"),
@@ -927,10 +939,12 @@ def mark_open_positions_to_market(
                 **{k: pos[k] for k in ("netPremiumPoints", "netPremium", "maxProfit", "breakEvens", "lots") if k in pos},
                 "maxCredit": max_cr,
                 "maxLoss": max_loss,
-                "entryIv": pos.get("entryIv", 16.0),
+                "entryIv": pos.get("entryIv"),
                 "gross": pos["grossMtm"],
                 "charges": pos["estCharges"],
                 "net": pos["netMtm"],
+                "integrity_status": pos.get("integrity_status"),
+                "provenance_status": pos.get("provenance_status"),
                 "exitReason": close_reason,
                 "mtmPath": mtm_path,
             })
@@ -1093,7 +1107,7 @@ def process_live_upstox_snapshot(
             )
             forward_basis = symbol_metrics.get("forward_basis") if basis_is_fresh else None
             try:
-                expiry_dt = datetime.fromisoformat(exp + "T15:30:00+05:30")
+                expiry_dt = expiry_close(exp)
                 seconds_to_expiry = (expiry_dt - chain_dt).total_seconds()
                 if seconds_to_expiry <= 0:
                     continue
@@ -1118,7 +1132,9 @@ def process_live_upstox_snapshot(
             for setup in eval_setups:
                 s_key = f"{sym}|{exp}|{setup['strat']}"
                 if setup.get("triggered") and s_key not in existing_keys:
-                    setup["triggerTime"] = f"{snapshot_day}T{chain_mkt['hm']}:00+05:30"
+                    setup["triggerTime"] = chain_dt.isoformat()
+                    setup["provenance_status"] = "VALIDATED_EVENT_QUOTES"
+                    setup["frontScope"] = is_front
                     setup["mtmPath"] = [{"t": chain_mkt["hm"], "gross": 0.0, "iv": setup["entryIv"]}]
                     state["open_positions"].append(setup)
                     existing_keys.add(s_key)
@@ -1147,7 +1163,7 @@ def process_live_upstox_snapshot(
         trade for trade in state["closed_trades"]
         if str(trade.get("session_date") or trade.get("date") or "")[:10] == snapshot_day
     ]
-    marks_withheld = any(
+    marks_withheld = any(not is_valid_forward_record(t) for t in session_closed) or any(
         str(position.get("freshness") or "").upper() != "FRESH"
         or str(position.get("integrity_status") or "") == "UNVERIFIED_RECORD"
         or bool(position.get("manual_reconciliation_required"))
@@ -1217,7 +1233,11 @@ def simulate_forward_portfolio(
     scope_filter = str(expiry_scope).upper()
 
     open_list = []
+    excluded_records = []
     for pos in data.get("open_positions", []):
+        if not is_valid_forward_record(pos):
+            excluded_records.append(copy.deepcopy(pos))
+            continue
         if sym_filter not in ("ALL", "BOTH") and pos["sym"] != sym_filter:
             continue
         if scope_filter == "FRONT" and not pos.get("frontScope", True):
@@ -1235,6 +1255,9 @@ def simulate_forward_portfolio(
 
     closed_list = []
     for tr in data.get("closed_trades", []):
+        if not is_valid_forward_record(tr):
+            excluded_records.append(copy.deepcopy(tr))
+            continue
         if sym_filter not in ("ALL", "BOTH") and tr["sym"] != sym_filter:
             continue
         if strat_filter != "ALL" and tr["strat"] != strat_filter:
@@ -1253,18 +1276,33 @@ def simulate_forward_portfolio(
         exit_time = t.get("exitTime", "15:15 IST")
         exit_reason = t.get("exitReason", "15:15 IST Auto-Close")
 
-        for pt in t.get("mtmPath", []):
-            g_val = float(pt["gross"]) * scale
-            if sl_thresh is not None and g_val <= sl_thresh:
-                raw_gross = round(sl_thresh, 2)
-                exit_time = f"{pt['t']} IST" if "IST" not in str(pt["t"]) else str(pt["t"])
-                exit_reason = f"SL Hit ({sl_rule})"
-                break
-            if tp_thresh is not None and g_val >= tp_thresh:
-                raw_gross = round(tp_thresh, 2)
-                exit_time = f"{pt['t']} IST" if "IST" not in str(pt["t"]) else str(pt["t"])
-                exit_reason = f"Target Hit ({tp_rule})"
-                break
+        if sl_thresh is not None or tp_thresh is not None:
+            marks = t.get("mtmPath") or []
+            supported = bool(marks) and lots <= int(t.get("lots", 1))
+            for pt in marks if supported else []:
+                # The initial ledger entry is an entry fill, not an exit book.
+                if pt.get("fresh") is None and pt.get("gross") == 0 and pt is marks[0]:
+                    continue
+                prices, times = pt.get("exit_prices") or [], pt.get("quote_times") or []
+                supported = (pt.get("fresh") is True and len(prices) == len(times) == len(t["legs"])
+                             and all(isinstance(p, (int, float)) and np.isfinite(p) and p > 0 for p in prices)
+                             and all(_parse_aware_timestamp(ts) is not None for ts in times))
+                if not supported:
+                    break
+                exit_legs = [dict(leg, exitPx=px) for leg, px in zip(t["legs"], prices)]
+                gross = sum((leg["exitPx"] - leg["entryPx"]) * leg["side"] * leg.get("mult", 1)
+                            for leg in exit_legs) * LOT_SIZES[t["sym"]] * lots
+                stopped = sl_thresh is not None and gross <= sl_thresh
+                targeted = tp_thresh is not None and gross >= tp_thresh
+                if stopped or targeted:
+                    raw_gross = round(gross, 2)
+                    chg = compute_position_charges(t["date"], t["sym"], exit_legs, lots=lots)
+                    exit_time = str(pt["t"]) if "IST" in str(pt["t"]) else f"{pt['t']} IST"
+                    exit_reason = f"SL Hit ({sl_rule})" if stopped else f"Target Hit ({tp_rule})"
+                    break
+            if not supported:
+                excluded_records.append(dict(t, scenario_status="Historical executable exit path unavailable"))
+                continue
 
         net_val = round(raw_gross - chg, 2)
         t["simCapital"] = round(cap, 2)
@@ -1300,6 +1338,7 @@ def simulate_forward_portfolio(
         "min_trigger_date": data.get("min_trigger_date", MIN_FORWARD_DATE),
         "open_positions": open_list,
         "closed_trades": closed_list,
+        "unverified_records": excluded_records,
         "summary": {
             "open_count": len(open_list),
             "open_expiries": len({f"{x['sym']}|{x['exp']}" for x in open_list}),

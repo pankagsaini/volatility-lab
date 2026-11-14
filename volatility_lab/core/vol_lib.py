@@ -10,8 +10,7 @@ YANG_ZHANG_VERSION = 'yang-zhang-2000-open-close-v3'
 
 
 def validate_ohlc(frame):
-    if isinstance(frame, pd.DataFrame) and getattr(frame, '_ohlc_validated', False):
-        return frame
+    original = frame
     if isinstance(frame, pd.DataFrame) and frame.index.name == 'Date' and 'Date' not in frame.columns:
         frame = frame.reset_index()
     required = ['Date', 'Open', 'High', 'Low', 'Close']
@@ -30,6 +29,8 @@ def validate_ohlc(frame):
         raise ValueError('Each High/Low must contain the Open and Close')
     df[required[1:]] = prices
     out = df.sort_values('Date').set_index('Date')
+    if getattr(original, '_ohlc_validated', False) and original.equals(out):
+        return original
     out._ohlc_validated = True
     return out
 

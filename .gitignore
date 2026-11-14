@@ -50,8 +50,8 @@ volatility_lab/data/backtest_1minute/*.json.gz
 volatility_lab/data/backtest_1minute/*.sqlite*
 volatility_lab/data/backtest_futures/*.json.gz
 volatility_lab/data/google_archive/*.json.gz
-data/google_archive/*.json.gz
-data/google_archive/
+# Superseded top-level copy. Runtime stores use the configured state directory.
+/data/
 volatility_lab/data/quote_archive/
 volatility_lab/data/quote_quality/
 volatility_lab/data/underlying_history/

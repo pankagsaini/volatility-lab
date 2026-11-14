@@ -161,11 +161,13 @@ def comparable_stats(history_df, current, dte_tol=3.0, min_obs=20):
     df['numeric_iv'] = pd.to_numeric(df['IV'], errors='coerce')
     start = cur_as_of - pd.Timedelta(days=365)
     prior = df[(df['ts'] < cur_as_of) & (df['ts'] >= start) & (df['numeric_dte'].sub(cur_dte).abs() <= dte_tol)]
-    vals = prior['numeric_iv'].dropna().to_numpy()
+    if 'Instrument' in prior and current.get('Instrument'):
+        prior = prior[prior['Instrument'] == current['Instrument']]
+    vals = prior.loc[np.isfinite(prior['numeric_iv']) & (prior['numeric_iv'] > 0), 'numeric_iv'].to_numpy()
     if len(vals) < min_obs:
         return {'status': 'Insufficient comparable prior observations', 'percentile': np.nan, 'z_score': np.nan, 'count': len(vals)}
     std = float(np.std(vals, ddof=1))
-    z = float((cur_iv - np.mean(vals)) / std) if std > 1e-8 else 0.0
+    z = float((cur_iv - np.mean(vals)) / std) if std > 1e-8 else np.nan
     return {
         'status': 'Ready',
         'percentile': _mid_rank_percentile(vals, cur_iv),
@@ -195,16 +197,24 @@ def maturity_stats(history_df, current, bounds=(0, 7, 15, 35, 65, 120, 366), min
         return empty_res
 
     try:
-        cur_dte = float(current.get('DTE', 7.0))
+        cur_dte = float(current.get('DTE'))
         cur_val = float(current.get(metric))
     except (TypeError, ValueError):
         return empty_res
     if not (np.isfinite(cur_dte) and np.isfinite(cur_val)):
         return empty_res
 
+    stamp = pd.to_datetime(current.get('As of'), errors='coerce')
+    if pd.isna(stamp) or stamp.tzinfo is None or 'As of' not in history_df or 'Expiry' not in history_df:
+        return empty_res
     data = history_df.copy()
+    times = pd.to_datetime(data['As of'], format='ISO8601', utc=True, errors='coerce')
+    data = data[(times < stamp) & (times >= stamp - pd.Timedelta(days=365))]
+    if 'Instrument' in data and current.get('Instrument'):
+        data = data[data['Instrument'] == current['Instrument']]
     data['numeric_dte'] = pd.to_numeric(data['DTE'], errors='coerce')
     data['numeric_val'] = pd.to_numeric(data[metric], errors='coerce')
+    data = data[np.isfinite(data['numeric_val']) & np.isfinite(data['numeric_dte'])]
     data['bucket'] = pd.cut(data['numeric_dte'], bins=bounds, right=False, labels=False)
     cur_bucket = pd.cut(pd.Series([cur_dte]), bins=bounds, right=False, labels=False).iloc[0]
     if pd.isna(cur_bucket):

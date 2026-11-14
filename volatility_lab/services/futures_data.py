@@ -11,6 +11,8 @@ try:
 except ImportError:  # Support existing standalone Streamlit/script entrypoints.
     from market_table import Monitor
 from market_calendar import HOLIDAYS,SPECIAL_SESSIONS,last_trading_day_on_or_before
+from volatility_lab.core.market_calendar import CalendarHorizonError, session_window
+from volatility_lab.core.quote_quality import timestamp as quote_timestamp
 from collector_support import serialized,atomic_csv
 
 
@@ -23,9 +25,10 @@ def contracts(master, symbol, now):
 
 
 def timestamp(value):
-    if not value:return None
-    stamp=pd.Timestamp(value)
-    return stamp.tz_localize(IST) if stamp.tzinfo is None else stamp.tz_convert(IST)
+    try:
+        return quote_timestamp(value)
+    except (ValueError, TypeError, OverflowError):
+        return None
 
 
 def quote_value(quote, now, max_bps=20):
@@ -34,29 +37,33 @@ def quote_value(quote, now, max_bps=20):
     if not quote:return result
     stamp=timestamp(quote.get('timestamp'));trade=timestamp(quote.get('last_trade_time'))
     result['As of']=stamp.isoformat() if stamp is not None else None
-    age=(pd.Timestamp(now)-stamp).total_seconds() if stamp is not None else np.inf
-    local=pd.Timestamp(now).tz_convert(IST)
-    mins = local.hour * 60 + local.minute
-    is_live = False
-    if local.date() in SPECIAL_SESSIONS:
-        info = SPECIAL_SESSIONS[local.date()]
-        is_live = info.get('snap_start_min', 1080) <= mins <= info.get('snap_end_min', 1170)
-    elif local.weekday() < 5 and local.date() not in HOLIDAYS and 9*60+15 <= mins <= 15*60+40:
-        is_live = True
+    local=timestamp(now)
+    if local is None:return {**result,'Status':'Invalid valuation time'}
+    age=(local-stamp).total_seconds() if stamp is not None else np.inf
+    try:
+        window = session_window(local.date())
+    except CalendarHorizonError:
+        window = None
+    is_live = window is not None and window[0] <= local.floor('min') <= window[1]
     if is_live:
         if not -5<=age<=90:return {**result,'Status':'Stale quote'}
         try:
             bid=quote['depth']['buy'][0];ask=quote['depth']['sell'][0]
             b=float(bid['price']);a=float(ask['price'])
-            if not np.isfinite([a,b]).all() or not 0<b<a or min(bid['quantity'],ask['quantity'])<=0:raise ValueError()
+            sizes = [float(bid['quantity']),float(ask['quantity'])]
+            if not np.isfinite([a,b,*sizes,max_bps]).all() or not 0<b<a or min(sizes)<=0 or max_bps<0:raise ValueError()
             if (a-b)/((a+b)/2)*10000>max_bps:return {**result,'Status':'Bid/ask too wide'}
         except (KeyError,IndexError,TypeError,ValueError):return {**result,'Status':'No valid two-sided book'}
         return {**result,'Price':(a+b)/2,'Bid':b,'Ask':a,'Source':'Live midpoint','Status':'Accepted'}
     price=quote.get('last_price')
     # A provider may return a sentinel pre-market timestamp. The last-trade
     # timestamp dates LTP independently; never admit this as live depth.
-    if (trade is not None and 0<=(local-trade).total_seconds()<=7*86400
-            and 15*60<=trade.hour*60+trade.minute<=15*60+40
+    try:
+        trade_window = session_window(trade.date()) if trade is not None else None
+    except CalendarHorizonError:
+        trade_window = None
+    if (trade is not None and trade_window is not None and 0<=(local-trade).total_seconds()<=7*86400
+            and trade_window[1]-timedelta(minutes=40) <= trade <= trade_window[1]
             and price is not None and np.isfinite(float(price)) and float(price)>0):
         return {**result,'Price':float(price),'As of':trade.isoformat(),'Source':'Closing LTP estimate','Status':'Dated close; not executable'}
     return {**result,'Status':'No eligible closing trade'}

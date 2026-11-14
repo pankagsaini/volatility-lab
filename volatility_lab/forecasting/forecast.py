@@ -8,6 +8,9 @@ from scipy.optimize import minimize
 from vol_lib import validate_ohlc, rolling_rv_suite
 
 
+HORIZON_CAP = 265
+
+
 def _scipy_garch11_fallback(r: np.ndarray, max_h: int):
     """Exact Gaussian zero-mean GARCH(1,1) MLE via SciPy L-BFGS-B when `arch` package is absent."""
     r2 = r * r
@@ -63,20 +66,21 @@ def _scipy_garch11_fallback(r: np.ndarray, max_h: int):
 
 @lru_cache(maxsize=8)
 def _cached_garch_mle(returns_digest: str, returns_bytes: bytes, n_obs: int):
-    """Fit GARCH(1,1) once per unique return series and project all 245 forward sessions."""
+    """Fit GARCH(1,1) once per unique return series and project all supported forward sessions."""
     r_arr = np.frombuffer(returns_bytes, dtype=np.float64)
     r_series = pd.Series(r_arr)
-    max_h = 245
+    max_h = HORIZON_CAP
     try:
         from arch import arch_model
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
             fit = arch_model(r_series, mean='Zero', vol='GARCH', p=1, q=1,
                              dist='normal', rescale=False).fit(disp='off', options={'maxiter': 1000})
+            daily_variance = fit.forecast(horizon=max_h, method='analytic', reindex=False).variance.iloc[-1].to_numpy(dtype=float) / 10000.0
         if fit.convergence_flag != 0:
             raise ValueError('GARCH optimizer did not converge; forecasts are withheld.')
         parameters = {k: float(v) for k, v in fit.params.items()}
-        daily_variance = fit.forecast(horizon=max_h, method='analytic', reindex=False).variance.iloc[-1].to_numpy(dtype=float) / 10000.0
+
         nobs = int(fit.nobs)
         ll, aic, bic = float(fit.loglikelihood), float(fit.aic), float(fit.bic)
         cond_vol = np.asarray(fit.conditional_volatility, dtype=float)
@@ -102,8 +106,8 @@ def _cached_garch_mle(returns_digest: str, returns_bytes: bytes, n_obs: int):
 
 
 def fit_garch(frame, horizons=(5, 10, 20, 30, 60), ann_factor=245, min_observations=250):
-    if not horizons or any(isinstance(h, bool) or not isinstance(h, int) or not 1 <= h <= 245 for h in horizons):
-        raise ValueError('Forecast horizons must be integers from 1 to 245 sessions.')
+    if not horizons or any(isinstance(h, bool) or not isinstance(h, int) or not 1 <= h <= HORIZON_CAP for h in horizons):
+        raise ValueError(f'Forecast horizons must be integers from 1 to {HORIZON_CAP} sessions.')
     if not np.isfinite(ann_factor) or ann_factor <= 0:
         raise ValueError('Annualization must be positive.')
     df = validate_ohlc(frame)

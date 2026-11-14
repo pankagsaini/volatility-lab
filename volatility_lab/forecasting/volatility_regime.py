@@ -3,6 +3,7 @@ from datetime import time, timedelta
 import numpy as np
 import pandas as pd
 from vol_lib import validate_ohlc
+from expiry_forecast import completed_cutoff
 
 VERSION='hv-regime-v1'
 
@@ -27,7 +28,7 @@ def regime_summary(frame,as_of):
     stamp=pd.Timestamp(as_of)
     if pd.isna(stamp) or stamp.tzinfo is None:raise ValueError('A dated, timezone-aware quote is required.')
     stamp=stamp.tz_convert('Asia/Kolkata')
-    cutoff=stamp.date() if stamp.time()>=time(15,40) else stamp.date()-timedelta(days=1)
+    cutoff=completed_cutoff(stamp)
     data=validate_ohlc(frame)
     data=data[data.index.date<=cutoff]
     if len(data)<31:raise ValueError('At least 31 completed candles are required.')

@@ -453,9 +453,9 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         strikes = np.array([24400.0, 24450.0, 24500.0])
         dtes = np.array([6.0, 6.0, 6.0])
         ivs = np.array([14.1, 14.3, 14.5])
-        vec_s, vec_d = rl._compute_straddle_series_vectorized(prices, strikes, dtes, ivs)
+        vec_s, vec_d = rl._compute_straddle_series_vectorized(prices, strikes, dtes, ivs, rate=.06, forwards=prices)
         for idx in range(len(prices)):
-            g = rl.compute_straddle_greeks(prices[idx], strikes[idx], dtes[idx], ivs[idx])
+            g = rl.compute_straddle_greeks(prices[idx], strikes[idx], dtes[idx], ivs[idx], rate=.06, forward=prices[idx])
             self.assertAlmostEqual(float(vec_s[idx]), float(g["straddle"]), places=10)
             self.assertAlmostEqual(float(vec_d[idx]), float(g["net_delta"]), places=10)
         s1 = ef.sessions("2026-11-01", "2026-11-30")
@@ -579,7 +579,6 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         import relative_value as rv
         import market_calendar as mc
         import expiry_forecast as ef
-        from datetime import date
 
         # 1. Verify 2027 and 2028 calendar horizon works without CalendarHorizonError
         d_2027 = mc.last_trading_day_on_or_before(date(2027, 11, 15))
@@ -631,11 +630,12 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             hist_df = rv.history(db_p, "NIFTY", "cfg_new", comparable=True)
             self.assertEqual(len(hist_df), 15)
             # UI 3-arg call: maturity_stats(saved, current, metric)
-            m_ui = rv.maturity_stats(hist_df, snap["rows"][-1], "IV-RV Spread")
+            current = dict(snap["rows"][-1], **{"As of": "2027-01-06T15:45:00+05:30"})
+            m_ui = rv.maturity_stats(hist_df, current, "IV-RV Spread")
             self.assertEqual(m_ui["Status"], "Ready")
             self.assertIsNotNone(m_ui["Percentile"])
             # Unit test 3-arg call: maturity_stats(saved, current, bounds=...)
-            m_bounds = rv.maturity_stats(hist_df, snap["rows"][-1], bounds=(0, 7, 15, 35, 65, 120, 366))
+            m_bounds = rv.maturity_stats(hist_df, current, bounds=(0, 7, 15, 35, 65, 120, 366))
             self.assertEqual(m_bounds["status"], "Ready")
             self.assertTrue(np.isfinite(m_bounds["percentile"]))
 
@@ -757,7 +757,6 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
         self.assertTrue(ok2)
 
     def test_v9_market_calendar_2027_2028_holidays_and_horizon_265(self):
-        from datetime import date
         import market_calendar
         import expiry_forecast
         import forecast
@@ -1575,7 +1574,7 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
         self.assertIn("Black-76", syn_res["Pricing model"])
         self.assertAlmostEqual(syn_res["Synthetic future"], f_real, places=2)
         self.assertAlmostEqual(syn_res["Black-76 ATM IV"], 16.95, places=1)
-        c_iv_pct, p_iv_pct, atm_iv_pct = market_table.atm_values(chain_df, [25050.0], spot=25044.65, forward=f_real, years=years, rate=rate)
+        c_iv_pct, p_iv_pct, atm_iv_pct = market_table.atm_values(chain_df, [25050.0], spot=25044.65, forward=f_real, years=years, rate=rate, use_black76=True, as_of=quote_time, expiry=expiry)
         self.assertAlmostEqual(c_iv_pct, p_iv_pct, places=4)
         self.assertAlmostEqual(atm_iv_pct, 16.95, places=1)
 
@@ -1707,7 +1706,7 @@ class TestIndependentQuantitativeAuditRegressions(unittest.TestCase):
 
         expiry = '2026-11-12'
         rows = [
-            (expiry, pd.Timestamp('2026-11-09 15:30', tz='Asia/Kolkata'), {'IV': 15.0}),
+            (expiry, pd.Timestamp('2026-11-09 15:40', tz='Asia/Kolkata'), {'IV': 15.0}),
             ('2026-11-19', pd.Timestamp('2026-11-10 09:18', tz='Asia/Kolkata'), {'IV': 18.0}),
         ]
         ok, _ = backtest_signals.decide(rows, expiry, '2026-11-10', '09:20', [('IV', 10.0, 20.0)])

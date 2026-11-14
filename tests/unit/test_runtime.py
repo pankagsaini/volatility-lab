@@ -111,3 +111,23 @@ def test_broker_response_contract_and_offline_guard(monkeypatch):
     client._opener = SimpleNamespace(open=lambda *a, **kw: pytest.fail("Unexpected network request"))
     with pytest.raises(UpstoxDataError, match="offline"):
         client.quotes([])
+
+
+@pytest.mark.parametrize("header", ["inf", "Infinity", "1e999", "NaN", "-1", "invalid"])
+def test_invalid_retry_after_cannot_permanently_disable_a_source(header):
+    waits = []
+    reads = ExternalReads(lambda: 100.0, waits.append)
+
+    def rate_limit():
+        raise HTTPError("https://example.invalid", 429, "limited", {"Retry-After": header}, None)
+
+    with pytest.raises(HTTPError):
+        reads.read("quotes", rate_limit)
+    assert waits == [1, 2]
+    assert reads.read("quotes", lambda: "recovered") == "recovered"
+
+
+@pytest.mark.parametrize("attempts", [0, -1, 1.5, True, None])
+def test_retry_attempts_must_execute_at_least_once(attempts):
+    with pytest.raises(ValueError, match="positive integer"):
+        ExternalReads().read("quotes", lambda: pytest.fail("Invalid retry count executed"), attempts=attempts)

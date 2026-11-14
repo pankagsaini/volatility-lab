@@ -3,7 +3,7 @@ from dataclasses import asdict, dataclass
 import json
 import numpy as np
 import pandas as pd
-from forecast import fit_garch
+from forecast import HORIZON_CAP, fit_garch
 from vol_lib import rv_snapshot, validate_ohlc
 
 VERSION = '1.0'
@@ -19,8 +19,8 @@ class ValidationConfig:
 
     def __post_init__(self):
         if (not self.horizons or len(set(self.horizons)) != len(self.horizons)
-                or any(type(h) is not int or not 1 <= h <= 245 for h in self.horizons)):
-            raise ValueError('Use unique integer horizons from 1 to 245.')
+                or any(type(h) is not int or not 1 <= h <= HORIZON_CAP for h in self.horizons)):
+            raise ValueError(f'Use unique integer horizons from 1 to {HORIZON_CAP}.')
         if type(self.min_returns) is not int or self.min_returns < 30:
             raise ValueError('At least 30 training returns are required.')
         if not np.isfinite(self.annualization) or self.annualization <= 0:

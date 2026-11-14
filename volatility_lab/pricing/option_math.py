@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from scipy.optimize import brentq
-from scipy.special import ndtr
+from scipy.special import erf, ndtr
 
 _INV_SQRT_2PI = 0.3989422804014327
 _VALID_CALL_KINDS = ('CE', 'CALL', 'C')
@@ -24,6 +24,7 @@ def _is_scalar_inputs(*args) -> bool:
 # ==============================================================================
 # 1. SPOT BLACK-SCHOLES-MERTON (BSM) MODEL (KEPT INTACT FOR SPOT COMPARISONS)
 # ==============================================================================
+@np.errstate(over='ignore', under='ignore', divide='ignore', invalid='ignore')
 def bsm_greeks(spot, strike, years, rate, vol, kind, dividend=0., *, div_yield=None):
     """Vectorized or scalar BSM price, spot delta, forward delta, gamma, vega (per 1% vol), and daily theta."""
     if kind not in ('CE', 'PE'):
@@ -51,7 +52,7 @@ def bsm_greeks(spot, strike, years, rate, vol, kind, dividend=0., *, div_yield=N
     active_vol = np.where(expired, 1.0, vol_a)
     sqrt_t = np.sqrt(active_t)
     vol_sqrt_t = active_vol * sqrt_t
-    d1 = (np.log(spot_a / strike_a) + (rate_a - dividend_a + 0.5 * np.square(active_vol)) * active_t) / vol_sqrt_t
+    d1 = ((np.log(spot_a) - np.log(strike_a)) + (rate_a - dividend_a + 0.5 * np.square(active_vol)) * active_t) / vol_sqrt_t
     d2 = d1 - vol_sqrt_t
     df_q = np.exp(-dividend_a * active_t)
     df_r = np.exp(-rate_a * active_t)
@@ -84,12 +85,8 @@ def bsm_greeks(spot, strike, years, rate, vol, kind, dividend=0., *, div_yield=N
     vega = np.where(expired, 0.0, vega)
     theta_daily = np.where(expired, 0.0, theta_ann / 365.0)
     return {
-        'price': price,
-        'delta': delta,
-        'fwd_delta': fwd_delta,
-        'gamma': gamma,
-        'vega': vega,
-        'theta_daily': theta_daily,
+        key: np.where(np.isfinite(value), value, np.nan) for key, value in
+        [('price', price), ('delta', delta), ('fwd_delta', fwd_delta), ('gamma', gamma), ('vega', vega), ('theta_daily', theta_daily)]
     }
 
 
@@ -98,20 +95,27 @@ def price_delta(spot, strike, years, rate, vol, kind, dividend=0., *, div_yield=
     return float(res['price']), float(res['delta'])
 
 
+@np.errstate(over='ignore', under='ignore', divide='ignore', invalid='ignore')
 def solve_iv(price, spot, strike, years, rate, kind, dividend=0., bounds=(1e-4, 5.0), tol=1e-8):
     """Arbitrage-bounded Brentq implied volatility solver for spot BSM."""
-    if kind not in ('CE', 'PE') or min(price, spot, strike, years) <= 0:
+    try:
+        price, spot, strike, years, rate, dividend, lo, hi, tol = map(float, (
+            price, spot, strike, years, rate, dividend, *bounds, tol))
+    except (TypeError, ValueError, OverflowError):
+        return np.nan
+    if (not np.isfinite([price, spot, strike, years, rate, dividend, lo, hi, tol]).all()
+            or kind not in ('CE', 'PE') or min(price, spot, strike, years, lo, tol) <= 0 or hi <= lo):
         return np.nan
     df_q = np.exp(-dividend * years)
     df_r = np.exp(-rate * years)
     intrinsic = max(0.0, spot * df_q - strike * df_r if kind == 'CE' else strike * df_r - spot * df_q)
     upper = spot * df_q if kind == 'CE' else strike * df_r
-    if not (intrinsic < price < upper):
+    if not (np.isfinite(upper) and intrinsic < price < upper):
         return np.nan
     try:
         return float(brentq(
             lambda sigma: price_delta(spot, strike, years, rate, sigma, kind, dividend)[0] - price,
-            bounds[0], bounds[1], xtol=tol, rtol=tol, maxiter=100
+            lo, hi, xtol=tol, rtol=tol, maxiter=100
         ))
     except (ValueError, RuntimeError):
         return np.nan
@@ -120,6 +124,7 @@ def solve_iv(price, spot, strike, years, rate, kind, dividend=0., bounds=(1e-4, 
 implied_vol = solve_iv
 
 
+@np.errstate(over='ignore', under='ignore', divide='ignore', invalid='ignore')
 def bsm_greeks_vec(spot, strike, years, vol=None, rate=0.0, dividend=0.0, kind='CE', iv=None, div_yield=None):
     """Vectorized BSM Greeks; expired contracts are intrinsic and invalid lanes are NaN."""
     sigma = np.asarray(iv if vol is None else vol, dtype=float)
@@ -150,7 +155,7 @@ def bsm_greeks_vec(spot, strike, years, vol=None, rate=0.0, dividend=0.0, kind='
     safe_T = np.where(active, T, 1.0)
     safe_sigma = np.where(active, sigma, 1.0)
     sqrt_T = np.sqrt(safe_T)
-    d1 = (np.log(safe_S / safe_K) + (r - q + 0.5 * np.square(safe_sigma)) * safe_T) / (safe_sigma * sqrt_T)
+    d1 = ((np.log(safe_S) - np.log(safe_K)) + (r - q + 0.5 * np.square(safe_sigma)) * safe_T) / (safe_sigma * sqrt_T)
     d2 = d1 - safe_sigma * sqrt_T
     df_r = np.exp(-r * safe_T)
     df_q = np.exp(-q * safe_T)
@@ -173,17 +178,18 @@ def bsm_greeks_vec(spot, strike, years, vol=None, rate=0.0, dividend=0.0, kind='
     gamma = np.where(expired, 0.0, gamma)
     vega = np.where(expired, 0.0, vega)
     theta = np.where(expired, 0.0, theta)
-    price = np.where(valid, price, np.nan)
-    delta = np.where(valid, delta, np.nan)
-    gamma = np.where(valid, gamma, np.nan)
-    vega = np.where(valid, vega, np.nan)
-    theta = np.where(valid, theta, np.nan)
+    price = np.where(valid & np.isfinite(price), price, np.nan)
+    delta = np.where(valid & np.isfinite(delta), delta, np.nan)
+    gamma = np.where(valid & np.isfinite(gamma), gamma, np.nan)
+    vega = np.where(valid & np.isfinite(vega), vega, np.nan)
+    theta = np.where(valid & np.isfinite(theta), theta, np.nan)
     return {'price': price, 'delta': delta, 'gamma': gamma, 'vega': vega, 'theta': theta}
 
 
 # ==============================================================================
 # 2. FISCHER BLACK (1976) FUTURES / FORWARD MODEL (BLACK-76 ENGINE)
 # ==============================================================================
+@np.errstate(over='ignore', under='ignore', divide='ignore', invalid='ignore')
 def forward_from_spot(spot, years, rate=0.0, div_yield=0.0, cost_of_carry=None, dividend=None):
     """Derive implied forward price F = S * exp(b * T) from spot and carry rate b = (r - q) or explicit cost_of_carry."""
     scalar = _is_scalar_inputs(spot, years, rate, div_yield, cost_of_carry, dividend)
@@ -202,6 +208,7 @@ def forward_from_spot(spot, years, rate=0.0, div_yield=0.0, cost_of_carry=None, 
     out = np.full(s_b.shape, np.nan, dtype=float)
     with np.errstate(over='ignore', under='ignore', invalid='ignore'):
         out[valid] = s_b[valid] * np.exp(b_b[valid] * t_b[valid])
+    out = np.where(np.isfinite(out) & (out > 0), out, np.nan)
     return float(out.item()) if scalar else out
 
 
@@ -229,9 +236,11 @@ def parity_implied_forward(strike, call_price, put_price, years, rate=0.0):
     with np.errstate(over='ignore', under='ignore', invalid='ignore'):
         t_pos = np.maximum(0.0, t_b[valid])
         out[valid] = k_b[valid] + np.exp(r_b[valid] * t_pos) * (c_b[valid] - p_b[valid])
+    out = np.where(np.isfinite(out) & (out > 0), out, np.nan)
     return float(out.item()) if scalar else out
 
 
+@np.errstate(over='ignore', under='ignore', divide='ignore', invalid='ignore')
 def _black76_core(forward, strike, years, rate, vol, kind, spot=None, div_yield=0.0, cost_of_carry=None, dividend=None, force_array=False):
     """Core scalar & vectorized Black-76 option pricing and Greeks engine with full edge-case & T<=0 handling."""
     if forward is None and spot is not None:
@@ -346,39 +355,34 @@ def _black76_core(forward, strike, years, rate, vol, kind, spot=None, div_yield=
             D = np.exp(-r * T)
             sqrt_T = np.sqrt(T)
             vol_sqrt_T = sigma * sqrt_T
-            log_fk = np.log(F / K)
-
-            # Guard against extreme near-zero T where vol_sqrt_T underflows toward 0
-            tiny = vol_sqrt_T < 1e-12
-            safe_vst = np.where(tiny, 1.0, vol_sqrt_T)
-            safe_sqrt_t = np.where(sqrt_T < 1e-12, 1.0, sqrt_T)
-
-            d1 = np.where(
-                tiny,
-                np.where(F > K, np.inf, np.where(F < K, -np.inf, 0.0)),
-                (log_fk + 0.5 * np.square(sigma) * T) / safe_vst,
-            )
-            d2 = np.where(tiny, d1, d1 - vol_sqrt_T)
+            log_fk = np.log(F) - np.log(K)
+            # For any representable positive v√T the ATM gamma and theta are
+            # nonzero. An arbitrary small-time cutoff understates expiry risk.
+            d1 = np.divide(log_fk, vol_sqrt_T) + 0.5 * vol_sqrt_T
+            d1 = np.where(F == K, 0.5 * vol_sqrt_T, d1)
+            d2 = d1 - vol_sqrt_T
 
             nd1 = ndtr(d1)
             nd2 = ndtr(d2)
             nd1_neg = ndtr(-d1)
             nd2_neg = ndtr(-d2)
-            pdf_d1 = np.where(tiny, 0.0, _norm_pdf(d1))
+            pdf_d1 = _norm_pdf(d1)
 
             call_p = np.maximum(0.0, D * (F * nd1 - K * nd2))
             put_p = np.maximum(0.0, D * (K * nd2_neg - F * nd1_neg))
             opt_p = np.where(c_mask, call_p, put_p)
 
+            opt_p = np.where(F == K, D * F * erf(vol_sqrt_T / (2 * np.sqrt(2.0))), opt_p)
+
             fwd_d = np.where(c_mask, nd1, -nd1_neg)
             disc_d = D * fwd_d
 
-            gam = np.where(tiny | (pdf_d1 == 0.0), 0.0, (D * pdf_d1) / (F * safe_vst))
-            veg = np.where(tiny | (pdf_d1 == 0.0), 0.0, 0.01 * D * F * pdf_d1 * sqrt_T)
+            gam = np.where(pdf_d1 == 0.0, 0.0, (D * pdf_d1) / (F * vol_sqrt_T))
+            veg = np.where(pdf_d1 == 0.0, 0.0, 0.01 * D * F * pdf_d1 * sqrt_T)
 
-            diff_term = np.where(tiny | (pdf_d1 == 0.0), 0.0, -(D * F * pdf_d1 * sigma) / (2.0 * safe_sqrt_t))
+            diff_term = np.where(pdf_d1 == 0.0, 0.0, -(D * F * pdf_d1 * sigma) / (2.0 * sqrt_T))
             theta_ann = diff_term + r * opt_p
-            th_daily = np.where(tiny, 0.0, theta_ann / 365.0)
+            th_daily = theta_ann / 365.0
 
             price[pos_t] = opt_p
             delta[pos_t] = disc_d
@@ -387,6 +391,8 @@ def _black76_core(forward, strike, years, rate, vol, kind, spot=None, div_yield=
             vega[pos_t] = veg
             theta_daily[pos_t] = th_daily
 
+    for values in (price, delta, fwd_delta, gamma, vega, theta_daily):
+        values[~np.isfinite(values)] = np.nan
     if scalar:
         p_f = float(price.item())
         d_f = float(delta.item())
@@ -438,7 +444,7 @@ def black76_greeks(forward=None, strike=None, years=None, rate=0.0, vol=None, ki
 def black76_greeks_vec(forward=None, strike=None, years=None, rate=0.0, vol=None, kind='CE', iv=None, *, is_call=None, spot=None, div_yield=0.0, cost_of_carry=None, dividend=None):
     """Vectorized Fischer Black (1976) Greeks supporting array inputs and safe T <= 0 / invalid-input handling."""
     if is_call is not None:
-        kind = 'CE' if is_call else 'PE'
+        kind = np.where(is_call, 'CE', 'PE')
     sigma = iv if vol is None else vol
     return _black76_core(
         forward=forward,
@@ -474,6 +480,7 @@ def black76_price_delta(forward=None, strike=None, years=None, rate=0.0, vol=Non
     return res['price'], res['delta']
 
 
+@np.errstate(over='ignore', under='ignore', divide='ignore', invalid='ignore')
 def _solve_black76_iv_scalar(price, forward, strike, years, rate=0.0, kind='CE', bounds=(1e-4, 5.0), tol=1e-8):
     """Single-contract arbitrage-bounded Brentq implied volatility solver for Black-76."""
     if not isinstance(kind, (str, np.str_)):
@@ -491,10 +498,13 @@ def _solve_black76_iv_scalar(price, forward, strike, years, rate=0.0, kind='CE',
         r = float(rate)
         low_b = float(bounds[0])
         high_b = float(bounds[1])
-    except (TypeError, ValueError):
+        tol = float(tol)
+    except (TypeError, ValueError, OverflowError, IndexError):
         return float(np.nan)
 
     if not (np.isfinite(px) and np.isfinite(F) and np.isfinite(K) and np.isfinite(T) and np.isfinite(r)):
+        return float(np.nan)
+    if not np.isfinite([low_b, high_b, tol]).all() or tol <= 0:
         return float(np.nan)
     if px <= 0.0 or F <= 0.0 or K <= 0.0 or T <= 0.0 or low_b <= 0.0 or high_b <= low_b:
         return float(np.nan)
@@ -502,7 +512,7 @@ def _solve_black76_iv_scalar(price, forward, strike, years, rate=0.0, kind='CE',
     D = float(np.exp(-r * T))
     intrinsic = max(0.0, D * (F - K) if is_call else D * (K - F))
     upper = D * F if is_call else D * K
-    if not (intrinsic < px < upper):
+    if not (np.isfinite(upper) and intrinsic < px < upper):
         return float(np.nan)
 
     canonical_kind = 'CE' if is_call else 'PE'
@@ -531,7 +541,7 @@ def _solve_black76_iv_scalar(price, forward, strike, years, rate=0.0, kind='CE',
 
 def solve_black76_iv_vec(price, forward=None, strike=None, years=None, rate=0.0, kind='CE', bounds=(1e-4, 5.0), tol=1e-8, *, is_call=None, spot=None, div_yield=0.0, cost_of_carry=None, dividend=None):
     if is_call is not None:
-        kind = 'CE' if is_call else 'PE'
+        kind = np.where(is_call, 'CE', 'PE')
     """Vectorized Black-76 implied volatility solver over NumPy arrays."""
     if forward is None and spot is not None:
         forward = forward_from_spot(spot, years, rate=rate, div_yield=div_yield, cost_of_carry=cost_of_carry, dividend=dividend)
@@ -568,157 +578,67 @@ def solve_black76_iv(price, forward=None, strike=None, years=None, rate=0.0, kin
 black76_implied_vol = solve_black76_iv
 
 
-def _parse_chain_quote_timestamps(values: pd.Series) -> pd.Series:
-    """Parse ISO and second/millisecond epoch quote timestamps without unit guessing by pandas."""
-    numeric = pd.to_numeric(values, errors='coerce')
-    numeric_mask = numeric.notna()
-    parsed = pd.Series(pd.NaT, index=values.index, dtype='datetime64[ns, UTC]')
-    if numeric_mask.any():
-        magnitude = float(numeric[numeric_mask].abs().median())
-        unit = 'ms' if magnitude > 1e11 else 's'
-        parsed.loc[numeric_mask] = pd.to_datetime(numeric[numeric_mask], unit=unit, utc=True, errors='coerce')
-    if (~numeric_mask).any():
-        parsed.loc[~numeric_mask] = pd.to_datetime(values[~numeric_mask], utc=True, errors='coerce')
-    return parsed
-
-
 def black76_chain_greeks(
     chain: pd.DataFrame,
     forward: float | None = None,
     spot: float | None = None,
-    years: float = 7.0 / 365.0,
-    rate: float = 0.066,
+    years: float | None = None,
+    rate: float | None = None,
     *,
     expiry: str | None = None,
     as_of=None,
     max_quote_age_seconds: float = 120.0,
     allow_unvalidated_quotes: bool = False,
 ) -> pd.DataFrame:
-    """Enrich a chain using fresh quotes; unvalidated historical inputs require explicit opt-in."""
+    """Calculate model IV solely from fresh, same-expiry bid/ask midpoints."""
+    if allow_unvalidated_quotes:
+        raise ValueError('Chain valuation requires observed two-sided books and a valuation timestamp.')
     if chain is None or chain.empty:
         return pd.DataFrame() if chain is None else chain.copy()
     df = chain.copy()
     strike_col = 'strike' if 'strike' in df.columns else ('Strike' if 'Strike' in df.columns else 'strike_price')
     type_col = 'option_type' if 'option_type' in df.columns else ('Type' if 'Type' in df.columns else 'Kind')
-    price_col = 'ltp' if 'ltp' in df.columns else ('Mid' if 'Mid' in df.columns else 'price')
-    expiry_col = next((c for c in ('expiry', 'expiration') if c in df.columns), None)
-    quote_ts_col = next((c for c in ('quote_timestamp', 'feed_timestamp', 'currentTs', 'ts') if c in df.columns), None)
-    bid_col = next((c for c in ('bid_price', 'bid', 'Bid') if c in df.columns), None)
-    ask_col = next((c for c in ('ask_price', 'ask', 'Ask') if c in df.columns), None)
-
-    eligible = np.ones(len(df), dtype=bool)
-    if expiry_col:
-        expiry_values = set(df[expiry_col].dropna().astype(str))
-        if expiry is not None:
-            eligible &= df[expiry_col].astype(str).to_numpy() == str(expiry)
-        elif len(expiry_values) > 1:
-            eligible[:] = False
-
-    fresh = np.zeros(len(df), dtype=bool)
-    if as_of is not None and quote_ts_col:
-        try:
-            reference = pd.Timestamp(as_of)
-            if reference.tzinfo is not None:
-                age_limit = float(max_quote_age_seconds)
-                observed = _parse_chain_quote_timestamps(df[quote_ts_col])
-                age = (reference.tz_convert('UTC') - observed).dt.total_seconds()
-                if np.isfinite(age_limit) and age_limit >= 0:
-                    fresh = ((age >= -30.0) & (age <= age_limit)).fillna(False).to_numpy(dtype=bool)
-        except (TypeError, ValueError, OverflowError):
-            fresh[:] = False
-    elif allow_unvalidated_quotes:
-        # Compatibility escape hatch for offline callers. It must be selected explicitly.
-        fresh[:] = True
-    eligible &= fresh
-
-    supplied_forward = forward is not None
-    if supplied_forward:
-        try:
-            forward = float(forward)
-        except (TypeError, ValueError, OverflowError):
-            forward = np.nan
-        if not np.isfinite(forward) or forward <= 0:
-            forward = np.nan
-    else:
-        # A parity forward is inferred only from matched, fresh bid/ask books for
-        # the same strike and expiry. LTPs and spot are not safe substitutes.
-        forward = np.nan
-        try:
-            reference = pd.Timestamp(as_of) if as_of is not None else pd.NaT
-            if reference.tzinfo is None:
-                reference = pd.NaT
-        except (TypeError, ValueError):
-            reference = pd.NaT
-        try:
-            age_limit = float(max_quote_age_seconds)
-        except (TypeError, ValueError, OverflowError):
-            age_limit = -1.0
-        expiry_values = set(df[expiry_col].dropna().astype(str)) if expiry_col else set()
-        expiry_ok = not expiry_col or (expiry is not None and str(expiry) in expiry_values) or len(expiry_values) == 1
-        if (
-            strike_col in df.columns and type_col in df.columns and quote_ts_col
-            and bid_col and ask_col and not pd.isna(reference)
-            and np.isfinite(age_limit) and age_limit >= 0 and expiry_ok
-        ):
-            work = df.copy()
-            work[type_col] = work[type_col].astype(str).str.strip().str.upper()
-            if expiry_col and expiry is not None:
-                work = work[work[expiry_col].astype(str) == str(expiry)]
-            work[quote_ts_col] = _parse_chain_quote_timestamps(work[quote_ts_col])
-            ref_utc = reference.tz_convert('UTC')
-            age = (ref_utc - work[quote_ts_col]).dt.total_seconds()
-            work = work[(age >= -30.0) & (age <= age_limit)]
-            work['_bid'] = pd.to_numeric(work[bid_col], errors='coerce')
-            work['_ask'] = pd.to_numeric(work[ask_col], errors='coerce')
-            work['_mid'] = np.where(
-                np.isfinite(work['_bid']) & np.isfinite(work['_ask'])
-                & (work['_bid'] > 0.0) & (work['_ask'] >= work['_bid']),
-                (work['_bid'] + work['_ask']) / 2.0,
-                np.nan,
-            )
-            group_cols = ([expiry_col] if expiry_col else []) + [strike_col]
-            for _, group in work.groupby(group_cols, dropna=True):
-                calls = group[group[type_col].isin(_VALID_CALL_KINDS)]
-                puts = group[group[type_col].isin(_VALID_PUT_KINDS)]
-                if len(calls) != 1 or len(puts) != 1:
-                    continue
-                call_row, put_row = calls.iloc[0], puts.iloc[0]
-                if abs((call_row[quote_ts_col] - put_row[quote_ts_col]).total_seconds()) > 5.0:
-                    continue
-                k = float(call_row[strike_col])
-                c_mid, p_mid = float(call_row['_mid']), float(put_row['_mid'])
-                candidate = parity_implied_forward(k, c_mid, p_mid, years, rate)
-                if np.isfinite(candidate) and candidate > 0.0:
-                    forward = float(candidate)
-                    break
-
+    from volatility_lab.pricing.pricing_policy import book, number
+    expiry_col = next((c for c in ('expiry', 'expiration') if c in df), None)
+    expires = df[expiry_col].astype(str).str[:10] if expiry_col else pd.Series('', index=df.index)
+    listed = set(expires) - {'', 'nan', 'NaT', 'None'}
+    target = str(expiry)[:10] if expiry is not None else next(iter(listed)) if len(listed) == 1 else None
+    eligible = (expires == target).to_numpy() if target else np.zeros(len(df), dtype=bool)
     strikes = pd.to_numeric(df[strike_col], errors='coerce').to_numpy(dtype=float)
-    kinds = df[type_col].astype(str).to_numpy()
-    if price_col in df.columns:
-        if bid_col and ask_col:
-            bid = pd.to_numeric(df[bid_col], errors='coerce').to_numpy(dtype=float)
-            ask = pd.to_numeric(df[ask_col], errors='coerce').to_numpy(dtype=float)
-            prices = np.where(
-                np.isfinite(bid) & np.isfinite(ask) & (bid > 0.0) & (ask >= bid),
-                (bid + ask) / 2.0,
-                np.nan,
-            )
-        else:
-            prices = pd.to_numeric(df[price_col], errors='coerce').to_numpy(dtype=float)
-        prices = np.where(eligible, prices, np.nan)
-        ivs = solve_black76_iv_vec(prices, forward=forward, strike=strikes, years=years, rate=rate, kind=kinds)
-    elif 'iv' in df.columns:
-        raw_iv = pd.to_numeric(df['iv'], errors='coerce').to_numpy(dtype=float)
-        # Upstox feeds use decimal IV while other callers provide percent IV.
-        # The interval (1, 5) is intentionally rejected as unit-ambiguous.
-        ivs = np.where(
-            (raw_iv > 0.0) & (raw_iv <= 1.0), raw_iv,
-            np.where((raw_iv >= 5.0) & (raw_iv <= 500.0), raw_iv / 100.0, np.nan),
-        )
-        ivs = np.where(eligible, ivs, np.nan)
-    else:
-        ivs = np.full(len(df), np.nan, dtype=float)
-
+    kinds = df[type_col].astype(str).str.strip().str.upper().to_numpy()
+    prices = np.full(len(df), np.nan)
+    books = {}
+    # Map broker aliases while using the same depth, freshness and spread rules
+    # as the live pricing policy. Missing observation times never imply freshness.
+    for i, record in enumerate(df.to_dict('records')):
+        if not eligible[i]:
+            continue
+        for dest, aliases in [('quote_timestamp', ('timestamp','feed_timestamp','currentTs','ts')),
+                              ('bid', ('Bid',)), ('ask', ('Ask',))]:
+            if dest not in record:
+                record[dest] = next((record[col] for col in aliases if col in record), None)
+        current = book(record, as_of, max_quote_age_seconds)
+        if current is not None:
+            books[i] = current
+            prices[i] = current['mid']
+    if forward is None:
+        listed_strikes = np.unique(strikes[eligible & np.isfinite(strikes) & (strikes > 0)])
+        ref = number(spot)
+        atm = None
+        if len(listed_strikes) == 1:
+            atm = listed_strikes[0]
+        elif len(listed_strikes) and ref is not None and ref > 0:
+            atm = min(listed_strikes, key=lambda k: (abs(k - ref), k))
+        calls = np.flatnonzero(eligible & (strikes == atm) & np.isin(kinds, _VALID_CALL_KINDS))
+        puts = np.flatnonzero(eligible & (strikes == atm) & np.isin(kinds, _VALID_PUT_KINDS))
+        if len(calls) == len(puts) == 1:
+            call, put = books.get(calls[0]), books.get(puts[0])
+            if call and put and max(call['spread'], put['spread']) < 3:
+                if abs((call['timestamp'] - put['timestamp']).total_seconds()) <= 5:
+                    forward = parity_implied_forward(atm, call['mid'], put['mid'], years, rate)
+    forward = number(forward)
+    forward = forward if forward is not None and forward > 0 else np.nan
+    ivs = solve_black76_iv_vec(prices, forward=forward, strike=strikes, years=years, rate=rate, kind=kinds)
     g = black76_greeks_vec(forward=forward, strike=strikes, years=years, vol=ivs, rate=rate, kind=kinds)
     df['forward'] = forward
     df['iv_b76'] = ivs
@@ -821,12 +741,16 @@ def calculate_greeks(underlying, strike, years, rate, vol, kind, model=DEFAULT_P
     """Calculate Greeks using specified model (default: Black-76 with a forward input; explicitly select 'bsm' for spot)."""
     if str(model).lower() in ("black76", "black-76", "sensibull", "forward"):
         return black76_greeks(underlying, strike, years, rate, vol, kind)
+    if str(model).lower() != 'bsm':
+        raise ValueError(f'Unknown pricing model: {model}')
     return bsm_greeks(underlying, strike, years, rate, vol, kind, dividend=dividend)
 
 def calculate_iv(price, underlying, strike, years, rate, kind, model=DEFAULT_PRICING_MODEL, dividend=0.0, bounds=(1e-4, 5.0), tol=1e-8):
     """Calculate IV using specified model (default: Black-76 with a forward input; explicitly select 'bsm' for spot)."""
     if str(model).lower() in ("black76", "black-76", "sensibull", "forward"):
         return solve_black76_iv(price, underlying, strike, years, rate, kind, bounds=bounds, tol=tol)
+    if str(model).lower() != 'bsm':
+        raise ValueError(f'Unknown pricing model: {model}')
     return solve_iv(price, underlying, strike, years, rate, kind, dividend=dividend, bounds=bounds, tol=tol)
 
 def compare_bsm_and_black76(spot, strike, years, rate, vol, kind, dividend=0.0, future_price=None, div_yield=None):

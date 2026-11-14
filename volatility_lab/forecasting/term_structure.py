@@ -1,5 +1,5 @@
 """Spot-ATM term structure from one instrument's dated expiry snapshots."""
-from datetime import datetime, time
+from market_calendar import expiry_close
 import numpy as np
 import pandas as pd
 try:
@@ -38,7 +38,10 @@ def term_structure(rows, symbol, deduplicate=False):
         valid_time = not pd.isna(stamp) and stamp.tzinfo is not None
         if valid_time:
             stamp = stamp.tz_convert(IST)
-        end = pd.Timestamp(datetime.combine(expiry, time(15, 30), tzinfo=IST))
+        try:
+            end = pd.Timestamp(expiry_close(expiry))
+        except ValueError:
+            end = pd.NaT
         dte = (end - stamp).total_seconds() / 86400 if valid_time else np.nan
         try:
             iv = float(row.get('IV'))
@@ -47,6 +50,8 @@ def term_structure(rows, symbol, deduplicate=False):
         status = 'Ready'
         if not valid_time:
             status = 'Missing valuation timestamp'
+        elif not np.isfinite(dte):
+            status = 'Expiry session unavailable'
         elif dte <= 0:
             status = 'Expired at valuation'
         elif not np.isfinite(iv) or iv <= 0:

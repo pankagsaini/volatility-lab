@@ -230,8 +230,8 @@ class TestQuantAuditFixes(unittest.TestCase):
         self.assertAlmostEqual(buy['Stamp duty'], 0.225)
         self.assertAlmostEqual(sell['STT'], 11.25)
         self.assertEqual(sell['Stamp duty'], 0.0)
-        self.assertAlmostEqual(sell['Exchange'], 100.0 * 75 * 0.0003553)
-        self.assertAlmostEqual(sell['IPFT'], 100.0 * 75 * 0.000005)
+        self.assertAlmostEqual(sell['Exchange'], 100.0 * 75 * 0.000355299)
+        self.assertAlmostEqual(sell['IPFT'], 100.0 * 75 * 0.000000001)
         self.assertAlmostEqual(sell['SEBI'], 100.0 * 75 * 0.000001)
         self.assertAlmostEqual(sell['GST'], 0.18 * (20.0 + sell['Exchange'] + sell['IPFT']))
 

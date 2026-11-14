@@ -8,6 +8,7 @@ import json
 import math
 from pathlib import Path
 from typing import Any
+from volatility_lab.pricing.pricing_policy import number
 
 ROOT = runtime_data_dir()
 
@@ -41,12 +42,12 @@ def record(kind: str, payload: Any) -> str:
     return digest
 
 
-def snapshot(rate: float, dividend: float, symbol: str) -> dict[str, Any]:
+def snapshot(rate: float | None, dividend: float | None, symbol: str) -> dict[str, Any]:
     """Capture rate and dividend provenance while surfacing file/mismatch warnings explicitly."""
     result: dict[str, Any] = {
         "symbol": symbol,
-        "rate": float(rate),
-        "dividend": float(dividend),
+        "rate": number(rate),
+        "dividend": number(dividend),
         "rate_digest": None,
         "dividend_digest": None,
         "warnings": [],

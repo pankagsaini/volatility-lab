@@ -10,7 +10,7 @@ import gzip,hashlib,json,os,sqlite3,threading,time,zlib
 import pandas as pd
 import numpy as np
 from collector_support import atomic_json,read_json,data_lock,STATE
-from market_calendar import HOLIDAYS, is_trading_day
+from volatility_lab.core.market_calendar import CalendarHorizonError, session_window
 from volatility_lab.pricing.pricing_policy import number
 ROOT=PACKAGE_ROOT
 DATA=runtime_data_dir()
@@ -124,8 +124,9 @@ def validate_report(obj, *, historical=False):
             # Earlier private archives predate the collector's session flag. Accept those only
             # on replay during a documented regular session; require a fresh underlying quote below.
             local = stamp.tz_convert('Asia/Kolkata')
-            if not (historical and 'nfo_session_validated' not in obj and is_trading_day(local.date())
-                    and 555 <= local.hour * 60 + local.minute <= 930):
+            window = session_window(local.date())
+            if not (historical and 'nfo_session_validated' not in obj and window
+                    and window[0] <= local.floor('min') <= window[1]):
                 raise ValueError('NFO session was not validated')
         day=str(obj.get('day') or '')[:10]
         if day != stamp.tz_convert('Asia/Kolkata').strftime('%Y-%m-%d'):
@@ -165,6 +166,10 @@ def import_report(obj,rate,dividend,spread, *, historical=False):
     from smile import smile_points,save_smile
     validate_report(obj, historical=historical)
     stamp=pd.Timestamp(obj['retrieved_at']).tz_convert('Asia/Kolkata')
+    try:
+        window = session_window(stamp.date())
+    except CalendarHorizonError:
+        window = None
     config=calculation_key(rate,dividend,spread)
     register(DATA/'monitor.sqlite',rate,dividend,spread)
     cat=obj.get('catalogue',{}).get('indices',{})
@@ -178,7 +183,7 @@ def import_report(obj,rate,dividend,spread, *, historical=False):
         q=quotes.get(INDICES[symbol],{})
         valuation=provider_timestamp(q.get('timestamp')) or provider_timestamp(q.get('last_trade_time'))
         trade=provider_timestamp(q.get('last_trade_time'))
-        if stamp.date() in HOLIDAYS or stamp.weekday()>4 or not 555<=stamp.hour*60+stamp.minute<=940:
+        if not window or not window[0] <= stamp.floor('min') <= window[1]:
             valuation=trade
         if valuation:
             valuation_stamp=pd.Timestamp(valuation)
@@ -261,7 +266,11 @@ def import_futures(obj,quotes,stamp):
     from upstox_archive import connect as research
     from upstox_data import INDICES
     root=DATA/'futures'
-    quote_now=stamp.replace(hour=18,minute=0) if stamp.date() in HOLIDAYS else stamp
+    try:
+        window = session_window(stamp.date())
+    except CalendarHorizonError:
+        window = None
+    quote_now=stamp.replace(hour=18,minute=0) if not window else stamp
     cat=obj.get('catalogue',{}).get('indices',{})
     for symbol,entry in cat.items():
         if symbol not in INDICES:continue

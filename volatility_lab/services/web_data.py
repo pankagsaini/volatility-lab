@@ -10,21 +10,34 @@ import numpy as np
 import pandas as pd
 
 from market_data import IST
+from volatility_lab.core.market_calendar import session_window, expiry_close, SPECIAL_SESSIONS
+from volatility_lab.pricing.pricing_policy import number
 
 ROOT = PACKAGE_ROOT
 DATA = runtime_data_dir()
 
 
-def get_market_summary() -> Dict[str, Any]:
+def positive(value):
+    value = number(value)
+    return value if value is not None and value > 0 else None
+
+
+def observed_count(value):
+    value = number(value)
+    return int(value) if value is not None and value >= 0 and value.is_integer() else None
+
+
+def get_market_summary(now=None) -> Dict[str, Any]:
     """Return live market session status, IST time, NIFTY, BANKNIFTY, and INDIA VIX."""
-    now = datetime.now(IST)
-    t_min = now.hour * 60 + now.minute
-    is_open = (now.weekday() < 5) and (555 <= t_min <= 930)
+    now = now or datetime.now(IST)
+    now = pd.Timestamp(now).tz_convert(IST).to_pydatetime()
+    window = session_window(now.date())
+    is_open = bool(window and window[0] <= now < window[1])
 
     if is_open:
-        status = 'NSE LIVE · REGULAR SESSION'
+        status = 'NSE LIVE · SPECIAL SESSION' if now.date() in SPECIAL_SESSIONS else 'NSE LIVE · REGULAR SESSION'
         status_type = 'live'
-    elif now.weekday() < 5 and 540 <= t_min < 555:
+    elif window and now.date() not in SPECIAL_SESSIONS and window[0] - pd.Timedelta(minutes=15) <= now < window[0]:
         status = 'NSE PRE-OPEN'
         status_type = 'preopen'
     else:
@@ -33,18 +46,18 @@ def get_market_summary() -> Dict[str, Any]:
 
     from expiry_data import load_snapshot
     from collector_support import read_json
-    
+
     snap = load_snapshot(None, allow_saved=True) or {}
     rows = snap.get('rows', [])
     nifty = next((r for r in rows if r.get('Instrument') == 'NIFTY'), {})
     bn = next((r for r in rows if r.get('Instrument') == 'BANKNIFTY'), {})
     vix_obj = snap.get('india_vix', {})
-    vix_val = vix_obj.get('value') if isinstance(vix_obj, dict) else None
+    vix_val = positive(vix_obj.get('value')) if isinstance(vix_obj, dict) else None
 
     # Google Cloud mirror sync info
     cloud_info = read_json(DATA / 'google_archive' / 'status.json')
     sync_state = str(cloud_info.get('status', 'unknown')).strip().lower()
-    sync_count = int(cloud_info.get('total_files', 0))
+    sync_count = observed_count(cloud_info.get('total_files'))
 
     def format_index(row: Dict[str, Any], default_name: str) -> Dict[str, Any]:
         spot = row.get('Price')
@@ -53,11 +66,9 @@ def get_market_summary() -> Dict[str, Any]:
         chg = row.get('% change')
         iv = row.get('IV')
         sprd = row.get('IV-RV Spread')
-        chg_f = float(chg) if chg and np.isfinite(chg) else None
+        chg_f = number(chg)
         as_of_str = str(row.get('As of', ''))[:16].replace('T', ' ')
-        fut_f = float(fut) if fut and np.isfinite(fut) else None
-        syn_f = float(syn) if syn and np.isfinite(syn) else None
-        spot_f = float(spot) if spot and np.isfinite(spot) else None
+        fut_f, syn_f, spot_f = positive(fut), positive(syn), positive(spot)
         return {
             'symbol': default_name,
             'price': spot_f,
@@ -69,8 +80,8 @@ def get_market_summary() -> Dict[str, Any]:
             'change': chg_f,
             'pchange': chg_f,
             'change_pct': chg_f,
-            'atm_iv': float(iv) if iv and np.isfinite(iv) else None,
-            'iv_rv_spread': float(sprd) if sprd and np.isfinite(sprd) else None,
+            'atm_iv': positive(iv),
+            'iv_rv_spread': number(sprd),
             'collected_at': as_of_str,
             'as_of': as_of_str
         }
@@ -89,12 +100,13 @@ def get_market_summary() -> Dict[str, Any]:
             'value': float(vix_val) if vix_val and np.isfinite(vix_val) else None,
             'change': None,
             'pchange': None,
-            'regime': 'Low Vol' if vix_val and vix_val < 13 else ('Normal Vol' if vix_val and vix_val <= 18 else 'Elevated Vol')
+            'regime': None if number(vix_val) is None or vix_val <= 0 else
+                      'Low Vol' if vix_val < 13 else 'Normal Vol' if vix_val <= 18 else 'Elevated Vol'
         },
         'cloud_sync': {
             'status': sync_state,
             'last_snapshot': str(cloud_info.get('last_snapshot', cloud_info.get('last_update', ''))),
-            'today_count': sync_count,
+            'today_count': observed_count(cloud_info.get('today_count')),
             'total_files': sync_count
         }
     }
@@ -102,21 +114,21 @@ def get_market_summary() -> Dict[str, Any]:
 
 def get_available_expiries(symbol: str) -> List[Dict[str, Any]]:
     """Return all active listed expiries for a symbol with DTE and contract type."""
-    today = datetime.now(IST).date()
+    now = datetime.now(IST)
+    today = now.date()
     files = sorted(DATA.glob(f'{symbol.lower()}_option_quotes_*.json'))
-    
+
     expiries = []
     for f in files:
         exp_str = f.stem.replace(f'{symbol.lower()}_option_quotes_', '')
         try:
             exp_date = datetime.strptime(exp_str, '%Y-%m-%d').date()
             if exp_date >= today:
-                dte = max(0.2, float((exp_date - today).days))
-                # Heuristic: monthly is typically last Tuesday/Thursday of month
+                dte = max(0.0, (expiry_close(exp_date) - now).total_seconds() / 86400)
                 expiries.append({
                     'expiry': exp_str,
                     'expiry_date': str(exp_date),
-                    'dte': round(dte, 1),
+                    'dte': dte,
                     'label': f"{exp_date.strftime('%d %b %Y')} ({dte:.1f}d)"
                 })
         except ValueError:
@@ -132,7 +144,9 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
     if not available:
         return {'symbol': symbol, 'error': f'No active option chains found for {symbol}'}
 
-    if not expiry or not any(e['expiry'] == expiry for e in available):
+    if expiry and not any(e['expiry'] == expiry for e in available):
+        return {'symbol': symbol, 'expiry': expiry, 'error': 'Requested expiry is unavailable'}
+    if not expiry:
         expiry = available[0]['expiry']
 
     file_path = DATA / f'{symbol.lower()}_option_quotes_{expiry}.json'
@@ -145,7 +159,9 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
     except Exception as exc:
         return {'symbol': symbol, 'expiry': expiry, 'error': str(exc)}
 
-    spot = float(content.get('spot', 0.0))
+    spot = number(content.get('spot'))
+    if spot is None or spot <= 0:
+        return {'symbol': symbol, 'expiry': expiry, 'error': 'Underlying spot is unavailable'}
     raw_chain = content.get('broker_option_chain', [])
 
     def aware_payload_timestamp(*values):
@@ -159,61 +175,57 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
         return None
 
     # Strike step and nearest ATM strike
-    strike_step = 50.0 if spot < 35000 else 100.0
-    atm_strike = round(spot / strike_step) * strike_step
+    strikes = [number(row.get('strike_price')) for row in raw_chain if isinstance(row, dict)]
+    strikes = [strike for strike in strikes if strike is not None and strike > 0]
+    if not strikes:
+        return {'symbol': symbol, 'expiry': expiry, 'error': 'No captured strikes'}
+    atm_strike = min(strikes, key=lambda strike: (abs(strike - spot), strike))
 
     rows = []
-    total_call_oi = 0
-    total_put_oi = 0
-    total_call_vol = 0
-    total_put_vol = 0
     oi_by_strike = {}
+    volumes_by_strike = {}
+    def observed_total(values):
+        return sum(values) if values and all(v is not None for v in values) else None
 
     for item in raw_chain:
-        k = float(item.get('strike_price', 0.0))
-        if k <= 0:
+        k = positive(item.get('strike_price')) if isinstance(item, dict) else None
+        if k is None:
             continue
 
-        call = item.get('call_options', {})
-        put = item.get('put_options', {})
-        c_m = call.get('market_data', {})
-        c_g = call.get('option_greeks', {})
-        p_m = put.get('market_data', {})
-        p_g = put.get('option_greeks', {})
+        call = item.get('call_options') or {}
+        put = item.get('put_options') or {}
+        c_m = call.get('market_data') or {}
+        c_g = call.get('option_greeks') or {}
+        p_m = put.get('market_data') or {}
+        p_g = put.get('option_greeks') or {}
 
-        c_oi = int(c_m.get('oi') or 0)
-        p_oi = int(p_m.get('oi') or 0)
-        c_vol = int(c_m.get('volume') or 0)
-        p_vol = int(p_m.get('volume') or 0)
-
-        total_call_oi += c_oi
-        total_put_oi += p_oi
-        total_call_vol += c_vol
-        total_put_vol += p_vol
+        c_oi, p_oi = observed_count(c_m.get('oi')), observed_count(p_m.get('oi'))
+        c_vol, p_vol = observed_count(c_m.get('volume')), observed_count(p_m.get('volume'))
         oi_by_strike[k] = (c_oi, p_oi)
+        volumes_by_strike[k] = (c_vol, p_vol)
 
         # Filter strikes to active trading window around spot (e.g. +/- 8%)
         if abs(k - spot) / spot <= 0.08:
             rows.append({
                 'strike': k,
-                'is_atm': abs(k - atm_strike) < (strike_step * 0.5),
+                'is_atm': k == atm_strike,
                 'call': {
-                    'ltp': float(c_m.get('ltp') or 0.0),
-                    'iv': float(c_g.get('iv') or 0.0),
-                    'delta': float(c_g.get('delta') or 0.0),
-                    'gamma': float(c_g.get('gamma') or 0.0),
-                    'theta': float(c_g.get('theta') or 0.0),
-                    'vega': float(c_g.get('vega') or 0.0),
+                    'ltp': positive(c_m.get('ltp')),
+                    'iv': positive(c_g.get('iv')),
+                    'delta': number(c_g.get('delta')),
+                    'gamma': number(c_g.get('gamma')),
+                    'theta': number(c_g.get('theta')),
+                    'vega': number(c_g.get('vega')),
                     'oi': c_oi,
                     'volume': c_vol
                 },
                 'put': {
-                    'ltp': float(p_m.get('ltp') or 0.0),
-                    'iv': float(p_g.get('iv') or 0.0),
-                    'delta': float(p_g.get('delta') or 0.0),
-                    'gamma': float(p_g.get('gamma') or 0.0),
-                    'theta': float(p_g.get('theta') or 0.0),
-                    'vega': float(p_g.get('vega') or 0.0),
+                    'ltp': positive(p_m.get('ltp')),
+                    'iv': positive(p_g.get('iv')),
+                    'delta': number(p_g.get('delta')),
+                    'gamma': number(p_g.get('gamma')),
+                    'theta': number(p_g.get('theta')),
+                    'vega': number(p_g.get('vega')),
                     'oi': p_oi,
                     'volume': p_vol
                 }
@@ -222,8 +234,10 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
     rows.sort(key=lambda r: r['strike'])
 
     # Max Pain Calculation across all listed strikes
-    max_pain = atm_strike
-    if oi_by_strike:
+    max_pain = None
+    total_call_oi, total_put_oi = (observed_total(side) for side in zip(*oi_by_strike.values()))
+    total_call_vol, total_put_vol = (observed_total(side) for side in zip(*volumes_by_strike.values()))
+    if total_call_oi is not None and total_put_oi is not None and total_call_oi + total_put_oi > 0:
         strikes = sorted(oi_by_strike.keys())
         min_loss = float('inf')
         for test_s in strikes:
@@ -239,8 +253,9 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
 
     # ATM Straddle & Synthetic Future
     atm_row = next((r for r in rows if r['is_atm']), None)
-    atm_straddle = (atm_row['call']['ltp'] + atm_row['put']['ltp']) if atm_row else 0.0
-    pcr = round(total_put_oi / total_call_oi, 2) if total_call_oi > 0 else 1.0
+    leg_prices = [atm_row[side]['ltp'] for side in ('call', 'put')] if atm_row else []
+    atm_straddle = round(sum(leg_prices), 2) if leg_prices and all(p is not None and p > 0 for p in leg_prices) else None
+    pcr = round(total_put_oi / total_call_oi, 2) if total_call_oi and total_put_oi is not None else None
 
     matched_exp = next((e for e in available if e['expiry'] == expiry), None)
     dte_val = float(matched_exp['dte']) if matched_exp else 0.0
@@ -278,8 +293,7 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
     dte_for_pricing = dte_val
     if valuation is not None:
         try:
-            expiry_close = pd.Timestamp(expiry).tz_localize('Asia/Kolkata') + pd.Timedelta(hours=15, minutes=30)
-            dte_for_pricing = max(0.0, (expiry_close - valuation).total_seconds() / 86400.0)
+            dte_for_pricing = max(0.0, (expiry_close(expiry) - valuation).total_seconds() / 86400.0)
         except (TypeError, ValueError):
             pass
     # Archive valuations use inputs recorded alongside that capture; never today's inputs.
@@ -327,8 +341,8 @@ def get_option_chain_table(symbol: str, expiry: Optional[str] = None) -> Dict[st
         'pricing_model': {'black76': 'Black-76', 'bsm': 'BSM'}.get(fwd_res.get('model'), 'Broker IV only'),
         'pricing_reason': fwd_res.get('reason'),
         'atm_strike': atm_strike,
-        'straddle_ltp': round(atm_straddle, 2),
-        'atm_straddle': round(atm_straddle, 2),
+        'straddle_ltp': atm_straddle,
+        'atm_straddle': atm_straddle,
         'total_call_oi': total_call_oi,
         'total_put_oi': total_put_oi,
         'total_call_vol': total_call_vol,
@@ -372,7 +386,7 @@ def get_vol_surface_payload(
         return float(value) if np.isfinite(value) else None
 
     smile_curves = diags['curves']
-    colors = ['#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6', '#14b8a6']
+    colors = ['#38bdf8', '#10b981', '#a78bfa', '#8b5cf6', '#f43f5e', '#3b82f6', '#14b8a6']
     for i, curve in enumerate(smile_curves):
         curve['color'] = colors[i % len(colors)]
         curve['label'] = expiry_labels[i]
@@ -440,26 +454,25 @@ def get_trade_radar(symbol: str, expiry: Optional[str] = None) -> Dict[str, Any]
     selected_rows = [r for r in rows if r.get('Instrument') == symbol]
     if expiry:
         row = next((r for r in selected_rows if r.get('Expiry') == expiry), None)
-        if not row and selected_rows:
-            row = selected_rows[0]
     else:
         row = selected_rows[0] if selected_rows else None
-    
-    if not row or not row.get('Price') or not row.get('IV'):
+
+    spot = positive(row.get('Price')) if row else None
+    iv = positive(row.get('IV')) if row else None
+    if spot is None or iv is None:
         return {'symbol': symbol, 'error': f'Live quotes not available for {symbol}'}
 
-    spot = float(row['Price'])
-    iv = float(row['IV'])
     spread = row.get('IV-RV Spread')
-    spread_val = float(spread) if spread and np.isfinite(spread) else None
+    spread_val = number(spread)
     exp = row.get('Expiry', '')
 
-    today = datetime.now(IST).date()
     try:
-        exp_date = datetime.strptime(exp, '%Y-%m-%d').date()
-        dte = max(0.2, float((exp_date - today).days))
-    except Exception:
-        dte = 6.0
+        captured = pd.Timestamp(row.get('As of'))
+        if pd.isna(captured) or captured.tzinfo is None:
+            raise ValueError('Undated snapshot')
+        dte = max(0.0, (expiry_close(exp) - captured).total_seconds() / 86400)
+    except (ValueError, TypeError):
+        return {'symbol': symbol, 'expiry': exp, 'error': 'Expiry or capture time is unavailable'}
 
     move_pts = spot * (iv / 100.0) * np.sqrt(dte / 365.0)
     move_pct = (move_pts / spot) * 100.0
@@ -488,17 +501,17 @@ def get_trade_radar(symbol: str, expiry: Optional[str] = None) -> Dict[str, Any]
         desc = 'Daily historical candles aligning for IV-RV spread benchmark.'
 
     # Parity Check
-    syn = row.get('Synthetic future')
-    m_fut = row.get('Month future LTP')
-    basis_pts = (float(syn) - float(m_fut)) if syn and m_fut and np.isfinite(syn) and np.isfinite(m_fut) else None
-    
+    syn = positive(row.get('Synthetic future'))
+    m_fut = positive(row.get('Month future LTP'))
+    basis_pts = syn - m_fut if syn is not None and m_fut is not None else None
+
     if basis_pts is not None:
         basis_status = 'Parity Normal' if abs(basis_pts) <= (30.0 if symbol == 'NIFTY' else 75.0) else 'Basis Dislocation'
     else:
         basis_status = 'Parity Reference'
 
     # Compute ATM straddle LTP from option chain file
-    straddle_ltp = 0.0
+    straddle_ltp = None
     strike_step = 50.0 if ('NIFTY' in symbol.upper() and 'BANK' not in symbol.upper()) else 100.0
     atm_strike_r = round(spot / strike_step) * strike_step
     try:
@@ -512,11 +525,12 @@ def get_trade_radar(symbol: str, expiry: Optional[str] = None) -> Dict[str, Any]
                 None
             )
             if _atm_row:
-                c_ltp = float(_atm_row.get('call_options', {}).get('market_data', {}).get('ltp') or 0.0)
-                p_ltp = float(_atm_row.get('put_options', {}).get('market_data', {}).get('ltp') or 0.0)
-                straddle_ltp = round(c_ltp + p_ltp, 2)
+                c_ltp = number((_atm_row.get('call_options') or {}).get('market_data', {}).get('ltp'))
+                p_ltp = number((_atm_row.get('put_options') or {}).get('market_data', {}).get('ltp'))
+                if c_ltp is not None and p_ltp is not None and min(c_ltp, p_ltp) > 0:
+                    straddle_ltp = round(c_ltp + p_ltp, 2)
     except Exception:
-        straddle_ltp = 0.0
+        straddle_ltp = None
 
     return {
         'symbol': symbol,
@@ -533,14 +547,15 @@ def get_trade_radar(symbol: str, expiry: Optional[str] = None) -> Dict[str, Any]
         'notes': [desc],
         'description': desc,
         'straddle_ltp': straddle_ltp,
-        'straddle_be_low': round(spot - straddle_ltp, 1) if straddle_ltp > 0 else None,
-        'straddle_be_high': round(spot + straddle_ltp, 1) if straddle_ltp > 0 else None,
+        'straddle_be_low': round(atm_strike_r - straddle_ltp, 1) if straddle_ltp is not None else None,
+        'straddle_be_high': round(atm_strike_r + straddle_ltp, 1) if straddle_ltp is not None else None,
+        'as_of': captured.isoformat(),
         'expected_move_pts': round(move_pts, 1),
         'expected_move_pct': round(move_pct, 2),
         'expected_range_low': round(spot - move_pts, 1),
         'expected_range_high': round(spot + move_pts, 1),
-        'synthetic_future': round(float(syn), 2) if syn and np.isfinite(syn) else None,
-        'month_future': round(float(m_fut), 2) if m_fut and np.isfinite(m_fut) else None,
+        'synthetic_future': round(syn, 2) if syn is not None else None,
+        'month_future': round(m_fut, 2) if m_fut is not None else None,
         'synthetic_basis_pts': round(basis_pts, 2) if basis_pts is not None else None,
         'basis_pts': round(basis_pts, 2) if basis_pts is not None else None,
         'basis_status': basis_status
@@ -551,10 +566,10 @@ def get_futures_carry_payload() -> Dict[str, Any]:
     """Futures basis, roll spread, and annualized carry."""
     from futures_data import load_latest
     from pricing_inputs import get_rate
-    
+
     rate_info = get_rate()
-    rf = rate_info.get('yield_percent', 5.9)
-    
+    rf = number(rate_info.get('yield_percent'))
+
     results = []
     for symbol in ('NIFTY', 'BANKNIFTY'):
         latest = load_latest(DATA / 'futures', symbol)
@@ -566,24 +581,29 @@ def get_futures_carry_payload() -> Dict[str, Any]:
             'pairs': latest.get('pairs', []),
             'legs': latest.get('legs', [])
         })
-            
+
     return {'rate_percent': rf, 'indices': results}
 
 
 def get_historical_candles(symbol: str = 'NIFTY') -> dict:
-    """Historical daily candles and volume estimates for TradingView Lightweight Charts."""
+    """Historical broker candles with volume only where the source supplies it."""
     sym = 'banknifty' if 'BANK' in symbol.upper() else 'nifty'
     csv_path = DATA / f"{sym}_one_year.csv"
     if not csv_path.exists():
-        return {'symbol': symbol, 'candles': [], 'volume': []}
-    
+        return {'symbol': symbol, 'candles': [], 'volumes': []}
+
     try:
         import pandas as pd
-        df = pd.read_csv(csv_path)
+        from volatility_lab.core.vol_lib import validate_ohlc
+        raw = pd.read_csv(csv_path)
+        df = validate_ohlc(raw).reset_index()
+        if 'Volume' in raw:
+            volumes_by_date = dict(zip(pd.to_datetime(raw['Date']), raw['Volume']))
+            df['Volume'] = df['Date'].map(volumes_by_date)
         candles = []
         volumes = []
         for _, row in df.iterrows():
-            d_str = str(row['Date'])
+            d_str = pd.Timestamp(row['Date']).date().isoformat()
             o = float(row['Open'])
             h = float(row['High'])
             l = float(row['Low'])
@@ -595,20 +615,17 @@ def get_historical_candles(symbol: str = 'NIFTY') -> dict:
                 'low': round(l, 2),
                 'close': round(c, 2),
             })
-            # Use real volume from CSV if present, otherwise estimate from true range
-            if 'Volume' in df.columns and pd.notna(row.get('Volume')):
-                vol_val = max(0, int(row.get('Volume', 0) or 0))
-            else:
-                vol_val = max(1000, int(abs(h - l) * (150 if sym == 'nifty' else 40)))
-            volumes.append({
-                'time': d_str,
-                'value': vol_val,
-                'color': 'rgba(16, 185, 129, 0.45)' if c >= o else 'rgba(244, 63, 94, 0.45)'
-            })
+            volume = number(row.get('Volume'))
+            if volume is not None and volume >= 0:
+                volumes.append({
+                    'time': d_str,
+                    'value': volume,
+                    'color': 'rgba(16, 185, 129, 0.45)' if c >= o else 'rgba(244, 63, 94, 0.45)'
+                })
         return {
             'symbol': symbol,
             'count': len(candles),
-            'last_price': candles[-1]['close'] if candles else 0.0,
+            'last_price': candles[-1]['close'] if candles else None,
             'candles': candles,
             'volumes': volumes
         }
@@ -621,7 +638,7 @@ def get_backtest_overview() -> dict:
     runs_dir = DATA / 'backtest_runs'
     if not runs_dir.exists():
         return {'runs': []}
-    
+
     reports = []
     import json
     for p in sorted(runs_dir.glob('*.json'), reverse=True):
@@ -633,7 +650,38 @@ def get_backtest_overview() -> dict:
                 continue
             name = settings.get('name', 'Strategy')
             sym = settings.get('symbol', 'NIFTY')
-            
+            validated = raw.get('provenance_schema') == 'captured-minute-v1' and isinstance(trades, list)
+            for trade in trades if validated else []:
+                try:
+                    amounts = [number(trade.get(key)) for key in ('Net', 'Gross', 'Charges', 'Slippage')]
+                    legs = json.loads(trade['Legs']) if isinstance(trade.get('Legs'), str) else trade.get('Legs')
+                    valid_legs = isinstance(legs, list) and len(legs) > 0 and all(
+                        isinstance(leg, dict) and leg.get('key') and leg.get('side') in (-1, 1)
+                        and all(number(leg.get(key)) is not None and number(leg[key]) > 0
+                                for key in ('entry', 'exit', 'quantity'))
+                        for leg in legs
+                    )
+                    versioned = (trade.get('Execution assumption version') == 'minute-bar-uniform-bps-proxy-v2'
+                                 or trade.get('Execution model') == 'v3_prior_minute_required')
+                    validated = validated and valid_legs and versioned and all(x is not None for x in amounts)
+                    validated = validated and abs(amounts[0] - (amounts[1] - amounts[2] - amounts[3])) < .05
+                except (KeyError, ValueError, TypeError):
+                    validated = False
+                if not validated:
+                    break
+            if not validated:
+                reports.append({
+                    'id': p.stem, 'name': name, 'symbol': sym,
+                    'start': settings.get('start'), 'end': settings.get('end'),
+                    'engine': settings.get('engine', 'legacy'),
+                    'integrity_status': 'UNVERIFIED_ARCHIVED_REPORT',
+                    'total_trades': len(trades) if isinstance(trades, list) else 0,
+                    'wins': None, 'losses': None, 'win_rate_pct': None,
+                    'total_net_pnl': None, 'total_gross_pnl': None,
+                    'total_charges': None, 'total_slippage': None, 'trades': [],
+                })
+                continue
+
             wins = sum(1 for t in trades if float(t.get('Net', 0)) > 0)
             losses = sum(1 for t in trades if float(t.get('Net', 0)) < 0)
             total_net = sum(float(t.get('Net', 0)) for t in trades)
@@ -649,6 +697,7 @@ def get_backtest_overview() -> dict:
                 'start': settings.get('start'),
                 'end': settings.get('end'),
                 'engine': settings.get('engine', 'v1'),
+                'integrity_status': 'CAPTURED_MINUTE_SIMULATION',
                 'total_trades': len(trades),
                 'wins': wins,
                 'losses': losses,

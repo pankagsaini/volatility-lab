@@ -7,6 +7,7 @@ import gzip
 import json
 import math
 from collections import OrderedDict
+from contextlib import closing
 from datetime import date, datetime
 from pathlib import Path
 from threading import RLock
@@ -54,7 +55,7 @@ def _daily_archive(symbol: str, day: str) -> dict[str, Any]:
 def load(symbol: str, start: str, end: str) -> pd.DataFrame:
     """Load daily futures contract bars between `start` and `end` excluding blacklisted contracts."""
     from futures_data import connection
-    with connection() as conn:
+    with closing(connection()) as conn:
         df = pd.read_sql_query(
             "SELECT symbol, expiry, day, open, high, low, close, volume, oi "
             "FROM candles WHERE symbol = ? AND day >= ? AND day <= ? ORDER BY day, expiry",

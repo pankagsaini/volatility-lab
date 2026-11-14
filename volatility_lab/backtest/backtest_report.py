@@ -11,7 +11,7 @@ STORE=runtime_data_dir()/'backtest_runs'
 def save_run(settings,trades,skips,coverage):
  STORE.mkdir(parents=True,exist_ok=True)
  name=datetime.now().strftime('%Y%m%d_%H%M%S')+'_'+uuid.uuid4().hex[:6]
- record={'settings':settings,'coverage':coverage,'trades':json.loads(trades.to_json(orient='records')),'skips':json.loads(skips.to_json(orient='records'))}
+ record={'provenance_schema':'captured-minute-v1','settings':settings,'coverage':coverage,'trades':json.loads(trades.to_json(orient='records')),'skips':json.loads(skips.to_json(orient='records'))}
  path=STORE/(name+'.json');temporary=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp')
  try:
   temporary.write_text(json.dumps(record,indent=2),encoding='utf-8')

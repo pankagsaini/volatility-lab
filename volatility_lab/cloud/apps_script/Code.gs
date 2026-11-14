@@ -198,7 +198,8 @@ function capCompletedEodDays_(completedMap, maxDays) {
  * this project because they are the source evidence for the displayed research.
  */
 function pruneOldMinuteSnapshots_(_retentionDays) {
-  return { pruned: 0, retention: 'indefinite', disabled: true };
+  return { pruned: 0, retention: 'indefinite', disabled: true,
+    reason: 'EOD and historical-candle bundles omit option books and Greeks; full-fidelity consolidation is unverified' };
 }
 
 function listDriveFilesPage_(folderId, pageToken, orderBy) {
@@ -241,15 +242,24 @@ function loadPendingEod_() {
 function savePendingEod_(pending) {
   const properties = props_();
   const all = properties.getProperties();
+  const kept = capCompletedEodDays_(pending, CONFIG.completedEodMaxDays);
+  const overflow = Object.keys(pending).filter(day => !Object.prototype.hasOwnProperty.call(kept, day));
+  // Preserve unresolved old file IDs before retiring property-index entries.
+  if (overflow.length) {
+    save_('eod_pending_overflow_' + new Date().toISOString().replace(/[:.]/g, '-'),
+      {schema:1, type:'eod_pending_archive_index', days:Object.fromEntries(overflow.map(d => [d, pending[d]]))});
+  }
   Object.keys(all).forEach(key => {
     const match = /^EOD_PENDING_DAY_(\d{4}-\d{2}-\d{2})$/.exec(key);
-    if (match && !Object.prototype.hasOwnProperty.call(pending, match[1])) {
+    if (match && !Object.prototype.hasOwnProperty.call(kept, match[1])) {
       properties.deleteProperty(key);
     }
   });
-  Object.keys(pending).forEach(day => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !pending[day]) return;
-    properties.setProperty(EOD_PENDING_PREFIX_ + day, String(pending[day]));
+  Object.keys(kept).forEach(day => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !kept[day]) return;
+    const value = String(kept[day]);
+    if (!/^[\w-]{1,256}$/.test(value)) throw new Error('Invalid pending archive file ID');
+    if (all[EOD_PENDING_PREFIX_ + day] !== value) properties.setProperty(EOD_PENDING_PREFIX_ + day, value);
   });
   properties.deleteProperty('EOD_PENDING');
 }
@@ -1442,11 +1452,6 @@ function reconcilePriorSession() {
   let attempted = false;
 
   try {
-    // Deliberately a no-op: raw minute archives are retained indefinitely.
-    attempted = true;
-    try { pruneOldMinuteSnapshots_(CONFIG.snapshotRetentionDays); } catch (pruneErr) {}
-    if (Date.now() - started > 60000) return;
-
     let pending = loadPendingEod_();
     let completedMap = capCompletedEodDays_(
       readJsonProperty_(properties, 'COMPLETED_EOD_DAYS', {}),
@@ -1536,7 +1541,10 @@ function auditStatus() {
  * Caches responses in CacheService for 55 seconds to eliminate redundant Drive/Gzip reads.
  */
 function manualDownloadSession(targetDay) {
-  const day = targetDay || '2026-11-08';
+  const started = Date.now();
+  const day = String(targetDay || '2026-11-08');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(Date.parse(day)) ||
+      new Date(day).toISOString().slice(0, 10) !== day) throw new Error('Invalid session date');
   console.log('Starting manual 1-minute download for session: ' + day);
 
   const keys = [
@@ -1552,98 +1560,52 @@ function manualDownloadSession(targetDay) {
       idx.futures.forEach(f => keys.push(f.instrument_key));
     });
   } catch (err) {
+    catalogue = null;
     console.warn('Catalogue discovery fallback: ' + safeError_(err));
   }
 
   const results = {};
-  const errors = [];
+  const errors = catalogue ? [] : [{instrument:'catalogue', error:'Historical futures catalogue unavailable'}];
 
   keys.forEach(key => {
     try {
+      if (Date.now() - started > CAPTURE_SAFE_DEADLINE_MS) throw new Error('Historical download time budget exhausted');
       const path = '/v3/historical-candle/' + encodeURIComponent(key) + '/minutes/1/' + day + '/' + day;
       const data = api_(path);
-      results[key] = data.candles || [];
+      if (!Array.isArray(data.candles)) throw new Error('Historical candle response is malformed');
+      results[key] = data.candles;
     } catch (err) {
       errors.push({ instrument: key, error: safeError_(err) });
     }
   });
 
-  const minutesSet = new Set();
-  Object.values(results).forEach(candles => {
-    candles.forEach(c => {
-      if (c && c[0]) {
-        minutesSet.add(String(c[0]));
-      }
+  const observedMinutes = new Set();
+  Object.keys(results).forEach(key => {
+    const rows = results[key];
+    const valid = rows.filter(c => {
+      if (!Array.isArray(c) || c.length < 5) return false;
+      const timestamp = timestampMillis_(c[0]);
+      if (!Number.isFinite(timestamp) || day_(new Date(timestamp)) !== day) return false;
+      const prices = c.slice(1, 5);
+      return prices.every(p => typeof p === 'number' && Number.isFinite(p) && p > 0)
+        && c[2] >= Math.max(c[1], c[4]) && c[3] <= Math.min(c[1], c[4]) && c[3] <= c[2];
     });
+    if (!valid.length || valid.length !== rows.length) {
+      errors.push({instrument:key, error:'Missing or invalid historical minute candles'});
+    }
+    valid.forEach(c => observedMinutes.add(timestampMillis_(c[0])));
   });
-
-  const timestamps = [...minutesSet].sort();
-  console.log('Discovered ' + timestamps.length + ' 1-minute bars for ' + day);
-
-  if (!timestamps.length) {
-    console.log('No minute bars found; running EOD reconciliation for ' + day);
-    return capture_('eod', { target_day: day, catalogue: catalogue });
-  }
-
-  let savedCount = 0;
-  timestamps.forEach(stamp => {
-    const timePart = stamp.slice(11, 19).replace(/:/g, '');
-    const quotes = {};
-
-    Object.keys(results).forEach(key => {
-      const match = results[key].find(c => c[0] === stamp);
-      if (match) {
-        quotes[key] = {
-          instrument_token: key,
-          timestamp: stamp,
-          last_trade_time: stamp,
-          last_price: match[4],
-          ohlc: { open: match[1], high: match[2], low: match[3], close: match[4] },
-          volume: match[5]
-        };
-      }
-    });
-
-    const snapshot = {
-      schema: 1,
-      provider: 'Upstox',
-      day: day,
-      mode: 'snapshot',
-      retrieved_at: stamp,
-      status: 'complete',
-      records: [
-        { label: 'quotes', retrieved_at: stamp, data: quotes }
-      ],
-      errors: [],
-      pending: [],
-      catalogue: catalogue,
-      fetch_seconds: 0.05,
-      source: 'manual_historical_download'
-    };
-
-    save_(day + '_snapshot_' + timePart + '_complete', snapshot);
-    savedCount++;
-  });
-
-  const consolidated = {
-    schema: 1,
-    provider: 'Upstox',
-    day: day,
-    type: '1minute_historical_session',
-    downloaded_at: new Date().toISOString(),
-    instruments: results,
-    minutes_count: timestamps.length,
-    errors: errors
+  const status = !observedMinutes.size ? 'empty' : errors.length ? 'partial' : 'available';
+  const bundle = {
+    schema:1, provider:'Upstox', day:day, mode:'historical_candles',
+    type:'1minute_historical_session', downloaded_at:new Date().toISOString(),
+    instruments:results, minutes_count:observedMinutes.size, status:status, errors:errors
   };
-  const consolidatedId = save_(day + '_1minute_consolidated_complete', consolidated);
-
-  return {
-    day: day,
-    saved_snapshots: savedCount,
-    consolidated_file_id: consolidatedId,
-    minutes: timestamps.length,
-    errors: errors
-  };
+  // A historical OHLC interval carries no contemporaneous option book or Greeks.
+  // Keep the raw candle arrays once, with the actual time they were downloaded.
+  const fileId = observedMinutes.size ? save_(day + '_1minute_historical_' + status, bundle) : null;
+  return {day:day, status:status, saved_snapshots:0, consolidated_file_id:fileId,
+    minutes:observedMinutes.size, errors:errors};
 }
 
 
@@ -1679,11 +1641,19 @@ function captureIntegrity_(properties,stamp,day) {
 }
 
 function doGet(e) {
+  const action = e?.parameter?.action || 'latest';
+  const callback = e?.parameter?.callback || '';
+  const readAction = ['latest', 'ledger', 'forward_ledger'].includes(action);
+  if (callback && (!readAction || !/^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/.test(callback))) {
+    return ContentService.createTextOutput(JSON.stringify({error:'Invalid callback'})).setMimeType(ContentService.MimeType.JSON);
+  }
+  const respond = json => callback
+    ? ContentService.createTextOutput(callback + '(' + json + ');').setMimeType(ContentService.MimeType.JAVASCRIPT)
+    : ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
   try {
     const properties = props_();
     const requiredKey = properties.getProperty('WEBHOOK_KEY');
     const providedKey = e && e.parameter ? e.parameter.key : null;
-    const action = e && e.parameter ? e.parameter.action : null;
     const mutation = ['manual_download', 'download_muhurat', 'backfill_eod'].includes(action);
     if ((mutation && !requiredKey) || (requiredKey && providedKey !== requiredKey)) {
       return ContentService.createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
@@ -1796,30 +1766,30 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    if (action === 'forward_ledger') {
+    if (action === 'forward_ledger' || action === 'ledger') {
       if (cache) {
         const cachedLedger = cache.get('DOGET_FWD_LEDGER_JSON');
         if (cachedLedger) {
-          return ContentService.createTextOutput(cachedLedger).setMimeType(ContentService.MimeType.JSON);
+          return respond(cachedLedger);
         }
       }
       const ledgerStr = JSON.stringify(loadForwardLedger_());
       if (cache && ledgerStr.length < 95000) {
         try { cache.put('DOGET_FWD_LEDGER_JSON', ledgerStr, CONFIG.doGetCacheSeconds); } catch (e) {}
       }
-      return ContentService.createTextOutput(ledgerStr).setMimeType(ContentService.MimeType.JSON);
+      return respond(ledgerStr);
     }
 
     const fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
     const last = readJsonProperty_(properties,'LAST_SNAPSHOT',null);
     if (fileId && last && last.file_id === fileId && last.status === 'complete' && last.retrieved_at &&
         e?.parameter?.since === last.retrieved_at) {
-      return ContentService.createTextOutput(JSON.stringify({unchanged:true,retrieved_at:last.retrieved_at,
-        capture_integrity:captureIntegrity_(properties,last.retrieved_at,last.day)})).setMimeType(ContentService.MimeType.JSON);
+      return respond(JSON.stringify({unchanged:true,retrieved_at:last.retrieved_at,
+        capture_integrity:captureIntegrity_(properties,last.retrieved_at,last.day)}));
     }
     if (cache && fileId) {
       const cachedSnap = cache.get('DOGET_LATEST_SNAPSHOT_JSON_' + fileId);
-      if (cachedSnap) return ContentService.createTextOutput(cachedSnap).setMimeType(ContentService.MimeType.JSON);
+      if (cachedSnap) return respond(cachedSnap);
     }
 
     let file = null;
@@ -1843,8 +1813,7 @@ function doGet(e) {
     }
 
     if (!file) {
-      return ContentService.createTextOutput(JSON.stringify({ error: 'No snapshot files found' }))
-        .setMimeType(ContentService.MimeType.JSON);
+      return respond(JSON.stringify({ error: 'No snapshot files found' }));
     }
 
     const uncompressed = Utilities.ungzip(file.getBlob());
@@ -1866,11 +1835,9 @@ function doGet(e) {
     if (cache && fileId && file.getId() === fileId && outStr.length < 95000) {
       try { cache.put('DOGET_LATEST_SNAPSHOT_JSON_' + fileId, outStr, CONFIG.doGetCacheSeconds); } catch (e) {}
     }
-    return ContentService.createTextOutput(outStr)
-      .setMimeType(ContentService.MimeType.JSON);
+    return respond(outStr);
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ error: String(err) }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return respond(JSON.stringify({ error: safeError_(err) }));
   }
 }
 
@@ -1896,9 +1863,9 @@ function upstoxOptionCharge_(price, qty, isSell) {
   const brokerage = 20.0;
   const stt = isSell ? turnover * 0.0015 : 0.0;
   // NSE equity-options transaction charge plus IPFT effective 2026-03-01.
-  const exch = turnover * 0.0003553;
+  const exch = turnover * 0.000355299;
   const sebi = turnover * 0.000001;
-  const ipft = turnover * 0.000005;
+  const ipft = turnover * 0.000000001;
   const stamp = isSell ? 0.0 : turnover * 0.00003;
   const gst = 0.18 * (brokerage + exch + ipft);
   return brokerage + stt + exch + sebi + ipft + stamp + gst;
@@ -2080,6 +2047,7 @@ function getNseMarketStatusIST(nowOpt) {
 }
 
 function isValidForwardRecord_(rec) {
+  if (rec && (rec.integrity_status === 'UNVERIFIED_RECORD' || rec.provenance_status === 'LEGACY_UNVERIFIED')) return false;
   if (!rec || typeof rec !== 'object') return false;
   const sDate = String(rec.session_date || rec.date || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(sDate) || sDate < MIN_FORWARD_DATE) return false;
@@ -2129,6 +2097,7 @@ function cleanSlateForwardLedger_() {
   return {
     schema: 2,
     version: 'forward-test-v20.1-event-time-gated',
+    provenance_schema: 'event-quotes-v1',
     pricing_model: 'Black-76',
     inception_date: MIN_FORWARD_DATE,
     min_trigger_date: MIN_FORWARD_DATE,
@@ -2145,11 +2114,22 @@ function sanitizeForwardLedger_(raw) {
   if (!raw || typeof raw !== 'object') return base;
   base.open_positions = retainForwardRecords_(raw.open_positions, true);
   base.closed_trades = retainForwardRecords_(raw.closed_trades, false);
+  const legacy = raw.schema === 1 || String(raw.version || '').startsWith('forward-test-v19')
+    || raw.provenance_schema !== 'event-quotes-v1';
+  if (legacy) {
+    base.open_positions.concat(base.closed_trades).forEach(row => Object.assign(row, {
+      integrity_status: 'UNVERIFIED_RECORD', provenance_status: 'LEGACY_UNVERIFIED', freshness: 'STALE',
+      staleReason: 'Legacy ledger lacks verifiable entry/exit quote evidence.'
+    }));
+    base.open_positions.forEach(row => { row.manual_reconciliation_required = true; });
+  }
   base.intraday_mtm_series = Array.isArray(raw.intraday_mtm_series)
     ? raw.intraday_mtm_series.filter(pt => pt && String(pt.session_date || pt.date || MIN_FORWARD_DATE).slice(0, 10) >= MIN_FORWARD_DATE)
     : [];
+  if (legacy) base.intraday_mtm_series = base.intraday_mtm_series.map(pt =>
+    Object.assign({}, pt, {gross_mtm:null, net_mtm:null, integrity_status:'UNVERIFIED_RECORD'}));
   if (raw.updated_at) base.updated_at = raw.updated_at;
-  base.status = base.open_positions.some(pos => pos.manual_reconciliation_required)
+  base.status = base.open_positions.concat(base.closed_trades).some(pos => pos.integrity_status === 'UNVERIFIED_RECORD')
     ? 'INTEGRITY_REVIEW_REQUIRED'
     : ((base.open_positions.length || base.closed_trades.length)
       ? (raw.status || 'ACTIVE_FORWARD_TESTING')
@@ -2316,7 +2296,7 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
   if (!report || !Array.isArray(report.records)) return null;
   if (report.status !== 'complete') throw new Error('Forward test requires a complete snapshot');
   if (report.nfo_session_validated !== true) throw new Error('NFO trading session was not validated');
-  const snapDate = report.retrieved_at ? new Date(report.retrieved_at) : new Date();
+  const snapDate = new Date(report.retrieved_at || NaN);
   if (!Number.isFinite(snapDate.getTime())) throw new Error('Invalid snapshot timestamp');
   const mkt = getNseMarketStatusIST(snapDate);
   const snapshotDay = String(report.day || mkt.isoDay).slice(0, 10);
@@ -2471,6 +2451,7 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
             invalidQuote = true;
             return;
           }
+          l.entryQuoteAt = l.type === 'CE' ? node.cQuoteAt : node.pQuoteAt;
           l.entryPx = Number(px.toFixed(2));
           l.curPx = Number(px.toFixed(2));
         });
@@ -2487,7 +2468,8 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
           id: 'OPEN-' + snapshotDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + exp.replace(/-/g, '').slice(4) + '-' + sCode,
           date: snapshotDay,
           session_date: snapshotDay,
-          triggerTime: snapshotDay + 'T' + chainMkt.hmLabel + ':00+05:30',
+          triggerTime: ch.retrievedAt,
+          provenance_status: 'VALIDATED_EVENT_QUOTES',
           trigTime: chainMkt.timeIstLabel,
           markedAt: chainMkt.timeIstLabel,
           sym: sym,
@@ -2553,7 +2535,11 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
       return;
     }
 
-    legs.forEach((leg, index) => { leg.curPx = marks[index]; });
+    legs.forEach((leg, index) => {
+      leg.curPx = marks[index];
+      const node = ch.strikes[leg.strike];
+      leg.markQuoteAt = leg.type === 'CE' ? node.cQuoteAt : node.pQuoteAt;
+    });
     pos.freshness = 'FRESH';
     delete pos.staleReason;
     pos.integrity_status = 'VALIDATED_FRESH_EXECUTABLE_MARK';
@@ -2572,7 +2558,7 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
       const reason = pos.grossMtm <= slThresh
         ? 'Stop-Loss Hit (-50% MaxLoss)'
         : (pos.grossMtm >= tpThresh ? 'Profit Target Hit' : (pos.exit_pending ? '15:15 IST Auto-Close (delayed until fresh quote)' : '15:15 IST Auto-Close (fresh quote)'));
-      (pos.legs || []).forEach(l => { l.exitPx = l.curPx; });
+      (pos.legs || []).forEach(l => { l.exitPx = l.curPx; l.exitQuoteAt = l.markQuoteAt; });
       ledger.closed_trades.unshift({
         id: String(pos.id || '').replace('OPEN-', 'FWD-'),
         date: pos.date || snapshotDay,
@@ -2593,10 +2579,12 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
         lots: lots,
         ...bounds,
         maxCredit: pos.maxCredit,
-        entryIv: pos.entryIv || 16.0,
+        entryIv: pos.entryIv ?? null,
         gross: pos.grossMtm,
         charges: pos.estCharges,
         net: pos.netMtm,
+        integrity_status: pos.integrity_status,
+        provenance_status: pos.provenance_status,
         exitReason: reason
       });
     } else {
@@ -2610,7 +2598,7 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
   const sessionClosed = ledger.closed_trades.filter(trade =>
     String(trade.session_date || trade.date || '').slice(0, 10) === snapshotDay
   );
-  const marksWithheld = stillOpen.some(pos =>
+  const marksWithheld = sessionClosed.some(trade => !isValidForwardRecord_(trade)) || stillOpen.some(pos =>
     String(pos.freshness || '').toUpperCase() !== 'FRESH'
     || String(pos.integrity_status || '') === 'UNVERIFIED_RECORD'
     || Boolean(pos.manual_reconciliation_required)

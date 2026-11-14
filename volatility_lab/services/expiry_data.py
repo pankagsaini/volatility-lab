@@ -18,7 +18,8 @@ try:
 except ImportError:  # Support existing standalone Streamlit/script entrypoints.
     import market_table as base
 
-from collector_support import serialized,atomic_csv
+from collector_support import serialized,atomic_csv,atomic_json
+from volatility_lab.core.market_calendar import expiry_close
 
 from market_data import IST, MarketDataError
 
@@ -42,7 +43,7 @@ def listed_expiries(master,symbol,now):
 
     sub=master[master.name==symbol]
 
-    options={d for d in sub.loc[sub.instrument_type.isin(['CE','PE']),'expiry'] if pd.notna(d) and datetime.combine(d,time(15,40),tzinfo=IST)>now}
+    options={d for d in sub.loc[sub.instrument_type.isin(['CE','PE']),'expiry'] if pd.notna(d) and expiry_close(d)>now}
 
     monthly=sorted(options.intersection(set(sub.loc[sub.instrument_type=='FUT','expiry'])))[:3]
 
@@ -139,9 +140,7 @@ def write_snapshot(result):
 
     clean=json.loads(pd.Series(result).to_json())
 
-    path=DATA/'expiry_latest.json';tmp=DATA/'expiry_latest.tmp'
-
-    tmp.write_text(json.dumps(clean,indent=2),encoding='utf-8');tmp.replace(path)
+    atomic_json(path, clean)
 
     return clean
 
@@ -294,9 +293,9 @@ class ExpiryMonitor(base.Monitor):
                                 'expiry':str(future_contract['expiry']),'bid':future_quality['bid'],
                                 'ask':future_quality['ask'],'timestamp':future_quality['quote_timestamp'],
                             }
-                    expiry_close=datetime.combine(expiry,time(15,30),tzinfo=IST)
+                    contract_close=expiry_close(expiry)
                     valuation_dt=pd.Timestamp(valuation).to_pydatetime()
-                    years_to_expiry=(expiry_close-valuation_dt).total_seconds()/(365.0*86400.0)
+                    years_to_expiry=(contract_close-valuation_dt).total_seconds()/(365.0*86400.0)
                     parity=synthetic_future(
                         synthetic_rows,spot,rate=rate,years=years_to_expiry,dividend=dividend,
                         future_quote=validated_future,expiry=str(expiry),as_of=received,
@@ -427,9 +426,9 @@ def align_snapshot(result):
         # Ensure DTE is always populated for consistent display across radar & term structure
         if row.get('DTE') is None and exp and row.get('As of'):
             try:
-                exp_date = pd.Timestamp(exp).date()
-                asof_date = pd.Timestamp(row['As of']).date()
-                row['DTE'] = max(0.2, float((exp_date - asof_date).days))
+                asof = pd.Timestamp(row['As of'])
+                asof = asof.tz_localize(IST) if asof.tzinfo is None else asof.tz_convert(IST)
+                row['DTE'] = max(0.0, (expiry_close(exp) - asof).total_seconds() / 86400.0)
             except Exception:
                 pass
 
@@ -451,49 +450,40 @@ def align_snapshot(result):
                 except Exception:
                     pass
 
-    # Fill an older saved snapshot immediately from its own monthly quote rows.
-    # This avoids a blank weekly reference until the next broker refresh while
-    # keeping the reference inside the same calendar month.
-    monthly={(row.get('Instrument'),str(row.get('Expiry'))[:7]):row
-             for row in result.get('rows',[]) if row.get('Type')=='Monthly'}
-    for row in result.get('rows',[]):
-        reference=monthly.get((row.get('Instrument'),str(row.get('Expiry'))[:7]))
-        if row.get('Type')=='Weekly' and reference:
-            row['Month future LTP']=reference.get('Month future LTP',reference.get('Listed future'))
-            row['Future contract']=reference.get('Future contract')
-            row['Future quote time']=reference.get('Future quote time')
-            row['Future reference']='Monthly future for weekly expiry month'
-            try:
-                if np.isfinite(float(row.get('Synthetic future'))):row['Synthetic status']='Ready · monthly future reference'
-            except (TypeError,ValueError):pass
-        else:
-            row['Month future LTP']=row.get('Month future LTP',row.get('Listed future'))
-            row['Future reference']=row.get('Future reference','Same-expiry monthly future' if row.get('Type')=='Monthly' else 'Unavailable')
-            try:
-                if np.isfinite(float(row.get('Synthetic future'))):row['Synthetic status']='Ready · same-expiry monthly future'
-            except (TypeError,ValueError):pass
-
-    # Fallback: if Month future LTP is still unpopulated, check latest futures snapshots
-    fut_db = DATA / 'futures/futures.sqlite'
-    if fut_db.exists() and any(r.get('Month future LTP') is None for r in result.get('rows', [])):
+    # Recover only the exact expiry, from a contemporaneous executable quote.
+    # Other maturities retain their own stored reference and cannot cross-fill it.
+    futures_path = DATA / 'futures' / 'futures.sqlite'
+    if futures_path.exists():
+        from contextlib import closing
+        from volatility_lab.core.quote_quality import timestamp as parse_quote_time
         try:
-            import sqlite3
-            latest_futs = {}
-            with sqlite3.connect(fut_db, timeout=5) as con:
-                for sym in ('NIFTY', 'BANKNIFTY'):
-                    r_fut = con.execute('SELECT payload FROM snapshots WHERE symbol=? ORDER BY rowid DESC LIMIT 1', (sym,)).fetchone()
-                    if r_fut:
-                        d_fut = json.loads(r_fut[0])
-                        for leg in d_fut.get('legs', []):
-                            p = (leg.get('quote') or {}).get('Price')
-                            if p and np.isfinite(float(p)):
-                                latest_futs[sym] = float(p)
-                                break
-            for row in result.get('rows', []):
-                sym = row.get('Instrument')
-                if row.get('Month future LTP') is None and sym in latest_futs:
-                    row['Month future LTP'] = latest_futs[sym]
-        except Exception:
+            with closing(sqlite3.connect(futures_path.resolve().as_uri() + '?mode=ro', uri=True)) as con:
+                for row in result.get('rows', []):
+                    if row.get('Month future LTP') is not None:
+                        continue
+                    asof = parse_quote_time(row.get('As of'))
+                    stored = con.execute(
+                        'SELECT payload FROM snapshots WHERE symbol=? ORDER BY stamp DESC LIMIT 1',
+                        (row.get('Instrument'),)
+                    ).fetchone()
+                    if stored is None:
+                        continue
+                    for leg in json.loads(stored[0]).get('legs', []):
+                        quote = leg.get('quote') or {}
+                        if str(leg.get('expiry')) != str(row.get('Expiry')):
+                            continue
+                        if quote.get('Source') != 'Live midpoint' or quote.get('Status') != 'Accepted':
+                            continue
+                        quote_time = parse_quote_time(quote.get('As of'))
+                        age = (asof - quote_time).total_seconds()
+                        price = float(quote.get('Price'))
+                        if 0 <= age <= 90 and np.isfinite(price) and price > 0:
+                            row['Month future LTP'] = price
+                            row['Future quote time'] = quote_time.isoformat()
+                            row['Future contract'] = leg.get('contract')
+                            row['Future reference'] = 'Same-expiry monthly future'
+                            break
+        except (OSError, sqlite3.Error, ValueError, TypeError, KeyError):
             pass
 
     result['spread_version']='session-aligned-v2'

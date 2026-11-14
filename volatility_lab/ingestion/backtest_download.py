@@ -3,6 +3,7 @@ from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 from pathlib import Path
 from datetime import date,timedelta,datetime
+from contextlib import closing
 from urllib.parse import quote
 import gzip,json,os,sqlite3,hashlib,time,shutil
 try:
@@ -122,7 +123,11 @@ def next_jobs(c,limit=2):
  return []
 
 def run():
- c=db();pool=ThreadPoolExecutor(max_workers=2)
+ with closing(db()) as c:
+  return _run(c)
+
+def _run(c):
+ pool=ThreadPoolExecutor(max_workers=2)
  with c:c.execute('UPDATE jobs SET state="pending",attempts=0 WHERE state IN ("failed","running")')
  configfile=ROOT/'scope.json'
  if configfile.exists():scope=json.loads(configfile.read_text(encoding='utf-8'))
@@ -197,7 +202,7 @@ if __name__=='__main__':
   except OSError:raise SystemExit(0)
   try:run()
   except BaseException as exc:
-   with db() as c:status(c,'stopped' if isinstance(exc,(KeyboardInterrupt,SystemExit)) else 'paused_error',error_type=type(exc).__name__)
+   with closing(db()) as c:status(c,'stopped' if isinstance(exc,(KeyboardInterrupt,SystemExit)) else 'paused_error',error_type=type(exc).__name__)
    if isinstance(exc,(KeyboardInterrupt,SystemExit)):raise
   finally:
    lock.seek(0)

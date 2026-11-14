@@ -28,16 +28,16 @@ def has_usable_points(result):
     return False
 
 
-def smile_points(chain, strikes, spot, forward=None, years=None, rate=0.0, use_black76=False):
+def smile_points(chain, strikes, spot, forward=None, years=None, rate=None, use_black76=False, *, as_of=None, expiry=None):
     chain = chain.copy()
-    if use_black76 and ('ltp' in chain.columns or 'Mid' in chain.columns or 'price' in chain.columns):
-        t_years = float(years) if (years is not None and np.isfinite(years) and years > 0) else (7.0 / 365.0)
-        enriched = black76_chain_greeks(chain, forward=forward, spot=spot, years=t_years, rate=float(rate or 0.0))
-        if 'iv_b76' in enriched.columns and np.isfinite(enriched['iv_b76']).any():
-            chain['iv'] = np.where(np.isfinite(enriched['iv_b76']) & (enriched['iv_b76'] > 0), enriched['iv_b76'], pd.to_numeric(chain.get('iv'), errors='coerce'))
-            chain['delta'] = np.where(np.isfinite(enriched['delta_b76']), enriched['delta_b76'], pd.to_numeric(chain.get('delta'), errors='coerce'))
-            if forward is None and 'forward' in enriched.columns and len(enriched):
-                forward = float(enriched['forward'].iloc[0])
+    if use_black76:
+        enriched = black76_chain_greeks(chain, forward=forward, spot=spot, years=years, rate=rate,
+                                         as_of=as_of, expiry=expiry)
+        chain['iv'] = enriched.get('iv_b76', np.nan)
+        chain['delta'] = enriched.get('fwd_delta_b76', np.nan)
+        chain['source'] = 'Black-76 on quoted midpoint'
+        if forward is None and len(enriched):
+            forward = float(enriched['forward'].iloc[0])
 
     chain['iv'] = pd.to_numeric(chain.iv, errors='coerce').astype(float)
     chain['delta'] = pd.to_numeric(chain.delta, errors='coerce').astype(float)
@@ -62,7 +62,7 @@ def smile_points(chain, strikes, spot, forward=None, years=None, rate=0.0, use_b
                 if paired:
                     strike = min(paired, key=lambda k: (abs(k - ref_px), k))
                     contributors = valid[valid.strike == strike]
-                    if len(contributors) >= 2:
+                    if len(contributors) == 2:
                         value = float(contributors.iv.mean() * 100)
                         method = 'Black-76 parity ATM call/put IV' if use_black76 else 'Same-strike call/put average'
         sources = sorted(set(contributors.source)) if len(contributors) and 'source' in contributors.columns else []
@@ -80,20 +80,20 @@ def smile_points(chain, strikes, spot, forward=None, years=None, rate=0.0, use_b
         p, c, atm = vals[f'{delta}P'], vals[f'{delta}C'], vals['ATM']
         metrics[f'{delta} RR · put minus call'] = p - c if p is not None and c is not None else None
         metrics[f'{delta} BF · wings minus ATM'] = (p + c) / 2 - atm if all(v is not None for v in (p, c, atm)) else None
-    out = {'version': VERSION, 'points': points, 'metrics': metrics}
+    out = {'version': BLACK76_VERSION if use_black76 else VERSION, 'points': points, 'metrics': metrics}
     if forward is not None and np.isfinite(forward):
         out['forward'] = float(forward)
         out['pricing_model'] = 'Black-76' if use_black76 else 'Spot-BSM'
     return out
 
 
-def black76_smile_points(chain, strikes=None, spot=None, forward=None, years=7.0 / 365.0, rate=0.066):
+def black76_smile_points(chain, strikes=None, spot=None, forward=None, years=None, rate=None, *, as_of=None, expiry=None):
     """Compute 5-point smile using Fischer Black (1976) implied volatilities and discounted deltas off Forward F."""
-    return smile_points(chain, strikes or [], spot, forward=forward, years=years, rate=rate, use_black76=True)
+    return smile_points(chain, strikes or [], spot, forward=forward, years=years, rate=rate, use_black76=True, as_of=as_of, expiry=expiry)
 
 
 def save_smile(path, symbol, expiry, config, as_of, result, capture_source=None):
-    if capture_source != 'Google Drive':
+    if capture_source != 'Google Drive' or result.get('version') != VERSION:
         return
     path = Path(path)
     with closing(sqlite3.connect(path, timeout=30)) as con, con:

@@ -14,6 +14,7 @@ except ImportError:
     from zoneinfo import ZoneInfo
     IST = ZoneInfo('Asia/Kolkata')
 
+from volatility_lab.core.market_calendar import expiry_close
 from volatility_lab.pricing.pricing_policy import number, timestamp
 
 SURFACE_VERSION = 'vol-surface-3d-v4-broker-iv'
@@ -33,7 +34,7 @@ def load_expiry_chains(symbol: str, data_dir: Path, today: Optional[date] = None
             spot = number(obj.get('spot'))
             if observed is None or spot is None or spot <= 0 or not isinstance(obj.get('broker_option_chain'), list):
                 continue
-            close = datetime.combine(expiry, datetime.min.time(), tzinfo=IST).replace(hour=15,minute=30)
+            close = expiry_close(expiry)
             dte = (close - observed).total_seconds() / 86400
             if dte < 0 or observed.astimezone(IST).date() > today:
                 continue
@@ -77,7 +78,8 @@ def extract_surface_mesh(
     if not expiries_data:
         return np.array([]), np.array([]), np.empty((0, 0)), [], {}
 
-    filtered = [e for e in expiries_data if include_zero_dte or e['dte'] >= 1.0]
+    filtered = [e for e in expiries_data if np.isfinite(e['dte']) and e['dte'] >= 0
+                and (include_zero_dte or e['dte'] >= 1.0)]
     if not filtered:
         return np.array([]), np.array([]), np.empty((0, 0)), [], {}
 
@@ -141,7 +143,10 @@ def extract_surface_mesh(
     front_atm_iv = front['atm_iv']
     back_atm_iv = back['atm_iv']
     term_slope = float('nan')
-    if len(curves) == len(filtered) and len(curves) >= 2 and all(c['atm_iv'] is not None for c in curves):
+    capture_times = {timestamp(c['as_of']) for c in curves}
+    if (len(curves) == len(filtered) and len(curves) >= 2
+            and len(capture_times) == 1 and None not in capture_times
+            and all(c['atm_iv'] is not None for c in curves)):
         term_slope = back_atm_iv - front_atm_iv
     left, right = np.interp([ref_spot * .96, ref_spot * 1.04], front['strikes'], front['ivs'],
                             left=np.nan, right=np.nan)

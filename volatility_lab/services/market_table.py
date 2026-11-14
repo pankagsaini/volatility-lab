@@ -192,31 +192,16 @@ class Monitor:
         self.histories[cache_key] = view
         return view
 
-    def rv(self, frame: pd.DataFrame, symbol: str, now: datetime, expiry: object, method: str) -> float:
-        """Forecast annualised realised volatility to expiry without elapsed-session variance."""
-        dates = pd.bdate_range(frame.Date.iloc[-1] + pd.Timedelta(days=1), pd.Timestamp(expiry))
-        if not len(dates) or len(dates) > 245:
-            raise MarketDataError('Unsupported forecast tenor.')
-        key = (symbol, frame.Date.iloc[-1].isoformat(), len(frame), method, len(dates))
-        if key not in self.paths:
-            if method == 'GARCH':
-                _, _, path, _ = fit_garch(frame, (len(dates),), min_observations=200)
-                variances = (path['Daily conditional vol %'].to_numpy() / 100.0) ** 2 / 245.0
-            else:
-                returns = np.log(frame.Close / frame.Close.shift()).dropna()
-                variances = np.full(len(dates), returns.tail(30).var())
-            self.paths[key] = variances
-
-        weights = np.array([0.0 if day.date() < now.date() else 1.0 for day in dates])
-        for index, day in enumerate(dates):
-            if day.date() == now.date():
-                opening = datetime.combine(now.date(), time(9, 15), tzinfo=IST)
-                closing = datetime.combine(now.date(), time(15, 40), tzinfo=IST)
-                weights[index] = np.clip((closing - now).total_seconds() / (closing - opening).total_seconds(), 0.0, 1.0)
-        years = (datetime.combine(pd.Timestamp(expiry).date(), time(15, 40), tzinfo=IST) - now).total_seconds() / (365.0 * 86400.0)
-        if years <= 0:
-            raise MarketDataError('Expiry must be after the valuation timestamp.')
-        return float(np.sqrt(np.sum(self.paths[key] * weights) / years) * 100.0)
+    def rv(self, frame, symbol, now, expiry, method):
+        """Return the annualized last-close forecast for the selected estimator."""
+        from expiry_forecast import term_structure_forecast
+        if method not in ('GARCH', 'EWMA'):
+            raise MarketDataError('Unknown expiry forecast method.')
+        try:
+            result = term_structure_forecast(frame, expiry, now)
+        except ValueError as exc:
+            raise MarketDataError(str(exc)) from exc
+        return float(result[f'{method} expiry RV'])
 
 
 def atm_values(
@@ -225,64 +210,39 @@ def atm_values(
     spot: float,
     forward: float | None = None,
     years: float | None = None,
-    rate: float = 0.066,
-    use_black76: bool = True,
+    rate: float | None = None,
+    use_black76: bool = False,
+    *, as_of=None, expiry=None,
 ) -> tuple[float, float, float]:
-    """Return (call_iv_pct, put_iv_pct, atm_iv_pct) at ATM strike, unifying Call/Put IV under Black-76 when LTPs are available."""
-    if chain is None or chain.empty or spot is None or not np.isfinite(float(spot)) or float(spot) <= 0:
-        return (np.nan, np.nan, np.nan)
-    df = chain.copy()
-    strike_col = 'strike' if 'strike' in df.columns else ('Strike' if 'Strike' in df.columns else 'strike_price')
-    type_col = 'option_type' if 'option_type' in df.columns else ('Type' if 'Type' in df.columns else 'Kind')
-    df[strike_col] = pd.to_numeric(df[strike_col], errors='coerce')
-    df['iv'] = pd.to_numeric(df['iv'], errors='coerce')
-    valid = df[np.isfinite(df[strike_col]) & df[type_col].isin(['CE', 'PE'])].copy()
-    if valid.empty:
-        return (np.nan, np.nan, np.nan)
-
-    pairs = valid.groupby(strike_col)[type_col].agg(set)
-    paired = [float(k) for k, kinds in pairs.items() if kinds == {'CE', 'PE'}]
-    listed = sorted(float(x) for x in strikes) if strikes is not None and len(strikes) else sorted(valid[strike_col].unique())
-    candidates = paired if use_black76 and paired else listed
-    if not candidates:
-        return (np.nan, np.nan, np.nan)
-
-    ref_px = float(forward) if (forward is not None and np.isfinite(float(forward)) and float(forward) > 0) else float(spot)
-    atm_k = min(candidates, key=lambda k: (abs(k - ref_px), k))
-    ce_sub = valid[(valid[strike_col] == atm_k) & (valid[type_col] == 'CE')]
-    pe_sub = valid[(valid[strike_col] == atm_k) & (valid[type_col] == 'PE')]
-    if not use_black76:
-        # chain_from_response stores broker percentages as fractions, including IV above 150%.
-        call = float(ce_sub['iv'].iloc[0]) * 100 if len(ce_sub) == 1 else np.nan
-        put = float(pe_sub['iv'].iloc[0]) * 100 if len(pe_sub) == 1 else np.nan
-        call = call if np.isfinite(call) and call > 0 else np.nan
-        put = put if np.isfinite(put) and put > 0 else np.nan
-        return call, put, (call + put) / 2
-    if ce_sub.empty or pe_sub.empty:
-        return (np.nan, np.nan, np.nan)
-
-    raw_c_iv = float(ce_sub['iv'].iloc[0])
-    raw_p_iv = float(pe_sub['iv'].iloc[0])
-    c_iv_pct = raw_c_iv * 100.0 if (np.isfinite(raw_c_iv) and 0 < raw_c_iv <= 1.5) else raw_c_iv
-    p_iv_pct = raw_p_iv * 100.0 if (np.isfinite(raw_p_iv) and 0 < raw_p_iv <= 1.5) else raw_p_iv
-
-    if use_black76 and ('ltp' in valid.columns or 'Mid' in valid.columns):
-        px_col = 'ltp' if 'ltp' in valid.columns else 'Mid'
-        c_px = float(pd.to_numeric(ce_sub[px_col], errors='coerce').iloc[0])
-        p_px = float(pd.to_numeric(pe_sub[px_col], errors='coerce').iloc[0])
-        t_years = float(years) if (years is not None and np.isfinite(float(years)) and float(years) > 0) else (8.0 / 365.0)
-        if np.isfinite(c_px) and c_px > 0 and np.isfinite(p_px) and p_px > 0:
-            fwd = float(forward) if (forward is not None and np.isfinite(float(forward)) and float(forward) > 0) else parity_implied_forward(atm_k, c_px, p_px, t_years, rate)
-            b76_c = solve_black76_iv(c_px, fwd, atm_k, t_years, rate, 'CE')
-            b76_p = solve_black76_iv(p_px, fwd, atm_k, t_years, rate, 'PE')
-            if np.isfinite(b76_c) and np.isfinite(b76_p) and b76_c > 0 and b76_p > 0:
-                c_iv_pct = float(b76_c * 100.0)
-                p_iv_pct = float(b76_p * 100.0)
-
-    if not (np.isfinite(c_iv_pct) and np.isfinite(p_iv_pct) and c_iv_pct > 0 and p_iv_pct > 0):
-        return (np.nan, np.nan, np.nan)
-    atm_iv_pct = 0.5 * (c_iv_pct + p_iv_pct)
-    return (float(c_iv_pct), float(p_iv_pct), float(atm_iv_pct))
+    """Return ATM IVs in percent. Model IV requires contemporaneous option books."""
+    from option_math import black76_chain_greeks
+    missing = (np.nan, np.nan, np.nan)
+    if chain is None or chain.empty or not np.isfinite(float(spot)) or spot <= 0:
+        return missing
+    df = chain.rename(columns={'Strike':'strike', 'strike_price':'strike', 'Type':'option_type', 'Kind':'option_type'}).copy()
+    if not {'strike', 'option_type'}.issubset(df):
+        return missing
+    df['strike'] = pd.to_numeric(df['strike'], errors='coerce')
+    candidates = pd.to_numeric(pd.Series(strikes if strikes is not None and len(strikes) else df['strike']), errors='coerce')
+    candidates = candidates[np.isfinite(candidates) & (candidates > 0)]
+    if candidates.empty:
+        return missing
+    ref = forward if forward is not None and np.isfinite(forward) and forward > 0 else spot
+    atm = min(candidates, key=lambda k: (abs(k - ref), k))
+    if use_black76:
+        if years is None or rate is None:
+            return missing
+        df = black76_chain_greeks(df, spot=spot, forward=forward, years=years, rate=rate, as_of=as_of, expiry=expiry)
+        iv_column = 'iv_b76'
+    else:
+        iv_column = 'iv'  # normalized broker decimals, including values over 100%
+    if iv_column not in df:
+        return missing
+    def leg(kind):
+        values = pd.to_numeric(df.loc[(df.strike == atm) & (df.option_type == kind), iv_column], errors='coerce')
+        return float(values.iloc[0]) * 100 if len(values) == 1 and np.isfinite(values.iloc[0]) and values.iloc[0] > 0 else np.nan
+    call, put = leg('CE'), leg('PE')
+    return call, put, (call + put) / 2
 
 
 def aligned_spread(iv: float, as_of: Any, source: str, frame: pd.DataFrame | None = None) -> dict[str, Any]:
@@ -304,19 +264,18 @@ def aligned_spread(iv: float, as_of: Any, source: str, frame: pd.DataFrame | Non
             'RV date': None,
             'RV status': 'Insufficient daily candles',
         }
+    from expiry_forecast import completed_cutoff
     try:
         stamp = pd.Timestamp(as_of)
-        if stamp.tzinfo is not None:
-            stamp = stamp.tz_convert(IST)
+        if stamp.tzinfo is None:
+            raise ValueError('A timezone-aware valuation is required.')
+        stamp = stamp.tz_convert(IST)
         quote_day = stamp.tz_localize(None).normalize()
-        is_closed = (stamp.hour * 60 + stamp.minute) >= (15 * 60 + 30)
-    except Exception:
-        quote_day = hv_df['Date'].max()
-        is_closed = True
-
-    eligible = hv_df[hv_df['Date'] <= (quote_day if is_closed else (quote_day - pd.Timedelta(days=1)))].dropna(subset=['Historical vol 30D'])
-    if eligible.empty:
-        eligible = hv_df.dropna(subset=['Historical vol 30D'])
+        cutoff = pd.Timestamp(completed_cutoff(stamp))
+    except (TypeError, ValueError, OverflowError):
+        return {'HV10': np.nan, 'HV30': np.nan, 'IV-RV Spread': np.nan,
+                'RV date': None, 'RV status': 'Valuation time unavailable'}
+    eligible = hv_df[hv_df['Date'] <= cutoff].dropna(subset=['Historical vol 10D'])
     if eligible.empty:
         return {
             'HV10': np.nan,

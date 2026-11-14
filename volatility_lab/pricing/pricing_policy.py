@@ -34,12 +34,20 @@ def fresh(value, as_of, max_age=120):
 
 
 def book(quote, as_of, max_age=120):
-    quote = quote or {}
+    if not isinstance(quote, dict):
+        return None
     stamp = quote.get('quote_timestamp') or quote.get('timestamp')
     if not fresh(stamp, as_of, max_age):
         return None
     depth = quote.get('depth') or {}
-    buy, sell = (depth.get('buy') or [{}])[0], (depth.get('sell') or [{}])[0]
+    if not isinstance(depth, dict):
+        return None
+    bids, asks = depth.get('buy') or [{}], depth.get('sell') or [{}]
+    if not isinstance(bids, list) or not isinstance(asks, list):
+        return None
+    buy, sell = bids[0], asks[0]
+    if not isinstance(buy, dict) or not isinstance(sell, dict):
+        return None
     bid = number(buy.get('price', quote.get('bid_price', quote.get('bid'))))
     ask = number(sell.get('price', quote.get('ask_price', quote.get('ask'))))
     if bid is None or ask is None or bid <= 0 or ask < bid:
@@ -73,6 +81,7 @@ def recorded_inputs(payload, symbol, as_of):
 
 def select_model(chain_rows, *, spot, expiry, as_of, spot_timestamp, years, rate, dividend,
                  future_quote=None, max_quote_age_seconds=120):
+    from volatility_lab.pricing.option_math import parity_implied_forward, forward_from_spot
     result = {'model': None, 'source': 'unavailable', 'forward': None, 'synthetic_forward': None,
               'basis': None, 'confidence': 'UNAVAILABLE', 'is_synthetic': False,
               'rate': number(rate), 'dividend': number(dividend), 'spread_percent': None,
@@ -96,7 +105,7 @@ def select_model(chain_rows, *, spot, expiry, as_of, spot_timestamp, years, rate
             spread = result['spread_percent'] = max(call['spread'], put['spread'])
             paired = abs((call['timestamp']-put['timestamp']).total_seconds()) <= 5
             if spread < 3 and paired:
-                forward = strike + math.exp(result['rate']*years)*(call['mid']-put['mid'])
+                forward = parity_implied_forward(strike, call['mid'], put['mid'], years, result['rate'])
                 if math.isfinite(forward) and forward > 0:
                     result['synthetic_forward'] = forward
     future = book(future_quote, as_of, max_quote_age_seconds)
@@ -108,7 +117,10 @@ def select_model(chain_rows, *, spot, expiry, as_of, spot_timestamp, years, rate
                       confidence='VALIDATED_OPTION_BOOKS', is_synthetic=True,
                       reason='Matched ATM call/put spreads below 3%', expiry=str(expiry)[:10])
     elif spot_ok and result['dividend'] is not None:
-        forward = spot*math.exp((result['rate']-result['dividend'])*years)
+        forward = forward_from_spot(spot, years, result['rate'], result['dividend'])
+        if not math.isfinite(forward):
+            result['reason'] = 'Pricing inputs produce an invalid forward'
+            return result
         result.update(model='bsm', source='cost_of_carry_forward', forward=forward, confidence='THEORETICAL',
                       reason='No eligible matched future or tight synthetic forward')
     else:

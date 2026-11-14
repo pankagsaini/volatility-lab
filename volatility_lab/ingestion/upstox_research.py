@@ -1,4 +1,5 @@
 """Source-labelled research views from verified Upstox candle archives."""
+from contextlib import closing
 from datetime import datetime
 import sqlite3
 import numpy as np
@@ -10,7 +11,7 @@ from upstox_data import INDICES
 @st.cache_data(ttl=60,show_spinner=False)
 def minute_data(symbol):
     if not (ROOT/'research.sqlite').exists():return pd.DataFrame()
-    with connect() as con:
+    with closing(connect()) as con, con:
         frame=pd.read_sql_query("SELECT stamp,open,high,low,close,volume FROM candles WHERE instrument=? AND interval='1minute' ORDER BY stamp",con,params=(INDICES[symbol],))
     if not frame.empty:frame['stamp']=pd.to_datetime(frame.stamp,utc=True).dt.tz_convert('Asia/Kolkata')
     return frame
@@ -49,7 +50,7 @@ def render_coverage():
     st.caption('Archive: '+status.get('status','not started')+' · '+status.get('stage',''))
     if status.get('error'):st.warning(status['error'])
     if not (ROOT/'research.sqlite').exists():return
-    with connect() as con:
+    with closing(connect()) as con, con:
         frame=pd.read_sql_query("SELECT COALESCE(c.symbol,a.instrument) AS Instrument,COALESCE(c.kind,'INDEX') AS Type,a.interval AS Interval,COUNT(*) AS Candles,MIN(a.stamp) AS First,MAX(a.stamp) AS Last FROM candles a LEFT JOIN contracts c ON c.instrument=a.instrument GROUP BY 1,2,3",con)
     st.dataframe(frame,hide_index=True,width='stretch')
     st.caption('Historical option OHLC contains no broker IV history. This view keeps those prices separate; IV is collected from Upstox snapshots through Google Cloud.')
@@ -58,7 +59,7 @@ def render_coverage():
 def futures_minute_pair(symbol,front,back):
     from futures_data import pair_values
     if not (ROOT/'research.sqlite').exists():return pd.DataFrame()
-    with connect() as con:
+    with closing(connect()) as con, con:
         raw=pd.read_sql_query("SELECT a.stamp,a.close,a.volume,c.expiry FROM candles a JOIN contracts c ON c.instrument=a.instrument WHERE c.symbol=? AND c.kind='FUT' AND a.interval='1minute' AND c.expiry IN (?,?) ORDER BY a.stamp",con,params=(symbol,str(front),str(back)))
     if raw.empty:return pd.DataFrame()
     raw=raw[raw.volume>0]

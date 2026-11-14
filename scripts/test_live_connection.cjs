@@ -35,7 +35,10 @@ for (const name of ['normPdf', 'normCdf', 'computeBlack76ParityForward', 'black7
 web.pricingInputs = {schema:1,rate:{model_rate:.066,source:'https://www.rbi.org.in/',sha256:'fixture',checked_at:new Date(now).toISOString()},
   dividends:Object.fromEntries(['NIFTY','BANKNIFTY'].map((s,i)=>[s,{model_yield:.0142,as_of:'2026-10-30',sha256:'fixture',source:'https://www.niftyindices.com/Factsheet/'+(i?'ind_nifty_bank.pdf':'ind_nifty50.pdf')}]))};
 // Compile every inline script, including the large generated data section.
-for (const [, script] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) new vm.Script(script);
+for (const [, attributes, script] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
+  if (/application\/json/.test(attributes)) JSON.parse(script);
+  else new vm.Script(script);
+}
 assert.equal(html, fs.readFileSync(path.join(root, 'docs/index.html'), 'utf8'));
 const webAppUrl = html.match(/var CLOUD_EXEC_URL = '([^']+)'/)[1];
 const syncConfig = JSON.parse(fs.readFileSync(path.join(root,'volatility_lab/cloud/apps_script/sync_config.json'),'utf8'));
