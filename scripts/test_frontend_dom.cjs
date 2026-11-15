@@ -33,6 +33,13 @@ const server = http.createServer((request,response) => {
     await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
     await page.waitForFunction(()=>window._vlDeskInitialized && window.Chart);
     assert((await page.locator('#kpiSpot').textContent()).includes('25,116'));
+    assert.equal(await page.locator('#shareDesk').count(),0);
+    assert.equal(await page.locator('#syncDesk').getAttribute('aria-label'),'Refresh market data');
+    assert.equal(await page.locator('#kpiHv10Sub').count(),0);
+    assert(!/Black-76|Broker/.test(await page.locator('#kpiIvRankSub').textContent()));
+    assert(!/IV below|IV above/.test(await page.locator('#kpiGarchGapSub').textContent()));
+    assert(await page.evaluate(()=>Chart.getChart('regimeMainCanvas').data.datasets.every(ds=>!ds.fill && !ds.label.includes('Estimated'))));
+
     for (let cycle=0;cycle<2;cycle++) {
       for (const symbol of ['BANKNIFTY','NIFTY']) {
         await page.locator('[data-sym="'+symbol+'"]').click();
@@ -50,6 +57,7 @@ const server = http.createServer((request,response) => {
     assert.match(await page.locator('#tradeIdTableBody').textContent(),/No executable/);
     await page.locator('[data-tab="term"]').click();
     assert.equal(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets.length),3);
+    assert.equal(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets[0].pointValueLabels),'iv');
     const displayedRisk = await page.locator('#kpiHvGarch').textContent();
     const firstTerm = await page.locator('#termMainTableBody tr').first().locator('td').allTextContents();
     const expectedSpread = Number.parseFloat(firstTerm[7]) - Number.parseFloat(displayedRisk.split('/')[1]);
