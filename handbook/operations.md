@@ -4,7 +4,7 @@ Run `python -m volatility_lab --health` for local JSON diagnostics. Exit 0 means
 
 | Condition | Action |
 | --- | --- |
-| New workstation reports missing data | Start the desk once to initialize dated reference files. Select an existing archive with `VOL_LAB_ARCHIVE_DIR` to import recorded captures. |
+| New workstation reports missing data | Run `python -c "from volatility_lab.storage.references import initialize_references; from volatility_lab.runtime.settings import data_dir; initialize_references(data_dir())"` to initialize dated reference files. Select an existing archive with `VOL_LAB_ARCHIVE_DIR` to import recorded captures. |
 | Earlier capture gap | Keep the missing interval blank. Check that subsequent complete snapshots arrive and the broker timestamps advance. |
 | Repeated failed reads | Check broker authentication and upstream availability. Transient failures are retried up to three times. After three failed read operations the source pauses for 60 seconds before a probe. Long Retry-After intervals are respected. |
 | Partial archive sync | Inspect the latest sync status and confirm Drive has finished syncing. Retry with the original source archive. |
@@ -22,7 +22,7 @@ Run `python scripts/fetch_market_data.py --status` to inspect. Run `--seed` expl
 
 ## Configuration and credentials
 
-The supported variables and defaults are in [.env.example](../.env.example). Export variables or use `VOL_LAB_ENV_FILE`. An optional analytics token enables broker reads. On Windows, the local credential store uses DPAPI. On other systems use environment or Streamlit secrets. `VOL_LAB_OFFLINE=true` disables direct broker and pricing refreshes and the desk's background cloud sync. Health checks make no network requests.
+The supported variables and defaults are in [.env.example](../.env.example). Export variables or use `VOL_LAB_ENV_FILE`. An optional analytics token enables broker reads. On Windows, the local credential store uses DPAPI. On other systems use environment variables. `VOL_LAB_OFFLINE=true` disables direct broker and pricing refreshes. Health checks make no network requests.
 
 ## Reproducible validation
 

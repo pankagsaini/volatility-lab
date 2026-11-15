@@ -15,7 +15,7 @@ import pandas as pd
 
 try:
     from . import market_table as base
-except ImportError:  # Support existing standalone Streamlit/script entrypoints.
+except ImportError:  # Support existing standalone script entrypoints.
     import market_table as base
 
 from collector_support import serialized,atomic_csv,atomic_json
@@ -489,4 +489,3 @@ def align_snapshot(result):
     result['spread_version']='session-aligned-v2'
 
     return result
-

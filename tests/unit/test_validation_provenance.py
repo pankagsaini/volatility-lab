@@ -9,9 +9,9 @@ from volatility_lab.research import run_model_validation as validation
 
 
 def test_validation_receipt_hashes_implementation_and_actual_config(tmp_path, monkeypatch):
-    from volatility_lab.ui import monitor_ui
+    from volatility_lab.services import price_history
     monkeypatch.setattr(validation, 'runtime_data_dir', lambda: tmp_path)
-    monkeypatch.setattr(monitor_ui, 'full_price_history', lambda symbol: pd.DataFrame({
+    monkeypatch.setattr(price_history, 'full_price_history', lambda symbol: pd.DataFrame({
         'Date': pd.date_range('2025-11-11', periods=2), 'Close': [100., 101.]}))
     monkeypatch.setattr(validation, 'walk_forward', lambda *args, **kwargs: pd.DataFrame({
         'origin': ['2025-11-12'], 'matured': [False], 'status': ['ok']}))

@@ -4,7 +4,7 @@
 
 NIFTY and BANKNIFTY options research, broker-data monitoring and historical/paper strategy evaluation.
 
-The public website is **[volatilitylab.in](https://volatilitylab.in)**: a static GitHub Pages application backed by read-only Apps Script snapshots. The optional Streamlit desk uses the Python research package; it is not the website's server.
+The public website is **[volatilitylab.in](https://volatilitylab.in)**: a static GitHub Pages application backed by read-only Apps Script snapshots. The Python package supplies research, data collection and an optional HTTP API.
 
 ## Local development
 
@@ -15,10 +15,10 @@ python -m venv .venv
 # Activate .venv using your shell's activation command.
 python -m pip install uv==0.13.8
 uv sync --locked --extra dev
-python -m volatility_lab
+python -m volatility_lab --health
 ```
 
-The desk binds to `127.0.0.1:8501`. Use `--port 8502` to change the port or explicitly add `--lan` for other devices on your network. For Streamlit Community Cloud, use **`streamlit_app.py`**. Older launchers remain compatibility wrappers around one bootstrap.
+Preview the website with `python -m http.server 8000 --directory docs`. Open `http://localhost:8000`. The health command inspects local research data.
 
 Do not commit credentials. See [configuration and deployment](handbook/deployment.md) before connecting a broker.
 

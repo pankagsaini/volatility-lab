@@ -8,7 +8,7 @@ import pandas as pd
 from market_data import IST, history_cutoff, MarketDataError
 try:
     from .market_table import Monitor
-except ImportError:  # Support existing standalone Streamlit/script entrypoints.
+except ImportError:  # Support existing standalone script entrypoints.
     from market_table import Monitor
 from market_calendar import HOLIDAYS,SPECIAL_SESSIONS,last_trading_day_on_or_before
 from volatility_lab.core.market_calendar import CalendarHorizonError, session_window

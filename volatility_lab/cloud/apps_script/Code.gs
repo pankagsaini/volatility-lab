@@ -8,7 +8,7 @@
  * 1. Uses effective-dated NSE equity derivatives trading hours and special sessions.
  * 2. Skips capture/status writes outside active windows; bounded scheduler state
  *    records trigger runtime for the free-tier execution quota.
- * 3. 55-Second CacheService Layer on doGet(e) — serves frequent web/Streamlit
+ * 3. 55-Second CacheService Layer on doGet(e) — serves frequent website
  *    polls from in-memory CacheService without repeated Drive/Gzip reads.
  * 4. 30-Day Cap on COMPLETED_EOD_DAYS (capCompletedEodDays_(map, 30)) — prevents
  *    ScriptProperties 9 KB per-key / 500 KB total storage exhaustion.
@@ -1537,7 +1537,7 @@ function auditStatus() {
 }
 
 /**
- * Public Web API endpoint for Streamlit Cloud & volatilitylab.in.
+ * Public Web API endpoint for volatilitylab.in.
  * Caches responses in CacheService for 55 seconds to eliminate redundant Drive/Gzip reads.
  */
 function manualDownloadSession(targetDay) {

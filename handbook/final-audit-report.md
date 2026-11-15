@@ -1,5 +1,7 @@
 # Final Audit & Production Lock Report
 
+> Streamlit was subsequently retired at the owner’s request. Its UI and startup references below describe the historical audit baseline.
+
 14 November 2026 · baseline `cd7a9986eebc4a03cde5cd1550e1f70b768fca33` · local branch `codex/final-systems-audit`
 
 The audit corrected confirmed pricing, provenance, collector, API and presentation defects in place. **214 Python tests passed with warnings treated as errors.** All five JavaScript/browser checks, Ruff, wheel build and an installed-wheel smoke test passed. At report issuance, the changes were local and uncommitted. Publication and subsequent Python 3.13 database-cleanup fixes are tracked in [PR #15](https://github.com/pankagsaini/volatility-lab/pull/15); Apps Script deployment remains a separate operation.

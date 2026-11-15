@@ -18,7 +18,7 @@ def predict(training,config):
     return result
 
 def run(symbol,years=None):
-    from monitor_ui import full_price_history
+    from volatility_lab.services.price_history import full_price_history
     from collector_support import atomic_json
     root=PACKAGE_ROOT
     frame=full_price_history(symbol)

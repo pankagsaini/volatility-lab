@@ -20,15 +20,6 @@ import pandas as pd
 # Never replace an installed package: doing so leaks a partial module into later
 # unittest discovery imports.
 try:
-    import streamlit  # noqa: F401
-except ImportError:
-    streamlit_stub = SimpleNamespace(
-        fragment=lambda *a, **kw: (lambda fn: fn),
-        session_state={},
-    )
-    sys.modules["streamlit"] = streamlit_stub
-
-try:
     import plotly  # noqa: F401
     import plotly.graph_objects  # noqa: F401
     import plotly.subplots  # noqa: F401
@@ -302,7 +293,7 @@ class TestTrack3BacktestEngines(unittest.TestCase):
 
 
 class TestTrack4UIAndCloudCaching(unittest.TestCase):
-    """Track 4: UI/UX, Streamlit Cloud IST Refresh Policy & Background Refresh tests."""
+    """Track 4: UI/UX, IST Refresh Policy & Background Refresh tests."""
 
     def test_refresh_policy_utc_to_ist_normalization(self):
         # 04:30 UTC is 10:00 IST (inside 09:15-15:40 IST live market session!)
@@ -383,40 +374,12 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             self.assertEqual(rows[0]["Event"], "RBI MPC")
             cache.close()
 
-    def test_ui_theme_figure_styling_and_session_badge(self):
-        import importlib.util
-        ui_p = Path(__file__).resolve().parents[2] / "ui_theme.py"
-        if not ui_p.exists():
-            ui_p = (Path(__file__).resolve().parents[2] / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parents[2] / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parents[2] / "Volatility Lab" / "ui_theme.py")
-        spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
-        ui_theme = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(ui_theme)
-        badge_live = ui_theme.market_session_badge_html(datetime(2026, 10, 16, 10, 30, tzinfo=ZoneInfo("Asia/Kolkata")))
-        self.assertIn("NSE LIVE", badge_live)
-        badge_closed = ui_theme.market_session_badge_html(datetime(2026, 10, 18, 12, 0, tzinfo=ZoneInfo("Asia/Kolkata")))
-        self.assertIn("NSE CLOSED", badge_closed)
-
-        called = {}
-        class DummyFig:
-            layout = SimpleNamespace(margin=SimpleNamespace(l=10, r=10, t=20, b=15))
-            data = []
-            def update_layout(self, **kw):
-                called["layout"] = kw
-            def update_xaxes(self, **kw):
-                called["xaxes"] = kw
-            def update_yaxes(self, **kw):
-                called["yaxes"] = kw
-        fig = DummyFig()
-        ui_theme.style_plotly_figure(fig)
-        self.assertIn("layout", called)
-        self.assertGreaterEqual(called["layout"]["margin"]["t"], 38)
-        self.assertEqual(called["xaxes"]["griddash"], "dot")
 
     def test_requirements_txt_valid_pypi_specifiers(self):
         req_path = Path(__file__).resolve().parents[2] / "requirements.txt"
         if req_path.exists():
             req_text = req_path.read_text(encoding="utf-8")
-            self.assertNotIn("streamlit==1.64.0", req_text)
+            self.assertNotIn("streamlit", req_text.lower())
             self.assertNotIn("plotly==7.1.0", req_text)
             self.assertNotIn("pypdf==6.20.1", req_text)
 
@@ -426,7 +389,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
     def test_v4_vectorized_intraday_greeks_and_garch_horizon_cache(self):
         from types import SimpleNamespace
         missing = object()
-        patched_names = ("plotly", "plotly.graph_objects", "streamlit", "trade_review_ui", "market_data")
+        patched_names = ("plotly", "plotly.graph_objects", "market_data")
         original_modules = {name: sys.modules.get(name, missing) for name in patched_names}
 
         def restore_modules():
@@ -439,13 +402,6 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
         self.addCleanup(restore_modules)
         sys.modules["plotly"] = SimpleNamespace(graph_objects=SimpleNamespace(Figure=object, Scatter=object))
         sys.modules["plotly.graph_objects"] = SimpleNamespace(Figure=object, Scatter=object)
-        sys.modules["streamlit"] = SimpleNamespace(
-            cache_data=lambda *a, **k: (lambda f: f),
-            cache_resource=lambda *a, **k: (lambda f: f),
-            fragment=lambda *a, **k: (lambda f: f),
-            session_state={},
-        )
-        sys.modules["trade_review_ui"] = SimpleNamespace(table=lambda *a, **k: None)
         sys.modules.setdefault("market_data", SimpleNamespace(IST=ZoneInfo("Asia/Kolkata"), MarketDataError=RuntimeError, history_cutoff=lambda *a: None))
         import restored_lab as rl
         import expiry_forecast as ef
@@ -479,7 +435,7 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
                 self.assertIn("kind", leg)
             info = sb.scenario_preset(scen_name)
             self.assertTrue(bool(info["hypothesis"]))
-            self.assertTrue(bool(info["streamlit_triggers"]))
+            self.assertTrue(bool(info["signal_description"]))
             self.assertTrue(sb.validate({
                 "name": scen_name,
                 "symbol": "NIFTY",
@@ -492,22 +448,6 @@ class TestTrack5SecondaryModulesAndClassicModernUI(unittest.TestCase):
             }))
 
 
-    def test_v6_any_device_network_binding_and_responsive_theme(self):
-        cfg_path = Path(__file__).resolve().parents[2] / ".streamlit" / "config.toml"
-        if cfg_path.exists():
-            cfg_txt = cfg_path.read_text(encoding="utf-8")
-            self.assertIn('address = "0.0.0.0"', cfg_txt)
-            self.assertIn("headless = true", cfg_txt)
-        import importlib.util
-        ui_p = Path(__file__).resolve().parents[2] / "ui_theme.py"
-        if not ui_p.exists():
-            ui_p = (Path(__file__).resolve().parents[2] / "volatility_lab" / "ui_theme.py") if (Path(__file__).resolve().parents[2] / "volatility_lab" / "ui_theme.py").exists() else (Path(__file__).resolve().parents[2] / "Volatility Lab" / "ui_theme.py")
-        spec = importlib.util.spec_from_file_location("ui_theme", ui_p)
-        ui_theme = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(ui_theme)
-        self.assertTrue(hasattr(ui_theme, "get_lan_ip"))
-        self.assertTrue(hasattr(ui_theme, "render_any_device_access_popover"))
-        self.assertIn("@media (max-width: 768px)", ui_theme.CLASSIC_MODERN_CSS)
 
 
     def test_v7_end_to_end_backtest_with_monitor_sqlite_cloud_fallback_and_header_actions(self):
@@ -999,13 +939,11 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
         """Verify repository structure and the permitted Workspace 3 markup range."""
         repo_root = Path(__file__).resolve().parents[2]
         vl_dir = (repo_root / "volatility_lab") if (repo_root / "volatility_lab").exists() else (repo_root / "Volatility Lab")
-        desk_dir = repo_root / "streamlit_desk"
         if not vl_dir.is_dir():
             return
 
         # 1. Verify root has zero duplicate Volatility Lab modules and zero obsolete scripts
         allowed_root_py = {
-            "streamlit_app.py",
             "test_audit_remediations.py",
             "test_execution_safety_fixes.py",
             "test_quant_audit_fixes.py",
@@ -1017,11 +955,6 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
         self.assertFalse((repo_root / "patches").exists(), "Obsolete patch directory should be absent")
         for banned in ("LAUNCH_ANY_DEVICE.py", "MAIN_AUDIT.md", "app.py", "apply_volatility_lab_fixes.py"):
             self.assertFalse((repo_root / banned).exists(), f"Obsolete file {banned} should not exist at repo root")
-
-        # 2. Verify streamlit_desk/ contains only app.py and run.py
-        if desk_dir.is_dir():
-            desk_py = {p.name for p in desk_dir.glob("*.py")}
-            self.assertEqual(desk_py, {"app.py", "run.py"}, f"Unexpected .py files in streamlit_desk/: {desk_py}")
 
         # 3. Confirm the expiry metadata file is present without opening protected JSON data.
         exp_latest_path = vl_dir / "data" / "expiry_latest.json"
