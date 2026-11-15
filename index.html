@@ -80,6 +80,8 @@
       color: #ffffff;
     }
 
+    #researchTabs .seg-btn.active { background: transparent; color: #7dd3fc; border-color: #38bdf8; }
+
     /* Cards & Panels */
     .kpi-card {
       background: var(--panel);
@@ -175,12 +177,7 @@
 
       <!-- Right: Clean Market Context & Dynamic Market-Hours Gate Pill -->
       <div class="flex items-center gap-3 mono text-xs">
-        <nav class="flex flex-wrap gap-2 text-sky-300" aria-label="Desk utilities">
-          <button type="button" id="shareDesk">Share</button>
-          <a href="https://github.com/pankagsaini/volatility-lab" target="_blank" rel="noopener" aria-label="Star project on GitHub">Star</a>
-          <a href="https://github.com/pankagsaini/volatility-lab/edit/master/index.html" target="_blank" rel="noopener">Edit</a>
-          <button type="button" id="syncDesk">⟳ Sync</button>
-        </nav>
+        <button type="button" id="syncDesk" aria-label="Refresh market data" title="Refresh market data" class="text-sky-300 text-lg">⟳</button>
         <span class="text-slate-300 hidden sm:inline">INDIA VIX: <strong id="headerVixVal" class="text-sky-300">—</strong></span>
         <span id="marketClockPill" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#070b12] border border-[#334155] text-slate-300 font-semibold">
           <span id="livePulseDot" class="hidden w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -215,7 +212,6 @@
         <div class="kpi-card border-t-2 border-t-emerald-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">HV10 &amp; HV30 (Realized)</div>
           <div id="kpiHvGarch" class="text-lg mono font-extrabold text-emerald-300 mt-0.5">—</div>
-          <div id="kpiHv10Sub" class="text-[11px] mono text-slate-300 mt-0.5">—</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-emerald-400">
@@ -245,7 +241,7 @@
             <button type="button" data-tab="term" class="res-tab-btn seg-btn">Term structure</button>
             <button type="button" data-tab="smile" class="res-tab-btn seg-btn">Smile</button>
             <button type="button" data-tab="straddle" class="res-tab-btn seg-btn">Straddle &amp; scenarios</button>
-            <button type="button" data-tab="trades" class="res-tab-btn seg-btn text-sky-300">Trade setups</button>
+            <button type="button" data-tab="trades" class="res-tab-btn seg-btn">Trade setups</button>
           </div>
 
           <!-- Context Controls for Tab 1 (Clean Metric & Horizon Selectors) -->
@@ -276,12 +272,11 @@
             <div class="relative" style="height: 410px;">
               <canvas id="regimeMainCanvas"></canvas>
             </div>
-            <p id="regimeVolSources" class="mt-2 text-xs text-slate-300"></p>
           </div>
 
           <!-- Companion Tables: Pure Quantitative Statistics -->
-          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-            <div class="lg:col-span-7 overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
+          <div class="grid grid-cols-1 gap-4">
+            <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
               <div class="px-3.5 py-2 bg-[#111c2d] border-b border-[#24344d] flex justify-between items-center">
                 <span class="text-xs font-bold uppercase text-white">Recorded distribution</span>
                 <span id="regimeHistoryDates" class="text-xs mono text-slate-400"></span>
@@ -302,7 +297,7 @@
               </table>
             </div>
 
-            <div class="lg:col-span-5 overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
+            <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
               <div class="px-3.5 py-2 bg-[#111c2d] border-b border-[#24344d] flex justify-between items-center">
                 <span class="text-xs font-bold uppercase text-white">Realized volatility</span>
                 <span class="text-[11px] mono text-sky-300">Annualized</span>
@@ -334,8 +329,7 @@
             <div class="relative" style="height: 410px;">
               <canvas id="termMainCanvas"></canvas>
             </div>
-            <p id="termForecastSource" class="mt-2 text-xs text-slate-300"></p>
-            <p class="mt-2 text-xs text-slate-300"><strong>Forward volatility</strong> is the annualized volatility implied for the period between two adjacent expiries. It is calculated from the difference in their total implied variance. The table shows it on the later expiry’s row. A negative variance difference leaves the value blank.</p>
+            <p id="termForecastSource" class="sr-only"></p>
           </div>
 
           <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
@@ -1505,15 +1499,14 @@
         var atmIvVal = (r.b76AtmIv != null && r.b76AtmIv > 0) ? r.b76AtmIv : r.iv;
         var dispFwd = isFinite(r.syn) && r.syn > 0 ? r.syn : null;
         document.getElementById('kpiSpot').textContent = r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        document.getElementById('kpiForwardSub').textContent = 'Future: ' + formatLiveNumber(r.fut, 1) + ' · Synthetic Future: ' + (dispFwd ? dispFwd.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—');
+        document.getElementById('kpiForwardSub').textContent = 'Matched fut: ' + formatLiveNumber(r.fut, 1) + ' · Syn. fut: ' + (dispFwd ? dispFwd.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—');
         document.getElementById('kpiAtmIv').textContent = formatIv(atmIvVal);
-        document.getElementById('kpiIvRankSub').textContent = 'Strike ' + r.atm.toLocaleString('en-IN') + ' · ' + (r.modelAtmIv > 0 ? r.pricingModel + ' · Broker ' + formatIv(r.brokerAtmIv) : 'Broker IV');
+        document.getElementById('kpiIvRankSub').textContent = 'Strike ' + r.atm.toLocaleString('en-IN');
+        document.getElementById('kpiForwardSub').title = r.fut > 0 ? 'Future with the same expiry as the selected option' : 'No eligible captured future with this option expiry. Monthly futures are not substituted for weekly contracts.';
         document.getElementById('kpiHvGarch').textContent = formatIv(completed?.h10 ?? r.hv10) + ' / ' + formatIv(completed?.h30 ?? r.hv30);
-        const reference = window.VL_PUBLIC_STATE?.forecasts?.[activeSymbol];
-        document.getElementById('kpiHv10Sub').textContent = 'HV20 ' + formatIv(completed?.h20 ?? r.hv20) + ' · EWMA ' + formatIv(r.ewma) + ' · Yang–Zhang 20D ' + formatIv(reference?.yang_zhang20) + ' (' + (reference?.training_through || '—') + ')';
         document.getElementById('kpiVrpSpread').textContent = vrp30 === null ? '—' : (vrp30 >= 0 ? '+' : '') + formatLiveNumber(vrp30, 2) + ' pp';
         document.getElementById('kpiVrpSpread').className = 'text-lg mono font-extrabold mt-0.5 ' + (vrp30 >= 0 ? 'text-emerald-400' : 'text-rose-400');
-        document.getElementById('kpiGarchGapSub').textContent = vrp30 === null ? 'Missing ATM IV or HV30' : (vrp30 > 0 ? 'IV above HV30' : vrp30 < 0 ? 'IV below HV30' : 'IV matches HV30') + ' · IV − HV10 ' + formatLiveNumber(vrp10,2,' pp');
+        document.getElementById('kpiGarchGapSub').textContent = vrp30 === null ? 'Missing ATM IV or HV30' : 'IV − HV10 ' + formatLiveNumber(vrp10,2,' pp');
         document.getElementById('kpiExpMove').textContent = Number.isFinite(movePts) ? '±' + Math.round(movePts) + ' pts (±' + movePct.toFixed(2) + '%)' : '—';
         document.getElementById('kpiSafeBandSub').textContent = Number.isFinite(movePts) ? '1σ Band: ' + low.toLocaleString('en-IN') + ' – ' + high.toLocaleString('en-IN') : 'Missing IV or expiry inputs';
         document.getElementById('kpiSkew25').textContent = (r.rev25 >= 0 ? '+' : '') + formatLiveNumber(r.rev25, 2) + ' / ' + (r.bfly25 >= 0 ? '+' : '') + formatLiveNumber(r.bfly25, 2) + ' pp';
@@ -1580,15 +1573,6 @@
           trigArr.push(1.50);
         }
 
-        const estimated = slice.map(pt => pt.closingEstimate && pt.closingEstimate.asOf.slice(0,10) === pt.d &&
-          Number.isFinite(pt.closingEstimate.iv) && pt.closingEstimate.iv > 0 ? pt.closingEstimate : null);
-        const closingOverlay = estimated.map((est,i) => est ? est.iv :
-          estimated[i-1] || estimated[i+1] ? ivArr[i] : null);
-        const closeDate = fullSeries.filter(pt => pt.hvCloseDate === pt.d && Number.isFinite(pt.h30)).at(-1)?.d;
-        document.getElementById('regimeVolSources').textContent = (closeDate
-          ? 'HV from index closes through ' + closeDate + '. ' : '') +
-          (activeMetric === 'levels' && estimated.some(Boolean)
-            ? 'Dotted points use closing-price IV estimates.' : '');
         var totalLabels = labels.length;
         document.getElementById('regimeHistoryDates').textContent = fullSeries.length
           ? fullSeries[0].d + ' – ' + fullSeries[fullSeries.length - 1].d : 'No history';
@@ -1607,7 +1591,7 @@
                 backgroundColor: 'rgba(16, 185, 129, 0.14)',
                 borderWidth: 2.6,
                 pointRadius: totalLabels > 80 ? 2.5 : 3.5,
-                fill: true,
+                fill: false,
                 spanGaps: false,
                 showLabels: false,
                 labelStep: labelStep,
@@ -1618,7 +1602,7 @@
               {
                 label: 'Spread: IV − HV10 (pp)',
                 data: spread10Arr,
-                borderColor: '#f59e0b',
+                borderColor: '#a78bfa',
                 borderDash: [5, 4],
                 borderWidth: 2.1,
                 pointRadius: totalLabels > 80 ? 2 : 3,
@@ -1646,13 +1630,13 @@
             labels: labels,
             datasets: [
               {
-                label: 'ATM IV · next expiry on expiry day (%)',
+                label: 'ATM IV (%)',
                 data: ivArr,
                 borderColor: '#38bdf8',
                 backgroundColor: 'rgba(56, 189, 248, 0.10)',
                 borderWidth: 2.8,
                 pointRadius: totalLabels > 80 ? 2.5 : 3.5,
-                fill: true,
+                fill: false,
                 spanGaps: false,
                 showLabels: false,
                 labelStep: labelStep,
@@ -1663,7 +1647,7 @@
               {
                 label: 'HV10 (%)',
                 data: hv10Arr,
-                borderColor: '#f59e0b',
+                borderColor: '#a78bfa',
                 borderWidth: 2.3,
                 pointRadius: totalLabels > 80 ? 1 : 2.5,
                 fill: false,
@@ -1682,26 +1666,17 @@
               }
             ]
           };
-          if (estimated.some(Boolean)) levelsData.datasets.push({
-            label:'Estimated IV from closing prices (%)', data:closingOverlay, borderColor:'#c4b5fd', borderDash:[2,4],
-            borderWidth:2, pointRadius:ctx => estimated[ctx.dataIndex] ? 5 : 0,
-            pointBackgroundColor:'#080d16', pointBorderWidth:2, spanGaps:false, tension:0
-          });
           regimeChart = updateOrCreateChart(regimeChart, ctx, 'line', levelsData, chartOpts('%', false));
         }
 
         regimeChart.options.plugins.tooltip.callbacks = {
           afterBody: items => {
             const index = items[0]?.dataIndex;
-            const estimate = estimated[index];
             const point = slice[index];
             const details = [];
             if (point && observedIv(point) !== null) details.push('Captured ' +
               new Date(point.snapshotId).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})
               + ' IST · ' + point.expiry + ' · strike ' + point.atm);
-            if (estimate && items.some(item => item.dataset.label.startsWith('Estimated IV'))) details.push(
-              '15:30 IST ' + estimate.model + ' estimate · ' + estimate.expiry + ' · strike ' + estimate.atm,
-              'Upstox traded candle prices');
             return details;
           }
         };
@@ -1735,7 +1710,7 @@
 
         var windows = [
           { w: 'HV10', hv: hv10 }, { w: 'HV20', hv: hv20 }, { w: 'HV30', hv: hv30 },
-          { w: 'Yang–Zhang 20D · ' + (window.VL_PUBLIC_STATE?.forecasts?.[activeSymbol]?.training_through || '—'), hv:window.VL_PUBLIC_STATE?.forecasts?.[activeSymbol]?.yang_zhang20 },
+          { w: 'Yang–Zhang 20D', hv:window.VL_PUBLIC_STATE?.forecasts?.[activeSymbol]?.yang_zhang20 },
           { w: 'HV30 · 60-session mean', hv: observedMean(allH30.slice(-60)) },
           { w: 'HV30 · 1-year mean', hv: observedMean(allH30) }
         ];
@@ -1804,12 +1779,14 @@
         tbody.innerHTML = rowsHtml;
 
         var ctx = document.getElementById('termMainCanvas');
+        ctx.title = document.getElementById('termForecastSource').textContent;
+
         var termData = {
           labels: labels,
           datasets: [
             {
               label: 'Captured ATM IV (%)',
-              pointValueLabels: 'expiry',
+              pointValueLabels: 'iv',
               data: ivArr,
               borderColor: '#38bdf8',
               borderWidth: 3,
@@ -1823,7 +1800,7 @@
             }
           ]
         };
-        for (const [key, label, color, dash] of [['garch','GARCH(1,1) forecast RV (%)','#a78bfa',[7,4]],['ewma','EWMA forecast RV (%)','#10b981',[2,4]]]) {
+        for (const [key, label, color, dash] of [['garch','GARCH(1,1) RV (%)','#a78bfa',[7,4]],['ewma','EWMA RV (%)','#10b981',[2,4]]]) {
           termData.datasets.push({label, data:list.map(row => OptionsCharts.forecast(window.VL_PUBLIC_STATE,activeSymbol,row)?.[key] ?? null),
             borderColor:color, borderDash:dash, pointRadius:3, borderWidth:2, spanGaps:false, tension:0});
         }
@@ -2248,7 +2225,7 @@
             if (statusFilter !== 'TRIGGERED') {
               for (let n = 1; n <= 6; n++) {
                 if (setups.some(setup => setup.code === 'S'+n)) continue;
-                html += '<tr><td class="py-2 px-3">' + symKey + ' · ' + item.expiry + '</td><td class="px-3">S' + n + '</td><td class="text-slate-300 px-3">WAIT</td><td colspan="7" class="px-3 text-slate-400">Fresh executable quotes or required inputs unavailable</td></tr>';
+                html += '<tr><td class="py-2 px-3">' + symKey + ' · ' + item.expiry + '</td><td class="px-3">S' + n + '</td><td class="text-slate-300 px-3">WAIT</td><td colspan="7" class="px-3 text-slate-400">Awaiting fresh executable quotes or required pricing inputs</td></tr>';
               }
             }
             for (var j = 0; j < setups.length; j++) {
@@ -3772,12 +3749,6 @@
         window._vlDeskInitialized = true;
         window.VL_PUBLIC_STATE = JSON.parse(document.getElementById('deskPublicState').textContent);
         document.getElementById('syncDesk').addEventListener('click', () => syncLiveCloudSnapshot(true));
-        document.getElementById('shareDesk').addEventListener('click', async () => {
-          try {
-            if (navigator.share) await navigator.share({title:'Volatility Lab',url:'https://volatilitylab.in/'});
-            else { await navigator.clipboard.writeText('https://volatilitylab.in/'); toast('Desk link copied'); }
-          } catch (error) { if (error.name !== 'AbortError') toast('Share link: https://volatilitylab.in/'); }
-        });
         var idxFilterEl = document.getElementById('tradeIdIndexFilter');
         if (idxFilterEl) {
           idxFilterEl.addEventListener('change', function() {
