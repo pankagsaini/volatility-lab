@@ -36,6 +36,7 @@ const server = http.createServer((request,response) => {
     assert.equal(await page.locator('#shareDesk').count(),0);
     assert.equal(await page.locator('#syncDesk').getAttribute('aria-label'),'Refresh market data');
     assert.equal(await page.locator('#kpiHv10Sub').count(),0);
+    assert.equal(await page.locator('#smileKpiStrip').count(),0);
     assert(!/Black-76|Broker/.test(await page.locator('#kpiIvRankSub').textContent()));
     assert(!/IV below|IV above/.test(await page.locator('#kpiGarchGapSub').textContent()));
     assert(await page.evaluate(()=>Chart.getChart('regimeMainCanvas').data.datasets.every(ds=>!ds.fill && !ds.label.includes('Estimated'))));
@@ -58,6 +59,14 @@ const server = http.createServer((request,response) => {
     await page.locator('[data-tab="term"]').click();
     assert.equal(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets.length),3);
     assert.equal(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets[0].pointValueLabels),'iv');
+    assert.equal(await page.locator('#expiryComparisonBody tr').count(),7);
+    assert(await page.locator('#termForecastSource').isVisible());
+    assert.equal(await page.locator('#panel-term details').getAttribute('open'),null);
+    await page.locator('#expiryComparisonBody button').nth(1).click();
+    assert.equal(await page.locator('#activeExpirySelect').inputValue(),'1');
+    assert(await page.locator('#panel-smile').isVisible());
+    assert.equal(await page.locator('#panel-smile details').getAttribute('open'),null);
+    await page.locator('[data-tab="term"]').click();
     const displayedRisk = await page.locator('#kpiHvGarch').textContent();
     const firstTerm = await page.locator('#termMainTableBody tr').first().locator('td').allTextContents();
     const expectedSpread = Number.parseFloat(firstTerm[7]) - Number.parseFloat(displayedRisk.split('/')[1]);
@@ -85,6 +94,14 @@ const server = http.createServer((request,response) => {
     const fits = await page.locator('#stressMatrixTableBody').evaluate(node=>node.parentElement.scrollWidth <= node.parentElement.parentElement.clientWidth+1);
     assert(fits,'Stress columns clipped');
     if (process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'mobile.png'),fullPage:true});
+    await page.locator('[data-tab="term"]').click();
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth <= 390),'Expiry comparison must scroll inside its panel on mobile');
+    if (process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'mobile-term.png'),fullPage:true});
+    await page.locator('#panel-term summary').click();
+    assert(await page.locator('#termMainTableBody').isVisible());
+    await page.locator('[data-tab="smile"]').click();
+    await page.locator('#panel-smile summary').click();
+    assert(await page.locator('#smileMainTableBody').isVisible());
     assert.deepEqual(errors,[]);
     console.log('DOM passed: all workspaces/tabs, 10 expiries, 60 setups, real Chart.js reuse, captured 3D points, archive provenance, mobile stress table, zero missing IDs or JS errors.');
   } finally { await browser.close(); server.close(); }

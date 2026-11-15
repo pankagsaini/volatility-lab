@@ -47,5 +47,20 @@ const OptionsCharts = (() => {
       && row.entry_source && row.exit_source && positive(row.unitLegs)
       && [row.gross,row.charges,row.capital].every(Number.isFinite) && row.capital > 0;
   }
-  return {smile, straddleSeries, surface, forecast, auditedTrade};
+  function comparison(state, symbol, row) {
+    const record = forecast(state, symbol, row);
+    const captured = Date.parse(row.ivCapturedAt || row.archivedAsOf);
+    const forecastAt = Date.parse(record?.as_of);
+    const day = stamp => Number.isFinite(stamp) ? new Date(stamp + 19800000).toISOString().slice(0,10) : '';
+    // Older forecasts remain visible as dated references, never as current edges.
+    const aligned = !!record && Number.isFinite(captured) && forecastAt <= captured
+      && day(forecastAt) === day(captured) && record.training_through <= day(captured);
+    const iv = positive(row.brokerAtmIv) ? row.brokerAtmIv : null;
+    const garch = positive(record?.garch) ? record.garch : null;
+    const ewma = positive(record?.ewma) ? record.ewma : null;
+    return {iv, garch, ewma, aligned, training:record?.training_through || null,
+      garchGap:aligned && iv !== null && garch !== null ? iv - garch : null,
+      ewmaGap:aligned && iv !== null && ewma !== null ? iv - ewma : null};
+  }
+  return {smile, straddleSeries, surface, forecast, comparison, auditedTrade};
 })();
