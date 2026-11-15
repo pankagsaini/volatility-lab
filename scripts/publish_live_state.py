@@ -48,6 +48,7 @@ def build(html, data):
             else:
                 point['as_of'] = model['Forecast as of']
                 point['status'] = model['EGARCH status']
+                point.update(ewma_total_variance=model['EWMA total variance'], ewma_horizon_volatility=model['EWMA horizon volatility'], ewma_training_returns=model['EWMA training returns'])
                 point.update(model=model['Model'], sessions=model['Trading sessions'], training_returns=model['Training returns'], calendar_status=model['Calendar status'], simulations=model['Simulations'], seed=model['Simulation seed'])
                 for key, label in [('egarch', 'EGARCH expiry RV'), ('ewma', 'EWMA expiry RV')]:
                     value = model[label]

@@ -203,10 +203,18 @@ def term_structure_forecast(frame, expiry, as_of):
         value = float(100 * np.sqrt(245 * variances[:len(dates)].mean()))
     except (ValueError, RuntimeError, FloatingPointError) as error:
         status = str(error)
+    # Standard EWMA projects constant conditional daily variance. Accumulate
+    # over the actual expiry horizon before returning annualized volatility.
+    ewma_daily_variance = rv_snapshot(data)['ewma_next_session_vol'] ** 2 / 245
+    ewma_total_variance = float(ewma_daily_variance * len(dates))
+    ewma_expiry_rv = float(100 * np.sqrt(245 * ewma_total_variance / len(dates)))
     model = {
         'Expiry': str(expiry), 'Training through': str(last),
         'EGARCH expiry RV': value, 'EGARCH status': status,
-        'EWMA expiry RV': float(100 * rv_snapshot(data)['ewma_next_session_vol']),
+        'EWMA expiry RV': ewma_expiry_rv,
+        'EWMA total variance': ewma_total_variance,
+        'EWMA horizon volatility': float(100 * np.sqrt(ewma_total_variance)),
+        'EWMA training returns': len(data) - 1,
         'Trading sessions': len(dates), 'Training returns': observations,
         'Model': 'EGARCH(1,1,1) Gaussian', 'Simulations': SIMULATIONS,
         'Simulation seed': SEED, 'Version': TERM_VERSION,
