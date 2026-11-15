@@ -111,6 +111,17 @@ assert(element('termMainTableBody').innerHTML.includes('0.000110'),'Total varian
 
 // The shipped history may contain IV only with provenance; pre-capture years stay empty.
 const charts = vm.runInContext('OptionsCharts',web);
+const comparisonState = {forecasts:{NIFTY:{expiries:[{expiry:'2026-11-17',as_of:'2026-11-11T15:40:00+05:30',training_through:'2026-11-11',garch:17,ewma:null}]}}};
+const comparisonRow = {expiry:'2026-11-17',ivCapturedAt:'2026-11-11T15:45:00+05:30',brokerAtmIv:20};
+assert.equal(charts.comparison(comparisonState,'NIFTY',comparisonRow).garchGap,3);
+assert.equal(charts.comparison(comparisonState,'NIFTY',comparisonRow).ewmaGap,null);
+for (const stamp of ['2026-11-12T15:45:00+05:30','2026-11-11T15:30:00+05:30','invalid']) {
+  const result = charts.comparison(comparisonState,'NIFTY',{...comparisonRow,ivCapturedAt:stamp});
+  assert.equal(result.garch,17,'Dated reference remains visible');
+  assert.equal(result.garchGap,null,'Stale, future, or undated forecasts cannot yield a current comparison gap');
+}
+assert.equal(charts.comparison(comparisonState,'NIFTY',{...comparisonRow,brokerAtmIv:null,iv:22}).garchGap,null,'Model IV cannot fill comparison');
+assert.equal(charts.comparison({},'NIFTY',comparisonRow).garch,null);
 const smile = charts.smile({spot:100,atm:100,chain:[
   {k:90,uPutIv:22,uPutDelta:-.11}, {k:95,uPutIv:19,uPutDelta:-.20},
   {k:100,uCallIv:16,uPutIv:18}, {k:105,uCallIv:15,uCallDelta:.25},
