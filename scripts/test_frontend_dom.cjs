@@ -59,6 +59,8 @@ const server = http.createServer((request,response) => {
     await page.locator('[data-tab="term"]').click();
     assert.equal(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets.length),3);
     assert.equal(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets[0].pointValueLabels),'iv');
+    assert(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets.every(ds =>
+      ds.showLabels && ds.pointValueLabels === 'iv' && !(ds.borderDash || []).length)), 'All term curves need solid lines and percentage labels');
     assert.equal(await page.locator('#expiryComparisonBody tr').count(),7);
     assert(await page.locator('#termForecastSource').isVisible());
     assert.equal(await page.locator('#panel-term details').getAttribute('open'),null);

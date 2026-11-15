@@ -68,3 +68,21 @@ def test_insufficient_history_withholds_egarch_but_keeps_ewma():
 def test_expiry_day_requires_remaining_session_model():
     with pytest.raises(ValueError, match='expiry-day'):
         term_structure_forecast(history(), '2026-11-17', '2026-11-17T10:00:00+05:30')
+
+
+def test_ewma_expiry_variance_scales_with_sessions_using_one_year(monkeypatch):
+    monkeypatch.setattr(egarch, 'fit_egarch', lambda data: (np.full(265, .0001), 'Ready', 750))
+    frame = history()
+    near = term_structure_forecast(frame, '2026-11-17', '2026-11-11T16:15:00+05:30')
+    far = term_structure_forecast(frame, '2026-12-15', '2026-11-11T16:15:00+05:30')
+    ratio = far['Trading sessions'] / near['Trading sessions']
+    assert ratio > 1
+    assert far['EWMA expiry RV'] == pytest.approx(near['EWMA expiry RV'])
+    assert far['EWMA total variance'] == pytest.approx(near['EWMA total variance'] * ratio)
+    assert far['EWMA horizon volatility'] == pytest.approx(near['EWMA horizon volatility'] * np.sqrt(ratio))
+    assert near['EWMA training returns'] == 247
+    # Older observations can affect EGARCH while remaining outside EWMA's window.
+    old = frame.Date <= '2025-11-11'
+    frame.loc[old, ['Open', 'High', 'Low', 'Close']] *= 2
+    changed = term_structure_forecast(frame, '2026-11-17', '2026-11-11T16:15:00+05:30')
+    assert changed['EWMA total variance'] == near['EWMA total variance']
