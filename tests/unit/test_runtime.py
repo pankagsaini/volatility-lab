@@ -14,15 +14,14 @@ from volatility_lab.storage.references import initialize_references, verified_re
 
 def test_settings_precedence_profiles_and_secrets(tmp_path):
     envfile = tmp_path / "config"
-    envfile.write_text("UPSTOX_TOKEN=private-fixture\nVOL_LAB_ENV=staging\nSTREAMLIT_SERVER_PORT=8001\n")
-    settings = load_settings({"VOL_LAB_ENV_FILE": str(envfile), "STREAMLIT_SERVER_PORT": "8002"})
-    assert settings.port == 8002 and settings.environment == "staging"
+    envfile.write_text("UPSTOX_TOKEN=private-fixture\nVOL_LAB_ENV=staging\n")
+    settings = load_settings({"VOL_LAB_ENV_FILE": str(envfile)})
+    assert settings.environment == "staging"
     assert settings.upstox_token == "private-fixture" and "private-fixture" not in repr(settings)
     for key, value in [
         ("VOL_LAB_ENV", "invalid"),
         ("VOL_LAB_OFFLINE", "perhaps"),
         ("VOL_LAB_DATA_DIR", "relative"),
-        ("STREAMLIT_SERVER_PORT", "99999"),
         ("GOOGLE_APPS_SCRIPT_WEBHOOK_URL", "https://example.org/?key=private-fixture"),
     ]:
         with pytest.raises(ConfigurationError) as error:

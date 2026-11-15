@@ -13,3 +13,7 @@ from volatility_lab.storage.references import initialize_references
 _test_store = tempfile.TemporaryDirectory(prefix='volatility-lab-tests-')
 os.environ['VOL_LAB_DATA_DIR'] = _test_store.name
 initialize_references(Path(_test_store.name))
+
+
+def pytest_sessionfinish(session, exitstatus):
+    _test_store.cleanup()

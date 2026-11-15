@@ -3,7 +3,6 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import copy
 import logging
 import time
-import streamlit as st
 
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='lab-data')
 
@@ -62,26 +61,3 @@ def frozen_client(client):
         except Exception:
             pass
     return cloned
-
-
-def status(key, on_tick=None):
-    """Poll only this small control; never interrupt the visible workspace."""
-    @st.fragment(run_every=2)
-    def poll():
-        completed = _collect(st.session_state, key)
-        if completed is not None:
-            st.session_state['_background_ready_' + key] = completed
-        if on_tick is not None:
-            on_tick()
-        ready = st.session_state.get('_background_ready_' + key)
-        with st.container(height=48, border=False):
-            message, action = st.columns([4, 1])
-            if ready is not None:
-                message.caption('New snapshot available' if ready[0] else ready[1])
-                if action.button('Show updates', key='_apply_' + key, width='stretch'):
-                    st.rerun()
-            elif pending(st.session_state, key):
-                message.caption('Updating quotes in background')
-            else:
-                message.caption('Saved snapshot · updates appear when ready')
-    poll()

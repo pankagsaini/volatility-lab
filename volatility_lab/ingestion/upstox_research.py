@@ -4,11 +4,9 @@ from datetime import datetime
 import sqlite3
 import numpy as np
 import pandas as pd
-import streamlit as st
 from upstox_archive import ROOT,connect
 from upstox_data import INDICES
 
-@st.cache_data(ttl=60,show_spinner=False)
 def minute_data(symbol):
     if not (ROOT/'research.sqlite').exists():return pd.DataFrame()
     with closing(connect()) as con, con:
@@ -16,7 +14,6 @@ def minute_data(symbol):
     if not frame.empty:frame['stamp']=pd.to_datetime(frame.stamp,utc=True).dt.tz_convert('Asia/Kolkata')
     return frame
 
-@st.cache_data(ttl=60,show_spinner=False)
 def realized_variance(symbol):
     frame=minute_data(symbol)
     if frame.empty:return pd.DataFrame(columns=['Date','RV','AvailableAt','Source'])
@@ -30,32 +27,8 @@ def realized_variance(symbol):
         rows.append({'Date':pd.Timestamp(day),'RV':rv,'AvailableAt':pd.Timestamp(str(day)+' 16:30',tz='Asia/Kolkata'),'Source':'Upstox 5-minute sampled RV; complete 375-minute session'})
     return pd.DataFrame(rows,columns=['Date','RV','AvailableAt','Source'])
 
-def render_minutes(symbol):
-    import plotly.graph_objects as go
-    data=minute_data(symbol)
-    if data.empty:st.info('Minute history is downloading. Saved option snapshots remain available.');return
-    dates=sorted(data.stamp.dt.date.unique(),reverse=True)
-    day=st.selectbox('Trading session',dates,key='upstox_minute_day_'+symbol)
-    frame=data[data.stamp.dt.date==day]
-    fig=go.Figure(go.Scatter(x=frame.stamp,y=frame.close,name=symbol,line=dict(color='#49cebc')))
-    fig.update_layout(height=400,margin=dict(l=10,r=10,t=10,b=10),yaxis=dict(tickformat='.2f',autorange=True),xaxis=dict(tickformat='%H:%M'))
-    st.plotly_chart(fig,width='stretch')
-    st.caption('Upstox index one-minute closes · historical prices, not option IV')
-    rv=realized_variance(symbol)
-    if len(rv):st.caption(f'{len(rv)} complete sessions available for realized-variance research; incomplete sessions excluded.')
 
-def render_coverage():
-    from collector_support import read_json
-    status=read_json(ROOT/'collection_status.json')
-    st.caption('Archive: '+status.get('status','not started')+' · '+status.get('stage',''))
-    if status.get('error'):st.warning(status['error'])
-    if not (ROOT/'research.sqlite').exists():return
-    with closing(connect()) as con, con:
-        frame=pd.read_sql_query("SELECT COALESCE(c.symbol,a.instrument) AS Instrument,COALESCE(c.kind,'INDEX') AS Type,a.interval AS Interval,COUNT(*) AS Candles,MIN(a.stamp) AS First,MAX(a.stamp) AS Last FROM candles a LEFT JOIN contracts c ON c.instrument=a.instrument GROUP BY 1,2,3",con)
-    st.dataframe(frame,hide_index=True,width='stretch')
-    st.caption('Historical option OHLC contains no broker IV history. This view keeps those prices separate; IV is collected from Upstox snapshots through Google Cloud.')
 
-@st.cache_data(ttl=60,show_spinner=False)
 def futures_minute_pair(symbol,front,back):
     from futures_data import pair_values
     if not (ROOT/'research.sqlite').exists():return pd.DataFrame()

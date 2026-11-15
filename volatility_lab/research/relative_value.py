@@ -95,7 +95,7 @@ def load_history(path, symbol=None, max_rows=2500):
 
 
 def history(path, symbol=None, config=None, comparable=True):
-    """Load intraday observations for `symbol` (compatible with monitor_ui.py and trade_review_ui.py)."""
+    """Load intraday observations for `symbol`."""
     db_path = Path(path) / 'monitor.sqlite' if Path(path).is_dir() else Path(path)
     frame = load_history(db_path, symbol=symbol)
     if frame.empty:

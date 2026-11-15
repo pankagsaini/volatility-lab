@@ -70,7 +70,7 @@ TEMPLATES = {
 SCENARIO_PRESETS = {
     'Scenario 1 · VRP Harvest Iron Condor (Calm HV)': {
         'hypothesis': 'Sell defined-risk wings when Volatility Radar shows RICH VOLATILITY (IV-RV Spread ≥ +2.0 pp) while trailing HV30 sits in a calm/normal regime (8%–16%) and IV trades above GARCH FRV.',
-        'streamlit_triggers': '◈ Volatility Radar: RICH VOLATILITY · Vol Regime: IV-RV Spread ≥ +2.0 pp & DTE Rank ≥ 75%ile · Term Structure: IV - GARCH FRV ≥ +2.0 pp · Parity Normal',
+        'signal_description': '◈ Volatility Radar: RICH VOLATILITY · Vol Regime: IV-RV Spread ≥ +2.0 pp & DTE Rank ≥ 75%ile · Term Structure: IV - GARCH FRV ≥ +2.0 pp · Parity Normal',
         'entry': '09:20',
         'exit': '15:15',
         'dte': (2, 10),
@@ -82,7 +82,7 @@ SCENARIO_PRESETS = {
     },
     'Scenario 2 · Gamma Expansion Long Straddle (Compressed IV)': {
         'hypothesis': 'Buy ATM gamma convexity when Volatility Radar shows COMPRESSED VOLATILITY (IV-RV Spread ≤ -1.5 pp) and Term Structure shows IV discounted below the GARCH/EWMA forward variance floor.',
-        'streamlit_triggers': '◈ Volatility Radar: COMPRESSED VOLATILITY · Term Structure: IV - GARCH FRV ≤ -2.0 pp · Intraday Straddle: Breakeven ±% < 1.15%',
+        'signal_description': '◈ Volatility Radar: COMPRESSED VOLATILITY · Term Structure: IV - GARCH FRV ≤ -2.0 pp · Intraday Straddle: Breakeven ±% < 1.15%',
         'entry': '09:25',
         'exit': '15:15',
         'dte': (3, 7),
@@ -94,7 +94,7 @@ SCENARIO_PRESETS = {
     },
     'Scenario 3 · Post-Event Front-Week Crush (Iron Butterfly)': {
         'hypothesis': 'Capture rapid front-week IV mean-reversion when a scheduled macro/earnings catalyst inflates the nearest weekly expiry ≥ +3.0 pp above HV30 and Next-Week IV (backwardation kink).',
-        'streamlit_triggers': 'Term Structure & Calendars: Front IV > Next IV by +2.5 pp & IV - GARCH FRV ≥ +3.0 pp · Macro Event Calendar: Catalyst listed before front expiry',
+        'signal_description': 'Term Structure & Calendars: Front IV > Next IV by +2.5 pp & IV - GARCH FRV ≥ +3.0 pp · Macro Event Calendar: Catalyst listed before front expiry',
         'entry': '09:30',
         'exit': '15:15',
         'dte': (1, 5),
@@ -106,7 +106,7 @@ SCENARIO_PRESETS = {
     },
     'Scenario 4 · Steep Put Skew Ratio Spread (RR25 ≥ +2.5 pp)': {
         'hypothesis': 'Monetize overpriced 25-delta put protection when Smile & Skew shows RR25 risk reversal ≥ +2.50 pp (≥85th percentile) by selling 2x 25Δ puts against 1x near-ATM put and 1x tail-hedge wing.',
-        'streamlit_triggers': 'Smile & Skew: RR25 risk reversal ≥ +2.50 pp · Vol Regime & Maturity Ranking: 25 Delta reversal ≥ 85%ile',
+        'signal_description': 'Smile & Skew: RR25 risk reversal ≥ +2.50 pp · Vol Regime & Maturity Ranking: 25 Delta reversal ≥ 85%ile',
         'entry': '09:20',
         'exit': '15:15',
         'dte': (3, 14),
@@ -118,7 +118,7 @@ SCENARIO_PRESETS = {
     },
     'Scenario 5 · Intraday Theta Decay Iron Butterfly (09:20–15:15)': {
         'hypothesis': 'Harvest intraday theta and post-open vega compression when 1-minute Cloud captures show ATM Straddle Price drifting below the 09:20 IST open and Net Delta bounded within [-0.12, +0.12].',
-        'streamlit_triggers': 'Intraday Straddle & Greeks: Straddle Price (₹) below opening high · Implied Volatility (%) flat/falling · |Net Delta| ≤ 0.12',
+        'signal_description': 'Intraday Straddle & Greeks: Straddle Price (₹) below opening high · Implied Volatility (%) flat/falling · |Net Delta| ≤ 0.12',
         'entry': '09:20',
         'exit': '15:15',
         'dte': (1, 6),
@@ -130,7 +130,7 @@ SCENARIO_PRESETS = {
     },
     'Scenario 6 · Synthetic Basis Skewed Condor (Call-Rich Parity)': {
         'hypothesis': 'Use Put-Call Parity Basis (Syn - Month Future LTP) as an execution gate and skew short call strikes closer (+150) and put strikes wider (-250) when call demand inflates IV alongside positive VRP.',
-        'streamlit_triggers': '◈ Volatility Radar: Parity Normal (Wait if ⚠️ Basis Dislocation > ±30 pts NIFTY / ±75 pts BANKNIFTY) · Term Structure: ATM synthetic future vs Month future LTP',
+        'signal_description': '◈ Volatility Radar: Parity Normal (Wait if ⚠️ Basis Dislocation > ±30 pts NIFTY / ±75 pts BANKNIFTY) · Term Structure: ATM synthetic future vs Month future LTP',
         'entry': '09:25',
         'exit': '15:15',
         'dte': (2, 12),

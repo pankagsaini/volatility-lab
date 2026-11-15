@@ -4,19 +4,9 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from volatility_lab.ui.ui_theme import market_session_badge_html
 
 
-def test_session_badge_uses_exchange_calendar():
-    def badge(stamp):
-        return market_session_badge_html(datetime.fromisoformat(stamp).replace(tzinfo=ZoneInfo('Asia/Kolkata')))
-    assert 'CLOSED' in badge('2026-11-10T10:00:00')
-    assert 'CLOSED' in badge('2026-11-08T10:00:00')
-    assert 'LIVE · SPECIAL' in badge('2026-11-08T14:30:00')
-    assert 'LIVE · REGULAR' in badge('2026-11-13T15:35:00')
-    assert 'CLOSED' in badge('2026-11-13T15:40:00')
-    assert 'PRE-OPEN' in badge('2026-11-13T09:05:00')
-    assert 'calendar unavailable' in badge('2030-01-01T10:00:00')
+
 
 
 def test_dated_public_archive_excludes_unverified_performance():

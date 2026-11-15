@@ -136,7 +136,7 @@ class UpstoxDataClient:
 
 def save_token(token):
     if os.name != 'nt':
-        raise UpstoxDataError('Use an environment or Streamlit secret for token storage on this operating system.')
+        raise UpstoxDataError('Use an environment variable for token storage on this operating system.')
     client=UpstoxDataClient(token)
     # Verify read-only market access before persisting a replacement token.
     result=client.quotes(list(INDICES.values()))
@@ -153,13 +153,6 @@ def save_token(token):
 def saved_client():
     from volatility_lab.runtime.settings import load_settings
     token = load_settings().upstox_token
-    if not token:
-        try:
-            import streamlit as st
-            if hasattr(st, 'secrets') and 'UPSTOX_TOKEN' in st.secrets:
-                token = st.secrets['UPSTOX_TOKEN']
-        except Exception:
-            token = None
     if token:
         try:
             return UpstoxDataClient(token)
@@ -170,7 +163,7 @@ def saved_client():
             return UpstoxDataClient(protect(TOKEN_PATH.read_bytes(), decrypt=True).decode())
         except Exception:
             pass
-    raise UpstoxDataError('No readable saved Upstox token. Connect it below.')
+    raise UpstoxDataError('No readable Upstox token. Set UPSTOX_TOKEN or use the encrypted local store.')
 
 
 def connection_test(client):
@@ -197,31 +190,3 @@ def connection_test(client):
     if all(r['status']=='passed' for r in report['checks']):report['status']='passed'
     atomic_json(REPORT_PATH,report)
     return report
-
-
-def render_connection():
-    import streamlit as st
-    from collector_support import read_json
-    with st.expander('Upstox connection'):
-        st.link_button('Open Upstox Developer Apps','https://account.upstox.com/developer/apps')
-        st.caption('Use the Analytics token from your Upstox developer app.')
-        with st.form('upstox_connect',clear_on_submit=True):
-            token=st.text_input('Analytics Token',type='password')
-            submitted=st.form_submit_button('Save and test Upstox')
-        retry=st.button('Retest saved Upstox connection',disabled=not TOKEN_PATH.exists())
-        if submitted or retry:
-            try:
-                with st.spinner('Checking Upstox market-data access…'):
-                    client=save_token(token) if submitted else saved_client()
-                    report=connection_test(client)
-                if report['status']=='passed':st.success('Upstox market-data access verified.')
-                else:st.warning('Some Upstox data checks failed; see results below.')
-            except UpstoxDataError as error:st.error(str(error))
-            except Exception:st.error('Could not save or test Upstox. Retry after checking your connection.')
-        report=read_json(REPORT_PATH)
-        if report:
-            checked=str(report.get('checked_at') or 'time unavailable').replace('T',' ')[:25]
-            st.caption(f"Last access test · {report.get('status','unknown')} · {checked}")
-            failed=[row for row in report.get('checks',[]) if row.get('status')!='passed']
-            for row in failed:
-                st.error(f"{row.get('instrument','Upstox')} · {row.get('check','check')}: {row.get('reason','Check failed')}")

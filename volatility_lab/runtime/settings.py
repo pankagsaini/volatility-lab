@@ -22,7 +22,6 @@ class Settings:
     cloud_url: str
     offline: bool
     log_level: str
-    port: int
     upstox_token: str | None = field(default=None, repr=False)
 
 
@@ -70,12 +69,6 @@ def load_settings(environ=None):
     raw_offline = env.get("VOL_LAB_OFFLINE", "false").strip().lower() or "false"
     if raw_offline not in ("0", "1", "false", "true"):
         raise ConfigurationError("VOL_LAB_OFFLINE must be true or false")
-    try:
-        port = int(env.get("STREAMLIT_SERVER_PORT") or 8501)
-        if not 1 <= port <= 65535:
-            raise ValueError()
-    except ValueError:
-        raise ConfigurationError("STREAMLIT_SERVER_PORT must be between 1 and 65535") from None
     # Keep existing workstations on their original history until an operator selects another directory.
     legacy = PACKAGE_ROOT / "data"
     existing = any(
@@ -119,7 +112,7 @@ def load_settings(environ=None):
     token = (env.get("UPSTOX_TOKEN") or env.get("UPSTOX_ACCESS_TOKEN") or "").strip() or None
     if token and ("\n" in token or "\r" in token):
         raise ConfigurationError("UPSTOX_TOKEN must be a single line")
-    return Settings(profile, data, archive, url, raw_offline in ("1", "true"), level, port, token)
+    return Settings(profile, data, archive, url, raw_offline in ("1", "true"), level, token)
 
 
 def data_dir():
