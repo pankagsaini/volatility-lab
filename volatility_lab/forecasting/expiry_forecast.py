@@ -13,7 +13,7 @@ except ImportError:
 from market_calendar import LAST_SOURCED_HOLIDAY_YEAR, expiry_close, is_trading_day, last_trading_day_on_or_before, session_window
 
 VERSION = 'expiry-v6-session-close-garch265'
-TERM_VERSION = 'term-v1-last-completed-close'
+TERM_VERSION = 'term-v2-dte-egarch'
 CALENDAR_SOURCE = 'https://nsearchives.nseindia.com/content/circulars/FAOP71777.pdf'
 
 
@@ -191,7 +191,27 @@ def term_structure_forecast(frame, expiry, as_of):
     if window is None:
         raise ValueError(f'No verified training close for {last}.')
     anchor = window[1]
-    model = expiry_forecast(data, expiry, anchor)
+    from volatility_lab.forecasting.egarch import fit_egarch, SIMULATIONS, SEED
+    dates = sessions(last + timedelta(days=1), expiry)
+    if not dates or len(dates) > HORIZON_CAP:
+        raise ValueError('Unsupported expiry forecast horizon.')
+    full_history = validate_ohlc(frame)
+    full_history = full_history.loc[full_history.index <= pd.Timestamp(last)]
+    value, status, observations = np.nan, 'Unavailable', 0
+    try:
+        variances, status, observations = fit_egarch(full_history)
+        value = float(100 * np.sqrt(245 * variances[:len(dates)].mean()))
+    except (ValueError, RuntimeError, FloatingPointError) as error:
+        status = str(error)
+    model = {
+        'Expiry': str(expiry), 'Training through': str(last),
+        'EGARCH expiry RV': value, 'EGARCH status': status,
+        'EWMA expiry RV': float(100 * rv_snapshot(data)['ewma_next_session_vol']),
+        'Trading sessions': len(dates), 'Training returns': observations,
+        'Model': 'EGARCH(1,1,1) Gaussian', 'Simulations': SIMULATIONS,
+        'Simulation seed': SEED, 'Version': TERM_VERSION,
+        'Calendar status': 'Provisional future holidays' if pd.Timestamp(expiry).year > LAST_SOURCED_HOLIDAY_YEAR else 'Sourced annual calendar',
+    }
     matched = last == quote.date() and quote >= anchor
     model.update({
         'Forecast as of': anchor.isoformat(),

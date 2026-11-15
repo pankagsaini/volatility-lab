@@ -47,8 +47,9 @@ def build(html, data):
                 point['status'] = str(exc)
             else:
                 point['as_of'] = model['Forecast as of']
-                point['status'] = model['GARCH status']
-                for key, label in [('garch', 'GARCH expiry RV'), ('ewma', 'EWMA expiry RV')]:
+                point['status'] = model['EGARCH status']
+                point.update(model=model['Model'], sessions=model['Trading sessions'], training_returns=model['Training returns'], calendar_status=model['Calendar status'], simulations=model['Simulations'], seed=model['Simulation seed'])
+                for key, label in [('egarch', 'EGARCH expiry RV'), ('ewma', 'EWMA expiry RV')]:
                     value = model[label]
                     point[key] = round(value, 7) if math.isfinite(value) else None
             series['expiries'].append(point)
