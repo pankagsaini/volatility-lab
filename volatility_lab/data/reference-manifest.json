@@ -2,7 +2,7 @@
   "schema": 1,
   "hash": "sha256, LF-normalized text",
   "files": {
-    "banknifty_one_year.csv": "e331dacc6d05746d3eab10c67b0adbe57dd6ff4b3260d18ee918925c3b8da79d",
+    "banknifty_one_year.csv": "46a2315d698231bc8474338c04f4c9a0bbe62589cca1999de29d4465c5696487",
     "banknifty_option_quotes_2026-11-23.json": "786509675b71d9d1eb545a8bfe5161a716eba78ae23d1446a94384c23cfc80f5",
     "banknifty_option_quotes_2026-12-29.json": "d676b6e5176874ff18e10211c551c2d415010c1051a6076e8db54cd8d18ebcf1",
     "banknifty_option_quotes_2027-01-25.json": "e7f9101bcfe1de8f478efae8473c12445c8186610256ea619b947824641bd258",
@@ -16,7 +16,7 @@
     "listed_monthly_expiries.json": "b0e36dab7979285399aade6aa73c2c7a3c87d0142f457e0b5c3dcf297ce54320",
     "macro_event_calendar_cache.json": "85019c4b4f8b49ac2d7f6b986adf8e3890d35f1ebd301d6f005025cbe83f808c",
     "nifty_daily.csv": "085b5fbfb3e7f6b7ac1e748d1576296de638ad354442c217c5641d75839c8dbe",
-    "nifty_one_year.csv": "98dd9d590a4a5a0f4bea0ed45f4e526058a6675932309c69971a9079387ec1a7",
+    "nifty_one_year.csv": "b0ec0e1eda7aa50033131bfa607cfaad9dca1d7f2a8f242985fb3c799fa66281",
     "nifty_option_quotes_2026-11-17.json": "c6cc5884e1dc6154d5d6dac8fe68d2ff5c8f72e023b55982f916315258957032",
     "nifty_option_quotes_2026-11-23.json": "994d81a0154c48503897d1b4cde012b703779082fba92c9caf9db5e191d32972",
     "nifty_option_quotes_2026-12-01.json": "6a1672e07fda5e2a7d5c1b18d296a3b9846cbc2ebd9b190806fbf1c308ff70cc",

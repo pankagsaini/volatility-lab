@@ -57,12 +57,20 @@ const server = http.createServer((request,response) => {
     await page.selectOption('#tradeIdStatusFilter','TRIGGERED');
     assert.match(await page.locator('#tradeIdTableBody').textContent(),/No executable/);
     await page.locator('[data-tab="term"]').click();
-    assert.equal(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets.length),3);
+    assert.equal(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets.length),2);
+    assert(!(await page.locator('#panel-term').textContent()).includes('EWMA'));
     assert.equal(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets[0].pointValueLabels),'iv');
     assert(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets.every(ds =>
       ds.showLabels && ds.pointValueLabels === 'iv' && !(ds.borderDash || []).length)), 'All term curves need solid lines and percentage labels');
     assert.equal(await page.locator('#expiryComparisonBody tr').count(),7);
     assert(await page.locator('#termForecastSource').isVisible());
+    const refreshed = structuredClone(publicState);
+    refreshed.forecast_update.generated_at = new Date(Date.now() + 60000).toISOString();
+    refreshed.forecasts.NIFTY.expiries[0].egarch = 12.34;
+    await page.route('**/live_state.json', route => route.fulfill({json:refreshed}));
+    await page.locator('#syncDesk').click();
+    await page.waitForFunction(()=>window.VL_PUBLIC_STATE.forecasts.NIFTY.expiries[0].egarch === 12.34);
+    assert((await page.locator('#expiryComparisonBody').textContent()).includes('12.34%'));
     assert.equal(await page.locator('#panel-term details').getAttribute('open'),null);
     await page.locator('#expiryComparisonBody button').nth(1).click();
     assert.equal(await page.locator('#activeExpirySelect').inputValue(),'1');

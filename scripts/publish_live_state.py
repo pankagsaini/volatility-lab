@@ -1,4 +1,6 @@
 """Publish dated, read-only desk references from the canonical local archive."""
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import hashlib
 import json
 import math
@@ -12,11 +14,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from volatility_lab.backtest.forward_test import sanitize_forward_ledger  # noqa: E402
 from volatility_lab.core.vol_lib import rv_snapshot  # noqa: E402
+from volatility_lab.core.market_calendar import session_window  # noqa: E402
 from volatility_lab.forecasting.expiry_forecast import term_structure_forecast  # noqa: E402
 
 
-def build(html, data):
+def build(html, data, as_of=None, catalogue=None):
     catalog = json.loads(re.search(r'var marketCatalog = (.*);', html)[1])
+    if catalogue:
+        for symbol, entry in catalogue.items():
+            if symbol in catalog:
+                known = {row['expiry'] for row in catalog[symbol]}
+                catalog[symbol].extend({'expiry': day} for day in entry.get('option_expiries', []) if day not in known)
     ledger_path = data / 'forward_test_ledger.json'
     ledger = sanitize_forward_ledger(json.loads(ledger_path.read_bytes()))
     ledger['source_authority'] = 'dated_archive'
@@ -31,15 +39,25 @@ def build(html, data):
     for symbol, rows in catalog.items():
         path = data / f'{symbol.lower()}_one_year.csv'
         frame = pd.read_csv(path).sort_values('Date')
-        # Never include a close which was unavailable at the catalog's capture time.
-        captured = min(pd.Timestamp(row['ivCapturedAt']).tz_convert('Asia/Kolkata') for row in rows)
-        close_times = pd.to_datetime(frame['Date'] + ' 16:15').dt.tz_localize('Asia/Kolkata')
-        frame = frame.loc[close_times <= captured].copy()
+        # Forecasts have their own as-of date. Browser comparisons independently
+        # require IV and forecast timestamps to align.
+        captured = pd.Timestamp(as_of or datetime.now(ZoneInfo('Asia/Kolkata'))).tz_convert('Asia/Kolkata')
+        window = session_window(captured.date())
+        available = pd.Timestamp(f'{captured.date()} 16:30', tz='Asia/Kolkata')
+        if window:
+            available = max(available, pd.Timestamp(window[1]) + pd.Timedelta(minutes=30))
+        cutoff = captured.date() if window and captured >= available else (captured - pd.Timedelta(days=1)).date()
+        frame = frame.loc[frame.Date <= str(cutoff)].copy()
         through = str(frame['Date'].iloc[-1])
-        anchor = pd.Timestamp(f'{through} 16:15', tz='Asia/Kolkata')
+        closing_window = session_window(through)
+        if closing_window is None:
+            raise ValueError('No verified exchange close for latest price history.')
+        anchor = pd.Timestamp(closing_window[1])
         risk = rv_snapshot(frame)
         series = {'training_through': through, 'yang_zhang20': 100 * risk['yang_zhang_rv'], 'expiries': []}
-        for row in rows:
+        for row in sorted(rows, key=lambda entry: entry['expiry']):
+            if row['expiry'] <= through:
+                continue
             point = {'expiry': row['expiry'], 'as_of': anchor.isoformat(), 'training_through': through}
             try:
                 model = term_structure_forecast(frame, row['expiry'], anchor)
@@ -48,9 +66,8 @@ def build(html, data):
             else:
                 point['as_of'] = model['Forecast as of']
                 point['status'] = model['EGARCH status']
-                point.update(ewma_total_variance=model['EWMA total variance'], ewma_horizon_volatility=model['EWMA horizon volatility'], ewma_training_returns=model['EWMA training returns'])
                 point.update(model=model['Model'], sessions=model['Trading sessions'], training_returns=model['Training returns'], calendar_status=model['Calendar status'], simulations=model['Simulations'], seed=model['Simulation seed'])
-                for key, label in [('egarch', 'EGARCH expiry RV'), ('ewma', 'EWMA expiry RV')]:
+                for key, label in [('egarch', 'EGARCH expiry RV')]:
                     value = model[label]
                     point[key] = round(value, 7) if math.isfinite(value) else None
             series['expiries'].append(point)
@@ -64,6 +81,11 @@ def publish():
     page = ROOT / 'index.html'
     html = page.read_text(encoding='utf-8')
     state = build(html, ROOT / 'volatility_lab' / 'data')
+    write_state(html, state)
+
+
+def write_state(html, state):
+    page = ROOT / 'index.html'
     compact = json.dumps(state, ensure_ascii=True, separators=(',', ':'), allow_nan=False).replace('<', '\\u003c')
     pattern = r'(<script type="application/json" id="deskPublicState">).*?(</script>)'
     html, count = re.subn(pattern, lambda m: m[1] + compact + m[2], html, flags=re.S)

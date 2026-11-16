@@ -1,10 +1,10 @@
-name: Publish website and official pricing inputs
+name: Publish website and daily forecasts
 
 on:
   push:
     branches: [master]
   schedule:
-    - cron: '0 3 * * 1-5'
+    - cron: '0 3,12,15 * * *'
   workflow_dispatch:
 
 permissions:
@@ -32,11 +32,17 @@ jobs:
           node scripts/test_frontend.cjs
           node scripts/test_pricing_policy.cjs
           cmp index.html docs/index.html
-      - name: Install locked PDF reader
+      - name: Install locked publishing and forecasting dependencies
         run: |
           python -m pip install uv==0.13.8
-          uv export --locked --only-group publishing --no-emit-project --output-file "$RUNNER_TEMP/pricing-reader.txt"
+          uv export --locked --no-dev --group publishing --no-emit-project --output-file "$RUNNER_TEMP/pricing-reader.txt"
           python -m pip install --require-hashes -r "$RUNNER_TEMP/pricing-reader.txt"
+      - name: Refresh completed broker candles and expiry forecasts
+        run: python scripts/refresh_forecasts.py
+      - name: Verify refreshed publication
+        run: |
+          node scripts/test_frontend.cjs
+          cmp index.html docs/index.html
       - name: Refresh RBI and NSE inputs in the deployment artifact
         id: pricing
         continue-on-error: true

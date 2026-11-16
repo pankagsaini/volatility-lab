@@ -22,7 +22,7 @@ def test_dated_public_archive_excludes_unverified_performance():
         if row.get('integrity_status') == 'UNVERIFIED_RECORD':
             assert not {'gross', 'net', 'charges', 'id', 'legs'} & row.keys()
     for symbol in ['NIFTY', 'BANKNIFTY']:
-        assert state['forecasts'][symbol]['training_through'] == '2026-11-11'
+        assert state['forecasts'][symbol]['training_through'] == state['forecast_update']['completed_session']
         assert len(state['forecasts'][symbol]['expiries']) > 1
         for row in state['forecasts'][symbol]['expiries']:
             assert row['as_of'].startswith(row['training_through'])
