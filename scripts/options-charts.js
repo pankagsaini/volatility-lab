@@ -57,10 +57,8 @@ const OptionsCharts = (() => {
       && day(forecastAt) === day(captured) && record.training_through <= day(captured);
     const iv = positive(row.brokerAtmIv) ? row.brokerAtmIv : null;
     const egarch = positive(record?.egarch) ? record.egarch : null;
-    const ewma = positive(record?.ewma) ? record.ewma : null;
-    return {iv, egarch, ewma, aligned, training:record?.training_through || null,
-      egarchGap:aligned && iv !== null && egarch !== null ? iv - egarch : null,
-      ewmaGap:aligned && iv !== null && ewma !== null ? iv - ewma : null};
+    return {iv, egarch, aligned, training:record?.training_through || null,
+      egarchGap:aligned && iv !== null && egarch !== null ? iv - egarch : null};
   }
   return {smile, straddleSeries, surface, forecast, comparison, auditedTrade};
 })();

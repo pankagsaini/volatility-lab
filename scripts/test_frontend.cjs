@@ -97,7 +97,7 @@ assert.deepEqual(Array.from(web.regimeChart.data.datasets[0].data),[6,null,7]);
 web.marketCatalog.NIFTY.push({...web.marketCatalog.NIFTY[0],expiry:'2026-12-29',dte:43,iv:25,brokerAtmIv:null});
 web.renderTab2Term();
 assert.equal(web.termChart.options.scales.x.type,'linear');
-assert.equal(web.termChart.data.datasets.length,3);
+assert.equal(web.termChart.data.datasets.length,2);
 assert.equal(web.termChart.data.datasets[0].pointValueLabels,'iv');
 assert.equal(web.termChart.options.scales.x.ticks.callback(43),'2026-12-29');
 assert.equal(web.termChart.data.datasets[0].data[1].y,null,'model IV cannot replace missing broker ATM IV');
@@ -106,7 +106,6 @@ assert.equal(web.termChart.data.datasets[1].data[0].y,null,'Missing forecast can
 web.window.VL_PUBLIC_STATE = {forecasts:{NIFTY:{expiries:[{expiry:'2026-11-17',as_of:'2026-11-11T15:40:00+05:30',training_through:'2026-11-11',egarch:17,ewma:16}]}}};
 web.renderTab2Term();
 assert.equal(web.termChart.data.datasets[1].data[0].y,17);
-assert.equal(web.termChart.data.datasets[2].data[0].y,16);
 assert(element('termMainTableBody').innerHTML.includes('0.000110'),'Total variance must contain numeric annual variance times DTE');
 
 // The shipped history may contain IV only with provenance; pre-capture years stay empty.
@@ -114,7 +113,6 @@ const charts = vm.runInContext('OptionsCharts',web);
 const comparisonState = {forecasts:{NIFTY:{expiries:[{expiry:'2026-11-17',as_of:'2026-11-11T15:40:00+05:30',training_through:'2026-11-11',egarch:17,ewma:null}]}}};
 const comparisonRow = {expiry:'2026-11-17',ivCapturedAt:'2026-11-11T15:45:00+05:30',brokerAtmIv:20};
 assert.equal(charts.comparison(comparisonState,'NIFTY',comparisonRow).egarchGap,3);
-assert.equal(charts.comparison(comparisonState,'NIFTY',comparisonRow).ewmaGap,null);
 for (const stamp of ['2026-11-12T15:45:00+05:30','2026-11-11T15:30:00+05:30','invalid']) {
   const result = charts.comparison(comparisonState,'NIFTY',{...comparisonRow,ivCapturedAt:stamp});
   assert.equal(result.egarch,17,'Dated reference remains visible');
