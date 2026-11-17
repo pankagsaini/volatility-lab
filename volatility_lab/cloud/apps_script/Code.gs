@@ -38,7 +38,7 @@ const CONFIG = {
   regularStartMins: 555, // 09:15 IST (9 * 60 + 15)
   regularEndMins: 931,   // 15:31 IST (15 * 60 + 31)
   eodEndMins: 22 * 60,   // 22:00 IST (1320)
-  pureSnapshotCaptureOnly: true, // Strictly capture 1-min Upstox snapshots only; skip EOD/reconcile/ledger I/O
+  pureSnapshotCaptureOnly: false, // Set to true or set Script Property PURE_SNAPSHOT_CAPTURE_ONLY='true' for 1-minute pure capture without inline ledger I/O
   completedEodMaxDays: 30,
   snapshotRetentionDays: SNAPSHOT_RETENTION_DAYS,
   doGetCacheSeconds: 55,
@@ -119,19 +119,21 @@ function runtimePolicy_(properties) {
 }
 
 function readRuntimeBudget_(properties, key, nowMs) {
-  const today = day_(new Date(nowMs));
   const stored = readJsonProperty_(properties, key, {});
   const startMs = Number(stored.windowStartMs);
   const endMs = Number(stored.windowEndMs);
-  // Reset runtime counter cleanly at midnight IST so prior-day runs never bleed into today's budget
-  if (stored.day && stored.day !== today) {
-    return { day: today, windowStartMs: nowMs, windowEndMs: nowMs + RUNTIME_BUDGET_WINDOW_MS, ms: 0 };
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+    // Preserve the prior calendar-day counter during migration to the rolling window.
+    return {
+      windowStartMs: nowMs,
+      windowEndMs: nowMs + RUNTIME_BUDGET_WINDOW_MS,
+      ms: Math.max(0, Number(stored.ms) || 0)
+    };
   }
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs > nowMs || endMs <= nowMs) {
-    return { day: today, windowStartMs: nowMs, windowEndMs: nowMs + RUNTIME_BUDGET_WINDOW_MS, ms: 0 };
+  if (startMs > nowMs || endMs <= nowMs) {
+    return { windowStartMs: nowMs, windowEndMs: nowMs + RUNTIME_BUDGET_WINDOW_MS, ms: 0 };
   }
   return {
-    day: today,
     windowStartMs: startMs,
     windowEndMs: endMs,
     ms: Math.max(0, Number(stored.ms) || 0)
@@ -1081,7 +1083,8 @@ function capture_(mode, recovery) {
   report.retrieved_at = new Date().toISOString();
 
   const evaluationStarted = Date.now();
-  if (mode === 'snapshot' && CONFIG.pureSnapshotCaptureOnly) {
+  const isPureCapture = Boolean(CONFIG.pureSnapshotCaptureOnly || properties.getProperty('PURE_SNAPSHOT_CAPTURE_ONLY') === 'true');
+  if (mode === 'snapshot' && isPureCapture) {
     // Pure capture mode: forward ledger pricing is performed post-capture on saved snapshots
     report.forward_test_status = report.status === 'complete' ? 'deferred_post_capture' : 'withheld_incomplete_snapshot';
   } else if (mode === 'snapshot' && report.status !== 'complete') {
@@ -1299,9 +1302,10 @@ function scheduledCapture() {
     (calendar?.checked <= today ? calendarSpecial_(calendar, today) : null);
   if (weekday > 5) { if (!sp) return; }
 
+  const isPure = Boolean(CONFIG.pureSnapshotCaptureOnly || properties.getProperty('PURE_SNAPSHOT_CAPTURE_ONLY') === 'true');
   // Pre-market reconciliation & 7-day snapshot pruning (reconcilePriorSession() / pruneOldMinuteSnapshots_(7))
   // are disabled in pureSnapshotCaptureOnly mode so 100% of trigger quota goes to 1-minute Upstox snapshots.
-  if (!CONFIG.pureSnapshotCaptureOnly && mins >= 420 && mins < 540) {
+  if (!isPure && mins >= 420 && mins < 540) {
     reconcilePriorSession();
     return;
   }
@@ -1314,7 +1318,7 @@ function scheduledCapture() {
   // Strictly run 'snapshot' mode during active market hours when pureSnapshotCaptureOnly is true
   const mode = (mins >= snapStart && mins <= snapEnd)
     ? 'snapshot'
-    : (!CONFIG.pureSnapshotCaptureOnly && mins >= eodStart && mins < eodEnd)
+    : (!isPure && mins >= eodStart && mins < eodEnd)
       ? 'eod'
       : null;
 
