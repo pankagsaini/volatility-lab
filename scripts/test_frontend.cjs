@@ -148,25 +148,52 @@ assert.deepEqual(Array.from(sessions.history([{d:'2026-11-06'},{d:'2026-11-12'}]
 assert.equal(sessions.session('2026-11-13').endMins,940);
 assert.equal(sessions.expiryMillis('2026-12-29'),Date.parse('2026-12-29T15:30:00+05:30'));
 
-// Custom criteria screening reads shipped strategy metrics and applies inclusive bounds.
+// Custom criteria screening reads only metrics the archive actually records, applies
+// inclusive bounds, and fails a criterion when the row has no value for it.
 const cxStart = html.indexOf('      var CUSTOM_METRICS = {');
 const cxEnd = html.indexOf('      function readCustomCriteria()');
 assert(cxStart >= 0 && cxEnd > cxStart, 'Custom criteria metric block must ship');
 vm.runInContext(html.slice(cxStart, cxEnd), web);
-const cxRow = {sym:'NIFTY',date:'2026-01-01',exp:'2026-01-08',strat:'S1',
-  sig:'HV30 12.34% · EWMA 11.00% · IV-RV Spread -0.40 pp'};
+const cxRow = {sym:'NIFTY',date:'2026-11-02',exp:'2026-11-09',strat:'S1',
+  sig:'IV 15.20% · HV30 12.69% · VRP +2.51 pp'};
 assert.equal(web.dteFromRow(cxRow),7);
-assert.equal(web.dteFromRow({date:'invalid',exp:'2026-01-08'}),null);
+assert.equal(web.dteFromRow({date:'invalid',exp:'2026-11-09'}),null);
 const cx = web.CUSTOM_METRICS;
-assert.equal(cx.ivrv.get(cxRow),-0.4,'Negative spreads keep their sign');
-assert.equal(cx.hv30.get(cxRow),12.34);
-assert.equal(cx.ivrv.get({sig:'HV30 9.00%'}),null,'Missing metric is null, never zero');
-assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.ivrv.get,min:0,max:null}]}),false);
-assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.ivrv.get,min:-1,max:0}]}),true,'Bounds are inclusive');
-assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.ivrv.get,min:0,max:null},{get:cx.hv30.get,min:null,max:20}]}),false,'AND requires every bound');
-assert.equal(web.rowMatchesCriteria(cxRow,{logic:'OR',criteria:[{get:cx.ivrv.get,min:0,max:null},{get:cx.hv30.get,min:null,max:20}]}),true,'OR accepts any bound');
+assert.deepEqual(Object.keys(cx),['vrp','hv30','hv10','ivhv10','rr25','bf25','dte'],'Only recorded archive metrics are offered');
+assert.equal(cx.vrp.get(cxRow),2.51);
+assert.equal(cx.hv30.get(cxRow),12.69);
+assert.equal(cx.hv10.get(cxRow),null,'HV10 is not recorded on S1 rows');
+assert.equal(cx.ivhv10.get({sig:'IV 14.89% · HV10 14.76% · IV−HV10 +0.13 pp'}),0.13);
+assert.equal(cx.ivhv10.get({sig:'IV 15.20% · HV10 14.70% · IV−HV10 -0.40 pp'}),-0.4,'Negative spreads keep their sign');
+assert.equal(cx.rr25.get({sig:'RR25 +2.90 pp · VRP +2.51 pp'}),2.9);
+assert.equal(cx.bf25.get({sig:'Basis -53.4 pts · BF25 +0.10 pp'}),0.1);
+assert.equal(cx.vrp.get({sig:'HV30 9.00%'}),null,'Missing metric is null, never zero');
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.vrp.get,min:3,max:null}]}),false);
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.vrp.get,min:2.5,max:2.6}]}),true,'Bounds are inclusive');
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.vrp.get,min:2,max:null},{get:cx.hv30.get,min:null,max:20}]}),true);
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.vrp.get,min:2,max:null},{get:cx.hv30.get,min:null,max:12}]}),false,'AND requires every bound');
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'OR',criteria:[{get:cx.rr25.get,min:null,max:null},{get:cx.hv30.get,min:null,max:20}]}),true,'OR accepts any bound');
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.rr25.get,min:null,max:null}]}),false,'A missing metric fails the criterion');
 assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.dte.get,min:7,max:7}]}),true);
 assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[]}),true,'No criteria matches everything');
+
+// The shipped archive must contain recorded rows only: no template replication, no imputed P&L.
+const archive = JSON.parse(html.match(/var tradeArchive = (\[[\s\S]*?\]);/)[1]);
+assert.equal(archive.length,72,'Archive ships only the recorded trades');
+assert.equal(new Set(archive.map(r=>r.date)).size,6,'Six recorded sessions');
+assert.equal(archive.filter(r=>r.sym==='NIFTY').length,36);
+assert.equal(archive.filter(r=>r.sym==='BANKNIFTY').length,36,'BANKNIFTY trades are included');
+for(const sym of ['NIFTY','BANKNIFTY']) {
+  for(const strat of ['S1','S2','S3','S4','S5','S6'])
+    assert.equal(archive.filter(r=>r.sym===sym&&r.strat===strat).length,6,sym+' '+strat+' has one recorded trade per session');
+}
+assert.equal(new Set(archive.map(r=>r.date+'|'+r.sym+'|'+r.strat)).size,72,'One row per session/index/structure');
+for(const row of archive) {
+  assert.equal(typeof row.gross,'number');
+  assert.equal(typeof row.charges,'number');
+  assert.equal(typeof row.capital,'number');
+  assert(row.sig && row.date && row.exp && row.legs);
+}
 assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.hv30.get,min:null,max:12}]}),false,'A bound above the value cannot pass');
 
 const embedded=JSON.parse(html.match(/var REAL_HISTORICAL_1Y = (.*);/)[1]);
