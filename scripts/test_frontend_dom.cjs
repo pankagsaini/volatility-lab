@@ -98,6 +98,8 @@ const server = http.createServer((request,response) => {
     assert.match(await page.locator('#btModeNote').textContent(),/not execution-verified|Research mode/);
     assert.equal(await page.locator('#resTradeCount').textContent(),'6 Recorded Trades');
     assert.match(await page.locator('#btLedgerIndex').textContent(),/NIFTY/);
+    assert.match(await page.locator('#btRestatedCount').textContent(),/38 of 72 recorded trades/);
+    assert.match(await page.locator('#btRestatedCount').textContent(),/recomputed HV/);
     await page.selectOption('#btSymbolSelect','BANKNIFTY');
     assert.equal(await page.locator('#btLedgerBody tr').count(),6,'BANKNIFTY is screened on the same six sessions');
     assert.match(await page.locator('#btLedgerIndex').textContent(),/BANKNIFTY/);
