@@ -91,7 +91,28 @@ const server = http.createServer((request,response) => {
     assert(all>=near && near>0);
     await page.selectOption('#smileViewSelect','2D');
     await page.locator('#wsBacktestBtn').click();
+    // Default mode is the explicitly labelled research archive; the strict verified gate stays intact.
+    assert.notEqual(await page.locator('#resNetPnl').textContent(),'—');
+    assert.equal(await page.locator('#btScorecardBody tr').count(),7);
+    assert((await page.locator('#btLedgerBody tr').count())>0);
+    assert.match(await page.locator('#btModeNote').textContent(),/not execution-verified|Research mode/);
+    await page.locator('#btModeVerified').click();
     assert.equal(await page.locator('#resNetPnl').textContent(),'—');
+    assert.match(await page.locator('#btScorecardBody').textContent(),/Performance unavailable until the trade archive is verified/);
+    assert.match(await page.locator('#btLedgerBody').textContent(),/No verified point-in-time trades/);
+    await page.locator('#btModeResearch').click();
+    assert.notEqual(await page.locator('#resNetPnl').textContent(),'—');
+    await page.selectOption('#btPresetSelect','CUSTOM');
+    assert(await page.locator('#btCustomPanel').isVisible());
+    assert((await page.locator('#btLedgerBody tr').count())>0,'Default custom criteria must match archived trades');
+    assert.match(await page.locator('#cxHint').textContent(),/archive matches/);
+    await page.fill('#cx_min_ivrv','1000');
+    await page.waitForFunction(()=>document.querySelectorAll('#btLedgerBody tr').length===1);
+    assert.match(await page.locator('#btLedgerBody').textContent(),/No archived trade matches/);
+    await page.locator('#cxResetBtn').click();
+    assert(!(await page.locator('#cx_on_ivrv').isChecked()));
+    await page.selectOption('#btPresetSelect','S3');
+    assert(!(await page.locator('#btCustomPanel').isVisible()));
     await page.locator('#wsForwardBtn').click();
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Read-only archive/);
     assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/\d+ recorded closes/);

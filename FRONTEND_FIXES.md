@@ -8,6 +8,10 @@ The embedded expiry catalogue is dated 12 November 2026, 15:59 IST. Its IVs use 
 
 Other fixes include true calendar spacing on term and strike charts, unavailable first-interval forward variance, observed-only statistics, leg-by-leg expiry payoffs, and a clearly labelled one-day Black-76 stress estimate before fees. Missing ledger data is displayed as unavailable, not zero performance. Shorter tabs, larger controls, horizontal table scrolling and a bounded strike table improve readability.
 
+The backtest workspace now ships the full 2,544-record archive (212 sessions, 1 January–9 November 2026, NIFTY and BANKNIFTY, six strategies per index). That archive is research data, not execution evidence, so the workspace has two explicitly labelled display modes. **Research archive** is the default and renders every archived trade behind a "not execution-verified" notice. **Verified only** keeps the strict `OptionsCharts.auditedTrade()` gate (event-time provenance, `decision_at`/`available_at` ordering and entry/exit capture sources) and stays empty until such evidence exists. The preset selector also offers **CX · Custom Criteria Builder**, which screens the archive with inclusive bounds on IV-RV spread, HV30, HV10, RR25, BF25 and days-to-expiry, combined with AND/OR logic and an optional single-structure filter. Exported CSV rows carry the exit reason and a `research_archive` / `execution_verified` provenance column.
+
+The builder deliberately excludes model-forecast levels (EWMA or EGARCH). The archive stores no point-in-time forecast per session, and the published term-structure forecasts are trained through 13 November 2026 — later than every archived trade — so screening with them would be look-ahead. A model criterion belongs in the builder only once the archive carries a per-session forecast trained through the day before each decision, together with the derived `IV − GARCH` gap the S1/S2 rules actually use.
+
 Validation:
 
 - `node scripts/test_frontend.cjs`
