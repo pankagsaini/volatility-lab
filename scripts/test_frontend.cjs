@@ -19,7 +19,7 @@ vm.runInContext(optionsAsset,web);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8'),web);
 for (const name of ['chartNumber','observedIv','observedSpread','observedMean','distribution','formatLiveNumber',
   'forwardInterval','scenarioLegs','black76Price','normCdf','normPdf','currentRow','chartOpts',
-  'renderTab1Regime','renderTab2Term','renderTab4Straddle']) {
+  'renderTab1Regime','renderTab2Term','renderTab4Straddle','rowMatchesCriteria']) {
   const start = html.indexOf('      function '+name+'(');
   assert(start>=0, name);
   vm.runInContext(html.slice(start, html.indexOf('\n      }',start)+8),web);
@@ -147,6 +147,28 @@ assert.deepEqual(Array.from(sessions.history([{d:'2026-11-06'},{d:'2026-11-12'}]
   ['2026-11-06','2026-11-08','2026-11-09','2026-11-11','2026-11-12']);
 assert.equal(sessions.session('2026-11-13').endMins,940);
 assert.equal(sessions.expiryMillis('2026-12-29'),Date.parse('2026-12-29T15:30:00+05:30'));
+
+// Custom criteria screening reads shipped strategy metrics and applies inclusive bounds.
+const cxStart = html.indexOf('      var CUSTOM_METRICS = {');
+const cxEnd = html.indexOf('      function readCustomCriteria()');
+assert(cxStart >= 0 && cxEnd > cxStart, 'Custom criteria metric block must ship');
+vm.runInContext(html.slice(cxStart, cxEnd), web);
+const cxRow = {sym:'NIFTY',date:'2026-01-01',exp:'2026-01-08',strat:'S1',
+  sig:'HV30 12.34% · EWMA 11.00% · IV-RV Spread -0.40 pp'};
+assert.equal(web.dteFromRow(cxRow),7);
+assert.equal(web.dteFromRow({date:'invalid',exp:'2026-01-08'}),null);
+const cx = web.CUSTOM_METRICS;
+assert.equal(cx.ivrv.get(cxRow),-0.4,'Negative spreads keep their sign');
+assert.equal(cx.hv30.get(cxRow),12.34);
+assert.equal(cx.ivrv.get({sig:'HV30 9.00%'}),null,'Missing metric is null, never zero');
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.ivrv.get,min:0,max:null}]}),false);
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.ivrv.get,min:-1,max:0}]}),true,'Bounds are inclusive');
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.ivrv.get,min:0,max:null},{get:cx.hv30.get,min:null,max:20}]}),false,'AND requires every bound');
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'OR',criteria:[{get:cx.ivrv.get,min:0,max:null},{get:cx.hv30.get,min:null,max:20}]}),true,'OR accepts any bound');
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.dte.get,min:7,max:7}]}),true);
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[]}),true,'No criteria matches everything');
+assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.hv30.get,min:null,max:12}]}),false,'A bound above the value cannot pass');
+
 const embedded=JSON.parse(html.match(/var REAL_HISTORICAL_1Y = (.*);/)[1]);
 for(const rows of Object.values(embedded)) for(const row of rows) {
   if(row.iv!==null) {assert.equal(web.observedIv(row),row.iv);assert(row.archiveFile);}
