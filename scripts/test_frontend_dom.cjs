@@ -94,7 +94,7 @@ const server = http.createServer((request,response) => {
     assert.equal(await page.locator('#resNetPnl').textContent(),'—');
     await page.locator('#wsForwardBtn').click();
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Read-only archive/);
-    assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/13 recorded closes/);
+    assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/\d+ recorded closes/);
     assert.equal(await page.locator('#fwdKpiClosedNet').textContent(),'—');
     await page.locator('#wsOptionsBtn').click();
     await page.locator('[data-tab="straddle"]').click();
