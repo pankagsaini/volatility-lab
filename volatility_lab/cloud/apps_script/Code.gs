@@ -1,6 +1,12 @@
 /**
  * ==============================================================================
- * VOLATILITY LAB — CLOUD ARCHIVE, BLACK-76 FORWARD TEST & INTEGRITY ENGINE (v21.0)
+ * VOLATILITY LAB — CLOUD ARCHIVE, BLACK-76 FORWARD TEST & INTEGRITY ENGINE (v23.0 Pure-Capture Edition)
+ *
+ * Free-Tier Quota Optimization:
+ * Set Script Property PURE_SNAPSHOT_CAPTURE_ONLY = 'true' to isolate 1-minute raw Upstox
+ * captures (09:15–15:31 IST) and defer forward test ledger pricing to post-capture.
+ * This reduces trigger execution time from ~15s to ~2s, keeping total daily runtime
+ * under 15 minutes and preventing 90-minute quota exhaustion before 15:30 IST market close.
  * ==============================================================================
  * Private, read-only automated data pipeline for Upstox NSE Market Feeds.
  *
@@ -1070,7 +1076,11 @@ function capture_(mode, recovery) {
   report.retrieved_at = new Date().toISOString();
 
   const evaluationStarted = Date.now();
-  if (mode === 'snapshot' && report.status !== 'complete') {
+  const isPureMode = properties.getProperty('PURE_SNAPSHOT_CAPTURE_ONLY') === 'true';
+  if (mode === 'snapshot' && isPureMode) {
+    // Pure capture mode: forward ledger pricing is performed post-capture on saved snapshots
+    report.forward_test_status = report.status === 'complete' ? 'deferred_post_capture' : 'withheld_incomplete_snapshot';
+  } else if (mode === 'snapshot' && report.status !== 'complete') {
     // A partial capture may omit an expiry, a leg, or the index quote.  It is
     // retained for diagnostics but cannot create or mark a forward-test trade.
     report.forward_test_status = 'withheld_incomplete_snapshot';
@@ -1300,7 +1310,9 @@ function scheduledCapture() {
   if (weekend && !sp) return;
 
   // Pre-market reconciliation & 7-day snapshot pruning window: 07:00 - 09:00 IST (minutes 420 to 540)
-  if (mins >= 420 && mins < 540) {
+  // Skipped when PURE_SNAPSHOT_CAPTURE_ONLY is active so 100% of runtime budget goes to market hours
+  const isPureCapture = properties.getProperty('PURE_SNAPSHOT_CAPTURE_ONLY') === 'true';
+  if (!isPureCapture && mins >= 420 && mins < 540) {
     reconcilePriorSession();
     return;
   }
