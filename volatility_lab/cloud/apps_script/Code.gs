@@ -1,13 +1,12 @@
 /**
  * ==============================================================================
- * VOLATILITY LAB — PURE 1-MINUTE UPSTOX SNAPSHOT COLLECTOR (v23.0 Pure-Capture Edition)
+ * VOLATILITY LAB — CLOUD ARCHIVE, BLACK-76 FORWARD TEST & INTEGRITY ENGINE (v23.0 Pure-Capture Edition)
  *
- * Architecture:
- * - Scheduled 1-minute trigger ONLY captures raw 1-minute Upstox data (09:15–15:31 IST)
- *   and saves compressed .json.gz snapshots to Google Drive.
- * - Zero in-capture forward_test_ledger.json reads/writes, zero EOD polling loops,
- *   and zero pre-market reconciliation runs during scheduled triggers.
- * - All forward-ledger pricing and downstream analytics run post-capture on snapshots.
+ * Free-Tier Quota Optimization:
+ * Set Script Property PURE_SNAPSHOT_CAPTURE_ONLY = 'true' to isolate 1-minute raw Upstox
+ * captures (09:15–15:31 IST) and defer forward test ledger pricing to post-capture.
+ * This reduces trigger execution time from ~15s to ~2s, keeping total daily runtime
+ * under 15 minutes and preventing 90-minute quota exhaustion before 15:30 IST market close.
  * ==============================================================================
  * Private, read-only automated data pipeline for Upstox NSE Market Feeds.
  *
@@ -36,9 +35,7 @@ const CONFIG = {
   timeZone: 'Asia/Kolkata',
   riskFreeRate: 0.066,
   regularStartMins: 555, // 09:15 IST (9 * 60 + 15)
-  regularEndMins: 931,   // 15:31 IST (15 * 60 + 31)
-  eodEndMins: 22 * 60,   // 22:00 IST (1320)
-  pureSnapshotCaptureOnly: false, // Set to true or set Script Property PURE_SNAPSHOT_CAPTURE_ONLY='true' for 1-minute pure capture without inline ledger I/O
+  eodEndMins: 22 * 60,           // 22:00 IST (1320)
   completedEodMaxDays: 30,
   snapshotRetentionDays: SNAPSHOT_RETENTION_DAYS,
   doGetCacheSeconds: 55,
@@ -276,8 +273,7 @@ function savePendingEod_(pending) {
 function api_(path, params) {
   const allowedEndpoint = (
     /^\/v2\/(option\/(chain|contract)|market-quote\/quotes|market\/holidays|historical-candle)/.test(path) ||
-    path.startsWith('/v3/historical-candle/') ||
-    path.startsWith('/v2/historical-candle/')
+    path.startsWith('/v3/historical-candle/')
   );
   if (!allowedEndpoint) {
     throw new Error('Endpoint not allowed');
@@ -454,7 +450,7 @@ function catalogue_(now) {
  * NSE/FAOP/74467 and the December 2026 CAS rules define regular F&O hours.
  */
 function regularCloseMinutes_(day) {
-  return day < '2026-08-03' ? 930 : CONFIG.regularEndMins;
+  return day < '2026-08-03' ? 930 : day < '2026-12-07' ? 940 : 945;
 }
 
 function indexExpiryMillis_(day) {
@@ -800,16 +796,11 @@ function quoteStrikes_(rec, ledger) {
   const rows = rec.data, step = sym === 'NIFTY' ? 50 : 100;
   const spot = Number(rows[0] && rows[0].underlying_spot_price);
   const atm = Math.round(spot / step) * step;
-  const anchor = Number(rec.straddle_anchor_strike) > 0 ? Number(rec.straddle_anchor_strike) : atm;
   const strikes = new Set();
-  for (let offset = -6; offset <= 6; ++offset) {
-    strikes.add(atm + offset * step);
-    strikes.add(anchor + offset * step);
-  }
-  for (const baseK of [atm, anchor]) {
-    for (const strat of ['S1','S2','S3','S4','S5','S6']) {
-      buildStrategyLegs_(sym, baseK, strat).forEach(leg => strikes.add(leg.strike));
-    }
+  if (rec.straddle_anchor_strike > 0) strikes.add(rec.straddle_anchor_strike);
+  for (let offset = -4; offset <= 4; ++offset) strikes.add(atm + offset * step);
+  for (const strat of ['S1','S2','S3','S4','S5','S6']) {
+    buildStrategyLegs_(sym, atm, strat).forEach(leg => strikes.add(leg.strike));
   }
   for (const pos of ledger?.open_positions || []) {
     if (pos.sym === sym && pos.exp === expiry) (pos.legs || []).forEach(leg => strikes.add(Number(leg.strike)));
@@ -1063,35 +1054,39 @@ function capture_(mode, recovery) {
     }
 
     if (mode === 'snapshot') {
+      try { ledger = loadForwardLedger_(ledgerState); } catch (err) { ledgerError = err; }
       try {
-        attachStraddleAnchors_(report, properties);
-        // Pure 1-minute capture: enrich quotes around anchor + ATM without reading forward_test_ledger.json from Drive
-        enrichSnapshotInputs_(report, started, null, properties.getProperty('OPTION_QUOTE_DEPTH') === 'full');
+        attachStraddleAnchors_(report,properties);
+        enrichSnapshotInputs_(report, started, ledger, properties.getProperty('OPTION_QUOTE_DEPTH') === 'full');
         report.enrichment_status = report.input_diagnostics.length ? 'partial' : 'complete';
       } catch (err) {
         report.enrichment_status = 'failed';
         report.input_diagnostics = (report.input_diagnostics || []).concat([{item:'enrichment',reason:safeError_(err)}]);
       }
     }
-    if (mode === 'eod') report.closing_risk = closingRiskRows_(report, targetDay);
+    if (mode === 'eod') report.closing_risk = closingRiskRows_(report,targetDay);
     report.status = (report.errors.length || report.pending.length) ? 'partial' : 'complete';
   } catch (err) {
     report.errors.push({ item: 'catalogue', reason: safeError_(err) });
   }
 
   report.fetch_seconds = (Date.now() - started) / 1000;
+  // Session gates use the completed capture time; per-instrument event times
+  // remain separate and are validated before entry or MTM.
   report.retrieved_at = new Date().toISOString();
 
   const evaluationStarted = Date.now();
-  const isPureCapture = Boolean(CONFIG.pureSnapshotCaptureOnly || properties.getProperty('PURE_SNAPSHOT_CAPTURE_ONLY') === 'true');
-  if (mode === 'snapshot' && isPureCapture) {
+  const isPureMode = properties.getProperty('PURE_SNAPSHOT_CAPTURE_ONLY') === 'true';
+  if (mode === 'snapshot' && isPureMode) {
     // Pure capture mode: forward ledger pricing is performed post-capture on saved snapshots
     report.forward_test_status = report.status === 'complete' ? 'deferred_post_capture' : 'withheld_incomplete_snapshot';
   } else if (mode === 'snapshot' && report.status !== 'complete') {
+    // A partial capture may omit an expiry, a leg, or the index quote.  It is
+    // retained for diagnostics but cannot create or mark a forward-test trade.
     report.forward_test_status = 'withheld_incomplete_snapshot';
   } else if (mode === 'snapshot' && report.records && report.records.length) {
     try {
-      ledger = loadForwardLedger_(ledgerState);
+      if (ledgerError) throw ledgerError;
       if (report.enrichment_status === 'failed') throw new Error('Timestamped quote enrichment unavailable');
       const forwardLedger = evaluateForwardTest_(report, ledger, ledgerState);
       if (!forwardLedger) throw new Error('Forward evaluator returned no ledger');
@@ -1297,28 +1292,41 @@ function scheduledCapture() {
   try {
     customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
   } catch (e) {}
-  const calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
+  const calendar = readJsonProperty_(properties,'MARKET_CALENDAR',null);
   let sp = customSpecial[today] || SPECIAL_SESSIONS[today] ||
-    (calendar?.checked <= today ? calendarSpecial_(calendar, today) : null);
-  if (weekday > 5) { if (!sp) return; }
+    (calendar?.checked <= today ? calendarSpecial_(calendar,today) : null);
+  const weekend = weekday > 5;
+  // Refresh before selecting a window, including after a failed premarket lookup.
+  // Unknown weekends can still discover an announced afternoon session.
+  if (!sp && mins >= 420 && mins < CONFIG.eodEndMins &&
+      (calendar?.checked !== today || !calendar.special)) {
+    const session = marketWindow_(now);
+    if (session.special) sp = session;
+    else if (weekend && session.label === 'Market calendar unavailable' && mins >= 540) {
+      const status = 'Weekend session unverified · NSE F&O calendar unavailable · ' + today;
+      if (properties.getProperty('COLLECTOR_STATUS') !== status) properties.setProperty('COLLECTOR_STATUS',status);
+    }
+  }
+  if (weekend && !sp) return;
 
-  const isPure = Boolean(CONFIG.pureSnapshotCaptureOnly || properties.getProperty('PURE_SNAPSHOT_CAPTURE_ONLY') === 'true');
-  // Pre-market reconciliation & 7-day snapshot pruning (reconcilePriorSession() / pruneOldMinuteSnapshots_(7))
-  // are disabled in pureSnapshotCaptureOnly mode so 100% of trigger quota goes to 1-minute Upstox snapshots.
-  if (!isPure && mins >= 420 && mins < 540) {
+  // Pre-market reconciliation & 7-day snapshot pruning window: 07:00 - 09:00 IST (minutes 420 to 540)
+  // Skipped when PURE_SNAPSHOT_CAPTURE_ONLY is active so 100% of runtime budget goes to market hours
+  const isPureCapture = properties.getProperty('PURE_SNAPSHOT_CAPTURE_ONLY') === 'true';
+  if (!isPureCapture && mins >= 420 && mins < 540) {
     reconcilePriorSession();
     return;
   }
 
   const snapStart = sp ? sp.startMins : CONFIG.regularStartMins; // 555 (09:15 IST)
-  const snapEnd = sp ? sp.endMins : regularCloseMinutes_(today); // 931 (15:31 IST)
+  const snapEnd = sp ? sp.endMins : regularCloseMinutes_(today);
   const eodStart = sp ? sp.eodStartMins : snapEnd + 5;
-  const eodEnd = sp ? sp.eodEndMins : CONFIG.eodEndMins;
+  const eodEnd = sp ? sp.eodEndMins : CONFIG.eodEndMins;         // 1320 (22:00 IST)
 
-  // Strictly run 'snapshot' mode during active market hours when pureSnapshotCaptureOnly is true
+  // Intraday snapshots: regular or published special session, inclusive
+  // EOD candle polling begins five minutes after the regular session closes.
   const mode = (mins >= snapStart && mins <= snapEnd)
     ? 'snapshot'
-    : (!isPure && mins >= eodStart && mins < eodEnd)
+    : (mins >= eodStart && mins < eodEnd)
       ? 'eod'
       : null;
 
@@ -1647,7 +1655,7 @@ function captureIntegrity_(properties,stamp,day) {
 function doGet(e) {
   const action = e?.parameter?.action || 'latest';
   const callback = e?.parameter?.callback || '';
-  const readAction = ['latest', 'refresh', 'ledger', 'forward_ledger', 'list_snapshots', 'snapshot_by_id', 'status'].includes(action);
+  const readAction = ['latest', 'ledger', 'forward_ledger'].includes(action);
   if (callback && (!readAction || !/^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/.test(callback))) {
     return ContentService.createTextOutput(JSON.stringify({error:'Invalid callback'})).setMimeType(ContentService.MimeType.JSON);
   }
@@ -1784,39 +1792,21 @@ function doGet(e) {
       return respond(ledgerStr);
     }
 
-    if (action === 'list_snapshots') {
-      const targetDay = (e && e.parameter && e.parameter.day) ? String(e.parameter.day).slice(0, 10) : day_(new Date());
-      const page = listDriveFilesPage_(folder_().getId(), '', 'name');
-      const snaps = (page.files || []).filter(f =>
-        f.name.startsWith(targetDay + '_snapshot_') && f.name.endsWith('_complete.json.gz')
-      );
-      return respond(JSON.stringify({ day: targetDay, snapshots: snaps }));
-    }
-
-    if (action === 'snapshot_by_id') {
-      const reqId = e && e.parameter ? String(e.parameter.file_id || '') : '';
-      if (!/^[\w-]{10,128}$/.test(reqId)) throw new Error('Invalid snapshot file_id');
-      const f = DriveApp.getFileById(reqId);
-      const rawJson = Utilities.ungzip(f.getBlob()).getDataAsString();
-      return respond(rawJson);
-    }
-
-    const force = Boolean(e && e.parameter && (e.parameter.force === '1' || e.parameter.force === 'true' || action === 'refresh'));
-    let fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
-    const last = readJsonProperty_(properties, 'LAST_SNAPSHOT', null);
-    if (!force && fileId && last && last.file_id === fileId && last.status === 'complete' && last.retrieved_at &&
+    const fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
+    const last = readJsonProperty_(properties,'LAST_SNAPSHOT',null);
+    if (fileId && last && last.file_id === fileId && last.status === 'complete' && last.retrieved_at &&
         e?.parameter?.since === last.retrieved_at) {
       return respond(JSON.stringify({unchanged:true,retrieved_at:last.retrieved_at,
         capture_integrity:captureIntegrity_(properties,last.retrieved_at,last.day)}));
     }
-    if (!force && cache && fileId) {
+    if (cache && fileId) {
       const cachedSnap = cache.get('DOGET_LATEST_SNAPSHOT_JSON_' + fileId);
       if (cachedSnap) return respond(cachedSnap);
     }
 
     let file = null;
 
-    if (fileId && !force) {
+    if (fileId) {
       try {
         file = DriveApp.getFileById(fileId);
       } catch (err) {
@@ -1825,15 +1815,13 @@ function doGet(e) {
     }
 
     if (!file) {
+      // A lost file-id must not make recovery dependent on Drive's arbitrary
+      // iterator order or a small prefix of an indefinitely retained archive.
       const page = listDriveFilesPage_(folder_().getId(), '', 'modifiedTime desc');
       const latest = (page.files || []).find(f =>
         /^\d{4}-\d{2}-\d{2}_snapshot_\d{6}_complete\.json\.gz$/.test(f.name)
       );
-      if (latest && latest.id) {
-        file = DriveApp.getFileById(latest.id);
-        fileId = latest.id;
-        properties.setProperty('LATEST_SNAPSHOT_FILE_ID', fileId);
-      }
+      if (latest && latest.id) file = DriveApp.getFileById(latest.id);
     }
 
     if (!file) {
@@ -1842,12 +1830,6 @@ function doGet(e) {
 
     const uncompressed = Utilities.ungzip(file.getBlob());
     const payload = JSON.parse(uncompressed.getDataAsString());
-    payload.drive_file_id = file.getId();
-    payload.drive_file_name = file.getName();
-    payload.manual_refresh = force;
-    if (e && e.parameter && e.parameter.include_ledger === '1' && !payload.forward_test_ledger) {
-      try { payload.forward_test_ledger = loadForwardLedger_(); } catch (err) {}
-    }
     if (payload.schema !== 1 || payload.provider !== 'Upstox' || payload.mode !== 'snapshot'
         || payload.status !== 'complete' || payload.nfo_session_validated !== true
         || !Array.isArray(payload.records) || !payload.records.length) {
@@ -2206,7 +2188,6 @@ function readLedgerContent_(content) {
   }
 }
 
-// Signature alias: function loadForwardLedger_()
 function loadForwardLedger_(state) {
   if (state) state.loaded = false;
   const file = ledgerFile_('forward_test_ledger.json');
@@ -2217,7 +2198,6 @@ function loadForwardLedger_(state) {
   return ledger;
 }
 
-// Signature alias: function saveForwardLedger_(ledger)
 function saveForwardLedger_(ledger, state) {
   // State belongs to this evaluation only, under the caller's script lock.
   // No-argument callers still read and validate the authoritative file.
@@ -2324,7 +2304,6 @@ function forwardRiskMetrics_(report, sym, snapshotDay) {
  * using Black-76 Put-Call Parity Forward F = K + exp(r*T)*(C - P) and
  * strictly enforcing MIN_FORWARD_DATE = '2026-11-11' AND live market hours (exchange session hours).
  */
-// Signature alias: function evaluateForwardTest_(report)
 function evaluateForwardTest_(report, ledger, ledgerState) {
   if (!report || !Array.isArray(report.records)) return null;
   if (report.status !== 'complete') throw new Error('Forward test requires a complete snapshot');
@@ -2542,15 +2521,14 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
     const ch = chainMap[key];
     const positionMkt = ch && ch.mkt ? ch.mkt : mkt;
     const lots = Number(pos.lots || 1);
-    const lotQty = pos.sym === 'NIFTY' ? 65 : 30;
-    const totalQty = lotQty * lots;
+    const lotQty = (pos.sym === 'NIFTY' ? 65 : 30) * lots;
     const legs = Array.isArray(pos.legs) ? pos.legs : [];
     let allLegsFresh = Boolean(ch && ch.fresh && legs.length);
     let gross = 0.0;
     const marks = [];
     legs.forEach(l => {
       const node = ch && ch.strikes ? ch.strikes[l.strike] : null;
-      const qty = totalQty * Number(l.mult || 1);
+      const qty = lotQty * Number(l.mult || 1);
       const px = executableQuote_(node, l.type, l.side, qty, true, ch && ch.retrievedAt);
       if (!(Number.isFinite(px) && px > 0)) {
         allLegsFresh = false;
