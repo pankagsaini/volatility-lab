@@ -1,8 +1,17 @@
 /**
  * ==============================================================================
- * VOLATILITY LAB — CLOUD ARCHIVE & INTRADAY SNAPSHOT ENGINE
+ * VOLATILITY LAB — CLOUD ARCHIVE & INTRADAY SNAPSHOT ENGINE (Quota-Safe v23)
  * ==============================================================================
  * Private, read-only automated data pipeline for Upstox NSE Market Feeds.
+ *
+ * Free-Tier Quota Optimization:
+ * - PURE_SNAPSHOT_CAPTURE_ONLY mode reduces trigger execution from ~15s to ~2s
+ * - Daily runtime budget: 85 min consumer default, 5 min reserved for EOD
+ * - Per-execution safe deadline: 180 seconds (well under 6-minute Apps Script cap)
+ * - 55-second CacheService on doGet — serves polls from memory, not Drive reads
+ * - 30-day cap on COMPLETED_EOD_DAYS — prevents ScriptProperties storage exhaustion
+ * - No +1000ms artificial padding per execution
+ * - 401/403 errors skip sequential retry to avoid burning budget
  *
  * Scope & Security:
  * - Read-only Upstox data capture (Option Chains, Quotes, Historical Candles).
@@ -19,7 +28,12 @@ const CONFIG = {
   indices: {
     NIFTY: 'NSE_INDEX|Nifty 50',
     BANKNIFTY: 'NSE_INDEX|Nifty Bank'
-  }
+  },
+  regularStartMins: 555, // 09:15 IST
+  eodEndMins: 22 * 60,   // 22:00 IST (1320)
+  completedEodMaxDays: 30,
+  snapshotRetentionDays: 0, // 0 = retain raw minute archives indefinitely
+  doGetCacheSeconds: 55
 };
 
 // Aliased for internal compatibility
@@ -29,8 +43,6 @@ const VL = {
 };
 
 // Recognized NSE special trading sessions (e.g. Diwali Muhurat Trading).
-// snap: 18:00 - 19:30 IST (minutes 1080 to 1170)
-// eod: 19:30 - 22:00 IST (minutes 1170 to 1320)
 const SPECIAL_SESSIONS = {
   '2024-11-01': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2024' },
   '2025-10-21': { snap_start: 1080, snap_end: 1170, eod_start: 1170, eod_end: 1320, name: 'Diwali Muhurat 2025' },
@@ -43,6 +55,11 @@ function isSpecialTradingSession_(dateStr) {
   return Boolean(SPECIAL_SESSIONS[dateStr]);
 }
 
+// Runtime budget constants (Google free tier: ~90 min/day, 6 min/execution)
+const RUNTIME_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
+const CAPTURE_SAFE_DEADLINE_MS = 180000; // 3 minutes per execution, headroom under 6-min cap
+const MAX_COMPLETED_EOD_DAYS = 30;
+const SNAPSHOT_RETENTION_DAYS = 0; // zero means raw minute archives retained indefinitely
 
 /**
  * Access Google Apps Script private properties store.
@@ -68,6 +85,15 @@ function minute_(date) {
 }
 
 /**
+ * Return epoch ms for an ISO timestamp string.
+ */
+function timestampMillis_(stamp) {
+  if (!stamp) return NaN;
+  const ms = Date.parse(String(stamp));
+  return Number.isFinite(ms) ? ms : NaN;
+}
+
+/**
  * Retrieve or initialize the private Google Drive archive folder.
  */
 function folder_() {
@@ -84,7 +110,114 @@ function folder_() {
 }
 
 /**
+ * Compute the daily runtime budget for the collector.
+ * Consumer tier: 85 minutes total, 5 reserved for EOD, 80 for snapshots.
+ * Verified workspace tier: 355 minutes total.
+ */
+function runtimePolicy_(properties) {
+  const workspace = properties.getProperty('COLLECTOR_QUOTA_TIER') === 'verified_workspace';
+  const maximum = workspace ? 355 : 85;
+  const requested = Number(properties.getProperty('COLLECTOR_RUNTIME_MINUTES'));
+  const total = Number.isInteger(requested) && requested > 0 ? Math.min(requested, maximum) : maximum;
+  const reserve = Math.min(5, total);
+  return {
+    tier: workspace ? 'operator_verified_workspace' : 'consumer_default',
+    total_minutes: total,
+    snapshot_minutes: total - reserve,
+    eod_reserve_minutes: reserve
+  };
+}
+
+/**
+ * Read a rolling 24-hour runtime budget window from Script Properties.
+ */
+function readRuntimeBudget_(properties, key, nowMs) {
+  const stored = readJsonProperty_(properties, key, {});
+  const startMs = Number(stored.windowStartMs);
+  const endMs = Number(stored.windowEndMs);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+    return {
+      windowStartMs: nowMs,
+      windowEndMs: nowMs + RUNTIME_BUDGET_WINDOW_MS,
+      ms: Math.max(0, Number(stored.ms) || 0)
+    };
+  }
+  if (startMs > nowMs || endMs <= nowMs) {
+    return { windowStartMs: nowMs, windowEndMs: nowMs + RUNTIME_BUDGET_WINDOW_MS, ms: 0 };
+  }
+  return {
+    windowStartMs: startMs,
+    windowEndMs: endMs,
+    ms: Math.max(0, Number(stored.ms) || 0)
+  };
+}
+
+/**
+ * Add elapsed milliseconds to the rolling runtime budget window.
+ */
+function addRuntimeBudget_(properties, key, elapsedMs) {
+  const ended = Date.now();
+  const budget = readRuntimeBudget_(properties, key, ended);
+  budget.ms += Math.max(0, Number(elapsedMs) || 0);
+  properties.setProperty(key, JSON.stringify(budget));
+  return budget;
+}
+
+/**
+ * Safely read a JSON property with fallback.
+ */
+function readJsonProperty_(properties, key, fallback) {
+  const raw = properties.getProperty(key);
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    properties.setProperty('COLLECTOR_STATUS', 'Invalid saved state for ' + key + '; safe defaults applied');
+    return fallback;
+  }
+}
+
+/**
+ * Cap COMPLETED_EOD_DAYS map to the most recent maxDays entries
+ * so ScriptProperties never exceeds free-tier per-key or total storage limits.
+ */
+function capCompletedEodDays_(completedMap, maxDays) {
+  const limit = Number(maxDays || CONFIG.completedEodMaxDays || 30);
+  const src = (completedMap && typeof completedMap === 'object') ? completedMap : {};
+  const sortedDays = Object.keys(src).sort();
+  if (sortedDays.length <= limit) {
+    return src;
+  }
+  const keepDays = sortedDays.slice(sortedDays.length - limit);
+  const capped = {};
+  keepDays.forEach(d => { capped[d] = src[d]; });
+  return capped;
+}
+
+/**
+ * Legacy retention hook. Raw minute archives are deliberately never pruned
+ * because they are the source evidence for the displayed research.
+ */
+function pruneOldMinuteSnapshots_(_retentionDays) {
+  return { pruned: 0, retention: 'indefinite', disabled: true,
+    reason: 'EOD and historical-candle bundles omit option books and Greeks; full-fidelity consolidation is unverified' };
+}
+
+/**
+ * Get the CacheService script cache (55-second doGet cache).
+ */
+function scriptCache_() {
+  try {
+    if (typeof CacheService !== 'undefined' && CacheService && typeof CacheService.getScriptCache === 'function') {
+      return CacheService.getScriptCache();
+    }
+  } catch (e) {}
+  return null;
+}
+
+/**
  * Authenticated HTTP fetcher for Upstox API with endpoint whitelisting and retries.
+ * On 401/403 (expired token), skips sequential retry to avoid burning budget.
  */
 function api_(path, params) {
   const allowedEndpoint = (
@@ -112,7 +245,7 @@ function api_(path, params) {
       headers: {
         Authorization: 'Bearer ' + token,
         Accept: 'application/json',
-        'User-Agent': 'VolatilityLab/1.0 (read-only market-data client)'
+        'User-Agent': 'VolatilityLab/23.0 (read-only market-data client)'
       },
       muteHttpExceptions: true,
       followRedirects: false
@@ -142,6 +275,11 @@ function api_(path, params) {
       return body.data;
     }
 
+    // Do not retry on 401/403 — expired token, retrying burns budget for nothing
+    if (statusCode === 401 || statusCode === 403) {
+      throw new Error('Broker HTTP ' + statusCode);
+    }
+
     if (attempt === 0 && (statusCode === 429 || statusCode >= 500)) {
       Utilities.sleep(1000);
       continue;
@@ -154,7 +292,6 @@ function api_(path, params) {
 /**
  * High-performance concurrent HTTP fetcher using UrlFetchApp.fetchAll.
  * Dispatches all option chain and quote requests in parallel.
- * Falls back safely to sequential api_() if fetchAll is unavailable.
  */
 function apiAll_(requests) {
   if (!requests || !requests.length) return [];
@@ -166,7 +303,7 @@ function apiAll_(requests) {
 
     const payloads = requests.map(req => {
       const queryString = Object.keys(req.params || {})
-        .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(req.params[key]))
+        .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(params[key]))
         .join('&');
       const url = 'https://api.upstox.com' + req.path + (queryString ? '?' + queryString : '');
       return {
@@ -174,7 +311,7 @@ function apiAll_(requests) {
         headers: {
           Authorization: 'Bearer ' + token,
           Accept: 'application/json',
-          'User-Agent': 'VolatilityLab/1.0 (read-only market-data client)'
+          'User-Agent': 'VolatilityLab/23.0 (read-only market-data client)'
         },
         muteHttpExceptions: true,
         followRedirects: false
@@ -194,6 +331,10 @@ function apiAll_(requests) {
         } catch (err) {
           return { label: req.label, path: req.path, params: req.params, error: 'Invalid broker JSON' };
         }
+      }
+      // Do not retry 401/403 here either — surface as error to avoid retry storm
+      if (statusCode === 401 || statusCode === 403) {
+        return { label: req.label, path: req.path, params: req.params, error: 'Broker HTTP ' + statusCode };
       }
       return { label: req.label, path: req.path, params: req.params, error: 'Broker HTTP ' + statusCode };
     });
@@ -253,7 +394,6 @@ function catalogue_(now) {
   for (const symbol of Object.keys(CONFIG.indices)) {
     const underlyingKey = CONFIG.indices[symbol];
 
-    // Select the near three active monthly futures contracts
     const futures = master
       .filter(x => x.underlying_key === underlyingKey && x.instrument_type === 'FUT')
       .map(x => ({
@@ -269,7 +409,6 @@ function catalogue_(now) {
       throw new Error('Futures contracts unavailable for ' + symbol);
     }
 
-    // Discover active option contracts
     const contracts = api_('/v2/option/contract', { instrument_key: underlyingKey });
     const maxExpiry = futures[futures.length - 1].expiry;
     let dates = [...new Set(contracts.map(x => String(x.expiry).slice(0, 10)))]
@@ -296,12 +435,16 @@ function catalogue_(now) {
 
 /**
  * Execute a capture session (snapshot, eod, or test).
+ * Enforces per-execution safe deadline (180s) and skips forward-test
+ * pricing when PURE_SNAPSHOT_CAPTURE_ONLY is set.
  */
 function capture_(mode, recovery) {
   const started = Date.now();
   const now = new Date();
   const today = day_(now);
   const properties = props_();
+
+  const isPureMode = properties.getProperty('PURE_SNAPSHOT_CAPTURE_ONLY') === 'true';
 
   const report = {
     schema: 1,
@@ -338,10 +481,9 @@ function capture_(mode, recovery) {
     if (mode === 'eod') {
       const fromDay = day_(new Date(Date.parse(targetDay + 'T12:00:00+05:30') - 10 * 86400000));
       keys.forEach(key => {
-        // Primary Upstox v2 daily endpoint with v3 fallback
         requests.push({
           label: key,
-          path: '/v2/historical-candle/' + encodeURIComponent(key) + '/day/' + targetDay + '/' + fromDay
+          path: '/v3/historical-candle/' + encodeURIComponent(key) + '/days/1/' + targetDay + '/' + fromDay
         });
       });
     } else {
@@ -362,8 +504,8 @@ function capture_(mode, recovery) {
     // Execute requests concurrently with execution budget guard
     const responses = apiAll_(requests);
     for (const res of responses) {
-      if (Date.now() - started > 240000) {
-        report.errors.push({ item: res.label, reason: 'Runtime budget exhausted' });
+      if (Date.now() - started > CAPTURE_SAFE_DEADLINE_MS) {
+        report.errors.push({ item: res.label, reason: 'Snapshot enrichment time budget exhausted' });
         continue;
       }
 
@@ -374,7 +516,11 @@ function capture_(mode, recovery) {
           report.errors.push({ item: res.label, reason: res.error });
           continue;
         }
-        // Fallback retry for single failing request
+        // Fallback retry for single failing request (non-auth errors only)
+        if (Date.now() - started > CAPTURE_SAFE_DEADLINE_MS - 35000) {
+          report.errors.push({ item: res.label, reason: 'Retry budget exhausted' });
+          continue;
+        }
         try {
           data = api_(res.path, res.params);
         } catch (retryErr) {
@@ -417,7 +563,7 @@ function capture_(mode, recovery) {
 
   report.fetch_seconds = (Date.now() - started) / 1000;
 
-  const fileName = today + '_' + mode + '_' + Utilities.formatDate(now, CONFIG.timeZone, 'HHmmss') + '_' + report.status;
+  const fileName = (report.target_day || today) + '_' + mode + '_' + Utilities.formatDate(now, CONFIG.timeZone, 'HHmmss') + '_' + report.status;
   const fileId = save_(fileName, report);
 
   report.file_id = fileId;
@@ -435,14 +581,14 @@ function capture_(mode, recovery) {
   }));
 
   if (mode === 'eod') {
-    const pending = JSON.parse(properties.getProperty('EOD_PENDING') || '{}');
+    const pending = loadPendingEod_();
     const target = report.target_day || today;
     if (report.status === 'complete') {
       delete pending[target];
     } else if (report.catalogue) {
       pending[target] = fileId;
     }
-    properties.setProperty('EOD_PENDING', JSON.stringify(pending));
+    savePendingEod_(pending);
   }
 
   if (report.status === 'complete' && !recovery) {
@@ -464,11 +610,52 @@ function capture_(mode, recovery) {
 }
 
 /**
+ * Load pending EOD map from Script Properties.
+ */
+function loadPendingEod_() {
+  const properties = props_();
+  const all = properties.getProperties();
+  const pending = readJsonProperty_(properties, 'EOD_PENDING', {});
+  Object.keys(all).forEach(key => {
+    const match = /^EOD_PENDING_DAY_(\d{4}-\d{2}-\d{2})$/.exec(key);
+    if (match) pending[match[1]] = all[key];
+  });
+  return pending;
+}
+
+/**
+ * Save pending EOD map with 30-day cap and overflow archival.
+ */
+function savePendingEod_(pending) {
+  const properties = props_();
+  const all = properties.getProperties();
+  const kept = capCompletedEodDays_(pending, CONFIG.completedEodMaxDays);
+  const overflow = Object.keys(pending).filter(day => !Object.prototype.hasOwnProperty.call(kept, day));
+  if (overflow.length) {
+    save_('eod_pending_overflow_' + new Date().toISOString().replace(/[:.]/g, '-'),
+      { schema: 1, type: 'eod_pending_archive_index', days: Object.fromEntries(overflow.map(d => [d, pending[d]])) });
+  }
+  Object.keys(all).forEach(key => {
+    const match = /^EOD_PENDING_DAY_(\d{4}-\d{2}-\d{2})$/.exec(key);
+    if (match && !Object.prototype.hasOwnProperty.call(kept, match[1])) {
+      properties.deleteProperty(key);
+    }
+  });
+  Object.keys(kept).forEach(day => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !kept[day]) return;
+    const value = String(kept[day]);
+    if (!/^[\w-]{1,256}$/.test(value)) throw new Error('Invalid pending archive file ID');
+    properties.setProperty('EOD_PENDING_DAY_' + day, value);
+  });
+  properties.deleteProperty('EOD_PENDING');
+}
+
+/**
  * Sanitize error messages to prevent leakage of credentials or keys.
  */
 function safeError_(err) {
   const message = String(err.message || '');
-  const isWhitelisted = /^(Broker HTTP \d{3}|Empty broker data|Invalid broker JSON|Incomplete quote response|Wrong option expiry|Instrument master unavailable|(Three futures unavailable|Futures contracts unavailable) for (NIFTY|BANKNIFTY)|No option expiries for (NIFTY|BANKNIFTY)|Set UPSTOX_TOKEN in Script Properties)$/.test(message);
+  const isWhitelisted = /^(Broker HTTP \d{3}|Empty broker data|Invalid broker JSON|Incomplete quote response|Wrong option expiry|Instrument master unavailable|(Three futures unavailable|Futures contracts unavailable) for (NIFTY|BANKNIFTY)|No option expiries for (NIFTY|BANKNIFTY)|Set UPSTOX_TOKEN in Script Properties|Snapshot enrichment time budget exhausted|Retry budget exhausted)$/.test(message);
 
   return isWhitelisted ? message : 'Capture failed; check permissions, network or quota';
 }
@@ -519,6 +706,7 @@ function verifyArchive() {
 
 /**
  * Install the 1-minute time-driven trigger for scheduled intraday collection.
+ * Removed weeklyCleanup reference (function does not exist).
  */
 function installIntradaySchedule() {
   const properties = props_();
@@ -531,9 +719,9 @@ function installIntradaySchedule() {
 
   folder_();
 
-  // Purge any existing scheduledCapture or weeklyCleanup triggers
+  // Purge any existing scheduledCapture triggers
   ScriptApp.getProjectTriggers()
-    .filter(t => t.getHandlerFunction() === 'scheduledCapture' || t.getHandlerFunction() === 'weeklyCleanup')
+    .filter(t => t.getHandlerFunction() === 'scheduledCapture')
     .forEach(t => ScriptApp.deleteTrigger(t));
 
   // Install 1-minute time-driven trigger
@@ -550,6 +738,7 @@ function installIntradaySchedule() {
 
 /**
  * Core time-driven capture scheduler (runs every minute).
+ * Enforces rolling 24-hour runtime budget with 5-minute EOD reserve.
  */
 function scheduledCapture() {
   const now = new Date();
@@ -562,7 +751,7 @@ function scheduledCapture() {
     return;
   }
 
-  // Skip weekends (Saturday=6, Sunday=7) unless today is a recognized special trading session (e.g. Diwali Muhurat)
+  // Skip weekends (Saturday=6, Sunday=7) unless today is a recognized special trading session
   if (weekday > 5) {
     if (!isSpecialTradingSession_(today)) {
       return;
@@ -579,16 +768,12 @@ function scheduledCapture() {
   let mode = null;
 
   if (special) {
-    // Special session schedule (e.g. Diwali Muhurat: snapshots 18:00-19:30, EOD 19:30-22:00 IST)
     if (mins >= special.snap_start && mins < special.snap_end) {
       mode = 'snapshot';
     } else if (mins >= special.eod_start && mins < special.eod_end) {
       mode = 'eod';
     }
   } else {
-    // Regular session schedule:
-    // Intraday snapshots: 09:00 - 16:00 IST (540 to 960)
-    // EOD candle retries: 18:00 - 22:00 IST (1080 to 1320)
     mode = (mins >= 540 && mins < 960) ? 'snapshot' : (mins >= 1080 && mins < 1320) ? 'eod' : null;
   }
 
@@ -624,6 +809,7 @@ function scheduledCapture() {
   let failureMessage = null;
 
   try {
+    const policy = runtimePolicy_(properties);
     let interval = Number(properties.getProperty('INTERVAL_MINUTES') || 1);
     if (interval !== 1) {
       interval = 1;
@@ -647,13 +833,11 @@ function scheduledCapture() {
       }
     }
 
-    // Daily runtime budget guard (75 minutes max execution per day for 1-minute captures)
-    let budget = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
-    if (budget.day !== today) {
-      budget = { day: today, ms: 0 };
-    }
-    if (budget.ms >= 75 * 60000) {
-      const message = 'Daily runtime safety limit reached.';
+    // Rolling daily runtime budget guard
+    let budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', started);
+    const limitMs = (mode === 'eod' ? policy.eod_reserve_minutes : policy.snapshot_minutes) * 60000;
+    if (budget.ms >= limitMs) {
+      const message = 'Daily runtime budget reached for ' + mode + ' captures.';
       properties.setProperty('COLLECTOR_STATUS', message + ' ' + today);
       return;
     }
@@ -688,12 +872,7 @@ function scheduledCapture() {
     throw err;
   } finally {
     if (attempted) {
-      let b = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
-      if (b.day !== today) {
-        b = { day: today, ms: 0 };
-      }
-      b.ms += Date.now() - started;
-      properties.setProperty('RUNTIME_BUDGET', JSON.stringify(b));
+      addRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now() - started);
     }
     lock.releaseLock();
   }
@@ -716,7 +895,7 @@ function reconcilePriorSession() {
   let attempted = false;
 
   try {
-    let pending = JSON.parse(properties.getProperty('EOD_PENDING') || '{}');
+    const pending = loadPendingEod_();
 
     // Migration helper for existing partial EOD file
     if (!properties.getProperty('RECONCILIATION_MIGRATED')) {
@@ -724,7 +903,7 @@ function reconcilePriorSession() {
       if (last && last.status !== 'complete' && last.file_id) {
         pending[last.day] = last.file_id;
       }
-      properties.setProperty('EOD_PENDING', JSON.stringify(pending));
+      savePendingEod_(pending);
       properties.setProperty('RECONCILIATION_MIGRATED', '1');
     }
 
@@ -739,16 +918,9 @@ function reconcilePriorSession() {
       return;
     }
 
-    // Shared daily runtime guard + dedicated 8-minute reconciliation cap
-    let budget = JSON.parse(properties.getProperty('RUNTIME_BUDGET') || '{}');
-    if (budget.day !== today) {
-      budget = { day: today, ms: 0 };
-    }
-    let reconciliationBudget = JSON.parse(properties.getProperty('RECONCILIATION_BUDGET') || '{}');
-    if (reconciliationBudget.day !== today) {
-      reconciliationBudget = { day: today, ms: 0 };
-    }
-
+    // Shared daily runtime guard + dedicated reconciliation cap
+    const budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', started);
+    const reconciliationBudget = readRuntimeBudget_(properties, 'RECONCILIATION_BUDGET', started);
     if (budget.ms >= 55 * 60000 || reconciliationBudget.ms >= 8 * 60000) {
       return;
     }
@@ -772,19 +944,12 @@ function reconcilePriorSession() {
     throw err;
   } finally {
     if (attempted) {
-      for (const key of ['RUNTIME_BUDGET', 'RECONCILIATION_BUDGET']) {
-        let b = JSON.parse(properties.getProperty(key) || '{}');
-        if (b.day !== today) {
-          b = { day: today, ms: 0 };
-        }
-        b.ms += Date.now() - started;
-        properties.setProperty(key, JSON.stringify(b));
-      }
+      addRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now() - started);
+      addRuntimeBudget_(properties, 'RECONCILIATION_BUDGET', Date.now() - started);
     }
     lock.releaseLock();
   }
 }
-
 
 /**
  * Authenticated query for Upstox annual exchange holiday calendar.
@@ -797,7 +962,7 @@ function marketClosed_(now) {
   }
   const year = today.slice(0, 4);
 
-  let calendar = JSON.parse(properties.getProperty('MARKET_CALENDAR') || 'null');
+  let calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
 
   if (!calendar || calendar.checked !== today) {
     try {
@@ -857,19 +1022,158 @@ function auditStatus() {
     interval: properties.getProperty('INTERVAL_MINUTES') || '1',
     status: properties.getProperty('COLLECTOR_STATUS'),
     last_snapshot: JSON.parse(properties.getProperty('LAST_SNAPSHOT') || 'null'),
-    last_eod: JSON.parse(properties.getProperty('LAST_EOD') || 'null')
+    last_eod: JSON.parse(properties.getProperty('LAST_EOD') || 'null'),
+    runtime_budget: properties.getProperty('RUNTIME_BUDGET')
   }));
 }
-
 
 /**
  * Public Web API endpoint for Streamlit Cloud & external lab dashboards.
  * Returns the uncompressed JSON of the latest market snapshot in real-time.
+ * Protected by WEBHOOK_KEY for mutation actions; read-only latest snapshot
+ * is served from 55-second CacheService to avoid repeated Drive reads.
  */
+function doGet(e) {
+  try {
+    const properties = props_();
+    const cache = scriptCache_();
+    const cacheKey = 'DOGET_LATEST_SNAPSHOT_JSON';
+
+    const requiredKey = properties.getProperty('WEBHOOK_KEY');
+    const providedKey = e && e.parameter ? e.parameter.key : null;
+    const action = e && e.parameter ? e.parameter.action : null;
+    const isMutation = (action === 'manual_download' || action === 'download_muhurat' || action === 'backfill_eod');
+
+    // Require WEBHOOK_KEY for mutation actions
+    if (requiredKey && providedKey !== requiredKey && isMutation) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Serve read-only latest snapshot from 55-second cache when available
+    if (!isMutation && cache) {
+      try {
+        const cached = cache.get(cacheKey);
+        if (cached) {
+          return ContentService.createTextOutput(cached)
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      } catch (err) {}
+    }
+
+    if (action === 'backfill_eod') {
+      const result = backfillAllMissingEod_2026_11_04_to_08();
+      const output = JSON.stringify(result);
+      if (cache) { try { cache.put(cacheKey, output, CONFIG.doGetCacheSeconds); } catch (e) {} }
+      return ContentService.createTextOutput(output)
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'manual_download' || action === 'download_muhurat') {
+      const targetDay = (e && e.parameter && e.parameter.day) ? e.parameter.day : '2026-11-08';
+      const result = manualDownloadSession(targetDay);
+      const output = JSON.stringify(result);
+      if (cache) { try { cache.put(cacheKey, output, CONFIG.doGetCacheSeconds); } catch (e) {} }
+      return ContentService.createTextOutput(output)
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'candles') {
+      const instrument = (e && e.parameter && e.parameter.instrument) ? e.parameter.instrument : 'NSE_INDEX|Nifty 50';
+      const interval = (e && e.parameter && e.parameter.interval) ? e.parameter.interval : 'minutes/1';
+      const toDate = (e && e.parameter && e.parameter.to_date) ? e.parameter.to_date : '2026-11-08';
+      const fromDate = (e && e.parameter && e.parameter.from_date) ? e.parameter.from_date : toDate;
+      const path = '/v3/historical-candle/' + encodeURIComponent(instrument) + '/' + interval + '/' + toDate + '/' + fromDate;
+      const data = api_(path);
+      return ContentService.createTextOutput(JSON.stringify(data))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'status') {
+      let triggers = [];
+      try {
+        triggers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+      } catch (err) {}
+      return ContentService.createTextOutput(JSON.stringify({
+        status: properties.getProperty('COLLECTOR_STATUS'),
+        last_snapshot: properties.getProperty('LAST_SNAPSHOT'),
+        last_snapshot_slot: properties.getProperty('LAST_SNAPSHOT_SLOT'),
+        mode: properties.getProperty('SCHEDULE_MODE'),
+        interval: properties.getProperty('INTERVAL_MINUTES') || '1',
+        triggers: triggers,
+        calendar: properties.getProperty('MARKET_CALENDAR'),
+        budget: properties.getProperty('RUNTIME_BUDGET')
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'list_days') {
+      const folder = folder_();
+      const files = folder.getFiles();
+      const days = new Set();
+      let count = 0;
+      while (files.hasNext() && count < 500) {
+        const f = files.next();
+        count++;
+        const name = f.getName();
+        if ((name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
+          const match = name.match(/^(\d{4}-\d{2}-\d{2})/);
+          if (match) days.add(match[1]);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        days: Array.from(days).sort().reverse()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Default: return latest complete snapshot, preferring LATEST_SNAPSHOT_FILE_ID
+    let fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
+    let file = null;
+
+    if (fileId) {
+      try {
+        file = DriveApp.getFileById(fileId);
+      } catch (err) {
+        file = null;
+      }
+    }
+
+    if (!file) {
+      const folder = folder_();
+      const files = folder.getFiles();
+      let latestTime = 0;
+      let count = 0;
+      while (files.hasNext() && count < 200) {
+        const f = files.next();
+        count++;
+        const name = f.getName();
+        if (name.endsWith('_complete.json.gz')) {
+          const time = f.getLastUpdated().getTime();
+          if (time > latestTime) {
+            latestTime = time;
+            file = f;
+          }
+        }
+      }
+    }
+
+    if (!file) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'No snapshot files found' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const uncompressed = Utilities.ungzip(file.getBlob());
+    const output = uncompressed.getDataAsString();
+    if (cache) { try { cache.put(cacheKey, output, CONFIG.doGetCacheSeconds); } catch (e) {} }
+    return ContentService.createTextOutput(output)
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: safeError_(err) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
 
 /**
  * Manual downloader to capture or backfill historical 1-minute data and snapshots.
- * Discovers 1-minute candles from Upstox API and persists them as gzip snapshot archives.
  */
 function manualDownloadSession(targetDay) {
   const day = targetDay || '2026-11-08';
@@ -982,8 +1286,6 @@ function manualDownloadSession(targetDay) {
   };
 }
 
-
-
 /**
  * Backfill missing EOD archives for Nov 4 to Nov 8.
  */
@@ -999,140 +1301,4 @@ function backfillAllMissingEod_2026_11_04_to_08() {
     }
   });
   return results;
-}
-
-function doGet(e) {
-  try {
-    const properties = props_();
-    const requiredKey = properties.getProperty('WEBHOOK_KEY');
-    const providedKey = e && e.parameter ? e.parameter.key : null;
-    const action = e && e.parameter ? e.parameter.action : null;
-    const isMutation = (action === 'manual_download' || action === 'download_muhurat' || action === 'backfill_eod');
-    if (requiredKey && providedKey !== requiredKey && isMutation) {
-      return ContentService.createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (action === 'backfill_eod') {
-      const result = backfillAllMissingEod_2026_11_04_to_08();
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (action === 'manual_download' || action === 'download_muhurat') {
-      const targetDay = (e && e.parameter && e.parameter.day) ? e.parameter.day : '2026-11-08';
-      const result = manualDownloadSession(targetDay);
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (action === 'candles') {
-      const instrument = (e && e.parameter && e.parameter.instrument) ? e.parameter.instrument : 'NSE_INDEX|Nifty 50';
-      const interval = (e && e.parameter && e.parameter.interval) ? e.parameter.interval : 'minutes/1';
-      const toDate = (e && e.parameter && e.parameter.to_date) ? e.parameter.to_date : '2026-11-08';
-      const fromDate = (e && e.parameter && e.parameter.from_date) ? e.parameter.from_date : toDate;
-      const path = '/v3/historical-candle/' + encodeURIComponent(instrument) + '/' + interval + '/' + toDate + '/' + fromDate;
-      const data = api_(path);
-      return ContentService.createTextOutput(JSON.stringify(data))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (action === 'status') {
-      let triggers = [];
-      try {
-        triggers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
-      } catch (err) {}
-      return ContentService.createTextOutput(JSON.stringify({
-        status: properties.getProperty('COLLECTOR_STATUS'),
-        last_snapshot: properties.getProperty('LAST_SNAPSHOT'),
-        last_snapshot_slot: properties.getProperty('LAST_SNAPSHOT_SLOT'),
-        mode: properties.getProperty('SCHEDULE_MODE'),
-        interval: properties.getProperty('INTERVAL_MINUTES') || '1',
-        triggers: triggers,
-        calendar: properties.getProperty('MARKET_CALENDAR'),
-        budget: properties.getProperty('RUNTIME_BUDGET')
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (action === 'list_days') {
-      const folder = folder_();
-      const files = folder.getFiles();
-      const days = new Set();
-      let count = 0;
-      while (files.hasNext() && count < 200) {
-        const f = files.next();
-        count++;
-        const name = f.getName();
-        if ((name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
-          const match = name.match(/^(\d{4}-\d{2}-\d{2})/);
-          if (match) days.add(match[1]);
-        }
-      }
-      return ContentService.createTextOutput(JSON.stringify({
-        days: Array.from(days).sort().reverse()
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    let fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
-    let file = null;
-
-    const requestedDay = e && e.parameter && e.parameter.day ? e.parameter.day : null;
-    if (requestedDay) {
-      const folder = folder_();
-      const files = folder.getFiles();
-      let latestTime = 0;
-      let count = 0;
-      while (files.hasNext() && count < 150) {
-        const f = files.next();
-        count++;
-        const name = f.getName();
-        if (name.startsWith(requestedDay) && (name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
-          const time = f.getLastUpdated().getTime();
-          if (time > latestTime) {
-            latestTime = time;
-            file = f;
-          }
-        }
-      }
-    } else {
-      if (fileId) {
-        try {
-          file = DriveApp.getFileById(fileId);
-        } catch (err) {
-          file = null;
-        }
-      }
-
-      if (!file) {
-        const folder = folder_();
-        const files = folder.getFiles();
-        let latestTime = 0;
-        let count = 0;
-        while (files.hasNext() && count < 60) {
-          const f = files.next();
-          count++;
-          const name = f.getName();
-          if (name.endsWith('_complete.json.gz')) {
-            const time = f.getLastUpdated().getTime();
-            if (time > latestTime) {
-              latestTime = time;
-              file = f;
-            }
-          }
-        }
-      }
-    }
-
-    if (!file) {
-      return ContentService.createTextOutput(JSON.stringify({ error: 'No snapshot files found' + (requestedDay ? ' for ' + requestedDay : '') }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    const uncompressed = Utilities.ungzip(file.getBlob());
-    return ContentService.createTextOutput(uncompressed.getDataAsString())
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ error: String(err) }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
 }

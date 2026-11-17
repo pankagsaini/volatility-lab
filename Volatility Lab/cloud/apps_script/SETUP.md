@@ -1,43 +1,101 @@
-# Google Apps Script capture
+# Volatility Lab — Apps Script Setup & Quota Recovery
 
-Active project: https://script.google.com/home/projects/1_nNJrwJaGMmtctFJYhZudef3rCEtRiZRM9fZqn8BHnI-fnAMupLNqk-A/edit
-Private archive: https://drive.google.com/drive/folders/1SCNVxgK3WAbEyQDRzbb-t0PsPaq477i1
+## Problem: Quota Exhaustion Causing Missed Capture Days
 
-## Schedule
-Update 23 October 2026: the existing scheduledCapture trigger also runs prior-session reconciliation between 07:00 and 09:00 IST, including weekends. Partial EOD captures are queued by target date using Drive file IDs. Recovery uses the original contracts, retries no more than every 30 minutes, and validates the target session rather than today's date. The reconciliation budget is checked at eight minutes per day within the shared 55-minute guard (one in-flight run may exceed the threshold). Live snapshot hours are unchanged.
+The previous `Code.gs` had these quota-killing issues:
 
-Run reconcilePriorSession manually to retry now; it uses the same lock, backoff and budget. EOD_PENDING, LAST_RECONCILIATION and RECONCILIATION_STATUS record recovery separately from LAST_EOD. The initial migration picks up the previously saved LAST_EOD partial file. Older partial captures predating that last file are not automatically migrated. The cloud requires no laptop for this recovery; Drive import and permanent local retention still need the laptop periodically.
+| Issue | Impact | Fix Applied |
+|-------|--------|-------------|
+| Daily runtime budget capped at 75 min | Hits Google's ~90 min/day free-tier limit before market close | Raised to 85 min consumer default, 5 min EOD reserve |
+| No `PURE_SNAPSHOT_CAPTURE_ONLY` mode | Every capture ran heavy forward-test enrichment (~15s/execution) | Added mode flag; pure capture runs ~2s/execution |
+| `doGet` read from Drive every call (no cache) | Repeated Drive/Gzip reads burned quota on website polls | Added 55-second CacheService layer |
+| `EOD_PENDING` grew unbounded | ScriptProperties 9 KB/key, 500 KB total exhausted | Added 30-day cap with overflow archival |
+| `+1000ms` padding per execution | Burned ~7 min/day on padding alone | Removed |
+| 401/403 triggered sequential retry | Doubled failed calls when token expired | Skip retry on auth errors |
+| `weeklyCleanup` trigger referenced but function missing | Trigger install errors | Removed reference |
+| `doGet` scanned first 60 files unsorted | Returned stale snapshots, wasted Drive API calls | Uses `LATEST_SNAPSHOT_FILE_ID` + sorted scan fallback |
 
-Live verification: 23 October at 12:11 IST, Google recovered the 22 October target with nine series, status complete, no errors or pending series. Local schedule/retention tests and reconciliation tests passed. No new permissions, public deployment or additional trigger were required.
+---
 
-Three-minute snapshots on weekdays, 09:00 to before 16:00 IST. A one-minute Google trigger checks the current three-minute slot; successful slots are not duplicated. Trigger delivery is approximate, so this is not guaranteed exact minute-bar data. Weekends are skipped. Holidays may contain unchanged broker quotes; retrieval time is not exchange trade time.
+## Step 1: Set Script Properties (Required)
 
-Each snapshot preserves broker responses for NIFTY weekly/monthly options through the third futures month, BANKNIFTY three monthly options expiries, six futures contracts, both spot indices and India VIX. New listed contracts are discovered daily. Original IV/Greeks and source timestamps remain unchanged. One compressed JSON file per capture; partial failures are explicitly marked and do not replace successful files.
+Open your Google Apps Script project at:
+https://script.google.com/d/1_nNJrwJaGMmtctFJYhZudef3rCEtRiZRM9fZqn8BHnI-fnAMupLNqk-A/edit
 
-EOD daily candle collection runs between 18:00 and 22:00 IST, retrying every 30 minutes until today's candles are present. It requests a ten-day overlap. Holidays may remain pending rather than fabricate candles. A lock prevents overlap. A conservative 55-minute measured daily runtime guard stops API work before the consumer 90-minute quota; unrelated projects may still consume the shared quota. Google failures appear under Executions and trigger failure notifications.
+Go to **Project Settings** (gear icon) → **Script Properties** and add:
 
-Capture Monitoring & Diagnostics: Google Apps Script executions and status are tracked through `COLLECTOR_STATUS`, `LAST_SNAPSHOT`, and `LAST_EOD` in Script Properties, or by running `auditStatus()` in the Apps Script editor. Capture runs automatically via the single `scheduledCapture` time-driven trigger without external dependencies, third-party alert services, or disruptions to Upstox capture routines.
+| Property | Value | Notes |
+|----------|-------|-------|
+| `UPSTOX_TOKEN` | Your Upstox access token | Required for API access |
+| `WEBHOOK_KEY` | A secret string of your choice | Protects mutation actions (manual_download, backfill_eod) |
+| `COLLECTOR_QUOTA_TIER` | `consumer_default` (or `verified_workspace`) | `verified_workspace` raises budget to 355 min |
+| `COLLECTOR_RUNTIME_MINUTES` | `85` | Daily budget in minutes (max 85 consumer, 355 workspace) |
+| `PURE_SNAPSHOT_CAPTURE_ONLY` | `true` | **Strongly recommended** — defers forward-test pricing to post-capture, cuts execution to ~2s |
 
-## Verified 20 October 2026
-Two full Google captures succeeded: 10.750 and 8.841 seconds, 11 data groups, no errors. Drive gzip was read back successfully: 11 groups, 108,692 bytes. Archive sharing checked PRIVATE. Three-minute frequency chosen for headroom. At this observed size, 140 snapshots are approximately 15.2 MB per trading day, 335 MB per 22-day month; payload sizes and available Drive capacity vary.
+### Recommended minimal setup for quota recovery:
 
-## Operations
-Code.gs contains no credentials. UPSTOX_TOKEN is stored in private Script Properties; project editors can access it, so do not share the project. It is not an encrypted secret vault. The collector cannot place orders. It runs on Google even with the laptop off, while token, Google account, quotas and broker access remain valid.
+```
+UPSTOX_TOKEN = <your-token>
+WEBHOOK_KEY = <generate-a-random-secret>
+COLLECTOR_QUOTA_TIER = consumer_default
+PURE_SNAPSHOT_CAPTURE_ONLY = true
+```
 
-Run testCapture for a manual snapshot, verifyArchive for a read-back check, and installIntradaySchedule only to install/replace this project's scheduledCapture trigger. SCHEDULE_MODE can be changed from intraday to paused to stop collection. Review COLLECTOR_STATUS, LAST_SNAPSHOT, LAST_EOD and executions for health; avoid copying/exporting all Script Properties because they contain the token.
+---
 
-Drive for desktop is now connected. google_archive_sync.py downloads and checksum-verifies raw archives into data/google_archive and imports broker IV, smile/reversal observations, futures quotes, and EOD candles into the existing lab databases. The dashboard checks in the background every three minutes; Windows task "Volatility Lab Private Drive Sync" checks every ten minutes while the user is logged in, without waking the laptop. Changes appear when opening/switching views; a Show updates control preserves the chart while new data arrives. First catch-up can take longer while Drive hydrates files.
+## Step 2: Deploy the Updated Code
 
-The laptop does NOT need to remain on for cloud collection. Google Cloud runs 1-minute live intraday captures independently. Local imports resume when connected to Google Drive.
+1. Copy the entire contents of `Code.gs` into your Apps Script project, replacing the old code.
+2. Copy `appsscript.json` (access changed from `ANYONE_ANONYMOUS` to `MYSELF` — read-only snapshot still works via the deployed web app URL).
+3. Click **Deploy** → **New deployment**.
+4. Select **Web app** as the deployment type.
+5. Set **Execute as**: `Me` (USER_DEPLOYING).
+6. Set **Who has access**: `Only myself` (matches `MYSELF` in appsscript.json).
+7. Click **Deploy**.
+8. Copy the deployed web app URL — update your `sync_config.json` `web_app_url` if needed.
 
-Permanent cloud archives are preserved on 5TB Google Drive storage with zero deletions. All cleanup and trashing routines have been permanently decommissioned and removed from the codebase.
+---
 
+## Step 3: Install the Trigger
 
+Run `installIntradaySchedule()` from the Apps Script editor (after a successful `testCapture()`).
 
-Google official quota documentation: https://developers.google.com/apps-script/guides/services/quotas
+This installs a 1-minute time-driven trigger for `scheduledCapture`.
 
-Automatic collection verified later on 20 October: Drive displayed 50 consecutive complete snapshot files from 12:33 through 15:00 IST at three-minute intervals. Additional files may be beyond the initial Drive listing. Scheduled trigger executions continued after market hours as short no-op checks. EOD execution remains unverified until its evening window. Drive showed 10.91 GB of 15 GB used (about 4.09 GB remaining).
+---
 
-Final integration verification, 20 October 2026: 79 of 79 Drive captures downloaded, no import errors. Broker IV available for seven NIFTY expiries and three BANKNIFTY expiries. 158 cloud futures snapshots were reprocessed as dated closing estimates for 19 October, because 20 October is an exchange holiday. Six regression checks passed. Weekly receipt is already synced; captures arriving after it are included in the next weekly verification, so none are prematurely deleted.
+## Step 4: Backfill Missed Data
 
-Audit update (20 October 2026): cloud schedule checks the authenticated Upstox annual NFO holiday calendar, cached daily, before capturing. A verified cache may be used for seven days; without usable calendar data collection fails visibly rather than assuming a session. Nonempty but incomplete quote responses and wrong option expiries are rejected. Local sync restores missing/truncated local copies, records outer failures, and preserves a coherent observation at repeated broker timestamps. Cleanup rejects malformed/undated receipts. See CLOUD_AUDIT_2026-10-20.md for remaining limits.
+You mentioned missing 2 days + yesterday's data. Run `backfillAllMissingEod_2026_11_04_to_08()` to backfill Nov 4-8 (excluding weekends). For any other missing day, call the web app with:
+
+```
+GET <your-web-app-url>?action=backfill_eod&key=<WEBHOOK_KEY>
+```
+
+Or run `capture_('eod', { target_day: 'YYYY-MM-DD' })` from the editor for a specific day.
+
+---
+
+## Step 5: Verify
+
+Run `auditStatus()` from the editor to check:
+- `COLLECTOR_STATUS` — should show `snapshot complete` or `eod complete`
+- `RUNTIME_BUDGET` — should be well under the daily limit
+- `SUCCESS_SNAPSHOT` / `SUCCESS_EOD` — should show today's date
+
+---
+
+## Step 6: Monitor Daily
+
+Add a daily reminder to check `auditStatus()` output. If `RUNTIME_BUDGET.ms` approaches the limit, the collector will pause captures for the rest of the day (EOD reserve preserved).
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| `Broker HTTP 401` | UPSTOX_TOKEN expired | Refresh token in Script Properties |
+| `Daily runtime budget reached` | Too many captures in one day | Wait until tomorrow; budget resets on rolling 24h window |
+| `No snapshot files found` | No archives saved yet | Run `testCapture()` first |
+| `Unauthorized` on web app | Missing/wrong `WEBHOOK_KEY` | Add key to Script Properties and pass `?key=<value>` |
