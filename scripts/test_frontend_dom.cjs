@@ -94,8 +94,15 @@ const server = http.createServer((request,response) => {
     // Default mode is the explicitly labelled research archive; the strict verified gate stays intact.
     assert.notEqual(await page.locator('#resNetPnl').textContent(),'—');
     assert.equal(await page.locator('#btScorecardBody tr').count(),7);
-    assert((await page.locator('#btLedgerBody tr').count())>0);
+    assert.equal(await page.locator('#btLedgerBody tr').count(),6,'S3 NIFTY has six recorded sessions');
     assert.match(await page.locator('#btModeNote').textContent(),/not execution-verified|Research mode/);
+    assert.equal(await page.locator('#resTradeCount').textContent(),'6 Recorded Trades');
+    assert.match(await page.locator('#btLedgerIndex').textContent(),/NIFTY/);
+    await page.selectOption('#btSymbolSelect','BANKNIFTY');
+    assert.equal(await page.locator('#btLedgerBody tr').count(),6,'BANKNIFTY is screened on the same six sessions');
+    assert.match(await page.locator('#btLedgerIndex').textContent(),/BANKNIFTY/);
+    assert.notEqual(await page.locator('#resNetPnl').textContent(),'—');
+    await page.selectOption('#btSymbolSelect','NIFTY');
     await page.locator('#btModeVerified').click();
     assert.equal(await page.locator('#resNetPnl').textContent(),'—');
     assert.match(await page.locator('#btScorecardBody').textContent(),/Performance unavailable until the trade archive is verified/);
@@ -104,13 +111,13 @@ const server = http.createServer((request,response) => {
     assert.notEqual(await page.locator('#resNetPnl').textContent(),'—');
     await page.selectOption('#btPresetSelect','CUSTOM');
     assert(await page.locator('#btCustomPanel').isVisible());
-    assert((await page.locator('#btLedgerBody tr').count())>0,'Default custom criteria must match archived trades');
+    assert((await page.locator('#btLedgerBody tr').count())>0,'Default custom criteria must match recorded trades');
     assert.match(await page.locator('#cxHint').textContent(),/archive matches/);
-    await page.fill('#cx_min_ivrv','1000');
+    await page.fill('#cx_min_vrp','1000');
     await page.waitForFunction(()=>document.querySelectorAll('#btLedgerBody tr').length===1);
-    assert.match(await page.locator('#btLedgerBody').textContent(),/No archived trade matches/);
+    assert.match(await page.locator('#btLedgerBody').textContent(),/No recorded trade matches/);
     await page.locator('#cxResetBtn').click();
-    assert(!(await page.locator('#cx_on_ivrv').isChecked()));
+    assert(!(await page.locator('#cx_on_vrp').isChecked()));
     await page.selectOption('#btPresetSelect','S3');
     assert(!(await page.locator('#btCustomPanel').isVisible()));
     await page.locator('#wsForwardBtn').click();
