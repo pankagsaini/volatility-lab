@@ -630,7 +630,7 @@
           <span id="btHypothesisLine" class="text-slate-100">
             <b class="text-sky-300">Hypothesis:</b> Capture post-open ATM IV mean-reversion when weekly ATM IV spikes above 15.5% with ±350 pt protective wings.
           </span>
-          <span id="btTriggerBadge" class="mono text-sky-300 font-semibold">09:20 IST Entry → 15:15 IST Exit · Upstox STT+GST Included</span>
+          <span id="btTriggerBadge" class="mono text-sky-300 font-semibold">09:20 IST Signal · 09:21 IST Captured Entry → 15:15 IST Captured Exit · Upstox STT+GST Included</span>
         </div>
       </div>
 
@@ -653,11 +653,19 @@
         <div id="btRestatedCount" class="text-[11px] mono text-slate-400"></div>
       </div>
 
-      <!-- Custom criteria builder: compose entry conditions from S1–S6 -->
-      <div id="btCustomPanel" class="desk-panel space-y-3 hidden">
+      <!-- Entry & risk criteria: preset rules auto-fill here, then screen the archive -->
+      <div id="btCustomPanel" class="desk-panel space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <span class="text-xs font-bold uppercase text-white">Custom Criteria · compose entry conditions from S1–S6</span>
-          <span class="text-[11px] mono text-slate-400">Bounds are inclusive · leave a bound blank for no limit</span>
+          <span class="text-xs font-bold uppercase text-white">Entry &amp; Risk Criteria · <span id="cxModeLabel" class="text-sky-300">S3 preset mirrored</span></span>
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="text-[11px] mono text-slate-400">Bounds are inclusive · leave a bound blank for no limit</span>
+            <label id="cxApplyWrap" class="flex items-center gap-2 text-[11px] font-bold text-emerald-300">
+              <input type="checkbox" id="cxApplyToggle" class="accent-emerald-400" /> Apply to ledger
+            </label>
+          </div>
+        </div>
+        <div id="cxPresetNote" class="text-[11px] mono text-amber-300">
+          Pick S1–S6 to mirror that strategy's published rule here. The ledger stays structure-only until you apply the criteria.
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           <div class="rounded-lg border border-[#24344d] bg-[#080d16] p-2">
@@ -723,14 +731,69 @@
               <input id="cx_max_dte" type="number" step="1" value="10" class="desk-input mono w-full text-[11px]" placeholder="max" />
             </div>
           </div>
+          <div class="rounded-lg border border-[#24344d] bg-[#080d16] p-2">
+            <label class="flex items-center gap-2 text-[11px] font-bold text-sky-300">
+              <input type="checkbox" id="cx_on_iv" class="accent-sky-400" /> Entry ATM IV (%)
+            </label>
+            <div class="grid grid-cols-2 gap-1.5 mt-1.5">
+              <input id="cx_min_iv" type="number" step="0.1" class="desk-input mono w-full text-[11px]" placeholder="min" />
+              <input id="cx_max_iv" type="number" step="0.1" class="desk-input mono w-full text-[11px]" placeholder="max" />
+            </div>
+          </div>
+          <div class="rounded-lg border border-[#24344d] bg-[#080d16] p-2">
+            <label class="flex items-center gap-2 text-[11px] font-bold text-sky-300">
+              <input type="checkbox" id="cx_on_entryMin" class="accent-sky-400" /> Entry clock (min after 09:15)
+            </label>
+            <div class="grid grid-cols-2 gap-1.5 mt-1.5">
+              <input id="cx_min_entryMin" type="number" step="1" class="desk-input mono w-full text-[11px]" placeholder="earliest" />
+              <input id="cx_max_entryMin" type="number" step="1" class="desk-input mono w-full text-[11px]" placeholder="latest" />
+            </div>
+            <div class="text-[10px] mono text-slate-500 mt-1">Recorded entries are 09:20:42–09:21:42 IST, i.e. 5–6. Every exit is 15:15:42–15:15:44 IST.</div>
+          </div>
+          <div class="rounded-lg border border-[#24344d] bg-[#080d16] p-2">
+            <label class="flex items-center gap-2 text-[11px] font-bold text-sky-300">
+              <input type="checkbox" id="cx_on_holdMin" class="accent-sky-400" /> Holding time (minutes)
+            </label>
+            <div class="grid grid-cols-2 gap-1.5 mt-1.5">
+              <input id="cx_min_holdMin" type="number" step="1" class="desk-input mono w-full text-[11px]" placeholder="min" />
+              <input id="cx_max_holdMin" type="number" step="1" class="desk-input mono w-full text-[11px]" placeholder="max" />
+            </div>
+          </div>
+          <div class="rounded-lg border border-[#24344d] bg-[#080d16] p-2">
+            <label class="flex items-center gap-2 text-[11px] font-bold text-rose-300">
+              <input type="checkbox" id="cx_on_stop" class="accent-rose-400" /> Stop-loss tolerance (% of capital)
+            </label>
+            <div class="mt-1.5">
+              <input id="cx_max_stop" type="number" step="0.1" class="desk-input mono w-full text-[11px]" placeholder="max worst drawdown" />
+            </div>
+            <div class="text-[10px] mono text-slate-500 mt-1">Passes when the worst captured mark stays inside this loss, checked at the archived capture cadence (1–3 min, session dependent), before charges.</div>
+          </div>
+          <div class="rounded-lg border border-[#24344d] bg-[#080d16] p-2">
+            <label class="flex items-center gap-2 text-[11px] font-bold text-emerald-300">
+              <input type="checkbox" id="cx_on_target" class="accent-emerald-400" /> Profit target (% of capital)
+            </label>
+            <div class="mt-1.5">
+              <input id="cx_min_target" type="number" step="0.1" class="desk-input mono w-full text-[11px]" placeholder="min peak gain" />
+            </div>
+            <div class="text-[10px] mono text-slate-500 mt-1">Passes when the best captured mark reaches this gain, checked at the archived capture cadence (1–3 min, session dependent), before charges.</div>
+          </div>
+          <div class="rounded-lg border border-[#24344d] bg-[#080d16] p-2">
+            <label class="flex items-center gap-2 text-[11px] font-bold text-sky-300">
+              <input type="checkbox" id="cx_on_grossPct" class="accent-sky-400" /> Gross return (% of capital)
+            </label>
+            <div class="grid grid-cols-2 gap-1.5 mt-1.5">
+              <input id="cx_min_grossPct" type="number" step="0.1" class="desk-input mono w-full text-[11px]" placeholder="min" />
+              <input id="cx_max_grossPct" type="number" step="0.1" class="desk-input mono w-full text-[11px]" placeholder="max" />
+            </div>
+          </div>
         </div>
         <div class="rounded-lg border border-[#24344d] bg-[#080d16] px-2.5 py-2 space-y-1">
-          <div class="text-[11px] font-bold uppercase text-slate-300">Criterion coverage</div>
+          <div class="text-[11px] font-bold uppercase text-slate-300">Criterion coverage &amp; provenance</div>
           <div class="text-[11px] mono text-slate-400 leading-relaxed">
-            VRP · HV30 · HV10 · IV − HV10 · days to expiry → every recorded row · RR25 → S4 only · BF25 → S6 only
+            VRP · HV30 · HV10 · IV − HV10 · days to expiry · entry IV · entry clock · holding time · stop · target · gross return → every recorded row · RR25 → S4 only · BF25 → S6 only
           </div>
           <div class="text-[11px] mono text-amber-300">
-            HV10/HV30 are recomputed from the recorded daily closes through the prior session (sample σ of log returns, 245 sessions). VRP and IV − HV10 follow from that HV and the recorded entry IV. RR25/BF25 exist only where recorded, so screening them without S4/S6 returns no matches. A missing value never becomes zero or a default.
+            HV10/HV30 are recomputed from the recorded daily closes through the prior session (sample σ of log returns, 245 sessions). VRP and IV − HV10 follow from that HV and the recorded entry IV. Entry clock, exit clock, holding time, worst drawdown and best gain are replayed from the same archived captures that produced each row's entry (09:20–09:21 IST) and exit (15:15 IST) marks, at that session's capture cadence (1–3 minutes). A stop or target is checked at those captured marks only, so a breach between captures is never claimed, and a capture missing any leg is skipped rather than filled. Drawdown and gain are before charges, as a % of the capital recorded for that trade. RR25/BF25 exist only where recorded, so screening them without S4/S6 returns no matches. A missing value never becomes zero or a default.
           </div>
         </div>
         <div class="flex flex-wrap items-end gap-3 pt-2 border-t border-[#1e293b]">
@@ -754,7 +817,7 @@
             </select>
           </div>
           <button type="button" id="cxResetBtn" class="px-3 py-2 rounded-lg bg-[#090f1a] hover:bg-slate-800 text-slate-200 font-semibold text-xs border border-[#24344d]">
-            Reset criteria
+            Clear criteria
           </button>
           <span id="cxHint" class="text-[11px] mono text-emerald-300"></span>
         </div>
@@ -2568,14 +2631,14 @@
       // REQUIREMENT 7: 100% REAL CAPTURED UPSTOX BACKTEST TRADES (Nov 2026)
       // ===================================================================
       var presetMeta = {
-        S1: 'Sell defined-risk Iron Condor wings (±200/±500 pts) at 09:20 IST → 15:15 IST exit across the 6 recorded November 2026 sessions (36 trades per index).',
-        S2: 'Buy ATM Gamma Long Straddle at 09:20 IST → 15:15 IST exit across the 6 recorded November 2026 sessions (36 trades per index).',
-        S3: 'Short ATM Iron Butterfly with ±350 pt protective wings at 09:20 IST → 15:15 IST exit across the 6 recorded November 2026 sessions (36 trades per index).',
-        S4: 'Steep 25Δ Put Skew Ratio Spread (Sell 2x -150 PE / Buy 2x -450 PE + Call Wing) at 09:20 IST → 15:15 IST exit across the 6 recorded November 2026 sessions (36 trades per index).',
-        S5: 'Intraday Theta Decay Iron Butterfly (±250 pt wings) at 09:20 IST → 15:15 IST exit across the 6 recorded November 2026 sessions (36 trades per index).',
-        S6: 'Synthetic Basis Skewed Condor (Sell 2x +150 CE / Buy 2x +450 CE + Put Wing) at 09:20 IST → 15:15 IST exit across the 6 recorded November 2026 sessions (36 trades per index).',
+        S1: 'Sell defined-risk Iron Condor wings (±200/±500 pts) at the 09:21 IST captured entry → 15:15 IST captured exit across the 6 recorded November 2026 sessions (36 trades per index).',
+        S2: 'Buy ATM Gamma Long Straddle at the 09:21 IST captured entry → 15:15 IST captured exit across the 6 recorded November 2026 sessions (36 trades per index).',
+        S3: 'Short ATM Iron Butterfly with ±350 pt protective wings at the 09:21 IST captured entry → 15:15 IST captured exit across the 6 recorded November 2026 sessions (36 trades per index).',
+        S4: 'Steep 25Δ Put Skew Ratio Spread (Sell 2x -150 PE / Buy 2x -450 PE + Call Wing) at the 09:21 IST captured entry → 15:15 IST captured exit across the 6 recorded November 2026 sessions (36 trades per index).',
+        S5: 'Intraday Theta Decay Iron Butterfly (±250 pt wings) at the 09:21 IST captured entry → 15:15 IST captured exit across the 6 recorded November 2026 sessions (36 trades per index).',
+        S6: 'Synthetic Basis Skewed Condor (Sell 2x +150 CE / Buy 2x +450 CE + Put Wing) at the 09:21 IST captured entry → 15:15 IST captured exit across the 6 recorded November 2026 sessions (36 trades per index).',
         ALL: 'Combined ledger across all 6 strategies (S1–S6) on the 6 recorded November 2026 sessions: 72 trades, 36 per index.',
-        CUSTOM: 'Compose your own entry criteria from the metrics recorded with S1–S6, then screen the 72 archived trades. Structure stays with each matched trade.'
+        CUSTOM: 'Compose your own entry, risk and outcome criteria from the metrics recorded with S1–S6, then screen the 72 archived trades. Structure stays with each matched trade.'
       };
 
       // Archive display modes: 'research' shows every recorded session with an
@@ -2604,6 +2667,15 @@
         dte: { label: 'Calendar days to expiry', get: function(t) {
           var v = rowMetric(t, 'dte', null);
           return v === null ? dteFromRow(t) : v;
+        } },
+        iv: { label: 'Entry ATM IV (%)', get: function(t) { return rowMetric(t, 'iv', /IV\s+([\d.]+)%/); } },
+        entryMin: { label: 'Entry clock (min after 09:15)', get: function(t) { return rowMetric(t, 'entryMin', null); } },
+        holdMin: { label: 'Holding time (minutes)', get: function(t) { return rowMetric(t, 'holdMin', null); } },
+        stop: { label: 'Stop-loss tolerance · worst drawdown (% of capital)', get: function(t) { return rowMetric(t, 'maePct', null); } },
+        target: { label: 'Profit target · best captured gain (% of capital)', get: function(t) { return rowMetric(t, 'mfePct', null); } },
+        grossPct: { label: 'Gross return (% of capital)', get: function(t) {
+          if (!t || !Number.isFinite(t.gross) || !Number.isFinite(t.capital) || t.capital <= 0) return null;
+          return Math.round((t.gross / t.capital) * 10000) / 100;
         } }
       };
 
@@ -2669,7 +2741,192 @@
         }).join(' ' + spec.logic + ' ');
       }
 
-      var tradeArchive = [{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S1","sig":"IV 15.20% · HV30 12.69% · VRP +2.51 pp","legs":"S 23450CE (117.3→133.0) / S 23050PE (111.7→89.3) / B 23750CE (37.0→44.9) / B 22750PE (52.5→39.2)","capital":26174,"gross":90.0,"charges":244.43,"unitLegs":300,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"IV 15.20% · HV30 13.99% · VRP +1.21 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S2","sig":"IV 15.20% · HV10 14.70% · IV−HV10 +0.50 pp","legs":"B 23250CE (215.8→234.7) / B 23250PE (184.6→153.6)","capital":30026,"gross":-903.75,"charges":163.85,"unitLegs":150,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"IV 15.20% · HV10 9.96% · IV−HV10 +5.24 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S3","sig":"ATM IV 15.20% → 14.64% · DTE 7d","legs":"S 23250CE (215.8→234.7) / S 23250PE (184.6→153.6) / B 23600CE (67.8→79.4) / B 22900PE (77.1→58.6)","capital":26174,"gross":390.0,"charges":284.35,"unitLegs":300,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"ATM IV 15.20% → 14.64% · DTE 7d","ruleOk":true},{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S4","sig":"RR25 +2.90 pp · VRP +2.51 pp","legs":"S2 23100PE (127.8→102.4) / B2 22800PE (60.2→45.2) / S 23500CE (99.3→112.8) / B 23800CE (29.8→37.1)","capital":52347,"gross":1095.0,"charges":274.09,"unitLegs":450,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"RR25 +2.90 pp · VRP +1.21 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S5","sig":"Straddle ₹400.4 → ₹377.7 · IV−HV10 +0.50 pp","legs":"S 23250CE (215.8→234.7) / S 23250PE (184.6→153.6) / B 23500CE (99.3→112.8) / B 23000PE (100.0→77.8)","capital":26174,"gross":247.5,"charges":293.77,"unitLegs":300,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"Straddle ₹400.4 → ₹377.7 · IV−HV10 +5.24 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S6","sig":"Basis -53.4 pts · BF25 +0.10 pp","legs":"S2 23400CE (139.3→154.4) / B2 23700CE (45.7→54.8) / S 23000PE (100.0→77.8) / B 22700PE (46.7→34.7)","capital":52347,"gross":-142.5,"charges":281.84,"unitLegs":450,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"Basis -53.4 pts · BF25 +0.10 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S1","sig":"IV 14.89% · HV30 12.85% · VRP +2.04 pp","legs":"S 23800CE (87.5→142.8) / S 23400PE (116.3→79.7) / B 24100CE (27.2→54.6) / B 23100PE (51.3→37.3)","capital":26533,"gross":-397.5,"charges":241.56,"unitLegs":300,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"IV 14.89% · HV30 14.78% · VRP +0.11 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S2","sig":"IV 14.89% · HV10 14.76% · IV−HV10 +0.13 pp","legs":"B 23600CE (170.3→249.4) / B 23600PE (197.2→137.4)","capital":27559,"gross":1451.25,"charges":162.53,"unitLegs":150,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"IV 14.89% · HV10 11.22% · IV−HV10 +3.67 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S3","sig":"ATM IV 14.89% → 15.23% · DTE 6d","legs":"S 23600CE (170.3→249.4) / S 23600PE (197.2→137.4) / B 23950CE (49.5→89.5) / B 23250PE (77.6→54.2)","capital":26533,"gross":-202.5,"charges":279.8,"unitLegs":300,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"ATM IV 14.89% → 15.23% · DTE 6d","ruleOk":false},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S4","sig":"RR25 +3.11 pp · VRP +2.04 pp","legs":"S2 23450PE (133.8→91.5) / B2 23150PE (59.1→42.3) / S 23850CE (72.5→123.0) / B 24150CE (22.6→46.5)","capital":53065,"gross":1830.0,"charges":271.77,"unitLegs":450,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"RR25 +3.11 pp · VRP +0.11 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S5","sig":"Straddle ₹367.4 → ₹370.9 · IV−HV10 +0.13 pp","legs":"S 23600CE (170.3→249.4) / S 23600PE (197.2→137.4) / B 23850CE (72.5→123.0) / B 23350PE (101.9→70.1)","capital":26533,"gross":-52.5,"charges":288.49,"unitLegs":300,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"Straddle ₹367.4 → ₹370.9 · IV−HV10 +3.67 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S6","sig":"Basis -38.6 pts · BF25 +0.37 pp","legs":"S2 23750CE (104.1→166.1) / B2 24050CE (33.2→64.8) / S 23350PE (101.9→70.1) / B 23050PE (44.9→33.5)","capital":53065,"gross":-3037.5,"charges":274.29,"unitLegs":450,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"Basis -38.6 pts · BF25 +0.37 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S1","sig":"IV 16.94% · HV30 13.11% · VRP +3.83 pp","legs":"S 24100CE (102.2→93.5) / S 23700PE (121.7→72.8) / B 24400CE (38.7→30.8) / B 23400PE (51.5→24.9)","capital":26884,"gross":1728.75,"charges":237.71,"unitLegs":300,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"IV 16.94% · HV30 15.42% · VRP +1.52 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S2","sig":"IV 16.94% · HV10 15.02% · IV−HV10 +1.92 pp","legs":"B 23900CE (182.3→178.9) / B 23900PE (206.4→145.6)","capital":29156,"gross":-4818.75,"charges":154.27,"unitLegs":150,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"IV 16.94% · HV10 12.87% · IV−HV10 +4.07 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S3","sig":"ATM IV 16.94% → 14.47% · DTE 5d","legs":"S 23900CE (182.3→178.9) / S 23900PE (206.4→145.6) / B 24250CE (63.4→54.2) / B 23550PE (79.1→41.9)","capital":26884,"gross":1338.75,"charges":274.41,"unitLegs":300,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"ATM IV 16.94% → 14.47% · DTE 5d","ruleOk":true},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S4","sig":"RR25 +2.44 pp · VRP +3.83 pp","legs":"S2 23750PE (139.2→87.2) / B2 23450PE (59.2→29.4) / S 24150CE (87.7→78.2) / B 24450CE (32.8→25.6)","capital":53769,"gross":3517.5,"charges":267.32,"unitLegs":450,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"RR25 +2.44 pp · VRP +1.52 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S5","sig":"Straddle ₹388.8 → ₹324.5 · IV−HV10 +1.92 pp","legs":"S 23900CE (182.3→178.9) / S 23900PE (206.4→145.6) / B 24150CE (87.7→78.2) / B 23650PE (105.7→60.6)","capital":26884,"gross":720.0,"charges":282.27,"unitLegs":300,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"Straddle ₹388.8 → ₹324.5 · IV−HV10 +4.07 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S6","sig":"Basis -46.1 pts · BF25 +0.44 pp","legs":"S2 24050CE (118.8→111.5) / B2 24350CE (45.6→37.2) / S 23650PE (105.7→60.6) / B 23350PE (44.5→21.4)","capital":53769,"gross":1500.0,"charges":266.23,"unitLegs":450,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"Basis -46.1 pts · BF25 +0.44 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S1","sig":"IV 14.79% · HV30 13.18% · VRP +1.61 pp","legs":"S 24550CE (74.0→157.5) / S 24150PE (80.0→33.8) / B 24850CE (26.2→59.0) / B 23850PE (27.2→13.2)","capital":27386,"gross":-1380.0,"charges":229.65,"unitLegs":300,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"IV 14.79% · HV30 15.45% · VRP -0.66 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S2","sig":"IV 14.79% · HV10 13.55% · IV−HV10 +1.24 pp","legs":"B 24350CE (147.6→275.1) / B 24350PE (162.2→73.5)","capital":23239,"gross":2906.25,"charges":155.08,"unitLegs":150,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"IV 14.79% · HV10 12.24% · IV−HV10 +2.55 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S3","sig":"ATM IV 14.79% → 15.21% · DTE 4d","legs":"S 24350CE (147.6→275.1) / S 24350PE (162.2→73.5) / B 24700CE (43.2→98.0) / B 24000PE (45.8→19.9)","capital":27386,"gross":-742.5,"charges":265.19,"unitLegs":300,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"ATM IV 14.79% → 15.21% · DTE 4d","ruleOk":false},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S4","sig":"RR25 +0.60 pp · VRP +1.61 pp","legs":"S2 24200PE (96.0→40.5) / B2 23900PE (32.2→15.0) / S 24600CE (61.6→135.0) / B 24900CE (22.1→49.9)","capital":54772,"gross":2325.0,"charges":247.06,"unitLegs":450,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"RR25 +0.60 pp · VRP -0.66 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S5","sig":"Straddle ₹309.9 → ₹311.9 · IV−HV10 +1.24 pp","legs":"S 24350CE (147.6→275.1) / S 24350PE (162.2→73.5) / B 24600CE (61.6→135.0) / B 24100PE (66.6→28.0)","capital":27386,"gross":-300.0,"charges":273.02,"unitLegs":300,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"Straddle ₹309.9 → ₹311.9 · IV−HV10 +2.55 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S6","sig":"Basis -34.6 pts · BF25 +0.43 pp","legs":"S2 24500CE (88.7→182.3) / B2 24800CE (30.6→70.2) / S 24100PE (66.6→28.0) / B 23800PE (23.0→11.7)","capital":54772,"gross":-6063.75,"charges":261.95,"unitLegs":450,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"Basis -34.6 pts · BF25 +0.43 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S1","sig":"IV 19.50% · HV30 14.13% · VRP +5.37 pp","legs":"S 24750CE (74.2→322.8) / S 24350PE (122.5→22.8) / B 25050CE (23.7→145.6) / B 24050PE (47.0→10.7)","capital":27593,"gross":-4740.0,"charges":253.71,"unitLegs":300,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"IV 19.50% · HV30 16.74% · VRP +2.76 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S2","sig":"IV 19.50% · HV10 15.52% · IV−HV10 +3.98 pp","legs":"B 24550CE (147.5→482.5) / B 24550PE (213.2→41.3)","capital":27056,"gross":12228.75,"charges":182.03,"unitLegs":150,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"IV 19.50% · HV10 13.93% · IV−HV10 +5.57 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S3","sig":"ATM IV 19.50% → 19.16% · DTE 3d","legs":"S 24550CE (147.5→482.5) / S 24550PE (213.2→41.3) / B 24900CE (42.5→223.4) / B 24200PE (76.0→14.9)","capital":27593,"gross":-3247.5,"charges":296.79,"unitLegs":300,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"ATM IV 19.50% → 19.16% · DTE 3d","ruleOk":true},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S4","sig":"RR25 +3.86 pp · VRP +5.37 pp","legs":"S2 24400PE (142.1→26.1) / B2 24100PE (55.8→11.7) / S 24800CE (61.6→285.7) / B 25100CE (19.3→124.9)","capital":55186,"gross":1908.75,"charges":275.81,"unitLegs":450,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"RR25 +3.86 pp · VRP +2.76 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S5","sig":"Straddle ₹360.8 → ₹346.2 · IV−HV10 +3.98 pp","legs":"S 24550CE (147.5→482.5) / S 24550PE (213.2→41.3) / B 24800CE (61.6→285.7) / B 24300PE (106.0→19.7)","capital":27593,"gross":-1897.5,"charges":308.11,"unitLegs":300,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"Straddle ₹360.8 → ₹346.2 · IV−HV10 +5.57 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S6","sig":"Basis -33.6 pts · BF25 +0.22 pp","legs":"S2 24700CE (88.4→359.1) / B2 25000CE (29.1→169.0) / S 24300PE (106.0→19.7) / B 24000PE (39.8→9.6)","capital":55186,"gross":-15416.25,"charges":307.83,"unitLegs":450,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"Basis -33.6 pts · BF25 +0.22 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S1","sig":"IV 18.50% · HV30 14.27% · VRP +4.23 pp","legs":"S 25100CE (200.0→211.0) / S 24700PE (180.3→121.8) / B 25400CE (110.0→110.2) / B 24400PE (94.7→55.5)","capital":28037,"gross":637.5,"charges":285.6,"unitLegs":300,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"IV 18.50% · HV30 16.72% · VRP +1.78 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S2","sig":"IV 18.50% · HV10 14.65% · IV−HV10 +3.85 pp","legs":"B 24900CE (285.1→307.9) / B 24900PE (268.6→196.5)","capital":41531,"gross":-3705.0,"charges":185.75,"unitLegs":150,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"IV 18.50% · HV10 14.66% · IV−HV10 +3.84 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S3","sig":"ATM IV 18.50% → 16.87% · DTE 8d","legs":"S 24900CE (285.1→307.9) / S 24900PE (268.6→196.5) / B 25250CE (149.8→153.8) / B 24550PE (132.5→82.5)","capital":28037,"gross":251.25,"charges":329.17,"unitLegs":300,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"ATM IV 18.50% → 16.87% · DTE 8d","ruleOk":true},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S4","sig":"RR25 +0.49 pp · VRP +4.23 pp","legs":"S2 24750PE (199.7→138.1) / B2 24450PE (106.3→63.7) / S 25150CE (181.8→190.4) / B 25450CE (99.2→98.8)","capital":56074,"gross":2167.5,"charges":331.37,"unitLegs":450,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"RR25 +0.49 pp · VRP +1.78 pp","ruleOk":false},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S5","sig":"Straddle ₹553.8 → ₹499.4 · IV−HV10 +3.85 pp","legs":"S 24900CE (285.1→307.9) / S 24900PE (268.6→196.5) / B 25150CE (181.8→190.4) / B 24650PE (161.2→107.5)","capital":28037,"gross":326.25,"charges":340.1,"unitLegs":300,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"Straddle ₹553.8 → ₹499.4 · IV−HV10 +3.84 pp","ruleOk":true},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S6","sig":"Basis -22.8 pts · BF25 +0.50 pp","legs":"S2 25050CE (220.3→233.7) / B2 25350CE (122.5→123.7) / S 24650PE (161.2→107.5) / B 24350PE (85.5→48.9)","capital":56074,"gross":-536.25,"charges":348.75,"unitLegs":450,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"Basis -22.8 pts · BF25 +0.50 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S1","sig":"IV 14.84% · HV30 13.79% · VRP +1.05 pp","legs":"S 55400CE (667.9→611.0) / S 54600PE (547.2→563.6) / B 56000CE (409.4→367.4) / B 54000PE (375.9→386.0)","capital":24732,"gross":255.0,"charges":328.7,"unitLegs":120,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"IV 14.84% · HV30 13.13% · VRP +1.71 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S2","sig":"IV 14.84% · HV10 13.97% · IV−HV10 +0.87 pp","legs":"B 55000CE (886.0→817.4) / B 55000PE (695.8→721.5)","capital":47452,"gross":-1287.0,"charges":204.43,"unitLegs":60,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"IV 14.84% · HV10 11.18% · IV−HV10 +3.66 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S3","sig":"ATM IV 14.84% → 14.69% · DTE 21d","legs":"S 55000CE (886.0→817.4) / S 55000PE (695.8→721.5) / B 55700CE (530.4→477.6) / B 54300PE (454.9→471.2)","capital":24732,"gross":193.5,"charges":368.7,"unitLegs":120,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"ATM IV 14.84% → 14.69% · DTE 21d","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S4","sig":"RR25 +2.77 pp · VRP +1.05 pp","legs":"S2 54700PE (581.1→600.2) / B2 54100PE (400.6→410.6) / S 55500CE (619.5→563.1) / B 56100CE (376.6→335.1)","capital":49463,"gross":-93.0,"charges":397.83,"unitLegs":180,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"RR25 +2.77 pp · VRP +1.71 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1581.8 → ₹1557.0 · IV−HV10 +0.87 pp","legs":"S 55000CE (886.0→817.4) / S 55000PE (695.8→721.5) / B 55500CE (619.5→563.1) / B 54500PE (512.7→530.3)","capital":24732,"gross":123.0,"charges":379.02,"unitLegs":120,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"Straddle ₹1581.8 → ₹1557.0 · IV−HV10 +3.66 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S6","sig":"Basis +10.1 pts · BF25 +0.08 pp","legs":"S2 55300CE (719.7→658.6) / B2 55900CE (449.6→402.0) / S 54500PE (512.7→530.3) / B 53900PE (347.2→361.4)","capital":49463,"gross":705.0,"charges":410.22,"unitLegs":180,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"Basis 10.1 pts · BF25 +0.08 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S1","sig":"IV 14.39% · HV30 13.72% · VRP +0.67 pp","legs":"S 55700CE (615.5→658.0) / S 54900PE (523.3→506.6) / B 56300CE (368.2→399.1) / B 54300PE (352.4→337.1)","capital":24883,"gross":-307.5,"charges":322.3,"unitLegs":120,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"IV 14.39% · HV30 13.15% · VRP +1.24 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S2","sig":"IV 14.39% · HV10 13.99% · IV−HV10 +0.40 pp","legs":"B 55300CE (832.8→872.5) / B 55300PE (672.7→648.7)","capital":45164,"gross":471.0,"charges":202.38,"unitLegs":60,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"IV 14.39% · HV10 11.52% · IV−HV10 +2.87 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S3","sig":"ATM IV 14.39% → 14.40% · DTE 20d","legs":"S 55300CE (832.8→872.5) / S 55300PE (672.7→648.7) / B 56000CE (478.8→516.2) / B 54600PE (428.1→414.6)","capital":24883,"gross":247.5,"charges":361.97,"unitLegs":120,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"ATM IV 14.39% → 14.40% · DTE 20d","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S4","sig":"RR25 +2.83 pp · VRP +0.67 pp","legs":"S2 55000PE (559.5→537.4) / B2 54400PE (373.1→361.2) / S 55800CE (567.5→610.9) / B 56400CE (332.3→365.9)","capital":49765,"gross":325.5,"charges":386.02,"unitLegs":180,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"RR25 +2.83 pp · VRP +1.24 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1505.5 → ₹1494.8 · IV−HV10 +0.40 pp","legs":"S 55300CE (832.8→872.5) / S 55300PE (672.7→648.7) / B 55800CE (567.5→610.9) / B 54800PE (489.8→474.9)","capital":24883,"gross":381.0,"charges":372.93,"unitLegs":120,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"Straddle ₹1505.5 → ₹1494.8 · IV−HV10 +2.87 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S6","sig":"Basis -20.4 pts · BF25 +0.13 pp","legs":"S2 55600CE (668.5→711.9) / B2 56200CE (405.0→435.1) / S 54800PE (489.8→474.9) / B 54200PE (333.1→317.4)","capital":49765,"gross":-828.0,"charges":403.56,"unitLegs":180,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"Basis -20.4 pts · BF25 +0.13 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S1","sig":"IV 14.86% · HV30 13.97% · VRP +0.89 pp","legs":"S 56200CE (562.0→567.9) / S 55400PE (588.2→501.1) / B 56800CE (327.8→328.1) / B 54800PE (403.1→329.9)","capital":25090,"gross":243.0,"charges":317.29,"unitLegs":120,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"IV 14.86% · HV30 13.47% · VRP +1.39 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S2","sig":"IV 14.86% · HV10 14.66% · IV−HV10 +0.20 pp","legs":"B 55800CE (768.9→775.9) / B 55800PE (750.0→651.1)","capital":45566,"gross":-2755.5,"charges":197.14,"unitLegs":60,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"IV 14.86% · HV10 12.67% · IV−HV10 +2.19 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S3","sig":"ATM IV 14.86% → 13.96% · DTE 19d","legs":"S 55800CE (768.9→775.9) / S 55800PE (750.0→651.1) / B 56500CE (436.7→437.1) / B 55100PE (491.5→407.4)","capital":25090,"gross":247.5,"charges":356.79,"unitLegs":120,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"ATM IV 14.86% → 13.96% · DTE 19d","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S4","sig":"RR25 +3.25 pp · VRP +0.89 pp","legs":"S2 55500PE (626.7→534.0) / B2 54900PE (429.9→354.6) / S 56300CE (522.0→525.2) / B 56900CE (298.9→296.6)","capital":50180,"gross":883.5,"charges":386.22,"unitLegs":180,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"RR25 +3.25 pp · VRP +1.39 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1518.8 → ₹1427.0 · IV−HV10 +0.20 pp","legs":"S 55800CE (768.9→775.9) / S 55800PE (750.0→651.1) / B 56300CE (522.0→525.2) / B 55300PE (552.4→465.4)","capital":25090,"gross":241.5,"charges":367.18,"unitLegs":120,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"Straddle ₹1518.8 → ₹1427.0 · IV−HV10 +2.19 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S6","sig":"Basis -31.1 pts · BF25 +0.22 pp","legs":"S2 56100CE (611.2→617.2) / B2 56700CE (364.1→364.4) / S 55300PE (552.4→465.4) / B 54700PE (379.6→306.8)","capital":50180,"gross":81.0,"charges":388.65,"unitLegs":180,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"Basis -31.1 pts · BF25 +0.22 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S1","sig":"IV 13.31% · HV30 14.04% · VRP -0.73 pp","legs":"S 57300CE (483.6→1055.0) / S 56500PE (506.0→274.2) / B 57900CE (265.1→699.9) / B 55900PE (326.9→189.0)","capital":25593,"gross":-1287.0,"charges":322.99,"unitLegs":120,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"IV 13.31% · HV30 13.57% · VRP -0.26 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S2","sig":"IV 13.31% · HV10 13.65% · IV−HV10 -0.34 pp","legs":"B 56900CE (679.2→1330.9) / B 56900PE (672.0→359.4)","capital":40538,"gross":10173.0,"charges":210.05,"unitLegs":60,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"IV 13.31% · HV10 11.90% · IV−HV10 +1.41 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S3","sig":"ATM IV 13.31% → 13.85% · DTE 18d","legs":"S 56900CE (679.2→1330.9) / S 56900PE (672.0→359.4) / B 57600CE (364.8→864.0) / B 56200PE (407.9→225.8)","capital":25593,"gross":-658.5,"charges":362.72,"unitLegs":120,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"ATM IV 13.31% → 13.85% · DTE 18d","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S4","sig":"RR25 +2.48 pp · VRP -0.73 pp","legs":"S2 56600PE (542.0→293.2) / B2 56000PE (350.2→200.4) / S 57400CE (441.4→986.1) / B 58000CE (233.9→650.0)","capital":51187,"gross":2077.5,"charges":371.09,"unitLegs":180,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"RR25 +2.48 pp · VRP -0.26 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1351.2 → ₹1423.0 · IV−HV10 -0.34 pp","legs":"S 56900CE (679.2→1330.9) / S 56900PE (672.0→359.4) / B 57400CE (441.4→986.1) / B 56400PE (468.4→257.0)","capital":25593,"gross":-172.5,"charges":373.4,"unitLegs":120,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"Straddle ₹1351.2 → ₹1423.0 · IV−HV10 +1.41 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S6","sig":"Basis -9.2 pts · BF25 +0.17 pp","legs":"S2 57200CE (528.0→1117.5) / B2 57800CE (295.2→754.8) / S 56400PE (468.4→257.0) / B 55800PE (301.1→177.8)","capital":51187,"gross":-5155.5,"charges":419.55,"unitLegs":180,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"Basis -9.2 pts · BF25 +0.17 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S1","sig":"IV 15.66% · HV30 15.57% · VRP +0.09 pp","legs":"S 58000CE (541.4→1376.2) / S 57200PE (652.8→297.1) / B 58600CE (335.2→993.9) / B 56600PE (459.1→214.6)","capital":25901,"gross":-1953.0,"charges":360.56,"unitLegs":120,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"IV 15.66% · HV30 16.45% · VRP -0.79 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S2","sig":"IV 15.66% · HV10 17.34% · IV−HV10 -1.68 pp","legs":"B 57600CE (732.0→1680.8) / B 57600PE (831.1→373.2)","capital":46893,"gross":14728.5,"charges":233.86,"unitLegs":60,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"IV 15.66% · HV10 19.26% · IV−HV10 -3.60 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S3","sig":"ATM IV 15.66% → 16.17% · DTE 17d","legs":"S 57600CE (732.0→1680.8) / S 57600PE (831.1→373.2) / B 58300CE (429.9→1180.7) / B 56900PE (550.6→251.8)","capital":25901,"gross":-1170.0,"charges":402.39,"unitLegs":120,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"ATM IV 15.66% → 16.17% · DTE 17d","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S4","sig":"RR25 +2.85 pp · VRP +0.09 pp","legs":"S2 57300PE (696.2→313.8) / B2 56700PE (486.1→225.2) / S 58100CE (506.4→1308.9) / B 58700CE (309.2→936.0)","capital":51801,"gross":2022.0,"charges":421.56,"unitLegs":180,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"RR25 +2.85 pp · VRP -0.79 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1563.1 → ₹1639.3 · IV−HV10 -1.68 pp","legs":"S 57600CE (732.0→1680.8) / S 57600PE (831.1→373.2) / B 58100CE (506.4→1308.9) / B 57100PE (617.6→280.5)","capital":25901,"gross":-765.0,"charges":413.37,"unitLegs":120,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"Straddle ₹1563.1 → ₹1639.3 · IV−HV10 -3.60 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S6","sig":"Basis -41.9 pts · BF25 +0.69 pp","legs":"S2 57900CE (589.0→1455.8) / B2 58500CE (366.1→1051.2) / S 57100PE (617.6→280.5) / B 56500PE (428.8→201.9)","capital":51801,"gross":-7584.0,"charges":483.84,"unitLegs":180,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"Basis -41.9 pts · BF25 +0.69 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S1","sig":"IV 17.54% · HV30 15.55% · VRP +1.99 pp","legs":"S 59400CE (620.8→861.0) / S 58600PE (649.0→436.5) / B 60000CE (407.0→568.0) / B 58000PE (441.1→297.1)","capital":26570,"gross":-324.0,"charges":340.79,"unitLegs":120,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"IV 17.54% · HV30 16.52% · VRP +1.02 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S2","sig":"IV 17.54% · HV10 17.70% · IV−HV10 -0.16 pp","legs":"B 59000CE (802.0→1091.9) / B 59000PE (830.0→565.5)","capital":48960,"gross":760.5,"charges":211.94,"unitLegs":60,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"IV 17.54% · HV10 19.33% · IV−HV10 -1.79 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S3","sig":"ATM IV 17.54% → 16.97% · DTE 14d","legs":"S 59000CE (802.0→1091.9) / S 59000PE (830.0→565.5) / B 59700CE (504.2→711.0) / B 58300PE (540.0→359.7)","capital":26570,"gross":37.5,"charges":381.02,"unitLegs":120,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"ATM IV 17.54% → 16.97% · DTE 14d","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S4","sig":"RR25 +1.91 pp · VRP +1.99 pp","legs":"S2 58700PE (694.5→465.0) / B2 58100PE (477.1→316.1) / S 59500CE (580.1→804.5) / B 60100CE (375.7→526.9)","capital":53140,"gross":1912.5,"charges":410.44,"unitLegs":180,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"RR25 +1.91 pp · VRP +1.02 pp","ruleOk":true},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1632.0 → ₹1577.8 · IV−HV10 -0.16 pp","legs":"S 59000CE (802.0→1091.9) / S 59000PE (830.0→565.5) / B 59500CE (580.1→804.5) / B 58500PE (611.8→410.9)","capital":26570,"gross":-55.5,"charges":391.35,"unitLegs":120,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"Straddle ₹1632.0 → ₹1577.8 · IV−HV10 -1.79 pp","ruleOk":false},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S6","sig":"Basis +14.2 pts · BF25 +0.55 pp","legs":"S2 59300CE (663.0→917.0) / B2 59900CE (436.2→613.5) / S 58500PE (611.8→410.9) / B 57900PE (426.9→278.4)","capital":53140,"gross":-3034.5,"charges":435.06,"unitLegs":180,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"Basis 14.2 pts · BF25 +0.55 pp","ruleOk":true}];
+      // Published strategy rules, mirrored from SCENARIO_PRESETS in
+      // volatility_lab/backtest/strategy_backtest.py. Only components the 72-row
+      // archive actually records are mirrored; anything else is named, never faked.
+      var PRESET_SCREENS = {
+        S1: { name: 'VRP Harvest Iron Condor', stopRs: 3000, targetRs: 4500,
+              min: { vrp: 2.0, hv30: 8, dte: 2 }, max: { vrp: 15, hv30: 16, dte: 10 },
+              unavailable: 'IV − GARCH FRV gap, DTE rank, expiry rank' },
+        S2: { name: 'Gamma Expansion Long Straddle', stopRs: 2200, targetRs: 5500,
+              min: { vrp: -15, dte: 3 }, max: { vrp: -1.5, dte: 7 },
+              unavailable: 'IV − GARCH FRV gap, breakeven width' },
+        S3: { name: 'Post-Event Front-Week Crush', stopRs: 3500, targetRs: 5000,
+              min: { vrp: 3, dte: 1 }, max: { vrp: 20, dte: 5 },
+              unavailable: 'front/next-week IV kink, IV − GARCH FRV gap, event calendar' },
+        S4: { name: 'Steep Put Skew Ratio Spread', stopRs: 2800, targetRs: 4200,
+              min: { rr25: 2.5, vrp: 1, dte: 3 }, max: { rr25: 12, vrp: 15, dte: 14 },
+              unavailable: '25Δ percentile rank' },
+        S5: { name: 'Intraday Theta Decay Iron Butterfly', stopRs: 2500, targetRs: 4000,
+              min: { vrp: 1, dte: 1 }, max: { vrp: 15, dte: 6 },
+              unavailable: 'intraday straddle drift, net delta bound' },
+        S6: { name: 'Synthetic Basis Skewed Condor', stopRs: 2800, targetRs: 4200,
+              min: { rr25: -6, vrp: 1.5, dte: 2 }, max: { rr25: 0.5, vrp: 15, dte: 12 },
+              unavailable: 'put-call parity basis vs month future; RR25 is only recorded on S4 rows, so this bound cannot pass any S6 row' }
+      };
+
+      // The ledger opens on the recorded structure; the mirrored rule only screens
+      // once the user applies it. CUSTOM always applies. Edits also apply.
+      var CX_APPLIED = false;
+      var CX_FILLED_FOR = null;
+
+      function cxById(id) { return document.getElementById(id); }
+
+      function criteriaInputIds() {
+        var ids = ['cxLogic', 'cxStructure', 'cxApplyToggle'];
+        Object.keys(CUSTOM_METRICS).forEach(function(key) {
+          ['cx_on_', 'cx_min_', 'cx_max_'].forEach(function(prefix) {
+            if (cxById(prefix + key)) ids.push(prefix + key);
+          });
+        });
+        return ids;
+      }
+
+      function clearCriteriaInputs() {
+        Object.keys(CUSTOM_METRICS).forEach(function(key) {
+          var on = cxById('cx_on_' + key);
+          if (on) on.checked = false;
+          var lo = cxById('cx_min_' + key);
+          if (lo) lo.value = '';
+          var hi = cxById('cx_max_' + key);
+          if (hi) hi.value = '';
+        });
+        var logic = cxById('cxLogic');
+        if (logic) logic.value = 'AND';
+        var struct = cxById('cxStructure');
+        if (struct) struct.value = 'ANY';
+      }
+
+      function presetCapitalRef(preset) {
+        var symEl = cxById('btSymbolSelect');
+        var sym = (symEl && symEl.value) || 'NIFTY';
+        var table = (typeof STRATEGY_CAPITAL_PER_LOT !== 'undefined') ? STRATEGY_CAPITAL_PER_LOT[sym] : null;
+        return table && table[preset] ? table[preset] : null;
+      }
+
+      function fillPresetCriteria(preset) {
+        var def = PRESET_SCREENS[preset];
+        clearCriteriaInputs();
+        if (!def) return;
+        Object.keys(def.min || {}).forEach(function(key) {
+          var on = cxById('cx_on_' + key);
+          if (on) on.checked = true;
+          var lo = cxById('cx_min_' + key);
+          if (lo) lo.value = String(def.min[key]);
+          var hi = cxById('cx_max_' + key);
+          if (hi) hi.value = String(def.max[key]);
+        });
+        // The archive recorded the same 09:21 IST capture for every row, so the
+        // mirrored entry window is the backtest window (09:15-09:25), not a
+        // staggered live-entry clock the archive does not contain.
+        var eOn = cxById('cx_on_entryMin');
+        if (eOn) eOn.checked = true;
+        var eLo = cxById('cx_min_entryMin');
+        if (eLo) eLo.value = '0';
+        var eHi = cxById('cx_max_entryMin');
+        if (eHi) eHi.value = '10';
+        var cap = presetCapitalRef(preset);
+        if (cap) {
+          var sOn = cxById('cx_on_stop');
+          if (sOn) sOn.checked = true;
+          var sVal = cxById('cx_max_stop');
+          if (sVal) sVal.value = (def.stopRs / cap * 100).toFixed(2);
+          var tOn = cxById('cx_on_target');
+          if (tOn) tOn.checked = true;
+          var tVal = cxById('cx_min_target');
+          if (tVal) tVal.value = (def.targetRs / cap * 100).toFixed(2);
+        }
+        var struct = cxById('cxStructure');
+        if (struct) struct.value = preset;
+      }
+
+      function countCriteriaMatches(preset, sym) {
+        var spec = readCustomCriteria();
+        return tradeArchive.filter(function(t) {
+          if (t.sym !== sym) return false;
+          if (preset && preset !== 'ALL' && preset !== 'CUSTOM' && t.strat !== preset) return false;
+          if (spec.structure !== 'ANY' && t.strat !== spec.structure) return false;
+          return rowMatchesCriteria(t, spec);
+        }).length;
+      }
+
+      function presetRuleText(preset, sym) {
+        var def = PRESET_SCREENS[preset];
+        if (!def) return '';
+        var bits = [];
+        if (def.min.vrp !== undefined) bits.push('VRP ' + def.min.vrp + ' to ' + def.max.vrp + ' pp');
+        if (def.min.hv30 !== undefined) bits.push('HV30 ' + def.min.hv30 + '–' + def.max.hv30 + '%');
+        if (def.min.rr25 !== undefined) bits.push('RR25 ' + def.min.rr25 + ' to ' + def.max.rr25 + ' pp');
+        if (def.min.dte !== undefined) bits.push('DTE ' + def.min.dte + '–' + def.max.dte);
+        bits.push('entry 09:15–09:25 IST');
+        var cap = presetCapitalRef(preset);
+        if (cap) bits.push('stop ≈' + (def.stopRs / cap * 100).toFixed(2) + '% · target ≈' + (def.targetRs / cap * 100).toFixed(2) + '% of 1-lot capital');
+        var rows = tradeArchive.filter(function(t) { return t.sym === sym && t.strat === preset; });
+        var total = rows.length;
+        var matched = countCriteriaMatches(preset, sym);
+        var text = preset + ' · ' + def.name + ': ' + bits.join(' · ') + '. ' +
+          matched + ' of ' + total + ' recorded ' + sym + ' trades pass. ';
+        if (total && matched === 0) {
+          var defs = [];
+          if (def.min.vrp !== undefined) defs.push(['vrp', 'VRP', ' pp']);
+          if (def.min.hv30 !== undefined) defs.push(['hv30', 'HV30', '%']);
+          if (def.min.rr25 !== undefined) defs.push(['rr25', 'RR25', ' pp']);
+          if (def.min.dte !== undefined) defs.push(['dte', 'DTE', '']);
+          var ranges = defs.map(function(d) {
+            var vals = rows.map(function(r) { return r[d[0]]; }).filter(function(v) { return Number.isFinite(v); });
+            if (!vals.length) return d[1] + ' not recorded';
+            var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+            return d[1] + ' ' + lo + (lo === hi ? '' : ' to ' + hi) + d[2];
+          });
+          text += 'Recorded range: ' + ranges.join(' · ') + ', so the recorded sessions do not satisfy the full published rule. ';
+        }
+        return text + 'Not in the archive: ' + def.unavailable + '.';
+      }
+
+      function syncPresetCriteria() {
+        var pEl = cxById('btPresetSelect');
+        var preset = pEl ? pEl.value : 'S3';
+        if (preset === 'CUSTOM') { CX_FILLED_FOR = 'CUSTOM'; return; }
+        if (preset === 'ALL') {
+          if (CX_FILLED_FOR !== 'ALL') {
+            clearCriteriaInputs();
+            CX_APPLIED = false;
+            CX_FILLED_FOR = 'ALL';
+          }
+          return;
+        }
+        if (CX_FILLED_FOR !== preset) {
+          fillPresetCriteria(preset);
+          CX_APPLIED = false;
+          CX_FILLED_FOR = preset;
+        }
+      }
+
+      function updateCriteriaUi(preset) {
+        var mode = cxById('cxModeLabel');
+        var note = cxById('cxPresetNote');
+        var toggle = cxById('cxApplyToggle');
+        var wrap = cxById('cxApplyWrap');
+        var symEl = cxById('btSymbolSelect');
+        var sym = (symEl && symEl.value) || 'NIFTY';
+        if (mode) mode.textContent = preset === 'CUSTOM' ? 'custom screen' : (preset === 'ALL' ? 'all strategies' : preset + ' preset mirrored');
+        if (note) {
+          note.className = 'text-[11px] mono ' + (preset !== 'CUSTOM' && preset !== 'ALL' && !CX_APPLIED ? 'text-amber-300' : 'text-emerald-300');
+          note.textContent = preset === 'CUSTOM'
+            ? 'Custom screen — every bound below is applied to the 72 recorded trades. A missing value fails its criterion.'
+            : preset === 'ALL'
+              ? 'All 72 recorded trades. Choose S1–S6 to mirror a published rule, or CX to compose one; editing a bound switches to CX.'
+              : presetRuleText(preset, sym);
+        }
+        if (toggle) {
+          toggle.disabled = (preset === 'CUSTOM' || preset === 'ALL');
+          toggle.checked = (preset === 'CUSTOM') || (preset !== 'ALL' && !!CX_APPLIED);
+        }
+        if (wrap) wrap.className = 'flex items-center gap-2 text-[11px] font-bold ' +
+          (toggle && toggle.disabled ? 'text-slate-500' : 'text-emerald-300');
+      }
+
+      var tradeArchive = [{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S1","sig":"IV 15.20% · HV30 12.69% · VRP +2.51 pp","legs":"S 23450CE (117.3→133.0) / S 23050PE (111.7→89.3) / B 23750CE (37.0→44.9) / B 22750PE (52.5→39.2)","capital":26174,"gross":90.0,"charges":244.43,"unitLegs":300,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"IV 15.20% · HV30 13.99% · VRP +1.21 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":3.12,"mfePct":1.82,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S2","sig":"IV 15.20% · HV10 14.70% · IV−HV10 +0.50 pp","legs":"B 23250CE (215.8→234.7) / B 23250PE (184.6→153.6)","capital":30026,"gross":-903.75,"charges":163.85,"unitLegs":150,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"IV 15.20% · HV10 9.96% · IV−HV10 +5.24 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":3.9,"mfePct":4.03,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S3","sig":"ATM IV 15.20% → 14.64% · DTE 7d","legs":"S 23250CE (215.8→234.7) / S 23250PE (184.6→153.6) / B 23600CE (67.8→79.4) / B 22900PE (77.1→58.6)","capital":26174,"gross":390.0,"charges":284.35,"unitLegs":300,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"ATM IV 15.20% → 14.64% · DTE 7d","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":1.59,"mfePct":2.66,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S4","sig":"RR25 +2.90 pp · VRP +2.51 pp","legs":"S2 23100PE (127.8→102.4) / B2 22800PE (60.2→45.2) / S 23500CE (99.3→112.8) / B 23800CE (29.8→37.1)","capital":52347,"gross":1095.0,"charges":274.09,"unitLegs":450,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"RR25 +2.90 pp · VRP +1.21 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":2.16,"mfePct":2.17,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S5","sig":"Straddle ₹400.4 → ₹377.7 · IV−HV10 +0.50 pp","legs":"S 23250CE (215.8→234.7) / S 23250PE (184.6→153.6) / B 23500CE (99.3→112.8) / B 23000PE (100.0→77.8)","capital":26174,"gross":247.5,"charges":293.77,"unitLegs":300,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"Straddle ₹400.4 → ₹377.7 · IV−HV10 +5.24 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":1.17,"mfePct":1.75,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-02","exp":"2026-11-09","strat":"S6","sig":"Basis -53.4 pts · BF25 +0.10 pp","legs":"S2 23400CE (139.3→154.4) / B2 23700CE (45.7→54.8) / S 23000PE (100.0→77.8) / B 22700PE (46.7→34.7)","capital":52347,"gross":-142.5,"charges":281.84,"unitLegs":450,"iv":15.2,"hv10":9.96,"hv30":13.99,"vrp":1.21,"ivhv10":5.24,"dte":7,"hvAsOf":"2026-10-30","sigCalc":"Basis -53.4 pts · BF25 +0.10 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":4.46,"mfePct":4.12,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S1","sig":"IV 14.84% · HV30 13.79% · VRP +1.05 pp","legs":"S 55400CE (667.9→611.0) / S 54600PE (547.2→563.6) / B 56000CE (409.4→367.4) / B 54000PE (375.9→386.0)","capital":24732,"gross":255.0,"charges":328.7,"unitLegs":120,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"IV 14.84% · HV30 13.13% · VRP +1.71 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":0.35,"mfePct":1.84,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S2","sig":"IV 14.84% · HV10 13.97% · IV−HV10 +0.87 pp","legs":"B 55000CE (886.0→817.4) / B 55000PE (695.8→721.5)","capital":47452,"gross":-1287.0,"charges":204.43,"unitLegs":60,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"IV 14.84% · HV10 11.18% · IV−HV10 +3.66 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":3.46,"mfePct":0.34,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S3","sig":"ATM IV 14.84% → 14.69% · DTE 21d","legs":"S 55000CE (886.0→817.4) / S 55000PE (695.8→721.5) / B 55700CE (530.4→477.6) / B 54300PE (454.9→471.2)","capital":24732,"gross":193.5,"charges":368.7,"unitLegs":120,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"ATM IV 14.84% → 14.69% · DTE 21d","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":1.01,"mfePct":1.18,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S4","sig":"RR25 +2.77 pp · VRP +1.05 pp","legs":"S2 54700PE (581.1→600.2) / B2 54100PE (400.6→410.6) / S 55500CE (619.5→563.1) / B 56100CE (376.6→335.1)","capital":49463,"gross":-93.0,"charges":397.83,"unitLegs":180,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"RR25 +2.77 pp · VRP +1.71 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":3.16,"mfePct":0.79,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1581.8 → ₹1557.0 · IV−HV10 +0.87 pp","legs":"S 55000CE (886.0→817.4) / S 55000PE (695.8→721.5) / B 55500CE (619.5→563.1) / B 54500PE (512.7→530.3)","capital":24732,"gross":123.0,"charges":379.02,"unitLegs":120,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"Straddle ₹1581.8 → ₹1557.0 · IV−HV10 +3.66 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":0.47,"mfePct":1.47,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-02","exp":"2026-11-23","strat":"S6","sig":"Basis +10.1 pts · BF25 +0.08 pp","legs":"S2 55300CE (719.7→658.6) / B2 55900CE (449.6→402.0) / S 54500PE (512.7→530.3) / B 53900PE (347.2→361.4)","capital":49463,"gross":705.0,"charges":410.22,"unitLegs":180,"iv":14.84,"hv10":11.18,"hv30":13.13,"vrp":1.71,"ivhv10":3.66,"dte":21,"hvAsOf":"2026-10-30","sigCalc":"Basis 10.1 pts · BF25 +0.08 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":0.33,"mfePct":4.18,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S1","sig":"IV 14.89% · HV30 12.85% · VRP +2.04 pp","legs":"S 23800CE (87.5→142.8) / S 23400PE (116.3→79.7) / B 24100CE (27.2→54.6) / B 23100PE (51.3→37.3)","capital":26533,"gross":-397.5,"charges":241.56,"unitLegs":300,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"IV 14.89% · HV30 14.78% · VRP +0.11 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":5.41,"mfePct":0.0,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S2","sig":"IV 14.89% · HV10 14.76% · IV−HV10 +0.13 pp","legs":"B 23600CE (170.3→249.4) / B 23600PE (197.2→137.4)","capital":27559,"gross":1451.25,"charges":162.53,"unitLegs":150,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"IV 14.89% · HV10 11.22% · IV−HV10 +3.67 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":0.0,"mfePct":12.67,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S3","sig":"ATM IV 14.89% → 15.23% · DTE 6d","legs":"S 23600CE (170.3→249.4) / S 23600PE (197.2→137.4) / B 23950CE (49.5→89.5) / B 23250PE (77.6→54.2)","capital":26533,"gross":-202.5,"charges":279.8,"unitLegs":300,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"ATM IV 14.89% → 15.23% · DTE 6d","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":4.2,"mfePct":0.0,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S4","sig":"RR25 +3.11 pp · VRP +2.04 pp","legs":"S2 23450PE (133.8→91.5) / B2 23150PE (59.1→42.3) / S 23850CE (72.5→123.0) / B 24150CE (22.6→46.5)","capital":53065,"gross":1830.0,"charges":271.77,"unitLegs":450,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"RR25 +3.11 pp · VRP +0.11 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":0.21,"mfePct":3.45,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S5","sig":"Straddle ₹367.4 → ₹370.9 · IV−HV10 +0.13 pp","legs":"S 23600CE (170.3→249.4) / S 23600PE (197.2→137.4) / B 23850CE (72.5→123.0) / B 23350PE (101.9→70.1)","capital":26533,"gross":-52.5,"charges":288.49,"unitLegs":300,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"Straddle ₹367.4 → ₹370.9 · IV−HV10 +3.67 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":2.22,"mfePct":0.27,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-03","exp":"2026-11-09","strat":"S6","sig":"Basis -38.6 pts · BF25 +0.37 pp","legs":"S2 23750CE (104.1→166.1) / B2 24050CE (33.2→64.8) / S 23350PE (101.9→70.1) / B 23050PE (44.9→33.5)","capital":53065,"gross":-3037.5,"charges":274.29,"unitLegs":450,"iv":14.89,"hv10":11.22,"hv30":14.78,"vrp":0.11,"ivhv10":3.67,"dte":6,"hvAsOf":"2026-11-02","sigCalc":"Basis -38.6 pts · BF25 +0.37 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":9.36,"mfePct":0.0,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S1","sig":"IV 14.39% · HV30 13.72% · VRP +0.67 pp","legs":"S 55700CE (615.5→658.0) / S 54900PE (523.3→506.6) / B 56300CE (368.2→399.1) / B 54300PE (352.4→337.1)","capital":24883,"gross":-307.5,"charges":322.3,"unitLegs":120,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"IV 14.39% · HV30 13.15% · VRP +1.24 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":3.41,"mfePct":0.0,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S2","sig":"IV 14.39% · HV10 13.99% · IV−HV10 +0.40 pp","legs":"B 55300CE (832.8→872.5) / B 55300PE (672.7→648.7)","capital":45164,"gross":471.0,"charges":202.38,"unitLegs":60,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"IV 14.39% · HV10 11.52% · IV−HV10 +2.87 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":0.0,"mfePct":10.62,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S3","sig":"ATM IV 14.39% → 14.40% · DTE 20d","legs":"S 55300CE (832.8→872.5) / S 55300PE (672.7→648.7) / B 56000CE (478.8→516.2) / B 54600PE (428.1→414.6)","capital":24883,"gross":247.5,"charges":361.97,"unitLegs":120,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"ATM IV 14.39% → 14.40% · DTE 20d","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":1.88,"mfePct":1.12,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S4","sig":"RR25 +2.83 pp · VRP +0.67 pp","legs":"S2 55000PE (559.5→537.4) / B2 54400PE (373.1→361.2) / S 55800CE (567.5→610.9) / B 56400CE (332.3→365.9)","capital":49765,"gross":325.5,"charges":386.02,"unitLegs":180,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"RR25 +2.83 pp · VRP +1.24 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":0.01,"mfePct":1.7,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1505.5 → ₹1494.8 · IV−HV10 +0.40 pp","legs":"S 55300CE (832.8→872.5) / S 55300PE (672.7→648.7) / B 55800CE (567.5→610.9) / B 54800PE (489.8→474.9)","capital":24883,"gross":381.0,"charges":372.93,"unitLegs":120,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"Straddle ₹1505.5 → ₹1494.8 · IV−HV10 +2.87 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":1.34,"mfePct":1.53,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-03","exp":"2026-11-23","strat":"S6","sig":"Basis -20.4 pts · BF25 +0.13 pp","legs":"S2 55600CE (668.5→711.9) / B2 56200CE (405.0→435.1) / S 54800PE (489.8→474.9) / B 54200PE (333.1→317.4)","capital":49765,"gross":-828.0,"charges":403.56,"unitLegs":180,"iv":14.39,"hv10":11.52,"hv30":13.15,"vrp":1.24,"ivhv10":2.87,"dte":20,"hvAsOf":"2026-11-02","sigCalc":"Basis -20.4 pts · BF25 +0.13 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":5.36,"mfePct":0.02,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S1","sig":"IV 16.94% · HV30 13.11% · VRP +3.83 pp","legs":"S 24100CE (102.2→93.5) / S 23700PE (121.7→72.8) / B 24400CE (38.7→30.8) / B 23400PE (51.5→24.9)","capital":26884,"gross":1728.75,"charges":237.71,"unitLegs":300,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"IV 16.94% · HV30 15.42% · VRP +1.52 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":1.28,"mfePct":7.09,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S2","sig":"IV 16.94% · HV10 15.02% · IV−HV10 +1.92 pp","legs":"B 23900CE (182.3→178.9) / B 23900PE (206.4→145.6)","capital":29156,"gross":-4818.75,"charges":154.27,"unitLegs":150,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"IV 16.94% · HV10 12.87% · IV−HV10 +4.07 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":17.69,"mfePct":0.86,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S3","sig":"ATM IV 16.94% → 14.47% · DTE 5d","legs":"S 23900CE (182.3→178.9) / S 23900PE (206.4→145.6) / B 24250CE (63.4→54.2) / B 23550PE (79.1→41.9)","capital":26884,"gross":1338.75,"charges":274.41,"unitLegs":300,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"ATM IV 16.94% → 14.47% · DTE 5d","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":0.95,"mfePct":5.57,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S4","sig":"RR25 +2.44 pp · VRP +3.83 pp","legs":"S2 23750PE (139.2→87.2) / B2 23450PE (59.2→29.4) / S 24150CE (87.7→78.2) / B 24450CE (32.8→25.6)","capital":53769,"gross":3517.5,"charges":267.32,"unitLegs":450,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"RR25 +2.44 pp · VRP +1.52 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":7.06,"mfePct":7.32,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S5","sig":"Straddle ₹388.8 → ₹324.5 · IV−HV10 +1.92 pp","legs":"S 23900CE (182.3→178.9) / S 23900PE (206.4→145.6) / B 24150CE (87.7→78.2) / B 23650PE (105.7→60.6)","capital":26884,"gross":720.0,"charges":282.27,"unitLegs":300,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"Straddle ₹388.8 → ₹324.5 · IV−HV10 +4.07 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":0.56,"mfePct":2.99,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-04","exp":"2026-11-09","strat":"S6","sig":"Basis -46.1 pts · BF25 +0.44 pp","legs":"S2 24050CE (118.8→111.5) / B2 24350CE (45.6→37.2) / S 23650PE (105.7→60.6) / B 23350PE (44.5→21.4)","capital":53769,"gross":1500.0,"charges":266.23,"unitLegs":450,"iv":16.94,"hv10":12.87,"hv30":15.42,"vrp":1.52,"ivhv10":4.07,"dte":5,"hvAsOf":"2026-11-03","sigCalc":"Basis -46.1 pts · BF25 +0.44 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":1.63,"mfePct":5.41,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S1","sig":"IV 14.86% · HV30 13.97% · VRP +0.89 pp","legs":"S 56200CE (562.0→567.9) / S 55400PE (588.2→501.1) / B 56800CE (327.8→328.1) / B 54800PE (403.1→329.9)","capital":25090,"gross":243.0,"charges":317.29,"unitLegs":120,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"IV 14.86% · HV30 13.47% · VRP +1.39 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":0.92,"mfePct":1.6,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S2","sig":"IV 14.86% · HV10 14.66% · IV−HV10 +0.20 pp","legs":"B 55800CE (768.9→775.9) / B 55800PE (750.0→651.1)","capital":45566,"gross":-2755.5,"charges":197.14,"unitLegs":60,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"IV 14.86% · HV10 12.67% · IV−HV10 +2.19 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":6.76,"mfePct":0.51,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S3","sig":"ATM IV 14.86% → 13.96% · DTE 19d","legs":"S 55800CE (768.9→775.9) / S 55800PE (750.0→651.1) / B 56500CE (436.7→437.1) / B 55100PE (491.5→407.4)","capital":25090,"gross":247.5,"charges":356.79,"unitLegs":120,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"ATM IV 14.86% → 13.96% · DTE 19d","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":1.29,"mfePct":1.79,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S4","sig":"RR25 +3.25 pp · VRP +0.89 pp","legs":"S2 55500PE (626.7→534.0) / B2 54900PE (429.9→354.6) / S 56300CE (522.0→525.2) / B 56900CE (298.9→296.6)","capital":50180,"gross":883.5,"charges":386.22,"unitLegs":180,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"RR25 +3.25 pp · VRP +1.39 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":2.29,"mfePct":2.95,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1518.8 → ₹1427.0 · IV−HV10 +0.20 pp","legs":"S 55800CE (768.9→775.9) / S 55800PE (750.0→651.1) / B 56300CE (522.0→525.2) / B 55300PE (552.4→465.4)","capital":25090,"gross":241.5,"charges":367.18,"unitLegs":120,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"Straddle ₹1518.8 → ₹1427.0 · IV−HV10 +2.19 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":1.2,"mfePct":1.73,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-04","exp":"2026-11-23","strat":"S6","sig":"Basis -31.1 pts · BF25 +0.22 pp","legs":"S2 56100CE (611.2→617.2) / B2 56700CE (364.1→364.4) / S 55300PE (552.4→465.4) / B 54700PE (379.6→306.8)","capital":50180,"gross":81.0,"charges":388.65,"unitLegs":180,"iv":14.86,"hv10":12.67,"hv30":13.47,"vrp":1.39,"ivhv10":2.19,"dte":19,"hvAsOf":"2026-11-03","sigCalc":"Basis -31.1 pts · BF25 +0.22 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:42","entryMin":6,"holdMin":354,"maePct":1.65,"mfePct":3.05,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S1","sig":"IV 14.79% · HV30 13.18% · VRP +1.61 pp","legs":"S 24550CE (74.0→157.5) / S 24150PE (80.0→33.8) / B 24850CE (26.2→59.0) / B 23850PE (27.2→13.2)","capital":27386,"gross":-1380.0,"charges":229.65,"unitLegs":300,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"IV 14.79% · HV30 15.45% · VRP -0.66 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":11.0,"mfePct":2.71,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S2","sig":"IV 14.79% · HV10 13.55% · IV−HV10 +1.24 pp","legs":"B 24350CE (147.6→275.1) / B 24350PE (162.2→73.5)","capital":23239,"gross":2906.25,"charges":155.08,"unitLegs":150,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"IV 14.79% · HV10 12.24% · IV−HV10 +2.55 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":8.12,"mfePct":26.63,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S3","sig":"ATM IV 14.79% → 15.21% · DTE 4d","legs":"S 24350CE (147.6→275.1) / S 24350PE (162.2→73.5) / B 24700CE (43.2→98.0) / B 24000PE (45.8→19.9)","capital":27386,"gross":-742.5,"charges":265.19,"unitLegs":300,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"ATM IV 14.79% → 15.21% · DTE 4d","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":8.49,"mfePct":2.3,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S4","sig":"RR25 +0.60 pp · VRP +1.61 pp","legs":"S2 24200PE (96.0→40.5) / B2 23900PE (32.2→15.0) / S 24600CE (61.6→135.0) / B 24900CE (22.1→49.9)","capital":54772,"gross":2325.0,"charges":247.06,"unitLegs":450,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"RR25 +0.60 pp · VRP -0.66 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":0.41,"mfePct":6.51,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S5","sig":"Straddle ₹309.9 → ₹311.9 · IV−HV10 +1.24 pp","legs":"S 24350CE (147.6→275.1) / S 24350PE (162.2→73.5) / B 24600CE (61.6→135.0) / B 24100PE (66.6→28.0)","capital":27386,"gross":-300.0,"charges":273.02,"unitLegs":300,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"Straddle ₹309.9 → ₹311.9 · IV−HV10 +2.55 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":4.6,"mfePct":1.23,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-05","exp":"2026-11-09","strat":"S6","sig":"Basis -34.6 pts · BF25 +0.43 pp","legs":"S2 24500CE (88.7→182.3) / B2 24800CE (30.6→70.2) / S 24100PE (66.6→28.0) / B 23800PE (23.0→11.7)","capital":54772,"gross":-6063.75,"charges":261.95,"unitLegs":450,"iv":14.79,"hv10":12.24,"hv30":15.45,"vrp":-0.66,"ivhv10":2.55,"dte":4,"hvAsOf":"2026-11-04","sigCalc":"Basis -34.6 pts · BF25 +0.43 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":17.49,"mfePct":1.92,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S1","sig":"IV 13.31% · HV30 14.04% · VRP -0.73 pp","legs":"S 57300CE (483.6→1055.0) / S 56500PE (506.0→274.2) / B 57900CE (265.1→699.9) / B 55900PE (326.9→189.0)","capital":25593,"gross":-1287.0,"charges":322.99,"unitLegs":120,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"IV 13.31% · HV30 13.57% · VRP -0.26 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":6.74,"mfePct":0.89,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S2","sig":"IV 13.31% · HV10 13.65% · IV−HV10 -0.34 pp","legs":"B 56900CE (679.2→1330.9) / B 56900PE (672.0→359.4)","capital":40538,"gross":10173.0,"charges":210.05,"unitLegs":60,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"IV 13.31% · HV10 11.90% · IV−HV10 +1.41 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":0.26,"mfePct":29.14,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S3","sig":"ATM IV 13.31% → 13.85% · DTE 18d","legs":"S 56900CE (679.2→1330.9) / S 56900PE (672.0→359.4) / B 57600CE (364.8→864.0) / B 56200PE (407.9→225.8)","capital":25593,"gross":-658.5,"charges":362.72,"unitLegs":120,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"ATM IV 13.31% → 13.85% · DTE 18d","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":4.81,"mfePct":1.67,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S4","sig":"RR25 +2.48 pp · VRP -0.73 pp","legs":"S2 56600PE (542.0→293.2) / B2 56000PE (350.2→200.4) / S 57400CE (441.4→986.1) / B 58000CE (233.9→650.0)","capital":51187,"gross":2077.5,"charges":371.09,"unitLegs":180,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"RR25 +2.48 pp · VRP -0.26 pp","ruleOk":true,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":0.82,"mfePct":4.26,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1351.2 → ₹1423.0 · IV−HV10 -0.34 pp","legs":"S 56900CE (679.2→1330.9) / S 56900PE (672.0→359.4) / B 57400CE (441.4→986.1) / B 56400PE (468.4→257.0)","capital":25593,"gross":-172.5,"charges":373.4,"unitLegs":120,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"Straddle ₹1351.2 → ₹1423.0 · IV−HV10 +1.41 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":2.58,"mfePct":3.52,"pathN":119,"pathTotal":119},{"sym":"BANKNIFTY","date":"2026-11-05","exp":"2026-11-23","strat":"S6","sig":"Basis -9.2 pts · BF25 +0.17 pp","legs":"S2 57200CE (528.0→1117.5) / B2 57800CE (295.2→754.8) / S 56400PE (468.4→257.0) / B 55800PE (301.1→177.8)","capital":51187,"gross":-5155.5,"charges":419.55,"unitLegs":180,"iv":13.31,"hv10":11.9,"hv30":13.57,"vrp":-0.26,"ivhv10":1.41,"dte":18,"hvAsOf":"2026-11-04","sigCalc":"Basis -9.2 pts · BF25 +0.17 pp","ruleOk":false,"entryAt":"09:21:42","exitAt":"15:15:43","entryMin":6,"holdMin":354,"maePct":12.02,"mfePct":1.19,"pathN":119,"pathTotal":119},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S1","sig":"IV 19.50% · HV30 14.13% · VRP +5.37 pp","legs":"S 24750CE (74.2→322.8) / S 24350PE (122.5→22.8) / B 25050CE (23.7→145.6) / B 24050PE (47.0→10.7)","capital":27593,"gross":-4740.0,"charges":253.71,"unitLegs":300,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"IV 19.50% · HV30 16.74% · VRP +2.76 pp","ruleOk":false,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":17.8,"mfePct":3.14,"pathN":355,"pathTotal":355},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S2","sig":"IV 19.50% · HV10 15.52% · IV−HV10 +3.98 pp","legs":"B 24550CE (147.5→482.5) / B 24550PE (213.2→41.3)","capital":27056,"gross":12228.75,"charges":182.03,"unitLegs":150,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"IV 19.50% · HV10 13.93% · IV−HV10 +5.57 pp","ruleOk":false,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":8.61,"mfePct":47.28,"pathN":355,"pathTotal":355},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S3","sig":"ATM IV 19.50% → 19.16% · DTE 3d","legs":"S 24550CE (147.5→482.5) / S 24550PE (213.2→41.3) / B 24900CE (42.5→223.4) / B 24200PE (76.0→14.9)","capital":27593,"gross":-3247.5,"charges":296.79,"unitLegs":300,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"ATM IV 19.50% → 19.16% · DTE 3d","ruleOk":true,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":12.77,"mfePct":3.57,"pathN":355,"pathTotal":355},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S4","sig":"RR25 +3.86 pp · VRP +5.37 pp","legs":"S2 24400PE (142.1→26.1) / B2 24100PE (55.8→11.7) / S 24800CE (61.6→285.7) / B 25100CE (19.3→124.9)","capital":55186,"gross":1908.75,"charges":275.81,"unitLegs":450,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"RR25 +3.86 pp · VRP +2.76 pp","ruleOk":false,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":2.0,"mfePct":9.13,"pathN":355,"pathTotal":355},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S5","sig":"Straddle ₹360.8 → ₹346.2 · IV−HV10 +3.98 pp","legs":"S 24550CE (147.5→482.5) / S 24550PE (213.2→41.3) / B 24800CE (61.6→285.7) / B 24300PE (106.0→19.7)","capital":27593,"gross":-1897.5,"charges":308.11,"unitLegs":300,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"Straddle ₹360.8 → ₹346.2 · IV−HV10 +5.57 pp","ruleOk":true,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":7.27,"mfePct":2.41,"pathN":355,"pathTotal":355},{"sym":"NIFTY","date":"2026-11-06","exp":"2026-11-09","strat":"S6","sig":"Basis -33.6 pts · BF25 +0.22 pp","legs":"S2 24700CE (88.4→359.1) / B2 25000CE (29.1→169.0) / S 24300PE (106.0→19.7) / B 24000PE (39.8→9.6)","capital":55186,"gross":-15416.25,"charges":307.83,"unitLegs":450,"iv":19.5,"hv10":13.93,"hv30":16.74,"vrp":2.76,"ivhv10":5.57,"dte":3,"hvAsOf":"2026-11-05","sigCalc":"Basis -33.6 pts · BF25 +0.22 pp","ruleOk":true,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":28.86,"mfePct":1.7,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S1","sig":"IV 15.66% · HV30 15.57% · VRP +0.09 pp","legs":"S 58000CE (541.4→1376.2) / S 57200PE (652.8→297.1) / B 58600CE (335.2→993.9) / B 56600PE (459.1→214.6)","capital":25901,"gross":-1953.0,"charges":360.56,"unitLegs":120,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"IV 15.66% · HV30 16.45% · VRP -0.79 pp","ruleOk":false,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":8.37,"mfePct":2.0,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S2","sig":"IV 15.66% · HV10 17.34% · IV−HV10 -1.68 pp","legs":"B 57600CE (732.0→1680.8) / B 57600PE (831.1→373.2)","capital":46893,"gross":14728.5,"charges":233.86,"unitLegs":60,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"IV 15.66% · HV10 19.26% · IV−HV10 -3.60 pp","ruleOk":true,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":2.47,"mfePct":32.97,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S3","sig":"ATM IV 15.66% → 16.17% · DTE 17d","legs":"S 57600CE (732.0→1680.8) / S 57600PE (831.1→373.2) / B 58300CE (429.9→1180.7) / B 56900PE (550.6→251.8)","capital":25901,"gross":-1170.0,"charges":402.39,"unitLegs":120,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"ATM IV 15.66% → 16.17% · DTE 17d","ruleOk":false,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":6.83,"mfePct":1.13,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S4","sig":"RR25 +2.85 pp · VRP +0.09 pp","legs":"S2 57300PE (696.2→313.8) / B2 56700PE (486.1→225.2) / S 58100CE (506.4→1308.9) / B 58700CE (309.2→936.0)","capital":51801,"gross":2022.0,"charges":421.56,"unitLegs":180,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"RR25 +2.85 pp · VRP -0.79 pp","ruleOk":true,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":0.75,"mfePct":4.61,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1563.1 → ₹1639.3 · IV−HV10 -1.68 pp","legs":"S 57600CE (732.0→1680.8) / S 57600PE (831.1→373.2) / B 58100CE (506.4→1308.9) / B 57100PE (617.6→280.5)","capital":25901,"gross":-765.0,"charges":413.37,"unitLegs":120,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"Straddle ₹1563.1 → ₹1639.3 · IV−HV10 -3.60 pp","ruleOk":false,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":4.79,"mfePct":2.07,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-06","exp":"2026-11-23","strat":"S6","sig":"Basis -41.9 pts · BF25 +0.69 pp","legs":"S2 57900CE (589.0→1455.8) / B2 58500CE (366.1→1051.2) / S 57100PE (617.6→280.5) / B 56500PE (428.8→201.9)","capital":51801,"gross":-7584.0,"charges":483.84,"unitLegs":180,"iv":15.66,"hv10":19.26,"hv30":16.45,"vrp":-0.79,"ivhv10":-3.6,"dte":17,"hvAsOf":"2026-11-05","sigCalc":"Basis -41.9 pts · BF25 +0.69 pp","ruleOk":true,"entryAt":"09:20:44","exitAt":"15:15:44","entryMin":5,"holdMin":355,"maePct":14.82,"mfePct":1.66,"pathN":355,"pathTotal":355},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S1","sig":"IV 18.50% · HV30 14.27% · VRP +4.23 pp","legs":"S 25100CE (200.0→211.0) / S 24700PE (180.3→121.8) / B 25400CE (110.0→110.2) / B 24400PE (94.7→55.5)","capital":28037,"gross":637.5,"charges":285.6,"unitLegs":300,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"IV 18.50% · HV30 16.72% · VRP +1.78 pp","ruleOk":false,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":0.74,"mfePct":2.82,"pathN":355,"pathTotal":355},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S2","sig":"IV 18.50% · HV10 14.65% · IV−HV10 +3.85 pp","legs":"B 24900CE (285.1→307.9) / B 24900PE (268.6→196.5)","capital":41531,"gross":-3705.0,"charges":185.75,"unitLegs":150,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"IV 18.50% · HV10 14.66% · IV−HV10 +3.84 pp","ruleOk":false,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":11.01,"mfePct":1.31,"pathN":355,"pathTotal":355},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S3","sig":"ATM IV 18.50% → 16.87% · DTE 8d","legs":"S 24900CE (285.1→307.9) / S 24900PE (268.6→196.5) / B 25250CE (149.8→153.8) / B 24550PE (132.5→82.5)","capital":28037,"gross":251.25,"charges":329.17,"unitLegs":300,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"ATM IV 18.50% → 16.87% · DTE 8d","ruleOk":true,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":0.64,"mfePct":1.9,"pathN":355,"pathTotal":355},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S4","sig":"RR25 +0.49 pp · VRP +4.23 pp","legs":"S2 24750PE (199.7→138.1) / B2 24450PE (106.3→63.7) / S 25150CE (181.8→190.4) / B 25450CE (99.2→98.8)","capital":56074,"gross":2167.5,"charges":331.37,"unitLegs":450,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"RR25 +0.49 pp · VRP +1.78 pp","ruleOk":false,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":1.2,"mfePct":4.17,"pathN":355,"pathTotal":355},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S5","sig":"Straddle ₹553.8 → ₹499.4 · IV−HV10 +3.85 pp","legs":"S 24900CE (285.1→307.9) / S 24900PE (268.6→196.5) / B 25150CE (181.8→190.4) / B 24650PE (161.2→107.5)","capital":28037,"gross":326.25,"charges":340.1,"unitLegs":300,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"Straddle ₹553.8 → ₹499.4 · IV−HV10 +3.84 pp","ruleOk":true,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":0.32,"mfePct":2.01,"pathN":355,"pathTotal":355},{"sym":"NIFTY","date":"2026-11-09","exp":"2026-11-17","strat":"S6","sig":"Basis -22.8 pts · BF25 +0.50 pp","legs":"S2 25050CE (220.3→233.7) / B2 25350CE (122.5→123.7) / S 24650PE (161.2→107.5) / B 24350PE (85.5→48.9)","capital":56074,"gross":-536.25,"charges":348.75,"unitLegs":450,"iv":18.5,"hv10":14.66,"hv30":16.72,"vrp":1.78,"ivhv10":3.84,"dte":8,"hvAsOf":"2026-11-08","sigCalc":"Basis -22.8 pts · BF25 +0.50 pp","ruleOk":true,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":3.35,"mfePct":3.66,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S1","sig":"IV 17.54% · HV30 15.55% · VRP +1.99 pp","legs":"S 59400CE (620.8→861.0) / S 58600PE (649.0→436.5) / B 60000CE (407.0→568.0) / B 58000PE (441.1→297.1)","capital":26570,"gross":-324.0,"charges":340.79,"unitLegs":120,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"IV 17.54% · HV30 16.52% · VRP +1.02 pp","ruleOk":false,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":1.82,"mfePct":1.45,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S2","sig":"IV 17.54% · HV10 17.70% · IV−HV10 -0.16 pp","legs":"B 59000CE (802.0→1091.9) / B 59000PE (830.0→565.5)","capital":48960,"gross":760.5,"charges":211.94,"unitLegs":60,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"IV 17.54% · HV10 19.33% · IV−HV10 -1.79 pp","ruleOk":true,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":5.79,"mfePct":3.31,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S3","sig":"ATM IV 17.54% → 16.97% · DTE 14d","legs":"S 59000CE (802.0→1091.9) / S 59000PE (830.0→565.5) / B 59700CE (504.2→711.0) / B 58300PE (540.0→359.7)","capital":26570,"gross":37.5,"charges":381.02,"unitLegs":120,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"ATM IV 17.54% → 16.97% · DTE 14d","ruleOk":true,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":3.0,"mfePct":1.03,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S4","sig":"RR25 +1.91 pp · VRP +1.99 pp","legs":"S2 58700PE (694.5→465.0) / B2 58100PE (477.1→316.1) / S 59500CE (580.1→804.5) / B 60100CE (375.7→526.9)","capital":53140,"gross":1912.5,"charges":410.44,"unitLegs":180,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"RR25 +1.91 pp · VRP +1.02 pp","ruleOk":true,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":0.84,"mfePct":3.97,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S5","sig":"Straddle ₹1632.0 → ₹1577.8 · IV−HV10 -0.16 pp","legs":"S 59000CE (802.0→1091.9) / S 59000PE (830.0→565.5) / B 59500CE (580.1→804.5) / B 58500PE (611.8→410.9)","capital":26570,"gross":-55.5,"charges":391.35,"unitLegs":120,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"Straddle ₹1632.0 → ₹1577.8 · IV−HV10 -1.79 pp","ruleOk":false,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":1.24,"mfePct":0.77,"pathN":355,"pathTotal":355},{"sym":"BANKNIFTY","date":"2026-11-09","exp":"2026-11-23","strat":"S6","sig":"Basis +14.2 pts · BF25 +0.55 pp","legs":"S2 59300CE (663.0→917.0) / B2 59900CE (436.2→613.5) / S 58500PE (611.8→410.9) / B 57900PE (426.9→278.4)","capital":53140,"gross":-3034.5,"charges":435.06,"unitLegs":180,"iv":17.54,"hv10":19.33,"hv30":16.52,"vrp":1.02,"ivhv10":-1.79,"dte":14,"hvAsOf":"2026-11-08","sigCalc":"Basis 14.2 pts · BF25 +0.55 pp","ruleOk":true,"entryAt":"09:20:42","exitAt":"15:15:42","entryMin":5,"holdMin":355,"maePct":6.63,"mfePct":1.0,"pathN":355,"pathTotal":355}];
 
       function fmtInr(v, plus) {
         var s = v < 0 ? '-' : (plus && v > 0 ? '+' : '');
@@ -2683,12 +2940,16 @@
         var lots = Math.min(50, Math.max(1, Math.floor(Number(lotsEl?.value) || 1)));
         if (document.getElementById('btLots')) document.getElementById('btLots').value = String(lots);
         var slip = Math.min(10,Math.max(0,Number(document.getElementById('btSlippageTicks').value) || 0));
-        var spec = preset === 'CUSTOM' ? readCustomCriteria() : null;
+        if (!overridePreset) syncPresetCriteria();
+        var spec = readCustomCriteria();
+        // Scorecard passes (overridePreset) always stay structure-only: a custom
+        // screen belongs to the selected ledger, not to every strategy's totals.
+        var useCriteria = !overridePreset && ((preset === 'CUSTOM') || (preset !== 'ALL' && CX_APPLIED));
         var verifyOnly = ARCHIVE_MODE === 'verified';
 
         if (!overridePreset) {
-          var hypothesis = preset === 'CUSTOM'
-            ? 'Custom criteria screen — ' + criteriaSummary(spec) + (spec.structure === 'ANY' ? ' · any structure' : ' · ' + spec.structure + ' structure only')
+          var hypothesis = useCriteria
+            ? 'Criteria screen — ' + criteriaSummary(spec) + (spec.structure === 'ANY' ? ' · any structure' : ' · ' + spec.structure + ' structure only')
             : (presetMeta[preset] || presetMeta.S3);
           document.getElementById('btHypothesisLine').innerHTML =
             '<b class="text-sky-300">Hypothesis:</b> ' + hypothesis;
@@ -2696,11 +2957,10 @@
 
         return tradeArchive.filter(function(t) {
           if (t.sym !== sym) return false;
-          if (preset === 'CUSTOM') {
+          if (preset !== 'ALL' && preset !== 'CUSTOM' && t.strat !== preset) return false;
+          if (useCriteria) {
             if (spec.structure !== 'ANY' && t.strat !== spec.structure) return false;
             if (!rowMatchesCriteria(t, spec)) return false;
-          } else if (preset !== 'ALL' && t.strat !== preset) {
-            return false;
           }
           return verifyOnly ? OptionsCharts.auditedTrade(t) : true;
         }).sort((a,b) => a.date.localeCompare(b.date) || a.strat.localeCompare(b.strat)).map(function(t) {
@@ -2715,6 +2975,10 @@
             sigCalc: t.sigCalc || t.sig, iv: t.iv ?? null, hv10: t.hv10 ?? null,
             hv30: t.hv30 ?? null, vrp: t.vrp ?? null, ivhv10: t.ivhv10 ?? null,
             dte: t.dte ?? null, hvAsOf: t.hvAsOf || '', ruleOk: t.ruleOk !== false,
+            entryAt: t.entryAt || '', exitAt: t.exitAt || '',
+            entryMin: t.entryMin ?? null, holdMin: t.holdMin ?? null,
+            maePct: t.maePct ?? null, mfePct: t.mfePct ?? null,
+            pathN: t.pathN ?? null,
             capital: cap, gross: g, cost: c, net: net, roc: roc,
             exitReason: t.exitReason || '', verified: OptionsCharts.auditedTrade(t)
           };
@@ -2759,13 +3023,14 @@
         var lots = Math.min(50, Math.max(1, Math.floor(Number(lotsEl?.value) || 1)));
         if (document.getElementById('btLots')) document.getElementById('btLots').value = String(lots);
 
-        // Keep the archive-mode toggle and custom-criteria panel in sync with the selection.
+        // Keep the archive-mode toggle and criteria panel in sync with the selection.
         var researchBtn = document.getElementById('btModeResearch');
         var verifiedBtn = document.getElementById('btModeVerified');
         if (researchBtn) researchBtn.classList.toggle('active', ARCHIVE_MODE === 'research');
         if (verifiedBtn) verifiedBtn.classList.toggle('active', ARCHIVE_MODE === 'verified');
-        var customPanel = document.getElementById('btCustomPanel');
-        if (customPanel) customPanel.classList.toggle('hidden', preset !== 'CUSTOM');
+        syncPresetCriteria();
+        updateCriteriaUi(preset);
+        var criteriaOn = (preset === 'CUSTOM') || (preset !== 'ALL' && CX_APPLIED);
         var cxHintEl = document.getElementById('cxHint');
         if (cxHintEl) cxHintEl.textContent = '';
         var ledgerIndexEl = document.getElementById('btLedgerIndex');
@@ -2785,36 +3050,39 @@
         }
 
         var rows = computeBtRows();
-        if (cxHintEl && preset === 'CUSTOM') {
+        if (cxHintEl && criteriaOn) {
           cxHintEl.textContent = rows.length
             ? rows.length.toLocaleString('en-IN') + ' archive matches · ' + criteriaSummary(readCustomCriteria())
             : '0 archive matches · ' + criteriaSummary(readCustomCriteria());
           cxHintEl.className = 'text-[11px] mono ' + (rows.length ? 'text-emerald-300' : 'text-rose-400');
+        } else if (cxHintEl && preset !== 'ALL') {
+          cxHintEl.textContent = 'Criteria mirrored but not applied — ledger lists all recorded ' + preset + ' trades.';
+          cxHintEl.className = 'text-[11px] mono text-slate-400';
         }
         if (!rows.length) {
           ['resNetPnl','resCapitalUsed','resRocPct','resWinRate','resProfitFactor','resMaxDd','resCharges'].forEach(id => document.getElementById(id).textContent = '—');
           const count = tradeArchive.filter(t => t.sym === sym && (preset === 'ALL' || t.strat === preset)).length;
           document.getElementById('resTradeCount').textContent = '0 trades';
-          document.getElementById('resNetSub').textContent = preset === 'CUSTOM'
-            ? 'No recorded trade matches the custom criteria'
+          document.getElementById('resNetSub').textContent = criteriaOn
+            ? 'No recorded trade matches the criteria'
             : ARCHIVE_MODE === 'verified'
               ? count + ' records lack execution evidence'
               : 'No recorded sessions for this selection';
           document.getElementById('resCapitalSub').textContent = 'Capital unavailable';
-          document.getElementById('resRocSub').textContent = preset === 'CUSTOM'
-            ? 'Widen or disable some custom criteria'
+          document.getElementById('resRocSub').textContent = criteriaOn
+            ? 'Widen or disable some criteria'
             : 'Performance withheld pending execution evidence';
           document.getElementById('resMaxDdSub').textContent = 'Equity history unavailable';
-          document.getElementById('btHypothesisLine').textContent = preset === 'CUSTOM'
-            ? 'No recorded trade satisfies the custom criteria. Loosen a bound, switch AND to OR, or allow any structure.'
+          document.getElementById('btHypothesisLine').textContent = criteriaOn
+            ? 'No recorded trade satisfies the criteria. Loosen a bound, switch AND to OR, or allow any structure.'
             : 'The archive contains ' + count + ' recorded trades for this selection. Entry/exit quote evidence and signal availability are required before performance can be presented as audited.';
           document.getElementById('btLedgerBody').innerHTML = '<tr><td colspan="9" class="p-4 text-slate-300">' +
-            (preset === 'CUSTOM' ? 'No recorded trade matches this custom criteria screen.' : 'No verified point-in-time trades for this selection.') + '</td></tr>';
+            (criteriaOn ? 'No recorded trade matches this screen.' : 'No verified point-in-time trades for this selection.') + '</td></tr>';
           document.getElementById('btScorecardBody').innerHTML = '<tr><td colspan="10" class="p-4 text-slate-300">Performance unavailable until the trade archive is verified.</td></tr>';
           var emptyMeta = document.getElementById('btLedgerMeta');
           if (emptyMeta) {
-            emptyMeta.textContent = preset === 'CUSTOM'
-              ? '0 matches · custom criteria screen'
+            emptyMeta.textContent = criteriaOn
+              ? '0 matches · criteria screen'
               : ARCHIVE_MODE === 'verified'
                 ? '0 verified trades · strict provenance gate'
                 : '0 trades · ' + count + ' records in archive for this selection';
@@ -2985,6 +3253,8 @@
             '<td class="py-2 px-3 font-bold text-sky-300">' + r.strat + '</td>' +
             '<td class="py-2 px-3 text-slate-200">' + (r.sigCalc || r.sig) +
               '<div class="text-[10px] text-slate-500 font-normal">recorded: ' + r.sig + '</div>' +
+              (r.entryAt ? '<div class="text-[10px] text-slate-500 font-normal">entry ' + r.entryAt + ' · exit ' + r.exitAt + ' IST' +
+                (r.maePct === null ? '' : ' · worst −' + r.maePct.toFixed(2) + '% / best +' + r.mfePct.toFixed(2) + '% of capital') + '</div>' : '') +
               (r.ruleOk === false ? '<div class="text-[10px] text-amber-300 font-normal">current entry rule not met on restated inputs</div>' : '') + '</td>' +
             '<td class="py-2 px-3 text-slate-300">' + r.legs + '</td>' +
             '<td class="py-2 px-3 text-right font-bold text-sky-300">' + fmtInr(r.capital, false) + '</td>' +
@@ -3695,7 +3965,29 @@
         });
       });
 
-      ['btPresetSelect', 'btSymbolSelect', 'btLotsInput', 'btLots', 'btSlippageTicks'].forEach(function(id) {
+      var btPresetEl = document.getElementById('btPresetSelect');
+      if (btPresetEl) {
+        btPresetEl.addEventListener('change', function() {
+          CX_FILLED_FOR = null;
+          if (btPresetEl.value === 'ALL' || btPresetEl.value === 'CUSTOM') {
+            clearCriteriaInputs();
+            CX_APPLIED = (btPresetEl.value === 'CUSTOM');
+            if (btPresetEl.value === 'CUSTOM') CX_FILLED_FOR = 'CUSTOM';
+          }
+          renderBacktestWorkspace();
+        });
+      }
+      var btSymbolEl = document.getElementById('btSymbolSelect');
+      if (btSymbolEl) {
+        btSymbolEl.addEventListener('change', function() {
+          // Stop/target percentages mirror ₹ levels against the selected index's
+          // 1-lot capital, so refill them (unless the user already applied a screen).
+          var p = btPresetEl ? btPresetEl.value : '';
+          if (PRESET_SCREENS[p] && !CX_APPLIED) CX_FILLED_FOR = null;
+          renderBacktestWorkspace();
+        });
+      }
+      ['btLotsInput', 'btLots', 'btSlippageTicks'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) {
           el.addEventListener('change', renderBacktestWorkspace);
@@ -3714,35 +4006,39 @@
         }
       });
 
-      // Custom criteria builder: any bound or logic change re-screens the archive.
-      var cxInputIds = ['cxLogic', 'cxStructure'];
-      Object.keys(CUSTOM_METRICS).forEach(function(key) {
-        cxInputIds.push('cx_on_' + key, 'cx_min_' + key, 'cx_max_' + key);
-      });
-      cxInputIds.forEach(function(id) {
+      // Criteria builder: editing any bound turns the mirrored preset into a custom
+      // screen so the edit always drives the ledger instead of being decorative.
+      criteriaInputIds().forEach(function(id) {
         var el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('change', renderBacktestWorkspace);
-        el.addEventListener('input', renderBacktestWorkspace);
+        if (!el || id === 'cxApplyToggle') return;
+        function onChange() {
+          if (btPresetEl && btPresetEl.value !== 'CUSTOM') {
+            btPresetEl.value = 'CUSTOM';
+            CX_APPLIED = true;
+            CX_FILLED_FOR = 'CUSTOM';
+          }
+          renderBacktestWorkspace();
+        }
+        el.addEventListener('change', onChange);
+        if (el.type !== 'checkbox' && el.tagName !== 'SELECT') el.addEventListener('input', onChange);
       });
+
+      var cxApply = document.getElementById('cxApplyToggle');
+      if (cxApply) {
+        cxApply.addEventListener('change', function() {
+          CX_APPLIED = !!cxApply.checked;
+          renderBacktestWorkspace();
+        });
+      }
 
       var cxReset = document.getElementById('cxResetBtn');
       if (cxReset) {
         cxReset.addEventListener('click', function() {
-          Object.keys(CUSTOM_METRICS).forEach(function(key) {
-            var on = document.getElementById('cx_on_' + key);
-            if (on) on.checked = false;
-            var lo = document.getElementById('cx_min_' + key);
-            if (lo) lo.value = '';
-            var hi = document.getElementById('cx_max_' + key);
-            if (hi) hi.value = '';
-          });
-          var logic = document.getElementById('cxLogic');
-          if (logic) logic.value = 'AND';
-          var struct = document.getElementById('cxStructure');
-          if (struct) struct.value = 'ANY';
+          clearCriteriaInputs();
+          var p = btPresetEl ? btPresetEl.value : '';
+          CX_APPLIED = (p === 'CUSTOM');
           renderBacktestWorkspace();
-          toast('Custom criteria reset');
+          toast('Criteria cleared');
         });
       }
 
@@ -3765,11 +4061,17 @@
         var rows = computeBtRows();
         var preset = document.getElementById('btPresetSelect').value || 'S3';
         var sym = document.getElementById('btSymbolSelect').value || 'NIFTY';
-        var lines = ['Date,Expiry,Scenario,Signal,Structure,Exit_Reason,Capital_Used_INR,Gross_INR,Charges_INR,Net_INR,ROC_Pct,Provenance'];
+        var lines = ['Date,Expiry,Scenario,Signal,Structure,Entry_IST,Exit_IST,Hold_Min,Worst_DD_Pct_Capital,Best_Gain_Pct_Capital,Exit_Reason,Capital_Used_INR,Gross_INR,Charges_INR,Net_INR,ROC_Pct,Provenance'];
         rows.forEach(function(r) {
           var sig = '"' + String(r.sig || '').replace(/"/g, '""') + '"';
           var legs = '"' + String(r.legs || '').replace(/"/g, '""') + '"';
-          lines.push([r.date, r.exp, r.strat, sig, legs, '"' + String(r.exitReason || '').replace(/"/g, '""') + '"',
+          lines.push([r.date, r.exp, r.strat, sig, legs,
+            '"' + String(r.entryAt || '').replace(/"/g, '""') + '"',
+            '"' + String(r.exitAt || '').replace(/"/g, '""') + '"',
+            r.holdMin === null ? '' : r.holdMin,
+            r.maePct === null ? '' : r.maePct,
+            r.mfePct === null ? '' : r.mfePct,
+            '"' + String(r.exitReason || '').replace(/"/g, '""') + '"',
             r.capital, r.gross, r.cost, r.net, r.roc.toFixed(2), r.verified ? 'execution_verified' : 'research_archive'].join(','));
         });
         var name = 'volatility_lab_' + sym.toLowerCase() + '_' + (preset === 'CUSTOM' ? 'custom' : preset.toLowerCase()) + '_backtest.csv';

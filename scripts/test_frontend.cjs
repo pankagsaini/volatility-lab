@@ -159,7 +159,7 @@ const cxRow = {sym:'NIFTY',date:'2026-11-02',exp:'2026-11-09',strat:'S1',
 assert.equal(web.dteFromRow(cxRow),7);
 assert.equal(web.dteFromRow({date:'invalid',exp:'2026-11-09'}),null);
 const cx = web.CUSTOM_METRICS;
-assert.deepEqual(Object.keys(cx),['vrp','hv30','hv10','ivhv10','rr25','bf25','dte'],'Only recorded archive metrics are offered');
+assert.deepEqual(Object.keys(cx),['vrp','hv30','hv10','ivhv10','rr25','bf25','dte','iv','entryMin','holdMin','stop','target','grossPct'],'Only recorded archive metrics are offered');
 assert.equal(cx.vrp.get(cxRow),2.51);
 assert.equal(cx.hv30.get(cxRow),12.69);
 assert.equal(cx.hv10.get(cxRow),null,'HV10 is not recorded on S1 rows');
@@ -183,6 +183,21 @@ assert.equal(cx.hv30.get(cxFieldRow),13.99);
 assert.equal(cx.hv10.get(cxFieldRow),9.96);
 assert.equal(cx.ivhv10.get(cxFieldRow),5.24);
 assert.equal(cx.dte.get(cxFieldRow),7);
+assert.equal(cx.iv.get(cxRow),15.2,'Entry IV comes from the recorded signal string');
+assert.equal(cx.iv.get({sig:'VRP +2.51 pp'}),null,'No IV in the signal is null, never zero');
+assert.equal(cx.entryMin.get({entryMin:5}),5);
+assert.equal(cx.holdMin.get({holdMin:354}),354);
+assert.equal(cx.holdMin.get({}),null,'A row without a replayed path has no holding time');
+assert.equal(cx.stop.get({maePct:3.12}),3.12);
+assert.equal(cx.stop.get({maePct:0}),0,'A flat worst mark is a real zero, not missing');
+assert.equal(cx.target.get({mfePct:1.82}),1.82);
+assert.equal(cx.grossPct.get({gross:90,capital:26174}),0.34);
+assert.equal(cx.grossPct.get({gross:90}),null,'Gross return needs both recorded numbers');
+assert.equal(web.rowMatchesCriteria({entryMin:6,holdMin:354,maePct:2.5,mfePct:1.8,gross:90,capital:26174},
+  {logic:'AND',criteria:[{get:cx.entryMin.get,min:0,max:10},{get:cx.holdMin.get,min:300,max:400},
+    {get:cx.stop.get,min:null,max:5},{get:cx.target.get,min:1,max:null},{get:cx.grossPct.get,min:0,max:null}]}),true);
+assert.equal(web.rowMatchesCriteria({entryMin:6,holdMin:354,maePct:9.5,mfePct:1.8},
+  {logic:'AND',criteria:[{get:cx.stop.get,min:null,max:5}]}),false,'A trade that drew down more than the tolerance fails the stop criterion');
 
 // The shipped archive must contain recorded rows only: no template replication, no imputed P&L.
 const archive = JSON.parse(html.match(/var tradeArchive = (\[[\s\S]*?\]);/)[1]);
@@ -206,6 +221,18 @@ for(const row of archive) {
   assert.equal(row.vrp,Math.round((row.iv-row.hv30)*100)/100,'VRP follows from recorded IV and restated HV30');
   assert.equal(row.ivhv10,Math.round((row.iv-row.hv10)*100)/100);
   assert.equal(typeof row.ruleOk,'boolean');
+  assert(/^\d{2}:\d{2}:\d{2}$/.test(row.entryAt),'Captured entry clock is recorded');
+  assert(/^\d{2}:\d{2}:\d{2}$/.test(row.exitAt),'Captured exit clock is recorded');
+  const eMin = Number(row.entryAt.slice(0,2))*60+Number(row.entryAt.slice(3,5));
+  assert.equal(row.entryMin,eMin-(9*60+15),'Entry clock is measured from the 09:15 open');
+  assert(row.entryMin>=0&&row.entryMin<=10);
+  const toSec = c => (Number(c.slice(0,2))*3600+Number(c.slice(3,5))*60+Number(c.slice(6,8)));
+  assert.equal(row.holdMin,Math.round((toSec(row.exitAt)-toSec(row.entryAt))/60),'Holding time matches the captured clocks');
+  assert(row.holdMin>0);
+  assert(Number.isFinite(row.maePct)&&row.maePct>=0&&row.maePct<=100);
+  assert(Number.isFinite(row.mfePct)&&row.mfePct>=0);
+  assert(Number.isInteger(row.pathN)&&row.pathN>0);
+  assert.equal(row.pathN,row.pathTotal,'Every capture in the holding window had all leg marks');
 }
 const restated02 = archive.find(r=>r.date==='2026-11-02'&&r.sym==='NIFTY'&&r.strat==='S1');
 assert.equal(restated02.hv30,13.99);

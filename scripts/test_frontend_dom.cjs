@@ -113,15 +113,40 @@ const server = http.createServer((request,response) => {
     assert.notEqual(await page.locator('#resNetPnl').textContent(),'—');
     await page.selectOption('#btPresetSelect','CUSTOM');
     assert(await page.locator('#btCustomPanel').isVisible());
-    assert((await page.locator('#btLedgerBody tr').count())>0,'Default custom criteria must match recorded trades');
+    assert(!(await page.locator('#cx_on_vrp').isChecked()),'Choosing CX starts from a blank screen');
+    assert((await page.locator('#btLedgerBody tr').count())>0,'Blank criteria match recorded trades');
     assert.match(await page.locator('#cxHint').textContent(),/archive matches/);
+    await page.check('#cx_on_vrp');
     await page.fill('#cx_min_vrp','1000');
     await page.waitForFunction(()=>document.querySelectorAll('#btLedgerBody tr').length===1);
     assert.match(await page.locator('#btLedgerBody').textContent(),/No recorded trade matches/);
     await page.locator('#cxResetBtn').click();
     assert(!(await page.locator('#cx_on_vrp').isChecked()));
     await page.selectOption('#btPresetSelect','S3');
-    assert(!(await page.locator('#btCustomPanel').isVisible()));
+    assert(await page.locator('#btCustomPanel').isVisible(),'Preset rules stay visible so the mirrored criteria can be read');
+    assert(await page.locator('#cx_on_vrp').isChecked(),'S3 mirrors its VRP bound into the panel');
+    assert.equal(await page.locator('#cx_min_vrp').inputValue(),'3');
+    assert.equal(await page.locator('#cx_max_dte').inputValue(),'5');
+    assert(await page.locator('#cx_on_target').isChecked(),'S3 mirrors its profit target');
+    const stopPct = Number(await page.locator('#cx_max_stop').inputValue());
+    assert(stopPct>0 && stopPct<100,'Stop tolerance is a % of the recorded 1-lot capital');
+    assert.match(await page.locator('#cxPresetNote').textContent(),/S3 · Post-Event Front-Week Crush/);
+    assert.match(await page.locator('#cxPresetNote').textContent(),/Recorded range: VRP/,
+      'When no recorded session satisfies the rule, the panel shows the recorded range instead of implying a match');
+    assert.match(await page.locator('#cxPresetNote').textContent(),/Not in the archive:/);
+    assert.equal(await page.locator('#btLedgerBody tr').count(),6,'Mirrored rule does not screen until it is applied');
+    await page.check('#cxApplyToggle');
+    await page.waitForFunction(()=>/archive matches/.test(document.getElementById('cxHint').textContent));
+    const hinted = Number((await page.locator('#cxHint').textContent()).match(/^(\d+)/)[1]);
+    assert(hinted<=6);
+    if (hinted===0) {
+      assert.match(await page.locator('#btLedgerBody').textContent(),/No recorded trade matches this screen/,
+        'A preset rule that no recorded session satisfies says so instead of showing trades');
+    } else {
+      assert.equal(await page.locator('#btLedgerBody tr').count(),hinted,'Applied rule screens the ledger to the hinted count');
+    }
+    await page.uncheck('#cxApplyToggle');
+    assert.equal(await page.locator('#btLedgerBody tr').count(),6,'Unapplying the rule restores the structure-only ledger');
     await page.locator('#wsForwardBtn').click();
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Read-only archive/);
     assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/\d+ recorded closes/);
