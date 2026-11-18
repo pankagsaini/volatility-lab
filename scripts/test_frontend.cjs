@@ -150,7 +150,7 @@ assert.equal(sessions.expiryMillis('2026-12-29'),Date.parse('2026-12-29T15:30:00
 
 // Custom criteria screening reads only metrics the archive actually records, applies
 // inclusive bounds, and fails a criterion when the row has no value for it.
-const cxStart = html.indexOf('      var CUSTOM_METRICS = {');
+const cxStart = html.indexOf('      function rowMetric(');
 const cxEnd = html.indexOf('      function readCustomCriteria()');
 assert(cxStart >= 0 && cxEnd > cxStart, 'Custom criteria metric block must ship');
 vm.runInContext(html.slice(cxStart, cxEnd), web);
@@ -176,6 +176,13 @@ assert.equal(web.rowMatchesCriteria(cxRow,{logic:'OR',criteria:[{get:cx.rr25.get
 assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.rr25.get,min:null,max:null}]}),false,'A missing metric fails the criterion');
 assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.dte.get,min:7,max:7}]}),true);
 assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[]}),true,'No criteria matches everything');
+const cxFieldRow = {sym:'NIFTY',date:'2026-11-02',exp:'2026-11-09',strat:'S1',
+  sig:'IV 15.20% · HV30 12.69% · VRP +2.51 pp',iv:15.2,hv10:9.96,hv30:13.99,vrp:1.21,ivhv10:5.24,dte:7,hvAsOf:'2026-10-30'};
+assert.equal(cx.vrp.get(cxFieldRow),1.21,'Restated row value wins over the recorded string');
+assert.equal(cx.hv30.get(cxFieldRow),13.99);
+assert.equal(cx.hv10.get(cxFieldRow),9.96);
+assert.equal(cx.ivhv10.get(cxFieldRow),5.24);
+assert.equal(cx.dte.get(cxFieldRow),7);
 
 // The shipped archive must contain recorded rows only: no template replication, no imputed P&L.
 const archive = JSON.parse(html.match(/var tradeArchive = (\[[\s\S]*?\]);/)[1]);
@@ -192,8 +199,20 @@ for(const row of archive) {
   assert.equal(typeof row.gross,'number');
   assert.equal(typeof row.charges,'number');
   assert.equal(typeof row.capital,'number');
-  assert(row.sig && row.date && row.exp && row.legs);
+  assert(row.sig && row.sigCalc && row.date && row.exp && row.legs);
+  assert(Number.isFinite(row.iv) && Number.isFinite(row.hv10) && Number.isFinite(row.hv30),'Restated inputs are numeric');
+  assert(row.hvAsOf < row.date,'HV uses completed closes, never the entry session close');
+  assert.equal(row.dte,(Date.parse(row.exp)-Date.parse(row.date))/86400000);
+  assert.equal(row.vrp,Math.round((row.iv-row.hv30)*100)/100,'VRP follows from recorded IV and restated HV30');
+  assert.equal(row.ivhv10,Math.round((row.iv-row.hv10)*100)/100);
+  assert.equal(typeof row.ruleOk,'boolean');
 }
+const restated02 = archive.find(r=>r.date==='2026-11-02'&&r.sym==='NIFTY'&&r.strat==='S1');
+assert.equal(restated02.hv30,13.99);
+assert.equal(restated02.hv10,9.96);
+assert.equal(restated02.vrp,1.21);
+assert.equal(restated02.hvAsOf,'2026-10-30');
+assert.equal(archive.filter(r=>!r.ruleOk).length,38,'Rule mismatches are counted, not hidden');
 assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.hv30.get,min:null,max:12}]}),false,'A bound above the value cannot pass');
 
 const embedded=JSON.parse(html.match(/var REAL_HISTORICAL_1Y = (.*);/)[1]);
