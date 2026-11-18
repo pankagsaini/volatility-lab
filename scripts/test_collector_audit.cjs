@@ -24,6 +24,7 @@ const cloud = vm.createContext({
     createTextOutput: text => ({setMimeType: mime => ({text, mime})}),
   },
   Utilities: {formatDate: date => date.toISOString().slice(0, 10)},
+  LockService: {getScriptLock: () => ({tryLock: () => true, releaseLock: () => {}})},
 });
 vm.runInContext(source, cloud);
 cloud.loadForwardLedger_ = () => { reads++; return {schema: 2, closed_trades: [], open_positions: []}; };
@@ -82,4 +83,35 @@ manual = cloud.manualDownloadSession('2026-11-13');
 assert.equal(manual.status, 'empty');
 assert.equal(manual.consolidated_file_id, null);
 assert.equal(stored.length, 2);
-console.log('Collector audit regressions passed: aliases, shared cache, JSONP, legacy provenance and fees.');
+
+// EOD recovery is a keyed mutation that drains the queue and reports every session.
+assert.equal(JSON.parse(get({action: 'eod_backfill'}).text).error, 'Unauthorized');
+values.set('WEBHOOK_KEY', 'secret');
+assert.equal(JSON.parse(get({action: 'eod_backfill', day: '2026-11-17', key: 'wrong'}).text).error, 'Unauthorized');
+assert.equal(JSON.parse(get({action: 'eod_backfill', day: '2026-11-17', key: 'secret'}).text).error,
+  'No pending EOD for 2026-11-17');
+assert.equal(JSON.parse(get({action: 'eod_backfill', day: '18 Nov 2026', key: 'secret'}).text).error,
+  'Invalid session date');
+[...values.keys()].filter(key => key.startsWith('EOD_PENDING_DAY_')).forEach(key => values.delete(key));
+values.delete('EOD_PENDING');
+values.set('EOD_PENDING_DAY_2026-11-16', 'partial-16');
+values.set('EOD_PENDING_DAY_2026-11-17', 'partial-17');
+const recovered = [];
+cloud.recoverEod_ = (day, fileId) => {
+  recovered.push({day, fileId});
+  values.delete('EOD_PENDING_DAY_' + day);
+  return {status: 'complete', file_id: 'complete-' + day, pending: [],
+    closing_risk: {NIFTY: [25387.4, 14.357172616, 13.417576576, 15.428042921, 15.134276148]}};
+};
+const backfill = JSON.parse(get({action: 'eod_backfill', key: 'secret'}).text);
+assert.equal(backfill.recovered, 2);
+assert.deepEqual(recovered.map(row => row.day), ['2026-11-16', '2026-11-17']);
+assert.deepEqual(recovered.map(row => row.fileId), ['partial-16', 'partial-17']);
+assert.deepEqual(backfill.sessions.map(row => row.status), ['complete', 'complete']);
+const status = JSON.parse(get({action: 'status', key: 'secret'}).text);
+assert.deepEqual(status.eod_pending, []);
+assert.equal(status.pure_snapshot_capture_only, false);
+values.set('PURE_SNAPSHOT_CAPTURE_ONLY', 'true');
+cached.delete('DOGET_STATUS_JSON');
+assert.equal(JSON.parse(get({action: 'status', key: 'secret'}).text).pure_snapshot_capture_only, true);
+console.log('Collector audit regressions passed: aliases, shared cache, JSONP, legacy provenance, fees and EOD recovery.');
