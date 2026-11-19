@@ -104,6 +104,11 @@ const server = http.createServer((request,response) => {
     assert.match(await page.locator('#btExcluded').textContent(),/Excluded sessions:/);
     assert.match(await page.locator('#btExcluded').textContent(),/never filled/);
     assert.match(await page.locator('#btLedgerBody').textContent(),/rule failed/,'Baseline rows state the failing rule');
+    const nov2Text = (await page.locator('#btLedgerBody tr').allTextContents()).find(t=>t.startsWith('2026-11-02'));
+    assert(nov2Text,'The 2026-11-02 structure is listed in the baseline');
+    assert.match(nov2Text,/HV10 10\.53%[\s\S]*HV30 14\.00%/,
+      'Both restated HV horizons are shown from completed closes');
+    assert.match(nov2Text,/HV as of 2026-10-30/,'HV window ends at the prior session close');
     await page.selectOption('#btSymbolSelect','BANKNIFTY');
     assert.equal(await page.locator('#btLedgerBody tr').count(),18,'BANKNIFTY replays the same recorded sessions');
     assert.match(await page.locator('#btLedgerIndex').textContent(),/BANKNIFTY/);
