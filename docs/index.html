@@ -651,6 +651,9 @@
         </div>
         <div id="btRestatedCount" class="text-[11px] mono text-slate-400"></div>
         <div id="btExcluded" class="text-[11px] mono text-rose-300"></div>
+        <div class="text-[11px] mono text-slate-500">
+          HV10 / HV30 are the sample standard deviation of the last 10 / 30 log returns ending at the prior session's close, annualised by √245. The HV window never includes the entry session, and a missing close shortens the window rather than being filled.
+        </div>
       </div>
 
       <!-- Entry & risk criteria: preset rules auto-fill here, then screen the archive -->
@@ -3299,6 +3302,7 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":75,"BANKNIFTY":30},"chargeMod
           var band = r.dteBand ? (r.dteInBand ? 'inside ' + r.dteBand[0] + '–' + r.dteBand[1] : 'outside ' + r.dteBand[0] + '–' + r.dteBand[1]) : '';
           var signal = [];
           if (r.iv !== null) signal.push('IV ' + r.iv.toFixed(2) + '%');
+          if (r.hv10 !== null) signal.push('HV10 ' + r.hv10.toFixed(2) + '%');
           if (r.hv30 !== null) signal.push('HV30 ' + r.hv30.toFixed(2) + '%');
           if (r.vrp !== null) signal.push('VRP ' + (r.vrp >= 0 ? '+' : '') + r.vrp.toFixed(2) + ' pp');
           if (r.rr25 !== null) signal.push('RR25 ' + (r.rr25 >= 0 ? '+' : '') + r.rr25.toFixed(2) + ' pp');
@@ -4122,10 +4126,11 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":75,"BANKNIFTY":30},"chargeMod
         var preset = document.getElementById('btPresetSelect').value || 'S3';
         var sym = document.getElementById('btSymbolSelect').value || 'NIFTY';
         var esc = function(value) { return '"' + String(value === null || value === undefined ? '' : value).replace(/"/g, '""') + '"'; };
-        var lines = ['Date,Expiry,DTE,DTE_In_Published_Band,Expiry_Kind,Scenario,Rule_Passed,Rule_Failure,Signal,Structure,Entry_IST,Exit_IST,Hold_Min,Path_Captures,Path_Total,Worst_DD_Pct_Capital,Best_Gain_Pct_Capital,Entry_Spot,Capital_INR,Gross_INR,Charges_INR,Net_INR,ROC_Pct,Source'];
+        var lines = ['Date,Expiry,DTE,DTE_In_Published_Band,Expiry_Kind,Scenario,Rule_Passed,Rule_Failure,Signal,IV_Pct,HV10_Pct,HV30_Pct,HV_AsOf,Structure,Entry_IST,Exit_IST,Hold_Min,Path_Captures,Path_Total,Worst_DD_Pct_Capital,Best_Gain_Pct_Capital,Entry_Spot,Capital_INR,Gross_INR,Charges_INR,Net_INR,ROC_Pct,Source'];
         rows.forEach(function(r) {
           lines.push([r.date, r.exp, r.dte, r.dteInBand ? 'yes' : 'no', r.expiryKind, r.strat,
-            r.rulePass ? 'pass' : 'fail', esc(r.ruleFail), esc(r.sig), esc(r.legs),
+            r.rulePass ? 'pass' : 'fail', esc(r.ruleFail), esc(r.sig), r.iv, r.hv10, r.hv30, esc(r.hvAsOf),
+            esc(r.legs),
             esc(r.entryAt), esc(r.exitAt), r.holdMin, r.pathN, r.pathTotal,
             r.maePct, r.mfePct, r.entrySpot,
             r.capital, r.gross, r.cost, r.net, r.roc.toFixed(2), 'recorded_capture'].join(','));
