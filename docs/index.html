@@ -267,6 +267,7 @@
             <button type="button" data-tab="smile" class="res-tab-btn seg-btn">Smile</button>
             <button type="button" data-tab="straddle" class="res-tab-btn seg-btn">Straddle &amp; scenarios</button>
             <button type="button" data-tab="trades" class="res-tab-btn seg-btn">Trade setups</button>
+            <button type="button" data-tab="zerodte" class="res-tab-btn seg-btn text-rose-300">Expiry day (0DTE)</button>
           </div>
 
           <!-- Context Controls for Tab 1 (Clean Metric & Horizon Selectors) -->
@@ -350,6 +351,10 @@
               <span id="termGraphHeading" class="text-xs font-bold uppercase tracking-wider text-slate-200">
                 ATM broker IV by listed expiry
               </span>
+              <label for="termInclude0Dte" class="inline-flex items-center gap-1.5 text-[11px] mono text-amber-300 cursor-pointer select-none">
+                <input id="termInclude0Dte" type="checkbox" class="accent-amber-500" />
+                Include expiring front in σ_fwd
+              </label>
             </div>
             <div class="overflow-x-auto" tabindex="0" role="region" aria-label="Term structure chart; scroll horizontally on small screens">
               <div class="relative" style="height: 410px; min-width: 780px;">
@@ -570,6 +575,135 @@
                 </tr>
               </thead>
               <tbody id="tradeIdTableBody" class="divide-y divide-[#1a2639]"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- =============================================================== -->
+        <!-- TAB 6: EXPIRY DAY (0DTE) MICROSTRUCTURE DESK                    -->
+        <!-- Every series is recorded quote data; benchmarks are labelled.   -->
+        <!-- =============================================================== -->
+        <div id="panel-zerodte" class="hidden space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-[#080d16] p-3.5 rounded-xl border border-rose-500/40">
+            <div class="space-y-0.5">
+              <div class="text-xs font-extrabold uppercase tracking-wider text-rose-300">
+                Expiry day (0DTE) quantitative desk
+              </div>
+              <div id="zerodteSubtitle" class="text-[11px] mono text-slate-300">
+                Minute-accurate dual-clock pricing, recorded rolling versus open-anchor straddle melt, dealer gamma exposure and the final settlement window.
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 text-xs mono">
+              <span id="zerodteContractBadge" class="px-2.5 py-1 rounded-md bg-rose-950/70 border border-rose-500/50 text-rose-200 font-bold">
+                Front contract: —
+              </span>
+              <div class="seg-group" id="zerodteDecayModeGroup">
+                <button type="button" data-zmode="pct" class="zmode-btn seg-btn active">% decay</button>
+                <button type="button" data-zmode="inr" class="zmode-btn seg-btn">₹ premium</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+            <div class="kpi-card border-t-2 border-t-rose-400">
+              <div class="text-[11px] font-bold uppercase text-slate-300">1. Dual-clock ATM IV</div>
+              <div id="zKpiClockIv" class="text-lg mono font-extrabold text-rose-300 mt-0.5">—</div>
+              <div id="zKpiClockSub" class="text-[11px] mono text-slate-300 mt-0.5">T_cal / T_vol · minutes left: —</div>
+            </div>
+            <div class="kpi-card border-t-2 border-t-amber-400">
+              <div class="text-[11px] font-bold uppercase text-slate-300">2. Recorded straddle</div>
+              <div id="zKpiStraddle" class="text-lg mono font-extrabold text-amber-300 mt-0.5">—</div>
+              <div id="zKpiStraddleSub" class="text-[11px] mono text-slate-300 mt-0.5">Rolling and anchor: —</div>
+            </div>
+            <div class="kpi-card border-t-2 border-t-sky-400">
+              <div class="text-[11px] font-bold uppercase text-slate-300">3. Bennett implied move</div>
+              <div id="zKpiBennettBand" class="text-lg mono font-extrabold text-sky-300 mt-0.5">—</div>
+              <div id="zKpiBennettSub" class="text-[11px] mono text-slate-300 mt-0.5">±0.8σ√T versus cash straddle</div>
+            </div>
+            <div class="kpi-card border-t-2 border-t-emerald-400">
+              <div class="text-[11px] font-bold uppercase text-slate-300">4. Pin magnet &amp; zero-Γ proxy</div>
+              <div id="zKpiPinMagnet" class="text-lg mono font-extrabold text-emerald-300 mt-0.5">—</div>
+              <div id="zKpiPinSub" class="text-[11px] mono text-slate-300 mt-0.5">Zero-gamma proxy: —</div>
+            </div>
+            <div class="kpi-card border-t-2 border-t-purple-400">
+              <div class="text-[11px] font-bold uppercase text-slate-300">5. Settlement window mean</div>
+              <div id="zKpiVwap" class="text-lg mono font-extrabold text-purple-300 mt-0.5">—</div>
+              <div id="zKpiVwapSub" class="text-[11px] mono text-slate-300 mt-0.5">Final 30 minutes</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div class="lg:col-span-6 bg-[#080d16] border border-[#24344d] rounded-xl p-4 space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-white">Rolling vs open-anchor straddle</span>
+                <span id="zKurtosisBadge" class="text-[11px] mono text-amber-300 font-semibold">BF10Δ: —</span>
+              </div>
+              <p class="text-[11px] text-slate-300">
+                Recorded paired-book mids only. The √t curve is a theoretical benchmark normalised to the first recorded premium, and the OIData line is the published NSE Tuesday median (-15.5% at 10:00, -26% at 12:00, -44% at 14:00, -52% at 15:00).
+              </p>
+              <div class="relative" style="height: 320px;">
+                <canvas id="zerodteStraddleCanvas"></canvas>
+              </div>
+              <div id="zBennettSummaryStrip" class="grid grid-cols-3 gap-2 pt-1 text-xs mono"></div>
+              <div id="zMeltSource" class="text-[10.5px] mono text-slate-400"></div>
+            </div>
+
+            <div class="lg:col-span-6 bg-[#080d16] border border-[#24344d] rounded-xl p-4 space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-white">Strike gamma exposure &amp; pin magnets</span>
+                <span id="zNetGexBadge" class="text-[11px] mono text-emerald-300 font-semibold">Net GEX: —</span>
+              </div>
+              <p class="text-[11px] text-slate-300">
+                GEX_K = (OI call − OI put) × Γ_K × S² × 0.01 × lot size, using recorded open interest and the model gamma. Positive bars indicate long-gamma pinning pressure; negative bars indicate short-gamma breakout pressure.
+              </p>
+              <div class="relative" style="height: 320px;">
+                <canvas id="zerodteGexCanvas"></canvas>
+              </div>
+              <div id="zGexSummaryStrip" class="grid grid-cols-3 gap-2 pt-1 text-xs mono"></div>
+              <div id="zGexSource" class="text-[10.5px] mono text-slate-400"></div>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
+            <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
+              <span class="text-xs font-bold uppercase text-white">Expiring-chain wings: normalised moneyness and tick-floor flags</span>
+              <span id="zWingSource" class="text-[11px] mono text-slate-400">Recorded strikes only</span>
+            </div>
+            <table class="w-full text-left border-collapse text-xs mono">
+              <thead>
+                <tr class="border-b border-[#24344d] bg-[#090f1a] text-slate-300 font-bold">
+                  <th class="py-2 px-3">Strike</th>
+                  <th class="py-2 px-3 text-right">Offset</th>
+                  <th class="py-2 px-3 text-right">OTM side</th>
+                  <th class="py-2 px-3 text-right">OTM LTP</th>
+                  <th class="py-2 px-3 text-right">Model IV</th>
+                  <th class="py-2 px-3 text-right">z = ln(K/F)/(σ√T)</th>
+                  <th class="py-2 px-3 text-center">Floor flag</th>
+                </tr>
+              </thead>
+              <tbody id="zWingTableBody" class="divide-y divide-[#1a2639]"></tbody>
+            </table>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
+            <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
+              <span class="text-xs font-bold uppercase text-white">Final 30-minute settlement-window tracker</span>
+              <span id="zVwapHeaderNote" class="text-[11px] mono text-purple-300">Running mean of recorded spot prints</span>
+            </div>
+            <table class="w-full text-left border-collapse text-xs mono">
+              <thead>
+                <tr class="border-b border-[#24344d] bg-[#090f1a] text-slate-300 font-bold">
+                  <th class="py-2 px-3">Time (IST)</th>
+                  <th class="py-2 px-3 text-right">Spot print</th>
+                  <th class="py-2 px-3 text-right text-purple-300">Running mean</th>
+                  <th class="py-2 px-3 text-right">Spot − mean</th>
+                  <th class="py-2 px-3 text-right">Anchor strike</th>
+                  <th class="py-2 px-3 text-right text-amber-300">Anchor straddle (₹)</th>
+                  <th class="py-2 px-3 text-right text-emerald-300">|Mean − K|</th>
+                  <th class="py-2 px-3 text-right text-rose-300">Remaining time value</th>
+                </tr>
+              </thead>
+              <tbody id="zVwapTableBody" class="divide-y divide-[#1a2639]"></tbody>
             </table>
           </div>
         </div>
@@ -1407,6 +1541,11 @@
       var straddleChart = null;
       var btMainChart = null;
       var btCompareChart = null;
+      var zerodteStraddleChart = null;
+      var zerodteGexChart = null;
+      var activeZeroDteMode = 'pct';
+      var activeTermInclude0Dte = false;
+      var userSelectedExpiryManually = false;
       // Volatility Lab Quantitative Engine Guardrail Pad 1
       // Volatility Lab Quantitative Engine Guardrail Pad 2
       // Volatility Lab Quantitative Engine Guardrail Pad 3
@@ -1627,21 +1766,85 @@
         return result;
       }
 
+      // ===================================================================
+      // PHASE 1 & 2: EXPIRY-DAY CLOCK, ROLL WINDOW & NORMALIZED WINGS
+      // Time to expiry is derived from the exchange session calendar. On an
+      // expiry day it is measured in minutes, never clamped to a whole day.
+      // ===================================================================
+      function istDayAndMinute(asOfIso) {
+        const ms = liveTimestamp(asOfIso);
+        if (!Number.isFinite(ms)) return null;
+        const d = new Date(ms + 19800000);
+        return {ms, day: d.toISOString().slice(0, 10), mins: d.getUTCHours() * 60 + d.getUTCMinutes()};
+      }
+
+      function nextTradingDay(day) {
+        const start = Date.parse(day + 'T00:00:00Z');
+        for (let i = 1; i <= 10; i++) {
+          const next = new Date(start + i * 86400000).toISOString().slice(0, 10);
+          if (TradingSessions.session(next)) return next;
+        }
+        return null;
+      }
+
+      function expiryClock(expiryIso, asOfIso) {
+        const expiry = String(expiryIso || '').slice(0, 10);
+        const at = istDayAndMinute(asOfIso);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry) || !at) return null;
+        const close = TradingSessions.expiryMillis(expiry);
+        const session = TradingSessions.session(at.day);
+        if (!Number.isFinite(close) || !session) return null;
+        const dteDays = (close - at.ms) / 86400000;
+        const rawCalendarDays = Math.round((Date.parse(expiry) - Date.parse(at.day)) / 86400000);
+        const is0Dte = rawCalendarDays === 0;
+        const minsLeft = is0Dte ? Math.max(0, (close - at.ms) / 60000) : null;
+        const tCal = is0Dte ? Math.max(1, minsLeft) / 525600 : dteDays / 365;
+        const tradingMins = is0Dte ? Math.max(1, minsLeft) : Math.max(1, dteDays) * 375;
+        return {expiry, day: at.day, mins: at.mins, closeMins: session.endMins, dteDays,
+          rawCalendarDays, is0Dte, minsLeft, tCal, tVol: tradingMins / (245 * 375)};
+      }
+
+      function isExpiryRollWindow(expiryIso, asOfIso) {
+        const expiry = String(expiryIso || '').slice(0, 10);
+        const at = istDayAndMinute(asOfIso);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry) || !at) return false;
+        if (expiry === at.day) return true;
+        const session = TradingSessions.session(at.day);
+        return expiry === nextTradingDay(at.day) && !!session && at.mins >= session.endMins;
+      }
+
+      function getDefaultActiveExpiryIdx(sym, asOfIso) {
+        const list = marketCatalog[sym] || [];
+        return list.length > 1 && isExpiryRollWindow(list[0].expiry, asOfIso) ? 1 : 0;
+      }
+
       function enrichItemWithBlack76(item) {
         if (!item || (item.archivedAsOf && !item.snapshotId)) return item;
         if (!Array.isArray(item.chain)) item.chain = [];
-        const decision = selectOptionPricing(item), T = item.dte/365;
+        const clock = typeof expiryClock === 'function' ? expiryClock(item.expiry, item.pricingAsOf || item.snapshotId || item.ivCapturedAt) : null;
+        if (clock) {
+          item.is0Dte = clock.is0Dte;
+          item.rawCalendarDays = clock.rawCalendarDays;
+          item.minsLeft = clock.minsLeft;
+          item.tCal = clock.tCal;
+          item.tVol = clock.tVol;
+        }
+        const decision = selectOptionPricing(item), T = clock ? clock.tCal : item.dte/365;
         item.modelDecision = decision;
         item.modelForward = decision.forward;
         item.syn = decision.syntheticForward;
         item.fut = decision.source === 'listed_future' ? decision.forward : NaN;
         item.modelAtmIv = item.b76AtmIv = item.b76CallIv = item.b76PutIv = null;
+        item.b76TradingIv = null;
+        item.bf10Raw = item.bf10Clean = null;
 
         item.pricingModel = decision.model === 'black76' ? 'Black-76' : decision.model === 'bsm' ? 'BSM' : 'Broker IV only';
         item.pricingReason = decision.reason;
         item.chain.forEach(node => {
           for (const key of Object.keys(node)) if (key.startsWith('b76') || key.startsWith('model')) node[key] = null;
           for (const key of ['b76CallIv','b76PutIv','b76CallDelta','b76PutDelta','b76CallFwdDelta','b76PutFwdDelta','b76OtmIv']) node[key] = null;
+          node.normZ = null;
+          node.isLotteryFloor = false;
           for (const [prefix,call,side] of [['c',true,'Call'],['p',false,'Put']]) {
             const mid = (node[prefix+'Bid']+node[prefix+'Ask'])/2;
             const valid = decision.model && liveBookValid(node,prefix,item.snapshotId);
@@ -1654,10 +1857,12 @@
             node['model'+side+'Iv'] = Number.isFinite(sigma) ? 100*sigma : null;
             node['model'+side+'Delta'] = Number.isFinite(g.delta) ? g.delta : null;
             node['model'+side+'FwdDelta'] = Number.isFinite(g.fwdDelta) ? g.fwdDelta : null;
+            node['model'+side+'Gamma'] = Number.isFinite(g.gamma) ? g.gamma : null;
             if (decision.model === 'black76') {
               node['b76'+side+'Iv'] = node['model'+side+'Iv'];
               node['b76'+side+'Delta'] = node['model'+side+'Delta'];
               node['b76'+side+'FwdDelta'] = node['model'+side+'FwdDelta'];
+              node['b76'+side+'Gamma'] = node['model'+side+'Gamma'];
             }
             node[prefix+'Iv'] = decision.model ? node['model'+side+'Iv'] : liveNumber(node['u'+side+'Iv']);
             node[prefix+'Delta'] = decision.model ? node['model'+side+'Delta'] : liveNumber(node['u'+side+'Delta']);
@@ -1665,6 +1870,8 @@
           const reference = Number.isFinite(decision.forward) ? decision.forward : item.spot;
           node.mktIv = node.k < reference ? node.pIv : node.cIv;
           node.b76OtmIv = decision.model === 'black76' ? node.mktIv : null;
+          node.b76Gamma = decision.model === 'black76' && Number.isFinite(node.b76CallGamma) && Number.isFinite(node.b76PutGamma)
+            ? (node.b76CallGamma + node.b76PutGamma) / 2 : null;
         });
         const atm = item.chain.find(n => n.k === item.atm);
         if (!atm) { item.iv = item.cIv = item.pIv = NaN; return item; }
@@ -1676,6 +1883,39 @@
         if (decision.model === 'black76') {
           item.b76CallIv = modelCall; item.b76PutIv = modelPut; item.b76AtmIv = item.modelAtmIv;
         }
+        // Phase 2: normalized log-moneyness, lottery-ticket flag and 10Δ kurtosis spread.
+        // All three read the recorded chain; nothing is fitted or interpolated.
+        const forward = Number.isFinite(decision.forward) ? decision.forward : item.spot;
+        const atmSigma = item.modelAtmIv > 0 ? item.modelAtmIv / 100 : NaN;
+        if (forward > 0 && T > 0 && Number.isFinite(atmSigma) && atmSigma > 0) {
+          const denomZ = atmSigma * Math.sqrt(T);
+          let put10 = null, call10 = null, put10Clean = null, call10Clean = null;
+          item.chain.forEach(node => {
+            node.normZ = node.k > 0 ? Number((Math.log(node.k / forward) / denomZ).toFixed(2)) : null;
+            const otmPx = node.k < forward ? node.pLtp : node.k > forward ? node.cLtp : (node.cLtp > 0 ? node.cLtp : node.pLtp);
+            node.isLotteryFloor = Number.isFinite(otmPx) && otmPx > 0 && otmPx < 2;
+            const near = (best, candidate) => !best || Math.abs(Math.abs(candidate) - .10) < Math.abs(Math.abs(best) - .10);
+            if (node.k < forward && node.modelPutIv > 0 && node.modelPutFwdDelta !== null) {
+              if (near(put10 && put10.modelPutFwdDelta, node.modelPutFwdDelta)) put10 = node;
+              if (!node.isLotteryFloor && near(put10Clean && put10Clean.modelPutFwdDelta, node.modelPutFwdDelta)) put10Clean = node;
+            }
+            if (node.k > forward && node.modelCallIv > 0 && node.modelCallFwdDelta !== null) {
+              if (near(call10 && call10.modelCallFwdDelta, node.modelCallFwdDelta)) call10 = node;
+              if (!node.isLotteryFloor && near(call10Clean && call10Clean.modelCallFwdDelta, node.modelCallFwdDelta)) call10Clean = node;
+            }
+          });
+          if (put10 && call10) item.bf10Raw = Number((.5 * (put10.modelPutIv + call10.modelCallIv) - item.modelAtmIv).toFixed(2));
+          if (put10Clean && call10Clean)
+            item.bf10Clean = Number((.5 * (put10Clean.modelPutIv + call10Clean.modelCallIv) - item.modelAtmIv).toFixed(2));
+        }
+        // Natenberg trading-session clock is diagnostic only; pricing stays on T_cal.
+        if (clock && clock.is0Dte && decision.model === 'black76' && clock.tVol > 0 &&
+            liveBookValid(atm, 'c', item.snapshotId) && liveBookValid(atm, 'p', item.snapshotId)) {
+          const cVol = black76IvDec((atm.cBid + atm.cAsk) / 2, decision.forward, atm.k, clock.tVol, decision.rate, true);
+          const pVol = black76IvDec((atm.pBid + atm.pAsk) / 2, decision.forward, atm.k, clock.tVol, decision.rate, false);
+          if (Number.isFinite(cVol) && Number.isFinite(pVol)) item.b76TradingIv = Number((50 * (cVol + pVol)).toFixed(2));
+        }
+        if (clock && clock.is0Dte) item.pricingModel += ' · 0DTE minute clock';
         const put25 = liveDeltaIv(item.chain,'p',-.25), call25 = liveDeltaIv(item.chain,'c',.25);
         item.rev25 = Number.isFinite(put25) && Number.isFinite(call25) ? put25-call25 : NaN;
         item.bfly25 = Number.isFinite(put25) && Number.isFinite(call25) && item.modelAtmIv > 0
@@ -1689,13 +1929,17 @@
       window.black76IvDec = black76IvDec;
       window.computeBlack76ParityForward = computeBlack76ParityForward;
       window.enrichItemWithBlack76 = enrichItemWithBlack76;
+      window.expiryClock = expiryClock;
+      window.isExpiryRollWindow = isExpiryRollWindow;
+      window.getDefaultActiveExpiryIdx = getDefaultActiveExpiryIdx;
 
       function populateExpiryDropdown() {
         var sel = document.getElementById('activeExpirySelect');
         var list = marketCatalog[activeSymbol] || [];
         if (activeExpiryIdx >= list.length) activeExpiryIdx = 0;
         sel.innerHTML = list.map(function(item, idx) {
-          return '<option value="' + idx + '"' + (idx === activeExpiryIdx ? ' selected' : '') + '>' + item.expiry + ' · ' + item.kind + ' (' + item.dte.toFixed(0) + ' DTE)</option>';
+          var dteLabel = (item.is0Dte || item.rawCalendarDays === 0) ? '0DTE · expiry day' : item.dte.toFixed(0) + ' DTE';
+          return '<option value="' + idx + '"' + (idx === activeExpiryIdx ? ' selected' : '') + '>' + item.expiry + ' · ' + item.kind + ' (' + dteLabel + ')</option>';
         }).join('');
 
         var tf = document.getElementById('tradeIdExpiryFilter');
@@ -1973,6 +2217,13 @@
       // ===================================================================
       // TAB 2: TERM STRUCTURE & FORWARD VOLATILITY (Pure Data)
       // ===================================================================
+      // Phase 1 positional gate: S1-S6 are multi-day structures. A contract that
+      // expires today or tomorrow is never an eligible positional vehicle.
+      function positionalGateOpen(item) {
+        return Number.isFinite(Number(item && item.dte)) && Number(item.dte) >= 2;
+      }
+      window.positionalGateOpen = positionalGateOpen;
+
       function forwardInterval(previous, item) {
         const unavailable = {vol: null, slope: '—'};
         if (!previous) return unavailable;
@@ -1991,6 +2242,17 @@
         var labels = [], ivArr = [];
         var tbody = document.getElementById('termMainTableBody');
         var rowsHtml = '';
+        // Phase 1: an expiry that closes today has dte in (0,1). It is a 0DTE
+        // kink, not a term point, so it is excluded from the variance-difference
+        // chain unless the analyst explicitly opts in.
+        const includeExpiring = typeof activeTermInclude0Dte === 'undefined' ? false : !!activeTermInclude0Dte;
+        const isExpiringFront = item => Number.isFinite(Number(item.dte)) && Number(item.dte) < 1;
+        const kinkItems = list.filter(isExpiringFront);
+        const chainList = includeExpiring ? list : list.filter(item => !isExpiringFront(item));
+        const chainIdx = new Map(chainList.map((item, idx) => [item.expiry, idx]));
+        const heading = document.getElementById('termGraphHeading');
+        if (heading) heading.textContent = 'ATM broker IV by listed expiry' +
+          (kinkItems.length && !includeExpiring ? ' · expiring front held out of σ_fwd' : '');
         const forecastThrough = window.VL_PUBLIC_STATE?.forecasts?.[activeSymbol]?.training_through;
         document.getElementById('termForecastSource').textContent = forecastThrough
           ? 'DTE-matched EGARCH · trained through ' + forecastThrough + ' close · annualized realized-volatility forecasts'
@@ -2000,21 +2262,27 @@
           var item = list[i];
           labels.push(item.expiry);
           ivArr.push(item.brokerAtmIv > 0 ? item.brokerAtmIv : null);
-          const interval = forwardInterval(i ? {dte:list[i-1].dte, iv:ivArr[i-1]} : null, {dte:item.dte, iv:ivArr[i]});
+          const ci = chainIdx.get(item.expiry);
+          const prevItem = ci > 0 ? chainList[ci - 1] : null;
+          const interval = ci === undefined ? {vol: null, slope: '—'}
+            : forwardInterval(prevItem ? {dte: prevItem.dte, iv: prevItem.brokerAtmIv > 0 ? prevItem.brokerAtmIv : null} : null,
+              {dte: item.dte, iv: ivArr[i]});
+          const expiring = isExpiringFront(item);
           const completed = (REAL_HISTORICAL_1Y[activeSymbol] || []).find(row => row.hvCloseDate === item.sessionDate);
           const vrp = observedSpread(ivArr[i], completed?.h30 ?? item.hv30);
           const basis = observedSpread(item.syn, item.fut);
           const strad = chartNumber(item.strad);
           const stradPct = strad !== null && item.spot > 0 ? strad / item.spot * 100 : null;
-          const totalVariance = ivArr[i] > 0 && item.dte > 0 ? (ivArr[i] / 100) ** 2 * item.dte / 365 : null;
+          const totalVariance = ivArr[i] > 0 && item.dte > 0 && !(expiring && !includeExpiring) ? (ivArr[i] / 100) ** 2 * item.dte / 365 : null;
           const varStatus = totalVariance === null ? '—' : totalVariance.toFixed(6) + (interval.slope === 'Inverted' ? ' · inverted' : '');
           const fwdText = formatLiveNumber(interval.vol, 2, '%');
+          const dteText = expiring ? (includeExpiring ? '0 · incl.' : '0 · kink') : formatLiveNumber(item.dte, 0);
 
           rowsHtml +=
-            '<tr class="' + (item === selected ? 'bg-sky-500/15 font-bold' : 'hover:bg-[#111c2d]') + '">' +
+            '<tr class="' + (item === selected ? 'bg-sky-500/15 font-bold' : expiring && !includeExpiring ? 'bg-amber-500/10' : 'hover:bg-[#111c2d]') + '">' +
               '<td class="py-2.5 px-3 text-white font-bold">' + item.expiry + '</td>' +
               '<td class="py-2.5 px-3 text-slate-300">' + item.kind + '</td>' +
-              '<td class="py-2.5 px-3 text-right text-white">' + formatLiveNumber(item.dte, 0) + '</td>' +
+              '<td class="py-2.5 px-3 text-right ' + (expiring && !includeExpiring ? 'text-amber-300' : 'text-white') + '">' + dteText + '</td>' +
               '<td class="py-2.5 px-3 text-right text-slate-200">' + item.atm.toLocaleString('en-IN') + '</td>' +
               '<td class="py-2.5 px-3 text-right text-slate-200">' + (chartNumber(item.syn) !== null ? item.syn.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—') + '</td>' +
               '<td class="py-2.5 px-3 text-right text-slate-300">' + formatLiveNumber(item.fut, 1) + '</td>' +
@@ -2041,14 +2309,15 @@
 
         var ctx = document.getElementById('termMainCanvas');
         ctx.title = document.getElementById('termForecastSource').textContent;
+        const excludedKink = kinkItems.length > 0 && !includeExpiring;
 
         var termData = {
           labels: labels,
           datasets: [
             {
-              label: 'Captured ATM IV (%)',
+              label: excludedKink ? 'Captured ATM IV · term baseline' : 'Captured ATM IV (%)',
               pointValueLabels: 'iv',
-              data: ivArr,
+              data: excludedKink ? ivArr.map((v, i) => isExpiringFront(list[i]) ? null : v) : ivArr,
               borderColor: '#38bdf8',
               borderWidth: 3,
               pointRadius: 5,
@@ -2061,6 +2330,19 @@
             }
           ]
         };
+        if (excludedKink) {
+          // Dashed overlay: the expiring front plus the first baseline point,
+          // so the kink is visible without entering the σ_fwd chain.
+          const kinkData = list.map(() => null);
+          list.forEach((item, i) => { if (isExpiringFront(item)) kinkData[i] = ivArr[i]; });
+          if (chainList.length) {
+            const firstIdx = list.indexOf(chainList[0]);
+            if (firstIdx >= 0 && ivArr[firstIdx] > 0) kinkData[firstIdx] = ivArr[firstIdx];
+          }
+          termData.datasets.push({label: 'Expiring front kink (0DTE, excluded)', data: kinkData,
+            borderColor: '#f59e0b', borderDash: [5, 4], borderWidth: 2.2, pointRadius: 4,
+            showLabels: false, spanGaps: false, tension: 0});
+        }
         for (const [key, label, color] of [['egarch','DTE-matched EGARCH RV (%)','#a78bfa']]) {
           termData.datasets.push({label, data:list.map(row => OptionsCharts.forecast(window.VL_PUBLIC_STATE,activeSymbol,row)?.[key] ?? null),
             borderColor:color, pointRadius:5, borderWidth:3, showLabels:true, pointValueLabels:'iv', spanGaps:false, tension:0});
@@ -2407,6 +2689,7 @@
       }
 
       function evaluateStrategiesForExpiry(item, sym, lots) {
+        if (!positionalGateOpen(item)) return [];
         const K = item.atm, units = (sym === 'NIFTY' ? 65 : 30) * lots;
         const reference = new Date().toISOString();
         const atm = (item.chain || []).find(node => node.k === K);
@@ -2469,6 +2752,7 @@
         var totalSetups = 0;
         var trigCount = 0;
         var totalExpiries = 0;
+        var skippedExpiries = 0;
 
         for (var sIdx = 0; sIdx < targetSyms.length; sIdx++) {
           var symKey = targetSyms[sIdx];
@@ -2477,6 +2761,16 @@
             var item = list[i];
             if (expFilter !== 'ALL' && item.expiry !== expFilter) continue;
             totalExpiries++;
+            if (!positionalGateOpen(item)) {
+              skippedExpiries++;
+              html += '<tr class="bg-amber-500/10"><td class="py-2 px-3 text-white font-bold whitespace-nowrap">' + symKey + ' · ' + item.expiry +
+                ' <span class="text-amber-300 font-normal">(' + item.kind + ' · ' + item.dte.toFixed(2) + 'd)</span></td>' +
+                '<td class="px-3 text-amber-300 font-bold">S1–S6</td>' +
+                '<td class="text-amber-300 px-3 font-bold whitespace-nowrap">GATED</td>' +
+                '<td colspan="7" class="px-3 text-amber-200/80">Positional gate: dte ' + item.dte.toFixed(2) +
+                ' &lt; 2, so this expiring contract cannot open an S1–S6 position. Use the Expiry day (0DTE) tab for expiry microstructure.</td></tr>';
+              continue;
+            }
             var setups = evaluateStrategiesForExpiry(item, symKey, lots);
             if (statusFilter !== 'TRIGGERED') {
               for (let n = 1; n <= 6; n++) {
@@ -2526,9 +2820,323 @@
         var sub = document.getElementById('tradeIdSummarySub');
         if (sub) {
           var scopeLabel = targetSyms.join(' + ');
-          sub.textContent = scopeLabel + ' · ' + totalExpiries * 6 + ' combinations screened across ' + totalExpiries + ' listed expiries · ' + totalSetups + ' priceable · ' + trigCount + ' qualified';
+          sub.textContent = scopeLabel + ' · ' + totalExpiries * 6 + ' combinations screened across ' + totalExpiries + ' listed expiries · ' +
+            totalSetups + ' priceable · ' + trigCount + ' qualified' +
+            (skippedExpiries ? ' · ' + skippedExpiries + ' expiry' + (skippedExpiries > 1 ? 'ies' : '') + ' gated at dte < 2' : '');
         }
       }
+
+      // ===================================================================
+      // TAB 6: EXPIRY DAY (0DTE) MICROSTRUCTURE DESK
+      // ===================================================================
+      var OIDATA_MEDIAN_DECAY_POINTS = [
+        {mins: 555, pct: 0}, {mins: 600, pct: -15.5}, {mins: 720, pct: -26},
+        {mins: 840, pct: -44}, {mins: 900, pct: -52}, {mins: 930, pct: -100}
+      ];
+
+      function interpolateOiDataDecayPct(minsOfDay) {
+        const pts = OIDATA_MEDIAN_DECAY_POINTS;
+        if (minsOfDay <= pts[0].mins) return pts[0].pct;
+        if (minsOfDay >= pts[pts.length - 1].mins) return pts[pts.length - 1].pct;
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a = pts[i], b = pts[i + 1];
+          if (minsOfDay >= a.mins && minsOfDay <= b.mins) {
+            const w = (minsOfDay - a.mins) / (b.mins - a.mins);
+            return a.pct + w * (b.pct - a.pct);
+          }
+        }
+        return -52;
+      }
+
+      function computeStrikeGexProfile(item, sym) {
+        const lotSizes = (typeof backtestMeta === 'object' && backtestMeta && backtestMeta.lotSizes) || {};
+        const lot = Number(lotSizes[sym]) > 0 ? Number(lotSizes[sym]) : (sym === 'BANKNIFTY' ? 30 : 75);
+        const S = Number(item.spot || item.syn || 0);
+        const rows = (item.chain || []).map(node => {
+          const gamma = Number.isFinite(node.modelCallGamma) && Number.isFinite(node.modelPutGamma)
+            ? (node.modelCallGamma + node.modelPutGamma) / 2
+            : Number(node.b76Gamma);
+          const cOiK = Number(node.cOi), pOiK = Number(node.pOi);
+          if (!(gamma > 0) || !(node.k > 0) || !Number.isFinite(cOiK) || !Number.isFinite(pOiK)) return null;
+          // GEX in INR per 1% move; open interest is stored in thousands.
+          const gexCr = ((cOiK - pOiK) * 1000 * gamma * S * S * .01 * lot) / 1e7;
+          return {k: node.k, cOiK, pOiK, gamma, gexCr: Number(gexCr.toFixed(2)), cumulative: 0};
+        }).filter(Boolean).sort((a, b) => a.k - b.k);
+        let cumulative = 0;
+        rows.forEach(row => { cumulative += row.gexCr; row.cumulative = Number(cumulative.toFixed(2)); });
+        let pin = null;
+        rows.forEach(row => { if (!pin || Math.abs(row.gexCr) > Math.abs(pin.gexCr)) pin = row; });
+        // Zero-gamma proxy: the cumulative strike GEX crossing closest to spot.
+        let flip = null;
+        for (let i = 0; i < rows.length - 1; i++) {
+          const a = rows[i], b = rows[i + 1];
+          if ((a.cumulative <= 0 && b.cumulative >= 0) || (a.cumulative >= 0 && b.cumulative <= 0)) {
+            const span = Math.abs(a.cumulative) + Math.abs(b.cumulative);
+            const frac = span > 0 ? Math.abs(a.cumulative) / span : .5;
+            const level = Math.round(a.k + frac * (b.k - a.k));
+            if (flip === null || Math.abs(level - S) < Math.abs(flip - S)) flip = level;
+          }
+        }
+        return {rows, pin, flip, lot, totalCr: Number(cumulative.toFixed(2))};
+      }
+      window.computeStrikeGexProfile = computeStrikeGexProfile;
+
+      function renderTab6ZeroDteDesk() {
+        const list = marketCatalog[activeSymbol] || [];
+        if (!list.length) return;
+        const r = list[0];
+        enrichItemWithBlack76(r);
+        const asOf = r.pricingAsOf || r.snapshotId || r.ivCapturedAt || lastSyncedRetrievedAt;
+        const clock = expiryClock(r.expiry, asOf);
+        const spot = Number(r.spot || 0);
+        const forward = Number(r.modelForward) > 0 ? Number(r.modelForward) : (Number(r.syn) > 0 ? Number(r.syn) : spot);
+        const iv = Number(r.iv) > 0 ? Number(r.iv) : (Number(r.brokerAtmIv) > 0 ? Number(r.brokerAtmIv) : NaN);
+        const session = TradingSessions.session(clock ? clock.day : new Date().toISOString().slice(0, 10));
+        const closeMins = clock ? clock.closeMins : (session ? session.endMins : null);
+        const startMins = session ? session.startMins : 555;
+
+        const badge = document.getElementById('zerodteContractBadge');
+        if (badge) badge.textContent = activeSymbol + ' ' + r.expiry + ' · ' +
+          (clock ? (clock.is0Dte ? '0DTE · ' + Math.round(clock.minsLeft) + ' min to close' : clock.rawCalendarDays + ' DTE front') : 'clock unavailable');
+        const subtitle = document.getElementById('zerodteSubtitle');
+        if (subtitle) subtitle.textContent = clock && clock.is0Dte
+          ? 'Expiry-day clock active: T_cal = ' + clock.minsLeft.toFixed(0) + ' minutes, T_vol = ' + Math.round(clock.tVol * 245 * 375) + ' trading minutes. Pricing uses T_cal; T_vol is shown as a diagnostic.'
+          : 'The front listed contract is not expiring today. Expiry-day series stay blank until a recorded expiry-day capture exists; no value is interpolated.';
+
+        // KPI 1
+        const kClock = document.getElementById('zKpiClockIv');
+        const kClockSub = document.getElementById('zKpiClockSub');
+        if (kClock) kClock.textContent = Number.isFinite(iv) ? iv.toFixed(2) + '%' : '—';
+        if (kClockSub) {
+          const broker = r.brokerAtmIv > 0 ? r.brokerAtmIv.toFixed(2) + '%' : '—';
+          const tvol = Number(r.b76TradingIv) > 0 ? r.b76TradingIv.toFixed(2) + '%' : '—';
+          kClockSub.textContent = 'T_vol IV ' + tvol + ' · broker ' + broker + ' · ' +
+            (clock ? (clock.is0Dte ? Math.round(clock.minsLeft) + ' min left' : clock.rawCalendarDays + ' calendar days') : 'clock unavailable');
+        }
+
+        // Recorded dual straddle series. The collector writes rolling and anchor
+        // paired-book mids; nothing is reconstructed from spot distance.
+        const dual = (r.dualIntraday || []).filter(p => p && Number.isFinite(Date.parse(p.markAt)))
+          .sort((a, b) => Date.parse(a.markAt) - Date.parse(b.markAt));
+        const rollPoints = dual.filter(p => p.rollStrad > 0);
+        const anchorPoints = dual.filter(p => p.anchorStrad > 0);
+        const intradaySeries = OptionsCharts.straddleSeries(r);
+        const spotByMark = new Map();
+        for (const p of intradaySeries) {
+          const ms = liveTimestamp(p.markAt || p.snapshotId);
+          if (Number(p.spot) > 0 && Number.isFinite(ms)) spotByMark.set(ms, Number(p.spot));
+        }
+        const fallbackAnchor = intradaySeries
+          .filter(p => p.strad > 0)
+          .map(p => ({t: p.t, anchorStrad: p.strad, anchorK: r.straddleStrike || r.atm,
+            markAt: p.markAt || p.snapshotId, spot: Number(p.spot)}));
+        const anchors = anchorPoints.length ? anchorPoints : fallbackAnchor;
+        // Spot prints come from the anchor series; a dual mark without a spot
+        // stays unlabelled rather than borrowing an unrelated print.
+        anchors.forEach(p => {
+          if (!(Number(p.spot) > 0)) p.spot = spotByMark.get(liveTimestamp(p.markAt));
+          if (!(Number(p.anchorK) > 0)) p.anchorK = r.straddleStrike || r.atm;
+          if (!p.t && p.markAt) p.t = new Date(Date.parse(p.markAt) + 19800000).toISOString().slice(11, 16);
+        });
+        const anchorK = anchors.length ? Number(anchors[0].anchorK || r.straddleStrike || r.atm) : Number(r.straddleStrike || r.atm);
+        const firstRoll = rollPoints[0], lastRoll = rollPoints[rollPoints.length - 1];
+        const firstAnchor = anchors[0], lastAnchor = anchors[anchors.length - 1];
+        const pctChange = (first, last) => first > 0 && last > 0 ? (last / first - 1) * 100 : null;
+        const rollMelt = firstRoll ? pctChange(firstRoll.rollStrad, lastRoll.rollStrad) : null;
+        const anchorMelt = firstAnchor ? pctChange(firstAnchor.anchorStrad, lastAnchor.anchorStrad) : null;
+
+        const kStrad = document.getElementById('zKpiStraddle');
+        const kStradSub = document.getElementById('zKpiStraddleSub');
+        const latestStrad = lastRoll && lastRoll.rollStrad > 0 ? lastRoll.rollStrad : (lastAnchor ? lastAnchor.anchorStrad : NaN);
+        if (kStrad) kStrad.textContent = Number.isFinite(latestStrad) && latestStrad > 0
+          ? '₹' + latestStrad.toFixed(2) + (rollMelt === null ? '' : ' (' + (rollMelt >= 0 ? '+' : '') + rollMelt.toFixed(1) + '%)') : '—';
+        if (kStradSub) {
+          if (rollPoints.length) kStradSub.textContent = 'Rolling ATM ' + lastRoll.rollAtm + ' · anchor ' + anchorK +
+            (anchorMelt === null ? '' : ' · anchor ' + (anchorMelt >= 0 ? '+' : '') + anchorMelt.toFixed(1) + '%');
+          else if (anchors.length) kStradSub.textContent = 'Anchor ' + anchorK + ' only · rolling ATM series not recorded yet';
+          else kStradSub.textContent = 'No recorded paired-book straddle for this session';
+        }
+
+        // Chart: recorded rolling/anchor series plus two clearly labelled benchmarks.
+        const labels = [], rollSeries = [], anchorSeries = [], sqrtSeries = [], oiSeries = [];
+        const byTime = new Map();
+        for (const p of anchors) if (!byTime.has(p.t) || !byTime.get(p.t).anchorStrad) byTime.set(p.t, Object.assign({}, byTime.get(p.t), p));
+        for (const p of rollPoints) byTime.set(p.t, Object.assign({}, byTime.get(p.t), p));
+        const union = Array.from(byTime.values()).sort((a, b) => {
+          const t = x => Number(String(x.t).slice(0, 2)) * 60 + Number(String(x.t).slice(3, 5));
+          return t(a) - t(b);
+        });
+        const base = rollPoints.length ? firstRoll.rollStrad : (firstAnchor ? firstAnchor.anchorStrad : NaN);
+        // Benchmarks are rebased to the first recorded premium so they never
+        // imply a premium the collection does not contain.
+        const clockMin = p => Number(String(p.t).slice(0, 2)) * 60 + Number(String(p.t).slice(3, 5));
+        const firstRecordMins = union.length ? clockMin(union[0]) : startMins;
+        const decaySpan = closeMins === null ? null : Math.max(1, closeMins - Math.min(firstRecordMins, closeMins - 1));
+        const oiStartPct = interpolateOiDataDecayPct(Math.max(555, firstRecordMins));
+        union.forEach(p => {
+          const mins = clockMin(p);
+          labels.push(p.t);
+          const roll = p.rollStrad > 0 ? p.rollStrad : null;
+          const anchor = p.anchorStrad > 0 ? p.anchorStrad : null;
+          if (activeZeroDteMode === 'pct' && base > 0) {
+            rollSeries.push(roll === null ? null : Number(((roll / base - 1) * 100).toFixed(2)));
+            anchorSeries.push(anchor === null ? null : Number(((anchor / base - 1) * 100).toFixed(2)));
+          } else {
+            rollSeries.push(roll);
+            anchorSeries.push(anchor);
+          }
+          if (decaySpan !== null && base > 0 && mins <= closeMins) {
+            const rem = Math.max(.01, (closeMins - mins) / decaySpan);
+            const oiPct = interpolateOiDataDecayPct(mins) - oiStartPct;
+            sqrtSeries.push(Number((base * Math.sqrt(rem)).toFixed(2)));
+            oiSeries.push(Number((base * (1 + oiPct / 100)).toFixed(2)));
+            if (activeZeroDteMode === 'pct') {
+              sqrtSeries[sqrtSeries.length - 1] = Number(((Math.sqrt(rem) - 1) * 100).toFixed(2));
+              oiSeries[oiSeries.length - 1] = Number(oiPct.toFixed(2));
+            }
+          } else {
+            sqrtSeries.push(null);
+            oiSeries.push(null);
+          }
+        });
+        const straddleData = {labels, datasets: [
+          {label: 'Rolling spot-ATM (recorded)', data: rollSeries, borderColor: '#38bdf8', borderWidth: 2.8, pointRadius: 3, spanGaps: false, tension: .2},
+          {label: 'Open anchor ' + (Number.isFinite(anchorK) ? anchorK : '—') + ' (recorded)', data: anchorSeries, borderColor: '#f59e0b', borderDash: [4, 3], borderWidth: 2.2, pointRadius: 2.5, spanGaps: false, tension: .2},
+          {label: 'Theoretical √t (benchmark, first record)', data: sqrtSeries, borderColor: '#94a3b8', borderDash: [6, 4], borderWidth: 1.8, pointRadius: 0, tension: .2},
+          {label: 'OIData NSE Tuesday median (published, first record)', data: oiSeries, borderColor: '#f43f5e', borderWidth: 2.2, pointRadius: 2, tension: .25}
+        ]};
+        zerodteStraddleChart = updateOrCreateChart(zerodteStraddleChart, document.getElementById('zerodteStraddleCanvas'),
+          'line', straddleData, chartOpts(activeZeroDteMode === 'pct' ? '%' : '₹', false));
+
+        const meltSource = document.getElementById('zMeltSource');
+        if (meltSource) meltSource.textContent = rollPoints.length
+          ? 'Source: ' + rollPoints.length + ' rolling and ' + (anchorPoints.length || fallbackAnchor.length) + ' anchor paired-book mids recorded this session. Benchmarks are rebased to the first recorded premium and are not data.'
+          : (anchors.length
+            ? 'Anchor series: ' + anchors.length + ' recorded paired-book mids. Rolling ATM requires the dual-straddle collector upgrade; it is left blank rather than estimated.'
+            : 'No recorded paired-book straddle for this session. Benchmarks are scaled only when a recorded opening premium exists.');
+
+        // KPI 3 and summary strip
+        const benPts = Number.isFinite(iv) && clock ? .8 * spot * (iv / 100) * Math.sqrt(Math.max(1e-7, clock.tCal)) : NaN;
+        const cashLow = Number.isFinite(latestStrad) ? Math.round(spot - latestStrad) : null;
+        const cashHigh = Number.isFinite(latestStrad) ? Math.round(spot + latestStrad) : null;
+        const kBen = document.getElementById('zKpiBennettBand');
+        const kBenSub = document.getElementById('zKpiBennettSub');
+        if (kBen) kBen.textContent = cashLow === null ? '—' : cashLow.toLocaleString('en-IN') + ' – ' + cashHigh.toLocaleString('en-IN');
+        if (kBenSub) kBenSub.textContent = cashLow === null || !Number.isFinite(benPts) ? 'Needs a recorded straddle and verified IV'
+          : 'Cash ±₹' + latestStrad.toFixed(1) + ' vs 0.8σ√T ±' + Math.round(benPts) + ' pts';
+        const strip = document.getElementById('zBennettSummaryStrip');
+        if (strip) {
+          const gap = cashLow === null || !Number.isFinite(benPts) ? null : latestStrad - benPts;
+          strip.innerHTML = [
+            ['Breakeven band', cashLow === null ? '—' : cashLow + ' – ' + cashHigh],
+            ['Bennett ±0.8σ√T', Number.isFinite(benPts) ? '±' + benPts.toFixed(1) + ' pts' : '—'],
+            ['Straddle − theory', gap === null ? '—' : (gap >= 0 ? '+' : '') + gap.toFixed(1) + ' pts']
+          ].map(([label, value]) => '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-400">' +
+            label + '</div><div class="text-sky-300 font-bold">' + value + '</div></div>').join('');
+        }
+
+        // KPI 4 and Phase 4 GEX
+        const gex = computeStrikeGexProfile(r, activeSymbol);
+        const kPin = document.getElementById('zKpiPinMagnet');
+        const kPinSub = document.getElementById('zKpiPinSub');
+        const netBadge = document.getElementById('zNetGexBadge');
+        if (kPin) kPin.textContent = gex.pin ? gex.pin.k.toLocaleString('en-IN') + ' (' + (gex.pin.gexCr >= 0 ? '+' : '') + gex.pin.gexCr + ' Cr)' : '—';
+        if (kPinSub) kPinSub.textContent = 'Zero-gamma proxy: ' + (gex.flip ? gex.flip.toLocaleString('en-IN') : '—');
+        if (netBadge) {
+          netBadge.textContent = gex.rows.length ? 'Net GEX ' + (gex.totalCr >= 0 ? '+' : '') + gex.totalCr + ' Cr' : 'Net GEX: —';
+          netBadge.className = 'text-[11px] mono font-semibold ' + (gex.totalCr >= 0 ? 'text-emerald-300' : 'text-rose-300');
+        }
+        const gexData = {labels: gex.rows.map(row => String(row.k)), datasets: [{
+          label: 'Net dealer GEX (₹ Cr / 1% move)', data: gex.rows.map(row => row.gexCr),
+          backgroundColor: gex.rows.map(row => gex.pin && row.k === gex.pin.k ? '#f59e0b' : row.gexCr >= 0 ? 'rgba(16, 185, 129, .85)' : 'rgba(244, 63, 94, .85)'),
+          borderRadius: 4
+        }]};
+        zerodteGexChart = updateOrCreateChart(zerodteGexChart, document.getElementById('zerodteGexCanvas'), 'bar', gexData,
+          chartOpts(' Cr', true));
+        const gexStrip = document.getElementById('zGexSummaryStrip');
+        if (gexStrip) {
+          const maxCall = gex.rows.reduce((a, b) => b.cOiK > a.cOiK ? b : a, gex.rows[0] || {k: 0, cOiK: 0});
+          const maxPut = gex.rows.reduce((a, b) => b.pOiK > a.pOiK ? b : a, gex.rows[0] || {k: 0, pOiK: 0});
+          gexStrip.innerHTML = [
+            ['Call wall', gex.rows.length ? maxCall.k + ' (' + maxCall.cOiK.toFixed(0) + 'k)' : '—'],
+            ['Put wall', gex.rows.length ? maxPut.k + ' (' + maxPut.pOiK.toFixed(0) + 'k)' : '—'],
+            ['Zero-Γ proxy', gex.flip ? gex.flip.toLocaleString('en-IN') : '—']
+          ].map(([label, value]) => '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-400">' +
+            label + '</div><div class="text-emerald-300 font-bold">' + value + '</div></div>').join('');
+        }
+        const gexSource = document.getElementById('zGexSource');
+        if (gexSource) gexSource.textContent = gex.rows.length
+          ? 'Source: ' + gex.rows.length + ' recorded strikes with a model gamma at lot ' + gex.lot + '. Zero-Γ is a strike-GEX proxy, not observed dealer positioning.'
+          : 'Gamma unavailable: needs a fresh two-sided book plus verified rate and dividend inputs.';
+
+        // Phase 2 wing diagnostics
+        const wingBody = document.getElementById('zWingTableBody');
+        const wingSource = document.getElementById('zWingSource');
+        if (wingBody) {
+          const wings = (r.chain || []).filter(n => forward > 0 && Math.abs(n.k / forward - 1) <= .05)
+            .sort((a, b) => a.k - b.k);
+          wingBody.innerHTML = wings.map(node => {
+            const call = node.k >= forward, px = call ? node.cLtp : node.pLtp;
+            const modelIv = call ? node.modelCallIv : node.modelPutIv;
+            return '<tr class="' + (node.k === r.atm ? 'bg-sky-500/15 font-bold' : 'hover:bg-[#111c2d]') + '">' +
+              '<td class="py-2 px-3 text-white">' + node.k.toLocaleString('en-IN') + '</td>' +
+              '<td class="py-2 px-3 text-right text-slate-300">' + (node.k >= forward ? '+' : '') + (node.k - forward).toFixed(0) + '</td>' +
+              '<td class="py-2 px-3 text-right ' + (call ? 'text-sky-300' : 'text-violet-300') + '">' + (node.k === forward ? 'ATM' : call ? 'CE' : 'PE') + '</td>' +
+              '<td class="py-2 px-3 text-right text-slate-200">' + (px > 0 ? '₹' + px.toFixed(2) : '—') + '</td>' +
+              '<td class="py-2 px-3 text-right text-sky-300">' + formatLiveNumber(modelIv, 2, '%') + '</td>' +
+              '<td class="py-2 px-3 text-right text-white">' + formatLiveNumber(node.normZ, 2) + '</td>' +
+              '<td class="py-2 px-3 text-center">' + (node.isLotteryFloor ? '<span class="text-rose-300 font-bold">&lt; ₹2</span>' : '<span class="text-slate-500">—</span>') + '</td>' +
+              '</tr>';
+          }).join('') || '<tr><td colspan="7" class="py-5 text-center text-slate-400">No recorded strikes within ±5% of the forward.</td></tr>';
+          if (wingSource) wingSource.textContent = r.expiry + ' · z uses σ_ATM ' + formatLiveNumber(iv, 2, '%') +
+            ' and T_cal ' + (clock ? (clock.is0Dte ? Math.round(clock.minsLeft) + 'm' : clock.rawCalendarDays + 'd') : '—') +
+            ' · BF10Δ ' + (Number.isFinite(r.bf10Clean) ? (r.bf10Clean >= 0 ? '+' : '') + r.bf10Clean.toFixed(2) + ' pp clean' : '—') +
+            ' / ' + (Number.isFinite(r.bf10Raw) ? (r.bf10Raw >= 0 ? '+' : '') + r.bf10Raw.toFixed(2) + ' pp raw' : '—');
+        }
+
+        // Phase 4B: final 30 minutes of the exchange session.
+        const vwapBody = document.getElementById('zVwapTableBody');
+        const kMean = document.getElementById('zKpiVwap');
+        const kMeanSub = document.getElementById('zKpiVwapSub');
+        const headerNote = document.getElementById('zVwapHeaderNote');
+        const winStart = closeMins === null ? null : closeMins - 30;
+        const prints = anchors.filter(p => {
+          const mins = Number(String(p.t).slice(0, 2)) * 60 + Number(String(p.t).slice(3, 5));
+          return winStart !== null && mins >= winStart && mins <= closeMins && Number(p.spot) > 0;
+        }).sort((a, b) => Date.parse(a.markAt) - Date.parse(b.markAt));
+        if (headerNote && winStart !== null) headerNote.textContent = 'Window ' + fmtIstClockMin(winStart) + '–' + fmtIstClockMin(closeMins) + ' IST · running mean of recorded spot prints';
+        if (prints.length) {
+          let sum = 0, html = '';
+          prints.forEach((p, i) => {
+            const pointSpot = Number(p.spot);
+            sum += pointSpot;
+            const mean = sum / (i + 1);
+            const strad = p.anchorStrad > 0 ? p.anchorStrad : null;
+            const intrinsic = Math.abs(mean - anchorK);
+            const remaining = strad === null ? null : Math.max(0, strad - intrinsic);
+            html += '<tr class="hover:bg-[#111c2d]">' +
+              '<td class="py-2 px-3 text-white font-bold">' + p.t + ' IST</td>' +
+              '<td class="py-2 px-3 text-right text-slate-200">' + pointSpot.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>' +
+              '<td class="py-2 px-3 text-right text-purple-300 font-bold">' + mean.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>' +
+              '<td class="py-2 px-3 text-right ' + (pointSpot >= mean ? 'text-emerald-300' : 'text-rose-300') + '">' + (pointSpot >= mean ? '+' : '') + (pointSpot - mean).toFixed(2) + '</td>' +
+              '<td class="py-2 px-3 text-right text-slate-300">' + anchorK.toLocaleString('en-IN') + '</td>' +
+              '<td class="py-2 px-3 text-right text-amber-300">' + (strad === null ? '—' : '₹' + strad.toFixed(2)) + '</td>' +
+              '<td class="py-2 px-3 text-right text-emerald-300">₹' + intrinsic.toFixed(2) + '</td>' +
+              '<td class="py-2 px-3 text-right text-rose-300">' + (remaining === null ? '—' : '₹' + remaining.toFixed(2)) + '</td>' +
+              '</tr>';
+          });
+          vwapBody.innerHTML = html;
+          const lastMean = sum / prints.length;
+          if (kMean) kMean.textContent = lastMean.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+          if (kMeanSub) kMeanSub.textContent = prints.length + ' recorded prints · spot ' + (spot - lastMean >= 0 ? '+' : '') + (spot - lastMean).toFixed(1) + ' pts vs mean';
+        } else {
+          if (vwapBody) vwapBody.innerHTML = '<tr><td colspan="8" class="py-5 text-center text-slate-400">' +
+            (winStart === null ? 'Session close unavailable.' : 'No recorded spot prints inside ' + fmtIstClockMin(winStart) + '–' + fmtIstClockMin(closeMins) + ' IST yet.') + '</td></tr>';
+          if (kMean) kMean.textContent = '—';
+          if (kMeanSub && winStart !== null) kMeanSub.textContent = 'Awaiting ' + fmtIstClockMin(winStart) + '–' + fmtIstClockMin(closeMins) + ' IST prints';
+        }
+      }
+      window.renderTab6ZeroDteDesk = renderTab6ZeroDteDesk;
 
       window.testStrategyInBacktest = function(stratCode, symName) {
         var pSel = document.getElementById('btPresetSelect');
@@ -2552,13 +3160,15 @@
         else if (activeResTab === 'smile') renderTab3Smile();
         else if (activeResTab === 'straddle') renderTab4Straddle();
         else if (activeResTab === 'trades') renderTab5TradeIdentification();
+        else if (activeResTab === 'zerodte') renderTab6ZeroDteDesk();
       }
 
       // --- Header Symbol & Expiry Listeners ---
       document.querySelectorAll('.sym-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
           activeSymbol = this.getAttribute('data-sym');
-          activeExpiryIdx = 0;
+          userSelectedExpiryManually = false;
+          activeExpiryIdx = getDefaultActiveExpiryIdx(activeSymbol, lastSyncedRetrievedAt);
           document.querySelectorAll('.sym-btn').forEach(function(b) {
             b.classList.toggle('active', b.getAttribute('data-sym') === activeSymbol);
           });
@@ -2568,6 +3178,7 @@
       });
 
       document.getElementById('activeExpirySelect').addEventListener('change', function() {
+        userSelectedExpiryManually = true;
         activeExpiryIdx = parseInt(this.value || '0', 10);
         renderActiveOptionsTab();
       });
@@ -2578,12 +3189,27 @@
           document.querySelectorAll('.res-tab-btn').forEach(function(b) {
             b.classList.toggle('active', b.getAttribute('data-tab') === activeResTab);
           });
-          ['regime', 'term', 'smile', 'straddle', 'trades'].forEach(function(t) {
+          ['regime', 'term', 'smile', 'straddle', 'trades', 'zerodte'].forEach(function(t) {
             var el = document.getElementById('panel-' + t);
             if (el) el.classList.toggle('hidden', t !== activeResTab);
           });
           renderActiveOptionsTab();
         });
+      });
+
+      document.querySelectorAll('.zmode-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          activeZeroDteMode = this.getAttribute('data-zmode') || 'pct';
+          document.querySelectorAll('.zmode-btn').forEach(function(b) {
+            b.classList.toggle('active', b.getAttribute('data-zmode') === activeZeroDteMode);
+          });
+          renderTab6ZeroDteDesk();
+        });
+      });
+
+      document.getElementById('termInclude0Dte').addEventListener('change', function() {
+        activeTermInclude0Dte = this.checked;
+        renderTab2Term();
       });
 
       document.querySelectorAll('.metric-btn').forEach(function(btn) {
@@ -2889,6 +3515,14 @@
         var hh = Math.floor(total / 60), mm = total % 60;
         return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
       }
+
+      // Absolute IST clock from minutes-of-day (0 = 00:00), used by the
+      // expiry desk whose session boundaries are not anchored at 09:15.
+      function fmtIstClockMin(minsOfDay) {
+        var total = Math.round(minsOfDay);
+        return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
+      }
+      window.fmtIstClockMin = fmtIstClockMin;
 
       function syncPresetCriteria() {
         var pEl = cxById('btPresetSelect');
@@ -4395,6 +5029,41 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":75,"BANKNIFTY":30},"chargeMod
             markSource:paired ? 'paired_book_mid' : null, cQuoteAt:anchor?.cQuoteAt, pQuoteAt:anchor?.pQuoteAt,
             iv:anchor?.uCallIv > 0 && anchor.uPutIv > 0 ? (anchor.uCallIv + anchor.uPutIv) / 2 : null,
             ivSource:'Upstox option_greeks.iv', expiry, snapshotId:item.ivCapturedAt, markAt:asOf});
+          // Dual-straddle desk series. The collector is the only source of a
+          // rolling spot-ATM mid; the browser never reconstructs one from spot
+          // distance. Anchor mids are reused from the settled anchor strike.
+          const dualMarks = new Map();
+          for (const p of previous?.dualIntraday || []) {
+            if (p && p.markAt) dualMarks.set(liveTimestamp(p.markAt), p);
+          }
+          if (Array.isArray(rec.dual_straddle_history)) for (const row of rec.dual_straddle_history.slice(-400)) {
+            if (!row || typeof row !== 'object') continue;
+            const markTime = liveTimestamp(row.markAt);
+            if (!Number.isFinite(markTime) || markTime > captured || Math.abs(markTime - captured) > 86400000) continue;
+            const local = new Date(markTime + 19800000).toISOString();
+            if (local.slice(0, 10) !== sessionDay) continue;
+            const rollStrad = liveNumber(row.rollStrad), rollAtm = liveNumber(row.rollAtm), anchorK = liveNumber(row.anchorK);
+            const recordedAnchor = liveNumber(row.anchorStrad);
+            const anchorStrad = recordedAnchor > 0 ? recordedAnchor : (marks.get(markTime)?.strad || null);
+            if (!(rollStrad > 0) && !(anchorStrad > 0)) continue;
+            dualMarks.set(markTime, {t: local.slice(11, 16), markAt: new Date(markTime).toISOString(),
+              rollAtm: rollAtm > 0 ? rollAtm : null, rollStrad: rollStrad > 0 ? rollStrad : null,
+              anchorK: anchorK > 0 ? anchorK : item.straddleStrike,
+              anchorStrad: anchorStrad > 0 ? anchorStrad : null, source: 'paired_book_mid'});
+          }
+          const liveDual = rec.dual_straddle && typeof rec.dual_straddle === 'object' && !Array.isArray(rec.dual_straddle) ? rec.dual_straddle : null;
+          const liveRollStrad = liveDual ? liveNumber(liveDual.rollStrad) : NaN;
+          const liveRollAtm = liveDual ? liveNumber(liveDual.rollAtm) : NaN;
+          const liveAnchorStrad = liveDual && liveNumber(liveDual.anchorStrad) > 0
+            ? liveNumber(liveDual.anchorStrad)
+            : (paired ? (anchor.cBid + anchor.cAsk + anchor.pBid + anchor.pAsk) / 2 : null);
+          if (liveRollStrad > 0) {
+            dualMarks.set(captured, {t: new Date(captured + 19800000).toISOString().slice(11, 16), markAt: asOf,
+              rollAtm: liveRollAtm > 0 ? liveRollAtm : null, rollStrad: liveRollStrad,
+              anchorK: liveDual && liveNumber(liveDual.anchorK) > 0 ? liveNumber(liveDual.anchorK) : item.straddleStrike,
+              anchorStrad: liveAnchorStrad, source: 'paired_book_mid'});
+          }
+          item.dualIntraday = Array.from(dualMarks.values()).sort((a, b) => liveTimestamp(a.markAt) - liveTimestamp(b.markAt));
           catalog[sym].push(item);
         });
         var history = {};
@@ -4474,7 +5143,9 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":75,"BANKNIFTY":30},"chargeMod
             REAL_HISTORICAL_1Y = next.history;
             window.marketCatalog = marketCatalog;
             window.REAL_HISTORICAL_1Y = REAL_HISTORICAL_1Y;
-            activeExpiryIdx = Math.max(0, marketCatalog[activeSymbol].findIndex(function(x) { return x.expiry === selectedExpiry; }));
+            activeExpiryIdx = userSelectedExpiryManually
+              ? Math.max(0, marketCatalog[activeSymbol].findIndex(function(x) { return x.expiry === selectedExpiry; }))
+              : getDefaultActiveExpiryIdx(activeSymbol, payload.retrieved_at);
             lastSyncedRetrievedAt = payload.retrieved_at;
             loadedCloudCapture = true;
             liveSnapshotAccepted = fresh;

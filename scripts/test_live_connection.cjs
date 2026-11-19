@@ -22,6 +22,7 @@ function browserFunction(name) {
 const web = vm.createContext({ Date: Clock, console, window: {}, B76_RISK_FREE_RATE: 0.066, B76_INV_SQRT_2PI: 1 / Math.sqrt(2 * Math.PI),
   marketCatalog: {NIFTY: [], BANKNIFTY: []}, REAL_HISTORICAL_1Y: {NIFTY: [], BANKNIFTY: []},
   activeSymbol: 'NIFTY', activeExpiryIdx: 0, lastSyncedRetrievedAt: '', loadedCloudCapture:false, liveSnapshotRequest: null,
+  userSelectedExpiryManually: false,
   CLOUD_EXEC_URL: 'https://example.invalid', updateMarketClock: () => ({isOpen: true}),
   populateExpiryDropdown() {}, renderActiveOptionsTab() {}, renderForwardWorkspace() {},
   setLiveCaptureIntegrity(message) { web.message = message; }
@@ -29,7 +30,8 @@ const web = vm.createContext({ Date: Clock, console, window: {}, B76_RISK_FREE_R
 vm.runInContext(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8'),web);
 for (const name of ['normPdf', 'normCdf', 'computeBlack76ParityForward', 'black76Greeks', 'black76Price',
   'black76IvDec', 'black76Iv', 'bsmIvDec', 'bsmGreeks', 'currentPricingInputs', 'relativeBookSpread', 'selectOptionPricing', 'enrichItemWithBlack76', 'liveNumber', 'liveTimestamp', 'liveBookValid',
-  'liveDeltaIv', 'capturedDeltaIv','validCloudCapture','showCaptureState','combineDailyCaptures','applyClosingRisk','normalizeLiveSnapshot', 'currentRow', 'isFreshValidatedCloudSnapshot', 'syncLiveCloudSnapshot']) {
+  'liveDeltaIv', 'capturedDeltaIv','validCloudCapture','showCaptureState','combineDailyCaptures','applyClosingRisk','normalizeLiveSnapshot', 'currentRow', 'isFreshValidatedCloudSnapshot', 'syncLiveCloudSnapshot',
+  'istDayAndMinute','nextTradingDay','expiryClock','isExpiryRollWindow','getDefaultActiveExpiryIdx']) {
   vm.runInContext(browserFunction(name), web);
 }
 web.pricingInputs = {schema:1,rate:{model_rate:.066,source:'https://www.rbi.org.in/',sha256:'fixture',checked_at:new Date(now).toISOString()},
