@@ -42,6 +42,8 @@ Tests live under `tests/unit`, `tests/integration` and `tests/smoke`. CI builds 
 - Model IV remains separate from broker-captured historical IV. Missing observations remain missing.
 - A past capture gap does not disable later complete, fresh snapshots.
 
+Custom replay rules and dataset refresh instructions: [Custom backtests](handbook/custom-backtests.md).
+
 ## Documentation
 
 Start with the **[documentation index](handbook/README.md)** for architecture, deployment, data flow, operations and audit status. `docs/` contains the published website artifact.

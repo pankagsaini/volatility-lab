@@ -257,7 +257,7 @@ const cxRow = {sym:'NIFTY',date:'2026-11-02',exp:'2026-11-09',strat:'S1',
 assert.equal(web.dteFromRow(cxRow),7);
 assert.equal(web.dteFromRow({date:'invalid',exp:'2026-11-09'}),null);
 const cx = web.CUSTOM_METRICS;
-assert.deepEqual(Object.keys(cx),['vrp','hv30','hv10','ivhv10','rr25','bf25','dte','iv','entryMin','holdMin','stop','target','grossPct'],'Only recorded archive metrics are offered');
+assert.deepEqual(Object.keys(cx),['vrp','hv30','hv10','ivhv10','rr25','bf25','dte','iv','entryMin','ivhvRatio','spotChange','netDelta','minOi','maxSpread'],'Only recorded archive metrics are offered');
 assert.equal(cx.vrp.get(cxRow),2.51);
 assert.equal(cx.hv30.get(cxRow),12.69);
 assert.equal(cx.hv10.get(cxRow),null,'HV10 is not recorded on S1 rows');
@@ -284,18 +284,8 @@ assert.equal(cx.dte.get(cxFieldRow),7);
 assert.equal(cx.iv.get(cxRow),15.2,'Entry IV comes from the recorded signal string');
 assert.equal(cx.iv.get({sig:'VRP +2.51 pp'}),null,'No IV in the signal is null, never zero');
 assert.equal(cx.entryMin.get({entryMin:5}),5);
-assert.equal(cx.holdMin.get({holdMin:354}),354);
-assert.equal(cx.holdMin.get({}),null,'A row without a replayed path has no holding time');
-assert.equal(cx.stop.get({maePct:3.12}),3.12);
-assert.equal(cx.stop.get({maePct:0}),0,'A flat worst mark is a real zero, not missing');
-assert.equal(cx.target.get({mfePct:1.82}),1.82);
-assert.equal(cx.grossPct.get({gross:90,capital:26174}),0.34);
-assert.equal(cx.grossPct.get({gross:90}),null,'Gross return needs both recorded numbers');
-assert.equal(web.rowMatchesCriteria({entryMin:6,holdMin:354,maePct:2.5,mfePct:1.8,gross:90,capital:26174},
-  {logic:'AND',criteria:[{get:cx.entryMin.get,min:0,max:10},{get:cx.holdMin.get,min:300,max:400},
-    {get:cx.stop.get,min:null,max:5},{get:cx.target.get,min:1,max:null},{get:cx.grossPct.get,min:0,max:null}]}),true);
-assert.equal(web.rowMatchesCriteria({entryMin:6,holdMin:354,maePct:9.5,mfePct:1.8},
-  {logic:'AND',criteria:[{get:cx.stop.get,min:null,max:5}]}),false,'A trade that drew down more than the tolerance fails the stop criterion');
+assert.equal(cx.stop,undefined,'Future drawdown is never an entry filter');
+assert.equal(cx.target,undefined,'Future profit is never an entry filter');
 
 // The shipped archive is generated from recorded captures: no template
 // replication, no imputed P&L, and metadata that accounts for every row.
@@ -368,3 +358,5 @@ for(const rows of Object.values(embedded)) for(const row of rows) {
   if(row.d<'2026-10-20') assert.equal(row.iv,null);
 }
 console.log('Frontend regressions passed: missing data, sourced IV, statistics, forward variance, actual payoff legs and capture times.');
+
+require('./test_backtest_replay.cjs');
