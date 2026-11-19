@@ -156,11 +156,11 @@ const gammaItem={spot:25000,chain:[
   {k:24900,cOi:10,pOi:30,modelCallGamma:.0004,modelPutGamma:.0004},
   {k:25000,cOi:50,pOi:20,modelCallGamma:.0005,modelPutGamma:.0005},
   {k:25100,cOi:25,pOi:5,modelCallGamma:.0003,modelPutGamma:.0003}]};
-web.backtestMeta={lotSizes:{NIFTY:75,BANKNIFTY:30}};
+web.backtestMeta={lotSizes:{NIFTY:65,BANKNIFTY:30}};
 const gex=web.computeStrikeGexProfile(gammaItem,'NIFTY');
 assert.equal(gex.rows.length,3);
-assert.equal(gex.rows.find(row=>row.k===24900).gexCr,-375,'GEX uses the site lot size, not a hardcoded proxy');
-assert.equal(gex.lot,75);
+assert.equal(gex.rows.find(row=>row.k===24900).gexCr,-325,'GEX uses the site lot size, not a hardcoded proxy');
+assert.equal(gex.lot,65);
 assert.equal(gex.pin.k,25000);
 assert.equal(gex.flip,24953);
 assert.equal(web.computeStrikeGexProfile({spot:25000,chain:[{k:25000}]},'NIFTY').rows.length,0);

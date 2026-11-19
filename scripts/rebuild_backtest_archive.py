@@ -49,7 +49,7 @@ DATA = os.path.join(ROOT, 'volatility_lab', 'data')
 DEFAULT_ARCHIVE = r'G:\My Drive\Historical Data\Volatility Lab - private Upstox archive'
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
-LOT_SIZES = {'NIFTY': 75, 'BANKNIFTY': 30}
+LOT_SIZES = {'NIFTY': 65, 'BANKNIFTY': 30}
 SPOT_TOKENS = {'NIFTY': 'NSE_INDEX|Nifty 50', 'BANKNIFTY': 'NSE_INDEX|Nifty Bank'}
 HV_SOURCE = {'NIFTY': 'nifty_one_year.csv', 'BANKNIFTY': 'banknifty_one_year.csv'}
 
