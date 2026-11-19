@@ -133,3 +133,84 @@ assert.equal(cloud.dualStraddlePoint_({...dualRec, data: [
       bid_price: 48, ask_price: 50, bid_qty: 75, ask_qty: 75}}}]}, quoteAt), null,
   'One recorded leg is not a straddle mark');
 console.log('Collector audit regressions passed: aliases, shared cache, JSONP, legacy provenance, fees and EOD recovery.');
+
+// Automatic recovery fairness, cooldowns, quota accounting and session safety.
+{
+  let stamp=Date.parse('2026-11-19T16:01:00+05:30');
+  class RecoveryClock extends Date { constructor(...args){super(...(args.length?args:[stamp]));} static now(){return stamp;} }
+  const state=new Map([['SCHEDULE_MODE','intraday']]);
+  const prop={getProperty:k=>state.get(k)||null,getProperties:()=>Object.fromEntries(state),
+    setProperty:(k,v)=>state.set(k,v),deleteProperty:k=>state.delete(k)};
+  let releases=0;
+  const worker=vm.createContext({Date:RecoveryClock,console,
+    PropertiesService:{getScriptProperties:()=>prop},
+    LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock:()=>releases++})}});
+  vm.runInContext(source,worker);
+  worker.day_=()=> '2026-11-19'; worker.scriptCache_=()=>null;
+  for(const day of ['2026-11-11','2026-11-12','2026-11-16','2026-11-17']) state.set('EOD_PENDING_DAY_'+day,'file-'+day);
+  const calls=[];
+  worker.recoverEod_=(day)=>{
+    calls.push(day);stamp+=1000;
+    if(day==='2026-11-11') throw new Error('Recovery archive unavailable');
+    state.delete('EOD_PENDING_DAY_'+day);
+    return {status:'complete',file_id:'done-'+day};
+  };
+  worker.reconcilePriorSession();
+  assert.deepEqual(calls,['2026-11-11','2026-11-12','2026-11-16'],'A failed day cannot starve later dates');
+  assert.equal(JSON.parse(state.get('RUNTIME_BUDGET')).ms,3000);
+  assert.equal(JSON.parse(state.get('RECONCILIATION_BUDGET')).ms,3000);
+  worker.reconcilePriorSession();assert.equal(calls.length,3,'Minimum retry spacing');
+  stamp+=60000;worker.reconcilePriorSession();
+  assert.equal(calls.at(-1),'2026-11-17');
+  assert.equal(calls.length,4,'Failed day stays in backoff while untouched day runs');
+  assert.equal(JSON.parse(state.get('EOD_RECOVERY_STATE'))['2026-11-11'].status,'error');
+  assert(state.has('EOD_PENDING_DAY_2026-11-11'),'Failed evidence is never cleared');
+  const budget=JSON.parse(state.get('RUNTIME_BUDGET'));budget.ms=80*60000;
+  state.set('RUNTIME_BUDGET',JSON.stringify(budget));stamp+=31*60000;
+  worker.reconcilePriorSession();assert.equal(calls.length,4,'Reserve current EOD runtime');
+  assert.equal(releases,4);
+
+  // MIME repair is read-only and target-date validation precedes any capture.
+  let mime=null,captured=null;
+  worker.DriveApp={getFileById:()=>({getId:()=> 'original',getBlob:()=>({setContentType:t=>{mime=t;}})})};
+  worker.folder_=()=>({searchFiles:()=>({hasNext:()=>false})});
+  worker.Utilities={ungzip:()=>({getDataAsString:()=>JSON.stringify({day:'2026-11-17',mode:'eod',catalogue:{indices:{}}})})};
+  worker.capture_=(mode,rec)=>{captured=rec;return {status:'complete'};};
+  const actualRecover=vm.runInContext('('+source.slice(source.indexOf('function recoverEod_('),source.indexOf('/**\n * Drain queued'))+')',worker);
+  assert.equal(actualRecover('2026-11-17','original').status,'complete');
+  assert.equal(mime,'application/x-gzip');assert.equal(captured.target_day,'2026-11-17');
+  assert.equal(captured.source_file_id,'original');
+  assert.throws(()=>actualRecover('2026-11-16','original'),/Invalid reconciliation archive/);
+  worker.DriveApp.getFileById=()=>{throw new Error('NOT_FOUND');};
+  const surviving={getId:()=> 'surviving',getName:()=> '2026-11-17_eod_220000_partial.json.gz',
+    getDateCreated:()=>new Date(stamp),getBlob:()=>({setContentType:t=>{mime=t;}})};
+  worker.folder_=()=>({searchFiles:query=>{assert(query.includes('2026-11-17_eod_'));let read=false;
+    return {hasNext:()=>!read,next:()=>{read=true;return surviving;}};}});
+  assert.equal(actualRecover('2026-11-17','missing').status,'complete');
+  assert.equal(captured.source_file_id,'surviving','Use a verified original when the saved reference is stale');
+}
+
+// Old futures resolve by the broker's expired-contract catalogue, never a reused live token.
+{
+  const at=Date.parse('2026-11-19T16:00:00+05:30');
+  class EodClock extends Date {constructor(...args){super(...(args.length?args:[at]));} static now(){return at;}}
+  const settings=new Map();const prop={getProperty:k=>settings.get(k)||null,setProperty:(k,v)=>settings.set(k,v)};
+  const c=vm.createContext({Date:EodClock,console:{log(){}},Utilities:{formatDate:()=> '160000'}});
+  vm.runInContext(source,c);c.props_=()=>prop;c.day_=d=>d.toISOString().slice(0,10);
+  c.closingRiskRows_=()=>({});c.saveClosingRisk_=()=>{};c.loadPendingEod_=()=>({'2026-10-27':'old'});
+  let queue;c.savePendingEod_=q=>{queue=q;};c.save_=()=> 'new-original';
+  const cat={indices:{NIFTY:{futures:[{instrument_key:'NSE_FO|1',expiry:'2026-10-27'}]},
+    BANKNIFTY:{futures:[{instrument_key:'NSE_FO|2',expiry:'2026-11-23'}]}}};
+  c.api_=(path,params)=>{assert.equal(path,'/v2/expired-instruments/future/contract');
+    assert.equal(params.expiry_date,'2026-10-27');return [{expiry:'2026-10-27',instrument_key:'NSE_FO|1|27-10-2026'}];};
+  let requests;
+  c.apiAll_=r=>{requests=r;return r.map(req=>({...req,data:{candles:[['2026-10-27T00:00:00+05:30',100,110,90,105,1000]]}}));};
+  let result=c.capture_('eod',{target_day:'2026-10-27',catalogue:cat,source_file_id:'old'});
+  assert.equal(result.status,'complete');assert.equal(queue['2026-10-27'],undefined);
+  assert(requests.find(r=>r.label==='NSE_FO|1').path.includes('/expired-instruments/historical-candle/NSE_FO%7C1%7C27-10-2026/day/'));
+  assert(requests.find(r=>r.label==='NSE_FO|2').path.startsWith('/v3/historical-candle/'));
+  c.api_=()=>[];result=c.capture_('eod',{target_day:'2026-10-27',catalogue:cat});
+  assert.equal(result.status,'partial');assert.equal(queue['2026-10-27'],'new-original');
+  assert(result.pending.includes('NSE_FO|1'),'Missing expired data stays pending');
+  assert(!requests.some(r=>r.label==='NSE_FO|1'),'Never fall back to a reused live token');
+}

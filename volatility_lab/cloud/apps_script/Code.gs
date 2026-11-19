@@ -7,9 +7,9 @@
  * captures (09:15–15:31 IST) and defer forward test ledger pricing to post-capture.
  * This reduces trigger execution time from ~15s to ~2s, keeping total daily runtime
  * under 15 minutes and preventing 90-minute quota exhaustion before 15:30 IST market close.
- * Prior-session EOD recovery still runs in the pre-market 07:00-09:00 IST window under its
- * own eight-minute budget: the broker publishes the daily candle after the 22:00 EOD cutoff,
- * so without that retry a late-published session would stay partial forever.
+ * Prior-session EOD recovery runs before the open and after the close under a separate
+ * eight-minute reconciliation budget and the shared runtime guard. Per-session backoff
+ * prevents one missing archive or delayed broker candle from blocking the queue.
  * ==============================================================================
  * Private, read-only automated data pipeline for Upstox NSE Market Feeds.
  *
@@ -288,7 +288,9 @@ function pendingEodDays_() {
 function api_(path, params) {
   const allowedEndpoint = (
     /^\/v2\/(option\/(chain|contract)|market-quote\/quotes|market\/holidays|historical-candle)/.test(path) ||
-    path.startsWith('/v3/historical-candle/')
+    path.startsWith('/v3/historical-candle/') ||
+    path === '/v2/expired-instruments/future/contract' ||
+    path.startsWith('/v2/expired-instruments/historical-candle/')
   );
   if (!allowedEndpoint) {
     throw new Error('Endpoint not allowed');
@@ -1026,6 +1028,7 @@ function capture_(mode, recovery) {
     if (recovery) {
       report.target_day = targetDay;
       report.purpose = 'prior-session reconciliation';
+      report.recovery_source_file_id = recovery.source_file_id || null;
     }
 
     const keys = Object.values(CONFIG.indices).concat(['NSE_INDEX|India VIX']);
@@ -1042,10 +1045,27 @@ function capture_(mode, recovery) {
       keys.forEach(key => {
         const lookback = Object.values(CONFIG.indices).includes(key) ? 100 : 10;
         const fromDay = day_(new Date(targetMs - lookback * 86400000));
-        requests.push({
-          label: key,
-          path: '/v3/historical-candle/' + encodeURIComponent(key) + '/days/1/' + targetDay + '/' + fromDay
-        });
+        let path = '/v3/historical-candle/' + encodeURIComponent(key) + '/days/1/' + targetDay + '/' + fromDay;
+        // Exchange tokens can be reused after expiry. Resolve the original
+        // expired contract at the broker rather than sending its live token.
+        const symbol = Object.keys(catalogue.indices).find(sym => catalogue.indices[sym].futures.some(f => f.instrument_key === key));
+        const future = symbol && catalogue.indices[symbol].futures.find(f => f.instrument_key === key);
+        if (future && future.expiry < today) {
+          try {
+            const contracts = api_('/v2/expired-instruments/future/contract',
+              {instrument_key:CONFIG.indices[symbol],expiry_date:future.expiry});
+            const contract = Array.isArray(contracts) && contracts.find(f => f.expiry === future.expiry
+              && String(f.instrument_key).startsWith(key + '|'));
+            if (!contract) throw new Error('Expired contract unavailable');
+            path = '/v2/expired-instruments/historical-candle/' + encodeURIComponent(contract.instrument_key)
+              + '/day/' + targetDay + '/' + fromDay;
+          } catch (err) {
+            report.errors.push({item:key,reason:safeError_(err)});
+            report.pending.push(key);
+            return;
+          }
+        }
+        requests.push({label:key,path:path});
       });
     } else {
       Object.keys(catalogue.indices).forEach(symbol => {
@@ -1252,7 +1272,7 @@ function capture_(mode, recovery) {
 function safeError_(err) {
   const message = String(err.message || '');
   if (['Invalid forward ledger. Restore a validated backup.', 'Timestamped quote enrichment unavailable',
-       'Snapshot enrichment time budget exhausted'].includes(message)) return message;
+       'Snapshot enrichment time budget exhausted', 'Recovery archive unavailable', 'Recovery archive decode failed', 'Recovery archive unavailable or unreadable', 'Expired contract unavailable'].includes(message)) return message;
   const isWhitelisted = /^(Broker HTTP \d{3}|Empty broker data|Invalid broker JSON|Incomplete quote response|Wrong option expiry|Instrument master unavailable|(Three futures unavailable|Futures contracts unavailable) for (NIFTY|BANKNIFTY)|No option expiries for (NIFTY|BANKNIFTY)|Set UPSTOX_TOKEN in Script Properties|Invalid session date|Capture in progress|Invalid reconciliation archive|No pending EOD.*)$/.test(message);
   return isWhitelisted ? message : 'Capture failed; check permissions, network or quota';
 }
@@ -1382,7 +1402,10 @@ function scheduledCapture() {
       if (properties.getProperty('COLLECTOR_STATUS') !== status) properties.setProperty('COLLECTOR_STATUS',status);
     }
   }
-  if (weekend && !sp) return;
+  if (weekend && !sp) {
+    if (mins >= 420 && mins < 540) reconcilePriorSession();
+    return;
+  }
 
   // Pre-market reconciliation window: 07:00 - 09:00 IST (minutes 420 to 540).
   // The exchange is closed and no snapshot slot is due, so recovery runs in every
@@ -1397,6 +1420,11 @@ function scheduledCapture() {
   const snapEnd = sp ? sp.endMins : regularCloseMinutes_(today);
   const eodStart = sp ? sp.eodStartMins : snapEnd + 5;
   const eodEnd = sp ? sp.eodEndMins : CONFIG.eodEndMins;         // 1320 (22:00 IST)
+
+  if (mins >= eodStart && mins < eodEnd && mins % 5 !== 0) {
+    reconcilePriorSession();
+    return;
+  }
 
   // Intraday snapshots: regular or published special session, inclusive
   // EOD candle polling begins five minutes after the regular session closes.
@@ -1527,13 +1555,38 @@ function scheduledCapture() {
  * Recover one queued EOD capture from the original contracts stored with the partial.
  * Recovery validates the target session rather than today's date.
  */
-function recoverEod_(targetDay, fileId) {
-  const file = DriveApp.getFileById(fileId);
-  const oldReport = JSON.parse(Utilities.ungzip(file.getBlob()).getDataAsString());
-  if (!oldReport.catalogue || oldReport.mode !== 'eod') {
-    throw new Error('Invalid reconciliation archive');
+function recoveryArchive_(targetDay, fileId) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDay)) throw new Error('Invalid session date');
+  const read = file => {
+    const blob = file.getBlob();
+    blob.setContentType('application/x-gzip');
+    const report = JSON.parse(Utilities.ungzip(blob).getDataAsString());
+    if (!report.catalogue || report.mode !== 'eod' || (report.target_day || report.day) !== targetDay)
+      throw new Error('Invalid reconciliation archive');
+    return {report:report,file_id:file.getId()};
+  };
+  let originalError;
+  try { return read(DriveApp.getFileById(fileId)); }
+  catch (err) { originalError = err; }
+  // A stale file reference must not strand surviving original archives. Search
+  // only the configured private folder and exact session's EOD filenames.
+  const files = folder_().searchFiles("trashed = false and title contains '" + targetDay + "_eod_'");
+  const candidates = [];
+  for (let i=0; i<100 && files.hasNext(); i++) {
+    const file=files.next();
+    if (file.getName().startsWith(targetDay + '_eod_') && file.getName().endsWith('.json.gz')) candidates.push(file);
   }
-  return capture_('eod', { target_day: targetDay, catalogue: oldReport.catalogue });
+  candidates.sort((a,b)=>b.getDateCreated().getTime()-a.getDateCreated().getTime());
+  for (const file of candidates.slice(0,5)) {
+    try { return read(file); } catch (err) {}
+  }
+  if (String(originalError.message || '').includes('Invalid reconciliation archive')) throw originalError;
+  throw new Error('Recovery archive unavailable or unreadable');
+}
+
+function recoverEod_(targetDay, fileId) {
+  const source = recoveryArchive_(targetDay,fileId);
+  return capture_('eod', {target_day:targetDay,catalogue:source.report.catalogue,source_file_id:source.file_id});
 }
 
 /**
@@ -1573,81 +1626,69 @@ function backfillPendingEod(requestedDay) {
   }
 }
 
-/**
- * Reconcile prior-session partial EOD captures between 07:00 and 09:00 IST.
- */
+/** Automatic, fair EOD queue worker, called only outside snapshot hours. */
 function reconcilePriorSession() {
-  const properties = props_();
-  const now = new Date();
-  const today = day_(now);
-  const started = Date.now();
-
+  const properties = props_(), started = Date.now();
+  const now = new Date(), today = day_(now);
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(100)) {
-    return;
-  }
-
+  if (!lock.tryLock(100)) return;
   let attempted = false;
-
   try {
-    let pending = loadPendingEod_();
-    let completedMap = capCompletedEodDays_(
-      readJsonProperty_(properties, 'COMPLETED_EOD_DAYS', {}),
-      CONFIG.completedEodMaxDays
-    );
-
-    if (!properties.getProperty('RECONCILIATION_MIGRATED')) {
-      const last = readJsonProperty_(properties, 'LAST_EOD', null);
-      if (last && last.status !== 'complete' && last.file_id) {
-        pending[last.day] = last.file_id;
+    const pending = loadPendingEod_();
+    const state = readJsonProperty_(properties, 'EOD_RECOVERY_STATE', {});
+    // The archive-reference repair gets one immediate retry for an earlier error.
+    for (const entry of Object.values(state)) if (entry.status === 'error' && !entry.error) entry.next_at = 0;
+    // One bad date must never starve the rest of the backlog.
+    const targets = Object.keys(pending).filter(d => d < today &&
+      !(Number(state[d]?.next_at) > started)).sort((a,b) =>
+      (Number(state[a]?.attempt_at) || 0) - (Number(state[b]?.attempt_at) || 0) || a.localeCompare(b));
+    if (!targets.length || started - Number(properties.getProperty('ATTEMPT_RECONCILIATION') || 0) < 55000) return;
+    const total = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', started);
+    const own = readRuntimeBudget_(properties, 'RECONCILIATION_BUDGET', started);
+    // Reserve a worst-case capture plus five minutes for the current session EOD.
+    const admission = runtimePolicy_(properties).total_minutes * 60000 - 300000 - CAPTURE_SAFE_DEADLINE_MS;
+    if (total.ms >= admission || own.ms >= 8 * 60000 - CAPTURE_SAFE_DEADLINE_MS) return;
+    properties.setProperty('ATTEMPT_RECONCILIATION', String(started));
+    for (const targetDay of targets.slice(0,3)) {
+      if (Date.now() - started > 45000 || total.ms + Date.now() - started >= admission
+          || own.ms + Date.now() - started >= 8 * 60000 - CAPTURE_SAFE_DEADLINE_MS) break;
+      attempted = true;
+      const entry = {attempt_at:Date.now(), attempts:(Number(state[targetDay]?.attempts) || 0) + 1};
+      // Save before the request too: interrupted executions receive a cooldown.
+      entry.next_at = entry.attempt_at + 30 * 60000;
+      state[targetDay] = entry;
+      properties.setProperty('EOD_RECOVERY_STATE', JSON.stringify(capCompletedEodDays_(state,30)));
+      try {
+        const result = recoverEod_(targetDay,pending[targetDay]);
+        entry.status = result.status;
+        entry.pending = result.pending || [];
+        entry.errors = (result.errors || []).slice(0,10);
+        if (result.status === 'complete') {
+          entry.completed_at = Date.now();
+          entry.file_id = result.file_id;
+          entry.next_at = null;
+        } else {
+          entry.next_at = Date.now() + Math.min(360,30 * Math.pow(2,Math.min(entry.attempts-1,4))) * 60000;
+        }
+      } catch (err) {
+        entry.status = 'error'; entry.error = safeError_(err);
+        entry.next_at = Date.now() + Math.min(360,30 * Math.pow(2,Math.min(entry.attempts-1,4))) * 60000;
       }
-      savePendingEod_(pending);
-      properties.setProperty('RECONCILIATION_MIGRATED', '1');
+      // Keep the property bounded even for repetitive broker errors.
+      state[targetDay] = {attempt_at:entry.attempt_at,attempts:entry.attempts,status:entry.status,
+        next_at:entry.next_at,completed_at:entry.completed_at,
+        error:entry.error || (entry.errors?.[0]?.reason) || null};
+      properties.setProperty('EOD_RECOVERY_STATE', JSON.stringify(capCompletedEodDays_(state,30)));
+      properties.setProperty('LAST_RECOVERY_RESULT', JSON.stringify({day:targetDay,...entry}));
+      properties.setProperty('RECONCILIATION_STATUS', targetDay + ' ' + entry.status + ' ' + new Date().toISOString());
+      if (entry.error === 'Set UPSTOX_TOKEN in Script Properties'
+          || entry.errors?.some(e => /Broker HTTP (401|403)/.test(e.reason))) break;
     }
-
-    const targets = Object.keys(pending).filter(d => d < today).sort();
-    if (!targets.length) {
-      return;
-    }
-
-    const lastReconciliation = Number(properties.getProperty('ATTEMPT_RECONCILIATION') || 0);
-    if (now.getTime() - lastReconciliation < 30 * 60000) {
-      return;
-    }
-
-    let budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', now.getTime());
-    let reconciliationBudget = readRuntimeBudget_(properties, 'RECONCILIATION_BUDGET', now.getTime());
-
-    if (budget.ms >= Math.min(55, runtimePolicy_(properties).snapshot_minutes) * 60000 || reconciliationBudget.ms >= 8 * 60000) {
-      return;
-    }
-
-    attempted = true;
-    properties.setProperty('ATTEMPT_RECONCILIATION', String(now.getTime()));
-
-    const targetDay = targets[0];
-    if (Date.now() - started > 60000) return;
-
-    const result = recoverEod_(targetDay, pending[targetDay]);
-    if (result.status === 'complete') {
-      completedMap[targetDay] = result.file_id;
-      completedMap = capCompletedEodDays_(completedMap, CONFIG.completedEodMaxDays);
-      properties.setProperty('COMPLETED_EOD_DAYS', JSON.stringify(completedMap));
-    }
-    properties.setProperty('RECONCILIATION_STATUS', targetDay + ' ' + result.status + ' ' + new Date().toISOString());
-  } catch (err) {
-    const message = safeError_(err);
-    properties.setProperty('RECONCILIATION_STATUS', 'Retry pending: ' + message);
-    throw err;
   } finally {
-    if (attempted) {
-      for (const key of ['RUNTIME_BUDGET', 'RECONCILIATION_BUDGET']) {
-        const ended = Date.now();
-        const b = readRuntimeBudget_(properties, key, ended);
-        b.ms += ended - started;
-        properties.setProperty(key, JSON.stringify(b));
-      }
+    if (attempted) for (const key of ['RUNTIME_BUDGET','RECONCILIATION_BUDGET']) {
+      addRuntimeBudget_(properties,key,Date.now() - started);
     }
+    try { scriptCache_()?.remove('DOGET_STATUS_JSON'); } catch (err) {}
     lock.releaseLock();
   }
 }
@@ -1894,6 +1935,8 @@ function doGet(e) {
         snapshot_gap: properties.getProperty('SNAPSHOT_GAP'),
         eod_pending: pendingEodDays_(),
         reconciliation_status: properties.getProperty('RECONCILIATION_STATUS') || null,
+        recovery_state: readJsonProperty_(properties, 'EOD_RECOVERY_STATE', {}),
+        last_recovery_result: readJsonProperty_(properties, 'LAST_RECOVERY_RESULT', null),
         pure_snapshot_capture_only: properties.getProperty('PURE_SNAPSHOT_CAPTURE_ONLY') === 'true',
         raw_snapshot_retention: 'indefinite'
       });

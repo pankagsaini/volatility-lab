@@ -210,7 +210,7 @@ class TestTrack2CloudAndDownloaders(unittest.TestCase):
         # 1. Resolve the special-session window before skipping ordinary weekends.
         sched_idx = code_gs.index("function scheduledCapture()")
         sched_body = code_gs[sched_idx:code_gs.index("function reconcilePriorSession()", sched_idx)]
-        guard = sched_body.index("if (weekend && !sp) return;")
+        guard = sched_body.index("if (weekend && !sp) {")
         self.assertLess(sched_body.index("const session = marketWindow_(now);"), guard)
         self.assertLess(guard, sched_body.index("reconcilePriorSession()"))
         # 2. Artificial + 1000ms budget padding removed
