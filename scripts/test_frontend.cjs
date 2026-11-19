@@ -160,6 +160,7 @@ web.backtestMeta={lotSizes:{NIFTY:75,BANKNIFTY:30}};
 const gex=web.computeStrikeGexProfile(gammaItem,'NIFTY');
 assert.equal(gex.rows.length,3);
 assert.equal(gex.rows.find(row=>row.k===24900).gexCr,-375,'GEX uses the site lot size, not a hardcoded proxy');
+assert.equal(gex.lot,75);
 assert.equal(gex.pin.k,25000);
 assert.equal(gex.flip,24953);
 assert.equal(web.computeStrikeGexProfile({spot:25000,chain:[{k:25000}]},'NIFTY').rows.length,0);

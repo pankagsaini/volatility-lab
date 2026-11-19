@@ -2877,7 +2877,7 @@
             if (flip === null || Math.abs(level - S) < Math.abs(flip - S)) flip = level;
           }
         }
-        return {rows, pin, flip, totalCr: Number(cumulative.toFixed(2))};
+        return {rows, pin, flip, lot, totalCr: Number(cumulative.toFixed(2))};
       }
       window.computeStrikeGexProfile = computeStrikeGexProfile;
 
@@ -3066,7 +3066,7 @@
         }
         const gexSource = document.getElementById('zGexSource');
         if (gexSource) gexSource.textContent = gex.rows.length
-          ? 'Source: ' + gex.rows.length + ' recorded strikes with a model gamma. Zero-Γ is a strike-GEX proxy, not observed dealer positioning.'
+          ? 'Source: ' + gex.rows.length + ' recorded strikes with a model gamma at lot ' + gex.lot + '. Zero-Γ is a strike-GEX proxy, not observed dealer positioning.'
           : 'Gamma unavailable: needs a fresh two-sided book plus verified rate and dividend inputs.';
 
         // Phase 2 wing diagnostics
