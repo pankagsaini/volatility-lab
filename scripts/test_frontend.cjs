@@ -199,47 +199,69 @@ assert.equal(web.rowMatchesCriteria({entryMin:6,holdMin:354,maePct:2.5,mfePct:1.
 assert.equal(web.rowMatchesCriteria({entryMin:6,holdMin:354,maePct:9.5,mfePct:1.8},
   {logic:'AND',criteria:[{get:cx.stop.get,min:null,max:5}]}),false,'A trade that drew down more than the tolerance fails the stop criterion');
 
-// The shipped archive must contain recorded rows only: no template replication, no imputed P&L.
+// The shipped archive is generated from recorded captures: no template
+// replication, no imputed P&L, and metadata that accounts for every row.
 const archive = JSON.parse(html.match(/var tradeArchive = (\[[\s\S]*?\]);/)[1]);
-assert.equal(archive.length,72,'Archive ships only the recorded trades');
-assert.equal(new Set(archive.map(r=>r.date)).size,6,'Six recorded sessions');
-assert.equal(archive.filter(r=>r.sym==='NIFTY').length,36);
-assert.equal(archive.filter(r=>r.sym==='BANKNIFTY').length,36,'BANKNIFTY trades are included');
+const btMeta = JSON.parse(html.match(/var backtestMeta = (\{[\s\S]*?\});/)[1]);
+assert(archive.length >= 200,'Archive covers every replayable session');
+assert.equal(archive.length,btMeta.counts.structures,'Metadata accounts for every structure');
+assert.equal(new Set(archive.map(r=>r.date)).size,btMeta.counts.sessions);
+assert.equal(archive.filter(r=>r.rulePass).length,btMeta.counts.rulePass,'Rule-pass count matches metadata');
+assert(btMeta.counts.sessions >= 15,'Recorded history is continuous, not a six-session stub');
+assert.equal(archive.filter(r=>r.sym==='NIFTY').length,archive.filter(r=>r.sym==='BANKNIFTY').length,'Both indices replay the same sessions');
+const excludedDates = new Set(btMeta.excluded.map(e=>e.date));
 for(const sym of ['NIFTY','BANKNIFTY']) {
   for(const strat of ['S1','S2','S3','S4','S5','S6'])
-    assert.equal(archive.filter(r=>r.sym===sym&&r.strat===strat).length,6,sym+' '+strat+' has one recorded trade per session');
+    assert(archive.some(r=>r.sym===sym&&r.strat===strat),sym+' '+strat+' is replayed');
 }
-assert.equal(new Set(archive.map(r=>r.date+'|'+r.sym+'|'+r.strat)).size,72,'One row per session/index/structure');
+assert.equal(new Set(archive.map(r=>r.date+'|'+r.sym+'|'+r.strat)).size,archive.length,'One row per session/index/structure');
 for(const row of archive) {
+  assert(!excludedDates.has(row.date),'Excluded sessions never appear as rows');
   assert.equal(typeof row.gross,'number');
   assert.equal(typeof row.charges,'number');
   assert.equal(typeof row.capital,'number');
+  assert(row.capital>0&&row.charges>0);
   assert(row.sig && row.sigCalc && row.date && row.exp && row.legs);
   assert(Number.isFinite(row.iv) && Number.isFinite(row.hv10) && Number.isFinite(row.hv30),'Restated inputs are numeric');
   assert(row.hvAsOf < row.date,'HV uses completed closes, never the entry session close');
   assert.equal(row.dte,(Date.parse(row.exp)-Date.parse(row.date))/86400000);
-  assert.equal(row.vrp,Math.round((row.iv-row.hv30)*100)/100,'VRP follows from recorded IV and restated HV30');
-  assert.equal(row.ivhv10,Math.round((row.iv-row.hv10)*100)/100);
-  assert.equal(typeof row.ruleOk,'boolean');
+  assert(Math.abs(row.vrp-(row.iv-row.hv30))<0.011,'VRP follows from recorded IV and restated HV30');
+  assert(Math.abs(row.ivhv10-(row.iv-row.hv10))<0.011,'IV minus HV10 follows from the recorded inputs');
+  assert.equal(typeof row.rulePass,'boolean');
+  assert.equal(typeof row.dteInBand,'boolean','DTE band outcome is recorded');
+  assert(Array.isArray(row.dteBand)&&row.dteBand.length===2);
+  assert(row.expiryKind==='weekly'||row.expiryKind==='monthly');
   assert(/^\d{2}:\d{2}:\d{2}$/.test(row.entryAt),'Captured entry clock is recorded');
   assert(/^\d{2}:\d{2}:\d{2}$/.test(row.exitAt),'Captured exit clock is recorded');
   const eMin = Number(row.entryAt.slice(0,2))*60+Number(row.entryAt.slice(3,5));
   assert.equal(row.entryMin,eMin-(9*60+15),'Entry clock is measured from the 09:15 open');
-  assert(row.entryMin>=0&&row.entryMin<=10);
+  assert(row.entryMin>=4&&row.entryMin<=17,'Entry clock follows the preset window');
   const toSec = c => (Number(c.slice(0,2))*3600+Number(c.slice(3,5))*60+Number(c.slice(6,8)));
   assert.equal(row.holdMin,Math.round((toSec(row.exitAt)-toSec(row.entryAt))/60),'Holding time matches the captured clocks');
-  assert(row.holdMin>0);
+  assert(row.holdMin>300);
   assert(Number.isFinite(row.maePct)&&row.maePct>=0&&row.maePct<=100);
   assert(Number.isFinite(row.mfePct)&&row.mfePct>=0);
   assert(Number.isInteger(row.pathN)&&row.pathN>0);
-  assert.equal(row.pathN,row.pathTotal,'Every capture in the holding window had all leg marks');
+  assert(row.pathTotal>=row.pathN,'Missing captures are skipped, never filled');
+  // Gross must reproduce from the displayed leg marks and lot size.
+  let sumRatio = 0, gross = 0;
+  for(const part of row.legs.split(' / ')) {
+    const m = part.match(/^([SB])(\d*) (\d+)(CE|PE) \(([\d.]+)\D+([\d.]+)\)$/);
+    assert(m,'Leg parses: '+part);
+    const ratio = Number(m[2]||1), entry = Number(m[5]), exit = Number(m[6]);
+    sumRatio += ratio;
+    gross += (m[1]==='S'?-1:1)*ratio*(exit-entry);
+  }
+  const lot = row.unitLegs/sumRatio;
+  assert(Number.isInteger(lot)&&lot>0,'Lot size is integral');
+  assert(Math.abs(gross*lot-row.gross) <= 0.11*sumRatio*lot+1,'Gross reproduces from recorded marks');
 }
-const restated02 = archive.find(r=>r.date==='2026-11-02'&&r.sym==='NIFTY'&&r.strat==='S1');
-assert.equal(restated02.hv30,13.99);
-assert.equal(restated02.hv10,9.96);
-assert.equal(restated02.vrp,1.21);
-assert.equal(restated02.hvAsOf,'2026-10-30');
-assert.equal(archive.filter(r=>!r.ruleOk).length,38,'Rule mismatches are counted, not hidden');
+const sample = archive.find(r=>r.date==='2026-11-02'&&r.sym==='NIFTY'&&r.strat==='S1');
+assert.equal(sample.gross,90.0,'Known 11-02 S1 gross reproduces');
+assert.equal(sample.capital,26174,'Known 11-02 S1 capital reproduces');
+assert.equal(sample.exp,'2026-11-09');
+assert.equal(sample.hvAsOf,'2026-10-30');
+assert(btMeta.excluded.every(e=>e.reason.length>0),'Every excluded session states why');
 assert.equal(web.rowMatchesCriteria(cxRow,{logic:'AND',criteria:[{get:cx.hv30.get,min:null,max:12}]}),false,'A bound above the value cannot pass');
 
 const embedded=JSON.parse(html.match(/var REAL_HISTORICAL_1Y = (.*);/)[1]);

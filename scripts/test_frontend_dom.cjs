@@ -91,26 +91,34 @@ const server = http.createServer((request,response) => {
     assert(all>=near && near>0);
     await page.selectOption('#smileViewSelect','2D');
     await page.locator('#wsBacktestBtn').click();
-    // Default mode is the explicitly labelled research archive; the strict verified gate stays intact.
+    // Default mode is the full recorded baseline; rule-match mode is a strict subset of it.
     assert.notEqual(await page.locator('#resNetPnl').textContent(),'—');
     assert.equal(await page.locator('#btScorecardBody tr').count(),7);
-    assert.equal(await page.locator('#btLedgerBody tr').count(),6,'S3 NIFTY has six recorded sessions');
-    assert.match(await page.locator('#btModeNote').textContent(),/not execution-verified|Research mode/);
-    assert.equal(await page.locator('#resTradeCount').textContent(),'6 Recorded Trades');
+    assert.equal(await page.locator('#btLedgerBody tr').count(),18,'S3 NIFTY replays every recorded session');
+    assert.match(await page.locator('#btModeNote').textContent(),/unconditional baseline/);
+    assert.equal(await page.locator('#resTradeCount').textContent(),'18 Recorded Trades');
     assert.match(await page.locator('#btLedgerIndex').textContent(),/NIFTY/);
-    assert.match(await page.locator('#btRestatedCount').textContent(),/38 of 72 recorded trades/);
-    assert.match(await page.locator('#btRestatedCount').textContent(),/recomputed HV/);
+    assert.match(await page.locator('#btArchiveSize').textContent(),/108 recorded structures · 18 replayable sessions/);
+    assert.match(await page.locator('#btRestatedCount').textContent(),/19 of 108 recorded NIFTY structures/);
+    assert.match(await page.locator('#btRestatedCount').textContent(),/counterfactual baseline/);
+    assert.match(await page.locator('#btExcluded').textContent(),/Excluded sessions:/);
+    assert.match(await page.locator('#btExcluded').textContent(),/never filled/);
+    assert.match(await page.locator('#btLedgerBody').textContent(),/rule failed/,'Baseline rows state the failing rule');
     await page.selectOption('#btSymbolSelect','BANKNIFTY');
-    assert.equal(await page.locator('#btLedgerBody tr').count(),6,'BANKNIFTY is screened on the same six sessions');
+    assert.equal(await page.locator('#btLedgerBody tr').count(),18,'BANKNIFTY replays the same recorded sessions');
     assert.match(await page.locator('#btLedgerIndex').textContent(),/BANKNIFTY/);
+    assert.match(await page.locator('#btRestatedCount').textContent(),/9 of 108 recorded BANKNIFTY structures/);
     assert.notEqual(await page.locator('#resNetPnl').textContent(),'—');
     await page.selectOption('#btSymbolSelect','NIFTY');
-    await page.locator('#btModeVerified').click();
-    assert.equal(await page.locator('#resNetPnl').textContent(),'—');
-    assert.match(await page.locator('#btScorecardBody').textContent(),/Performance unavailable until the trade archive is verified/);
-    assert.match(await page.locator('#btLedgerBody').textContent(),/No verified point-in-time trades/);
-    await page.locator('#btModeResearch').click();
+    await page.locator('#btModeRules').click();
+    assert.equal(await page.locator('#resNetPnl').textContent(),'—','S3 NIFTY has no rule match, so the gated view is empty');
+    assert.equal(await page.locator('#resTradeCount').textContent(),'0 Rule Matches');
+    assert.match(await page.locator('#btLedgerBody').textContent(),/No structure passed its published rule/);
+    assert.match(await page.locator('#btScorecardBody').textContent(),/S3 · Event Crush Iron Fly[\s\S]{0,40}0\/0/,
+      'Rule-mode scorecard counts only structures that passed');
+    await page.locator('#btModeAll').click();
     assert.notEqual(await page.locator('#resNetPnl').textContent(),'—');
+    assert.equal(await page.locator('#btLedgerBody tr').count(),18);
     await page.selectOption('#btPresetSelect','CUSTOM');
     assert(await page.locator('#btCustomPanel').isVisible());
     assert(!(await page.locator('#cx_on_vrp').isChecked()),'Choosing CX starts from a blank screen');
@@ -134,11 +142,11 @@ const server = http.createServer((request,response) => {
     assert.match(await page.locator('#cxPresetNote').textContent(),/Recorded range: VRP/,
       'When no recorded session satisfies the rule, the panel shows the recorded range instead of implying a match');
     assert.match(await page.locator('#cxPresetNote').textContent(),/Not in the archive:/);
-    assert.equal(await page.locator('#btLedgerBody tr').count(),6,'Mirrored rule does not screen until it is applied');
+    assert.equal(await page.locator('#btLedgerBody tr').count(),18,'Mirrored rule does not screen until it is applied');
     await page.check('#cxApplyToggle');
     await page.waitForFunction(()=>/archive matches/.test(document.getElementById('cxHint').textContent));
     const hinted = Number((await page.locator('#cxHint').textContent()).match(/^(\d+)/)[1]);
-    assert(hinted<=6);
+    assert(hinted<=18);
     if (hinted===0) {
       assert.match(await page.locator('#btLedgerBody').textContent(),/No recorded trade matches this screen/,
         'A preset rule that no recorded session satisfies says so instead of showing trades');
@@ -146,7 +154,7 @@ const server = http.createServer((request,response) => {
       assert.equal(await page.locator('#btLedgerBody tr').count(),hinted,'Applied rule screens the ledger to the hinted count');
     }
     await page.uncheck('#cxApplyToggle');
-    assert.equal(await page.locator('#btLedgerBody tr').count(),6,'Unapplying the rule restores the structure-only ledger');
+    assert.equal(await page.locator('#btLedgerBody tr').count(),18,'Unapplying the rule restores the structure-only ledger');
     await page.locator('#wsForwardBtn').click();
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Read-only archive/);
     assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/\d+ recorded closes/);
