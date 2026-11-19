@@ -21,7 +21,7 @@ for (const name of ['chartNumber','observedIv','observedSpread','observedMean','
   'forwardInterval','scenarioLegs','black76Price','normCdf','normPdf','currentRow','chartOpts',
   'renderTab1Regime','renderTab2Term','renderTab4Straddle','rowMatchesCriteria',
   'liveNumber','liveTimestamp','istDayAndMinute','nextTradingDay','expiryClock','isExpiryRollWindow',
-  'getDefaultActiveExpiryIdx','positionalGateOpen','interpolateOiDataDecayPct','computeStrikeGexProfile']) {
+  'getDefaultActiveExpiryIdx','positionalGateOpen','interpolateOiDataDecayPct','computeStrikeGexProfile','renderTab6ZeroDteDesk','fmtIstClockMin']) {
   const start = html.indexOf('      function '+name+'(');
   assert(start>=0, name);
   vm.runInContext(html.slice(start, html.indexOf('\n      }',start)+8),web);
@@ -159,7 +159,7 @@ const gammaItem={spot:25000,chain:[
 web.backtestMeta={lotSizes:{NIFTY:65,BANKNIFTY:30}};
 const gex=web.computeStrikeGexProfile(gammaItem,'NIFTY');
 assert.equal(gex.rows.length,3);
-assert.equal(gex.rows.find(row=>row.k===24900).gexCr,-325,'GEX uses the site lot size, not a hardcoded proxy');
+assert.equal(gex.rows.find(row=>row.k===24900).gexCr,-5,'Broker OI quantity must not be multiplied by lot size twice');
 assert.equal(gex.lot,65);
 assert.equal(gex.pin.k,25000);
 assert.equal(gex.flip,24953);
@@ -167,7 +167,44 @@ assert.equal(web.computeStrikeGexProfile({spot:25000,chain:[{k:25000}]},'NIFTY')
 assert.equal(web.interpolateOiDataDecayPct(555),0);
 assert.equal(web.interpolateOiDataDecayPct(600),-15.5);
 assert.equal(web.interpolateOiDataDecayPct(780),-35);
-assert.equal(web.interpolateOiDataDecayPct(930),-100);
+assert.equal(web.interpolateOiDataDecayPct(930),null,'No invented close for published median');
+assert.equal(web.interpolateOiDataDecayPct(NaN),null);
+const differentGamma = web.computeStrikeGexProfile({spot:25000,chain:[
+  {k:25000,cOi:10,pOi:10,modelCallGamma:.0004,modelPutGamma:.0002}]},'NIFTY');
+assert.equal(differentGamma.totalCr,1.25,'Each leg uses its own gamma');
+for (const missing of [null,undefined,'',-1]) {
+  assert.equal(web.computeStrikeGexProfile({spot:25000,chain:[{...gammaItem.chain[0],cOi:missing}]},'NIFTY').rows.length,0);
+}
+assert.equal(web.computeStrikeGexProfile({...gammaItem,spot:0},'NIFTY').rows.length,0);
+
+// Run the real expiry desk on different anchor/rolling baselines and late capture.
+web.enrichItemWithBlack76 = () => {};
+web.lastSyncedRetrievedAt = '2026-11-17T15:40:00+05:30';
+web.zerodteStraddleChart = null; web.zerodteGexChart = null;
+web.activeZeroDteMode = 'pct';
+const zeroItem = {expiry:'2026-11-17',pricingAsOf:web.lastSyncedRetrievedAt,spot:25024,
+  atm:25000,straddleStrike:24900,chain:[],dualIntraday:[
+    {markAt:'2026-11-16T12:00:00+05:30',rollStrad:999,anchorStrad:999,anchorK:24900,rollAtm:25000},
+    {markAt:'2026-11-17T12:00:00+05:30',rollStrad:100,anchorStrad:200,anchorK:24900,rollAtm:25000},
+    {markAt:'2026-11-17T14:00:00+05:30',rollStrad:80,anchorStrad:220,anchorK:24900,rollAtm:25000},
+    {markAt:'2026-11-17T15:40:00+05:30',rollStrad:24,anchorStrad:124,anchorK:24900,rollAtm:25000}]};
+web.marketCatalog = {NIFTY:[zeroItem], BANKNIFTY:[zeroItem]};
+web.renderTab6ZeroDteDesk();
+let zero = web.zerodteStraddleChart.data;
+assert.deepEqual(Array.from(zero.labels),['12:00','14:00','15:40'],'Old-session points excluded');
+assert.deepEqual(Array.from(zero.datasets[0].data),[0,-20,-76]);
+assert.deepEqual(Array.from(zero.datasets[1].data),[0,10,-38],'Anchor changes from its own first mark');
+assert.deepEqual(Array.from(zero.datasets[3].data),[0,-24.32,null],'Late-start benchmark uses a ratio of remaining premium');
+assert.equal(zero.datasets[2].data[2],-100,'Ideal ATM time value tends to zero at expiry');
+assert.equal(element('zKpiBennettBand').textContent,'24,976 – 25,024','Breakeven uses the traded strike');
+web.activeZeroDteMode = 'inr'; web.renderTab6ZeroDteDesk();
+assert.equal(web.zerodteStraddleChart.data.datasets[3].data[1],75.68);
+web.activeSymbol='BANKNIFTY'; web.renderTab6ZeroDteDesk();
+assert(web.zerodteStraddleChart.data.datasets[3].data.every(p=>p===null),'NIFTY study cannot become BANKNIFTY evidence');
+web.activeSymbol='NIFTY'; zeroItem.expiry='2026-11-23'; web.renderTab6ZeroDteDesk();
+assert.equal(web.zerodteStraddleChart.data.labels.length,0,'0DTE desk must not plot next-week decay');
+web.activeZeroDteMode='pct';
+
 
 // The shipped history may contain IV only with provenance; pre-capture years stay empty.
 const charts = vm.runInContext('OptionsCharts',web);

@@ -590,7 +590,7 @@
                 Expiry day (0DTE) quantitative desk
               </div>
               <div id="zerodteSubtitle" class="text-[11px] mono text-slate-300">
-                Minute-accurate dual-clock pricing, recorded rolling versus open-anchor straddle melt, dealer gamma exposure and the final settlement window.
+                Minute-accurate dual-clock pricing, recorded rolling versus open-anchor straddle melt, OI-weighted gamma and the final-session spot window.
               </div>
             </div>
             <div class="flex flex-wrap items-center gap-2 text-xs mono">
@@ -621,9 +621,9 @@
               <div id="zKpiBennettSub" class="text-[11px] mono text-slate-300 mt-0.5">±0.8σ√T versus cash straddle</div>
             </div>
             <div class="kpi-card border-t-2 border-t-emerald-400">
-              <div class="text-[11px] font-bold uppercase text-slate-300">4. Pin magnet &amp; zero-Γ proxy</div>
+              <div class="text-[11px] font-bold uppercase text-slate-300">4. Largest OI-gamma imbalance</div>
               <div id="zKpiPinMagnet" class="text-lg mono font-extrabold text-emerald-300 mt-0.5">—</div>
-              <div id="zKpiPinSub" class="text-[11px] mono text-slate-300 mt-0.5">Zero-gamma proxy: —</div>
+              <div id="zKpiPinSub" class="text-[11px] mono text-slate-300 mt-0.5">Cumulative balance: —</div>
             </div>
             <div class="kpi-card border-t-2 border-t-purple-400">
               <div class="text-[11px] font-bold uppercase text-slate-300">5. Settlement window mean</div>
@@ -639,7 +639,7 @@
                 <span id="zKurtosisBadge" class="text-[11px] mono text-amber-300 font-semibold">BF10Δ: —</span>
               </div>
               <p class="text-[11px] text-slate-300">
-                Recorded paired-book mids only. The √t curve is a theoretical benchmark normalised to the first recorded premium, and the OIData line is the published NSE Tuesday median (-15.5% at 10:00, -26% at 12:00, -44% at 14:00, -52% at 15:00).
+                Recorded paired-book mids; each series starts at its own first capture. √t assumes constant IV and ATM time value. <a href="https://www.oidata.in/blog/theta-decay-how-option-premium-melts-toward-expiry" target="_blank" rel="noopener noreferrer" class="text-sky-300 underline">OIData: 13 NIFTY Tuesday expiries</a>, interpolated between published times through 15:00 only; no assumed closing premium.
               </p>
               <div class="relative" style="height: 320px;">
                 <canvas id="zerodteStraddleCanvas"></canvas>
@@ -650,11 +650,11 @@
 
             <div class="lg:col-span-6 bg-[#080d16] border border-[#24344d] rounded-xl p-4 space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="text-xs font-bold uppercase tracking-wider text-white">Strike gamma exposure &amp; pin magnets</span>
+                <span class="text-xs font-bold uppercase tracking-wider text-white">OI-weighted gamma by strike</span>
                 <span id="zNetGexBadge" class="text-[11px] mono text-emerald-300 font-semibold">Net GEX: —</span>
               </div>
               <p class="text-[11px] text-slate-300">
-                GEX_K = (OI call − OI put) × Γ_K × S² × 0.01 × lot size, using recorded open interest and the model gamma. Positive bars indicate long-gamma pinning pressure; negative bars indicate short-gamma breakout pressure.
+                Call OI × call gamma minus put OI × put gamma, scaled to a 1% move. OI is underlying quantity. The sign convention does not identify dealer positions or predict pinning.
               </p>
               <div class="relative" style="height: 320px;">
                 <canvas id="zerodteGexCanvas"></canvas>
@@ -2810,13 +2810,12 @@
       // ===================================================================
       var OIDATA_MEDIAN_DECAY_POINTS = [
         {mins: 555, pct: 0}, {mins: 600, pct: -15.5}, {mins: 720, pct: -26},
-        {mins: 840, pct: -44}, {mins: 900, pct: -52}, {mins: 930, pct: -100}
+        {mins: 840, pct: -44}, {mins: 900, pct: -52}
       ];
 
       function interpolateOiDataDecayPct(minsOfDay) {
         const pts = OIDATA_MEDIAN_DECAY_POINTS;
-        if (minsOfDay <= pts[0].mins) return pts[0].pct;
-        if (minsOfDay >= pts[pts.length - 1].mins) return pts[pts.length - 1].pct;
+        if (!Number.isFinite(minsOfDay) || minsOfDay < pts[0].mins || minsOfDay > pts[pts.length - 1].mins) return null;
         for (let i = 0; i < pts.length - 1; i++) {
           const a = pts[i], b = pts[i + 1];
           if (minsOfDay >= a.mins && minsOfDay <= b.mins) {
@@ -2832,20 +2831,20 @@
         const lot = Number(lotSizes[sym]) > 0 ? Number(lotSizes[sym]) : (sym === 'BANKNIFTY' ? 30 : 65);
         const S = Number(item.spot || item.syn || 0);
         const rows = (item.chain || []).map(node => {
-          const gamma = Number.isFinite(node.modelCallGamma) && Number.isFinite(node.modelPutGamma)
-            ? (node.modelCallGamma + node.modelPutGamma) / 2
-            : Number(node.b76Gamma);
-          const cOiK = Number(node.cOi), pOiK = Number(node.pOi);
-          if (!(gamma > 0) || !(node.k > 0) || !Number.isFinite(cOiK) || !Number.isFinite(pOiK)) return null;
-          // GEX in INR per 1% move; open interest is stored in thousands.
-          const gexCr = ((cOiK - pOiK) * 1000 * gamma * S * S * .01 * lot) / 1e7;
-          return {k: node.k, cOiK, pOiK, gamma, gexCr: Number(gexCr.toFixed(2)), cumulative: 0};
+          const callGamma = chartNumber(node.modelCallGamma), putGamma = chartNumber(node.modelPutGamma);
+          const cOiK = chartNumber(node.cOi), pOiK = chartNumber(node.pOi);
+          if (!(S > 0) || !Number.isFinite(S) || !(callGamma > 0) || !(putGamma > 0) || !(node.k > 0)
+              || cOiK === null || pOiK === null || cOiK < 0 || pOiK < 0) return null;
+          // Upstox OI is underlying quantity, stored in thousands (not lots).
+          // Call-positive/put-negative is a convention, not dealer inventory.
+          const gexCr = (cOiK * callGamma - pOiK * putGamma) * 1000 * S * S * .01 / 1e7;
+          return {k: node.k, cOiK, pOiK, gexCr, cumulative: 0};
         }).filter(Boolean).sort((a, b) => a.k - b.k);
         let cumulative = 0;
-        rows.forEach(row => { cumulative += row.gexCr; row.cumulative = Number(cumulative.toFixed(2)); });
+        rows.forEach(row => { cumulative += row.gexCr; row.cumulative = cumulative; });
         let pin = null;
         rows.forEach(row => { if (!pin || Math.abs(row.gexCr) > Math.abs(pin.gexCr)) pin = row; });
-        // Zero-gamma proxy: the cumulative strike GEX crossing closest to spot.
+        // Cumulative strike-balance crossing; not a spot-scenario gamma flip.
         let flip = null;
         for (let i = 0; i < rows.length - 1; i++) {
           const a = rows[i], b = rows[i + 1];
@@ -2895,11 +2894,17 @@
 
         // Recorded dual straddle series. The collector writes rolling and anchor
         // paired-book mids; nothing is reconstructed from spot distance.
-        const dual = (r.dualIntraday || []).filter(p => p && Number.isFinite(Date.parse(p.markAt)))
-          .sort((a, b) => Date.parse(a.markAt) - Date.parse(b.markAt));
+        const sessionPoint = p => {
+          const stamp = p && liveTimestamp(p.markAt || p.snapshotId);
+          return clock && clock.is0Dte && Number.isFinite(stamp) && stamp <= liveTimestamp(asOf)
+            && new Date(stamp + 19800000).toISOString().slice(0, 10) === clock.day;
+        };
+        const dual = (r.dualIntraday || []).filter(sessionPoint)
+          .map(p => ({...p, t: new Date(liveTimestamp(p.markAt) + 19800000).toISOString().slice(11, 16)}))
+          .sort((a, b) => liveTimestamp(a.markAt) - liveTimestamp(b.markAt));
         const rollPoints = dual.filter(p => p.rollStrad > 0);
         const anchorPoints = dual.filter(p => p.anchorStrad > 0);
-        const intradaySeries = OptionsCharts.straddleSeries(r);
+        const intradaySeries = OptionsCharts.straddleSeries(r).filter(sessionPoint);
         const spotByMark = new Map();
         for (const p of intradaySeries) {
           const ms = liveTimestamp(p.markAt || p.snapshotId);
@@ -2945,33 +2950,39 @@
           const t = x => Number(String(x.t).slice(0, 2)) * 60 + Number(String(x.t).slice(3, 5));
           return t(a) - t(b);
         });
-        const base = rollPoints.length ? firstRoll.rollStrad : (firstAnchor ? firstAnchor.anchorStrad : NaN);
+        const rollBase = firstRoll ? firstRoll.rollStrad : NaN;
+        const anchorBase = firstAnchor ? firstAnchor.anchorStrad : NaN;
+        const base = rollPoints.length ? rollBase : anchorBase;
         // Benchmarks are rebased to the first recorded premium so they never
         // imply a premium the collection does not contain.
         const clockMin = p => Number(String(p.t).slice(0, 2)) * 60 + Number(String(p.t).slice(3, 5));
-        const firstRecordMins = union.length ? clockMin(union[0]) : startMins;
+        const firstRecordMins = firstRoll ? clockMin(firstRoll) : (firstAnchor ? clockMin(firstAnchor) : startMins);
         const decaySpan = closeMins === null ? null : Math.max(1, closeMins - Math.min(firstRecordMins, closeMins - 1));
-        const oiStartPct = interpolateOiDataDecayPct(Math.max(555, firstRecordMins));
+        const oiStartPct = interpolateOiDataDecayPct(firstRecordMins);
+        const oiEligible = clock && clock.is0Dte && activeSymbol === 'NIFTY'
+          && new Date(clock.day + 'T12:00:00Z').getUTCDay() === 2 && startMins === 555 && !session.label;
         union.forEach(p => {
           const mins = clockMin(p);
           labels.push(p.t);
           const roll = p.rollStrad > 0 ? p.rollStrad : null;
           const anchor = p.anchorStrad > 0 ? p.anchorStrad : null;
           if (activeZeroDteMode === 'pct' && base > 0) {
-            rollSeries.push(roll === null ? null : Number(((roll / base - 1) * 100).toFixed(2)));
-            anchorSeries.push(anchor === null ? null : Number(((anchor / base - 1) * 100).toFixed(2)));
+            rollSeries.push(roll === null ? null : Number(((roll / rollBase - 1) * 100).toFixed(2)));
+            anchorSeries.push(anchor === null ? null : Number(((anchor / anchorBase - 1) * 100).toFixed(2)));
           } else {
             rollSeries.push(roll);
             anchorSeries.push(anchor);
           }
-          if (decaySpan !== null && base > 0 && mins <= closeMins) {
-            const rem = Math.max(.01, (closeMins - mins) / decaySpan);
-            const oiPct = interpolateOiDataDecayPct(mins) - oiStartPct;
+          if (clock && clock.is0Dte && decaySpan !== null && base > 0 && mins >= firstRecordMins && mins <= closeMins) {
+            const rem = Math.max(0, (closeMins - mins) / decaySpan);
+            const oiAt = interpolateOiDataDecayPct(mins);
+            const oiRatio = oiEligible && oiStartPct !== null && oiAt !== null
+              ? (100 + oiAt) / (100 + oiStartPct) : null;
             sqrtSeries.push(Number((base * Math.sqrt(rem)).toFixed(2)));
-            oiSeries.push(Number((base * (1 + oiPct / 100)).toFixed(2)));
+            oiSeries.push(oiRatio === null ? null : Number((base * oiRatio).toFixed(2)));
             if (activeZeroDteMode === 'pct') {
               sqrtSeries[sqrtSeries.length - 1] = Number(((Math.sqrt(rem) - 1) * 100).toFixed(2));
-              oiSeries[oiSeries.length - 1] = Number(oiPct.toFixed(2));
+              oiSeries[oiSeries.length - 1] = oiRatio === null ? null : Number(((oiRatio - 1) * 100).toFixed(2));
             }
           } else {
             sqrtSeries.push(null);
@@ -2996,13 +3007,14 @@
 
         // KPI 3 and summary strip
         const benPts = Number.isFinite(iv) && clock ? .8 * spot * (iv / 100) * Math.sqrt(Math.max(1e-7, clock.tCal)) : NaN;
-        const cashLow = Number.isFinite(latestStrad) ? Math.round(spot - latestStrad) : null;
-        const cashHigh = Number.isFinite(latestStrad) ? Math.round(spot + latestStrad) : null;
+        const bandStrike = lastRoll ? Number(lastRoll.rollAtm) : anchorK;
+        const cashLow = Number.isFinite(latestStrad) && bandStrike > 0 ? Math.round(bandStrike - latestStrad) : null;
+        const cashHigh = cashLow === null ? null : Math.round(bandStrike + latestStrad);
         const kBen = document.getElementById('zKpiBennettBand');
         const kBenSub = document.getElementById('zKpiBennettSub');
         if (kBen) kBen.textContent = cashLow === null ? '—' : cashLow.toLocaleString('en-IN') + ' – ' + cashHigh.toLocaleString('en-IN');
         if (kBenSub) kBenSub.textContent = cashLow === null || !Number.isFinite(benPts) ? 'Needs a recorded straddle and verified IV'
-          : 'Cash ±₹' + latestStrad.toFixed(1) + ' vs 0.8σ√T ±' + Math.round(benPts) + ' pts';
+          : 'Strike ' + bandStrike + ' ±₹' + latestStrad.toFixed(1) + ' vs 0.8σ√T ±' + Math.round(benPts) + ' pts';
         const strip = document.getElementById('zBennettSummaryStrip');
         if (strip) {
           const gap = cashLow === null || !Number.isFinite(benPts) ? null : latestStrad - benPts;
@@ -3019,14 +3031,14 @@
         const kPin = document.getElementById('zKpiPinMagnet');
         const kPinSub = document.getElementById('zKpiPinSub');
         const netBadge = document.getElementById('zNetGexBadge');
-        if (kPin) kPin.textContent = gex.pin ? gex.pin.k.toLocaleString('en-IN') + ' (' + (gex.pin.gexCr >= 0 ? '+' : '') + gex.pin.gexCr + ' Cr)' : '—';
-        if (kPinSub) kPinSub.textContent = 'Zero-gamma proxy: ' + (gex.flip ? gex.flip.toLocaleString('en-IN') : '—');
+        if (kPin) kPin.textContent = gex.pin ? gex.pin.k.toLocaleString('en-IN') + ' (' + (gex.pin.gexCr >= 0 ? '+' : '') + gex.pin.gexCr.toFixed(2) + ' Cr)' : '—';
+        if (kPinSub) kPinSub.textContent = 'Cumulative balance: ' + (gex.flip ? gex.flip.toLocaleString('en-IN') : '—');
         if (netBadge) {
           netBadge.textContent = gex.rows.length ? 'Net GEX ' + (gex.totalCr >= 0 ? '+' : '') + gex.totalCr + ' Cr' : 'Net GEX: —';
           netBadge.className = 'text-[11px] mono font-semibold ' + (gex.totalCr >= 0 ? 'text-emerald-300' : 'text-rose-300');
         }
         const gexData = {labels: gex.rows.map(row => String(row.k)), datasets: [{
-          label: 'Net dealer GEX (₹ Cr / 1% move)', data: gex.rows.map(row => row.gexCr),
+          label: 'Call-minus-put OI gamma (₹ Cr / 1% move)', data: gex.rows.map(row => row.gexCr),
           backgroundColor: gex.rows.map(row => gex.pin && row.k === gex.pin.k ? '#f59e0b' : row.gexCr >= 0 ? 'rgba(16, 185, 129, .85)' : 'rgba(244, 63, 94, .85)'),
           borderRadius: 4
         }]};
@@ -3039,13 +3051,13 @@
           gexStrip.innerHTML = [
             ['Call wall', gex.rows.length ? maxCall.k + ' (' + maxCall.cOiK.toFixed(0) + 'k)' : '—'],
             ['Put wall', gex.rows.length ? maxPut.k + ' (' + maxPut.pOiK.toFixed(0) + 'k)' : '—'],
-            ['Zero-Γ proxy', gex.flip ? gex.flip.toLocaleString('en-IN') : '—']
+            ['Cumulative balance', gex.flip ? gex.flip.toLocaleString('en-IN') : '—']
           ].map(([label, value]) => '<div class="bg-[#0d1522] p-2 rounded border border-[#24344d]"><div class="text-[10px] text-slate-400">' +
             label + '</div><div class="text-emerald-300 font-bold">' + value + '</div></div>').join('');
         }
         const gexSource = document.getElementById('zGexSource');
         if (gexSource) gexSource.textContent = gex.rows.length
-          ? 'Source: ' + gex.rows.length + ' recorded strikes with a model gamma at lot ' + gex.lot + '. Zero-Γ is a strike-GEX proxy, not observed dealer positioning.'
+          ? 'Source: ' + gex.rows.length + ' recorded strikes with per-leg model gamma. Cumulative balance is a crossing across strikes, not a dealer gamma-flip price.'
           : 'Gamma unavailable: needs a fresh two-sided book plus verified rate and dividend inputs.';
 
         // Phase 4B: final 30 minutes of the exchange session.
@@ -4988,7 +5000,9 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           // distance. Anchor mids are reused from the settled anchor strike.
           const dualMarks = new Map();
           for (const p of previous?.dualIntraday || []) {
-            if (p && p.markAt) dualMarks.set(liveTimestamp(p.markAt), p);
+            const stamp = p && liveTimestamp(p.markAt);
+            if (Number.isFinite(stamp) && stamp <= captured
+                && new Date(stamp + 19800000).toISOString().slice(0,10) === sessionDay) dualMarks.set(stamp, p);
           }
           if (Array.isArray(rec.dual_straddle_history)) for (const row of rec.dual_straddle_history.slice(-400)) {
             if (!row || typeof row !== 'object') continue;
@@ -5006,16 +5020,15 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
               anchorStrad: anchorStrad > 0 ? anchorStrad : null, source: 'paired_book_mid'});
           }
           const liveDual = rec.dual_straddle && typeof rec.dual_straddle === 'object' && !Array.isArray(rec.dual_straddle) ? rec.dual_straddle : null;
-          const liveRollStrad = liveDual ? liveNumber(liveDual.rollStrad) : NaN;
-          const liveRollAtm = liveDual ? liveNumber(liveDual.rollAtm) : NaN;
-          const liveAnchorStrad = liveDual && liveNumber(liveDual.anchorStrad) > 0
-            ? liveNumber(liveDual.anchorStrad)
-            : (paired ? (anchor.cBid + anchor.cAsk + anchor.pBid + anchor.pAsk) / 2 : null);
-          if (liveRollStrad > 0) {
-            dualMarks.set(captured, {t: new Date(captured + 19800000).toISOString().slice(11, 16), markAt: asOf,
-              rollAtm: liveRollAtm > 0 ? liveRollAtm : null, rollStrad: liveRollStrad,
-              anchorK: liveDual && liveNumber(liveDual.anchorK) > 0 ? liveNumber(liveDual.anchorK) : item.straddleStrike,
-              anchorStrad: liveAnchorStrad, source: 'paired_book_mid'});
+          const dualTime = liveDual ? liveTimestamp(liveDual.markAt) : NaN;
+          if (Number.isFinite(dualTime) && dualTime <= captured
+              && new Date(dualTime + 19800000).toISOString().slice(0,10) === sessionDay) {
+            const rollStrad = liveNumber(liveDual.rollStrad), anchorStrad = liveNumber(liveDual.anchorStrad);
+            if (rollStrad > 0 || anchorStrad > 0) dualMarks.set(dualTime, {
+              t: new Date(dualTime + 19800000).toISOString().slice(11, 16), markAt: new Date(dualTime).toISOString(),
+              rollAtm: liveNumber(liveDual.rollAtm), rollStrad: rollStrad > 0 ? rollStrad : null,
+              anchorK: liveNumber(liveDual.anchorK), anchorStrad: anchorStrad > 0 ? anchorStrad : null,
+              source: 'paired_book_mid'});
           }
           item.dualIntraday = Array.from(dualMarks.values()).sort((a, b) => liveTimestamp(a.markAt) - liveTimestamp(b.markAt));
           catalog[sym].push(item);

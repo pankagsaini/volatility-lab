@@ -20,3 +20,22 @@ Validation:
 - `node scripts/test_live_connection.cjs`
 - `python scripts/verify_dashboard_iv.py PATH_TO_PRIVATE_ARCHIVE_DIRECTORY` verifies 94 embedded observations and all embedded option-chain IVs against the original files. It does not modify the archives.
 - Headless Chrome checks both indices, all workspaces, expiry selectors and scenario controls at desktop and mobile widths. The local test intercepts the cloud request to exercise the disconnected state without changing any cloud data.
+
+## Recent-change review — 19 November 2026
+
+Reviewed changes through `f0a3464` (PRs 24–37): pure-capture collector, EOD recovery, recorded archive replay, HV inputs, lot sizes, expiry clock and the new 0DTE desk. Existing archive, collector, pricing-policy and daily-forecast tests were retained. The deployed forecast artifact was independently checked: both indices were trained through 18 November. Earlier counts and dates above describe earlier releases, not the current archive.
+
+Confirmed defects repaired:
+
+- Cached `dual_straddle` prices were being copied to the current capture timestamp. The browser now retains the source mark timestamp and rejects future/other-session marks. No new history is inferred.
+- Rolling and fixed-anchor percentage curves shared a denominator. Each now starts at its own first observed premium. A late-start benchmark uses the ratio of remaining premiums, with no backward extrapolation.
+- The published OIData curve was extrapolated to an invented -100% close and applied to both indices/non-expiry days. It now stops at the last precisely timed published point (15:00), applies only to ordinary NIFTY Tuesday expiry sessions, and links the original 13-expiry study. The square-root curve is separately labelled ideal ATM time value.
+- The cash straddle breakeven band was centred on spot rather than the recorded option strike. It now uses the strike of the displayed straddle.
+- GEX multiplied Upstox OI quantity by lot size a second time and averaged call/put gammas before weighting. It now uses each leg's gamma and quantity once. Missing/negative OI and invalid spot cannot produce an exposure. Display rounding occurs after aggregation.
+- Aggregate call-minus-put OI was described as known dealer positioning, and a cumulative strike crossing as a gamma flip. The UI now labels the sign convention and cumulative strike balance explicitly; neither is a dealer-inventory estimate or pinning signal.
+
+Sources: [Upstox option-chain schema](https://upstox.com/developer/api-documentation/get-pc-option-chain/) and [original OIData study](https://www.oidata.in/blog/theta-decay-how-option-premium-melts-toward-expiry). Broker OI is ingested as `oi / 1000`; it is not converted into lot counts before GEX.
+
+Roadmap boundaries: the supplied 0DTE research PDF is design context, not a replacement for source data. The previously removed wings table stays removed. Sparse spot prints remain a labelled running mean, not an official settlement VWAP. Historical IV remains broker-sourced; EGARCH is a separate dated forecast and EWMA stays removed.
+
+Regression coverage exercises unequal leg gammas, missing OI/spot, unequal straddle bases, late join, source timestamps, expiry/session isolation, missing benchmark endpoints, index scope and strike-centred breakevens. Desktop/mobile browser checks cover all tabs and archive screening.

@@ -637,6 +637,18 @@ async function main() {
   assert.equal(replay.straddleStrike,rec.straddle_anchor_strike);
   assert.equal(replay.intraday.find(p => Date.parse(p.markAt)===time).strad,99);
   assert.equal(replay.intraday.find(p => Date.parse(p.markAt)===time+1000).strad,null);
+  // Collector may fall back to the last cached dual mark when today's book is missing.
+  rec.dual_straddle = {markAt:time,rollAtm:25000,rollStrad:88,anchorK:rec.straddle_anchor_strike,anchorStrad:99};
+  rec.dual_straddle_history = [rec.dual_straddle];
+  let dualReplay = web.normalizeLiveSnapshot(lateJoin).catalog.NIFTY[0].dualIntraday;
+  assert.equal(dualReplay.length,1);
+  assert.equal(Date.parse(dualReplay[0].markAt),time,'Cached marks keep their original source time');
+  assert(!dualReplay.some(p=>Date.parse(p.markAt)===Date.parse(next.retrieved_at)), 'No fabricated current mark');
+  rec.dual_straddle.markAt = time - 86400000;
+  rec.dual_straddle_history = [];
+  assert.equal(web.normalizeLiveSnapshot(lateJoin).catalog.NIFTY[0].dualIntraday.length,0,'Prior session cache is rejected');
+  rec.dual_straddle.markAt = Date.parse(next.retrieved_at) + 60000;
+  assert.equal(web.normalizeLiveSnapshot(lateJoin).catalog.NIFTY[0].dualIntraday.length,0,'Future cache is rejected');
   console.log('Live connection regressions passed: collector contract, event-time gates, HV provenance, atomic refresh, session/expiry transitions, deduplication and parity.');
 }
 main().catch(error => {console.error(error); process.exitCode = 1;});
