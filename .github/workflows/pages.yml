@@ -38,7 +38,15 @@ jobs:
           uv export --locked --no-dev --group publishing --no-emit-project --output-file "$RUNNER_TEMP/pricing-reader.txt"
           python -m pip install --require-hashes -r "$RUNNER_TEMP/pricing-reader.txt"
       - name: Refresh completed broker candles and expiry forecasts
+        id: forecasts
+        continue-on-error: true
         run: python scripts/refresh_forecasts.py
+      - name: Retain dated forecasts when the broker refresh fails
+        if: steps.forecasts.outcome == 'failure'
+        run: |
+          git restore --source=HEAD -- index.html docs/index.html docs/live_state.json volatility_lab/data/nifty_one_year.csv volatility_lab/data/banknifty_one_year.csv volatility_lab/data/reference-manifest.json
+          echo '::warning::Forecast refresh failed. Publishing the checked-in dated forecasts; no missing candles or historical IV were filled.'
+          echo 'Forecast refresh failed. The website retains the checked-in forecast training dates. See the refresh step for the missing-session or source error.' >> "$GITHUB_STEP_SUMMARY"
       - name: Verify refreshed publication
         run: |
           node scripts/test_frontend.cjs
