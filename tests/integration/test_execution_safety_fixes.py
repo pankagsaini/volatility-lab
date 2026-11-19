@@ -345,7 +345,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertIn("timeoutSeconds: 60", code)
         self.assertNotIn("timeoutSeconds: 240", code)
         self.assertIn("Date.now() - started > CAPTURE_SAFE_DEADLINE_MS", code)
-        self.assertIn("Date.now() - started > 60000", code)
+        self.assertIn("Date.now() - started > 45000", code)
         self.assertEqual(code.count("if (budget.ms >= limit)"), 2)
         self.assertIn("function readRuntimeBudget_(properties, key, nowMs)", code)
         self.assertIn("windowEndMs", code)
