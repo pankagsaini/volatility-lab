@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-const gs = fs.readFileSync(path.join(root, 'volatility_lab/cloud/apps_script/Code.gs'), 'utf8');
+const gs = fs.readFileSync(process.env.COLLECTOR_SOURCE_PATH || path.join(root, 'volatility_lab/cloud/apps_script/Code.gs'), 'utf8');
 const clone = value => JSON.parse(JSON.stringify(value));
 let now = Date.parse('2026-11-13T04:30:00Z');
 class Clock extends Date {
