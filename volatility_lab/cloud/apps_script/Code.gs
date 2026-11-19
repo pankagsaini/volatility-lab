@@ -806,6 +806,62 @@ function attachStraddleHistory_(report, cache) {
   return updates;
 }
 
+// Expiry-day desk: a rolling spot-ATM straddle and the fixed open-anchor
+// straddle, both from paired two-sided books. Nothing is derived from spot
+// distance or LTP, so a mark only exists when both legs quoted together.
+function pairedBookMid_(rec, strike, referenceStamp) {
+  const row = rec.data.find(r => Number(r.strike_price) === strike);
+  const books = [row?.call_options, row?.put_options].map(leg => {
+    const md = leg?.market_data;
+    if (md?.quote_source !== 'Upstox /v2/market-quote/quotes') return null;
+    const time = timestampMillis_(md.quote_timestamp);
+    const bid = Number(md.bid_price), ask = Number(md.ask_price);
+    if (!forwardQuoteFresh_(time, referenceStamp) || ![bid,ask].every(Number.isFinite)
+        || !(bid > 0 && ask >= bid && md.bid_qty > 0 && md.ask_qty > 0)) return null;
+    return {time, mid:(bid + ask) / 2};
+  });
+  const matched = books[0] && books[1] && Math.abs(books[0].time - books[1].time) <= 30000;
+  return matched ? Number((books[0].mid + books[1].mid).toFixed(2)) : null;
+}
+
+function dualStraddlePoint_(rec, stamp) {
+  const markAt = timestampMillis_(stamp);
+  if (!Number.isFinite(markAt) || !Array.isArray(rec.data) || !rec.data.length) return null;
+  const sym = String(rec.label || '').split('|')[0];
+  if (sym !== 'NIFTY' && sym !== 'BANKNIFTY') return null;
+  const spot = Number(rec.data[0].underlying_spot_price);
+  const listed = rec.data.map(row => Number(row.strike_price)).filter(k => Number.isFinite(k) && k > 0);
+  if (!(spot > 0) || !listed.length) return null;
+  const rollAtm = listed.reduce((a,b) => Math.abs(a-spot) === Math.abs(b-spot) ? Math.min(a,b)
+    : Math.abs(a-spot) < Math.abs(b-spot) ? a : b);
+  const anchorK = Number(rec.straddle_anchor_strike) > 0 ? Number(rec.straddle_anchor_strike) : null;
+  const rollStrad = pairedBookMid_(rec, rollAtm, stamp);
+  const anchorStrad = anchorK ? pairedBookMid_(rec, anchorK, stamp) : null;
+  if (!(rollStrad > 0) && !(anchorStrad > 0)) return null;
+  return {markAt, rollAtm, rollStrad, anchorK, anchorStrad};
+}
+
+function attachDualStraddleHistory_(report, cache, updates) {
+  const records = report.records.filter(r => r.straddle_anchor_strike > 0 && Array.isArray(r.data)
+    && /^(NIFTY|BANKNIFTY)\|\d{4}-\d{2}-\d{2}$/.test(r.label));
+  const keys = records.map(r => ['DUAL_V1', report.day, r.label].join(':'));
+  let cached = {};
+  try { if (keys.length && cache) cached = cache.getAll(keys) || {}; } catch (err) {}
+  records.forEach((rec, i) => {
+    const point = dualStraddlePoint_(rec, report.retrieved_at);
+    let prior;
+    try { prior = JSON.parse(cached[keys[i]] || '[]'); } catch (err) { prior = []; }
+    const cutoff = point ? point.markAt : Infinity;
+    const history = Array.isArray(prior) ? prior.filter(p => p && Number.isFinite(p.markAt)
+      && p.markAt < cutoff).slice(-399) : [];
+    if (point) history.push(point);
+    if (!history.length) return;
+    rec.dual_straddle = point || history[history.length - 1];
+    rec.dual_straddle_history = history;
+    updates[keys[i]] = JSON.stringify(history);
+  });
+}
+
 function quoteStrikes_(rec, ledger) {
   const [sym, expiry] = rec.label.split('|');
   const rows = rec.data, step = sym === 'NIFTY' ? 50 : 100;
@@ -1119,6 +1175,10 @@ function capture_(mode, recovery) {
   const fileName = (report.target_day || today) + '_' + mode + '_' + Utilities.formatDate(now, CONFIG.timeZone, 'HHmmss') + '_' + report.status;
   const historyCache = mode === 'snapshot' && report.status === 'complete' ? scriptCache_() : null;
   const history = mode === 'snapshot' && report.status === 'complete' ? attachStraddleHistory_(report,historyCache) : {};
+  if (historyCache) {
+    try { attachDualStraddleHistory_(report, historyCache, history); }
+    catch (err) { report.input_diagnostics = (report.input_diagnostics || []).concat([{item:'dual_straddle',reason:safeError_(err)}]); }
+  }
   const fileId = save_(fileName, report);
   // Only committed archives can supply observations to the next snapshot.
   if (historyCache && Object.keys(history).length) {
@@ -2490,6 +2550,9 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
       const secondsToExpiry = (expiryMs - new Date(ch.retrievedAt).getTime()) / 1000.0;
       if (!Number.isFinite(secondsToExpiry) || secondsToExpiry <= 0) return;
       const dte = Math.ceil(secondsToExpiry / 86400.0);
+      // Positional gate: S1-S6 never open inside the final two calendar days.
+      // This keeps the forward ledger out of expiry-day gamma and basis noise.
+      if (secondsToExpiry < 2 * 86400) { reject(key, 'Positional gate: dte < 2'); return; }
       const years = secondsToExpiry / (365.0 * 86400.0);
       const iv = Number((0.5 * (atmNode.cIv + atmNode.pIv)).toFixed(2));
       const riskMetrics = forwardRiskMetrics_(report, sym, snapshotDay);

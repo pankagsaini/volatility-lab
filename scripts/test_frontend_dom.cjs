@@ -45,7 +45,7 @@ const server = http.createServer((request,response) => {
       for (const symbol of ['BANKNIFTY','NIFTY']) {
         await page.locator('[data-sym="'+symbol+'"]').click();
         assert.equal(await page.locator('#activeExpirySelect option').count(),symbol==='NIFTY'?7:3);
-        for (const tab of ['regime','term','smile','straddle','trades']) {
+        for (const tab of ['regime','term','smile','straddle','trades','zerodte']) {
           await page.locator('[data-tab="'+tab+'"]').click();
         }
       }
@@ -56,6 +56,39 @@ const server = http.createServer((request,response) => {
     assert.equal(await page.locator('#tradeIdTableBody tr').count(),60);
     await page.selectOption('#tradeIdStatusFilter','TRIGGERED');
     assert.match(await page.locator('#tradeIdTableBody').textContent(),/No executable/);
+    await page.locator('[data-tab="zerodte"]').click();
+    assert(await page.locator('#panel-zerodte').isVisible(),'0DTE desk tab renders');
+    assert.match(await page.locator('#zerodteContractBadge').textContent(),/NIFTY 2026-11-17/);
+    assert.match(await page.locator('#zMeltSource').textContent(),/anchor|No recorded/i);
+    assert(await page.evaluate(()=>{
+      const chart=Chart.getChart('zerodteStraddleCanvas');
+      const rolling=chart.data.datasets.find(ds=>ds.label.startsWith('Rolling'));
+      return rolling && rolling.data.every(pt=>pt===null||pt.y===null);
+    }),'Rolling straddle stays blank until the collector records it');
+    assert.match(await page.locator('#zGexSource').textContent(),/recorded strikes|Gamma unavailable/);
+    assert.match(await page.locator('#zVwapHeaderNote').textContent(),/15:10/);
+    assert.match(await page.locator('#zBennettSummaryStrip').textContent(),/Breakeven band|Bennett/);
+    await page.locator('[data-zmode="inr"]').click();
+    assert.match(await page.locator('[data-zmode="inr"]').getAttribute('class'),/active/);
+    const anchored = await page.evaluate(()=>{
+      const chart=Chart.getChart('zerodteStraddleCanvas');
+      const sqrt=chart.data.datasets.find(ds=>ds.label.startsWith('Theoretical'));
+      const anchor=chart.data.datasets.find(ds=>ds.label.startsWith('Open anchor'));
+      const i=anchor.data.findIndex(v=>typeof v==='number' && Number.isFinite(v));
+      return i<0?null:{bench:sqrt.data[i],anchor:anchor.data[i]};
+    });
+    if (anchored) assert(Math.abs(anchored.bench-anchored.anchor)<=0.02,
+      'The √t benchmark starts at the first recorded premium, never at an implied open');
+    await page.locator('[data-zmode="pct"]').click();
+    const pctStart = await page.evaluate(()=>{
+      const chart=Chart.getChart('zerodteStraddleCanvas');
+      const sqrt=chart.data.datasets.find(ds=>ds.label.startsWith('Theoretical'));
+      const anchor=chart.data.datasets.find(ds=>ds.label.startsWith('Open anchor'));
+      const i=anchor.data.findIndex(v=>typeof v==='number' && Number.isFinite(v));
+      return i<0?null:{bench:sqrt.data[i],anchor:anchor.data[i]};
+    });
+    if (pctStart) assert(Math.abs(pctStart.bench)<=0.02&&Math.abs(pctStart.anchor)<=0.02,
+      'Percent mode is rebased to the first recorded premium');
     await page.locator('[data-tab="term"]').click();
     assert.equal(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets.length),2);
     assert(!(await page.locator('#panel-term').textContent()).includes('EWMA'));
@@ -175,6 +208,10 @@ const server = http.createServer((request,response) => {
     await page.locator('[data-tab="term"]').click();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth <= 390),'Expiry comparison must scroll inside its panel on mobile');
     if (process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'mobile-term.png'),fullPage:true});
+    await page.locator('[data-tab="zerodte"]').click();
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth <= 390),'0DTE desk must not overflow on mobile');
+    if (process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'mobile-0dte.png'),fullPage:true});
+    await page.locator('[data-tab="term"]').click();
     await page.locator('#panel-term summary').click();
     assert(await page.locator('#termMainTableBody').isVisible());
     await page.locator('[data-tab="smile"]').click();

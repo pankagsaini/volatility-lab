@@ -19,13 +19,18 @@ vm.runInContext(optionsAsset,web);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8'),web);
 for (const name of ['chartNumber','observedIv','observedSpread','observedMean','distribution','formatLiveNumber',
   'forwardInterval','scenarioLegs','black76Price','normCdf','normPdf','currentRow','chartOpts',
-  'renderTab1Regime','renderTab2Term','renderTab4Straddle','rowMatchesCriteria']) {
+  'renderTab1Regime','renderTab2Term','renderTab4Straddle','rowMatchesCriteria',
+  'liveNumber','liveTimestamp','istDayAndMinute','nextTradingDay','expiryClock','isExpiryRollWindow',
+  'getDefaultActiveExpiryIdx','positionalGateOpen','interpolateOiDataDecayPct','computeStrikeGexProfile']) {
   const start = html.indexOf('      function '+name+'(');
   assert(start>=0, name);
   vm.runInContext(html.slice(start, html.indexOf('\n      }',start)+8),web);
 }
 web.updateOrCreateChart = (prior, ctx, type, data, options) => ({data, options, update(){}});
 web.fmtInr = value => String(value); // Keep exact numbers readable in test table cells.
+const oiStart = html.indexOf('      var OIDATA_MEDIAN_DECAY_POINTS');
+assert(oiStart >= 0, 'OIDATA_MEDIAN_DECAY_POINTS');
+vm.runInContext(html.slice(oiStart, html.indexOf('];', oiStart) + 2), web);
 
 for(const missing of [null,undefined,'', '  ',false,NaN,Infinity]) assert.equal(web.chartNumber(missing),null);
 assert.equal(web.chartNumber(0),0);
@@ -107,6 +112,61 @@ web.window.VL_PUBLIC_STATE = {forecasts:{NIFTY:{expiries:[{expiry:'2026-11-17',a
 web.renderTab2Term();
 assert.equal(web.termChart.data.datasets[1].data[0].y,17);
 assert(element('termMainTableBody').innerHTML.includes('0.000110'),'Total variance must contain numeric annual variance times DTE');
+
+// Phase 1/2: minute-accurate 0DTE clock, expiry roll window and positional gate.
+const minutesClock = web.expiryClock('2026-11-17','2026-11-17T08:35:00Z'); // 14:05 IST
+assert.equal(minutesClock.is0Dte,true);
+assert.equal(minutesClock.rawCalendarDays,0);
+assert.equal(minutesClock.minsLeft,95);
+assert.equal(minutesClock.tCal,95/525600);
+assert.equal(minutesClock.tVol,95/(245*375));
+assert.equal(minutesClock.closeMins,940,'Close must come from the exchange calendar');
+assert.equal(web.expiryClock('2026-11-17','2026-11-16T09:30:00Z').is0Dte,false);
+assert.equal(web.expiryClock('2026-11-17','2026-11-16T09:30:00Z').rawCalendarDays,1);
+assert.equal(web.expiryClock('2026-11-17','2026-11-16T09:30:00Z').tCal,(1480/1440)/365);
+assert.equal(web.isExpiryRollWindow('2026-11-17','2026-11-16T10:15:00Z'),true,'15:45 IST on T-1 rolls');
+assert.equal(web.isExpiryRollWindow('2026-11-17','2026-11-16T09:30:00Z'),false,'15:00 IST on T-1 stays');
+assert.equal(web.isExpiryRollWindow('2026-11-17','2026-11-17T03:45:00Z'),true,'Expiry morning rolls');
+web.marketCatalog={NIFTY:[{expiry:'2026-11-17'},{expiry:'2026-11-24'}]};
+assert.equal(web.getDefaultActiveExpiryIdx('NIFTY','2026-11-17T03:45:00Z'),1);
+assert.equal(web.getDefaultActiveExpiryIdx('NIFTY','2026-11-13T09:30:00Z'),0);
+assert.equal(web.positionalGateOpen({dte:1.99}),false);
+assert.equal(web.positionalGateOpen({dte:2}),true);
+assert.equal(web.positionalGateOpen({dte:0.05}),false);
+
+// Tab 2: the expiring front is held out of the σ_fwd chain and drawn as a kink.
+web.window.VL_PUBLIC_STATE={forecasts:{}};
+web.marketCatalog={NIFTY:[
+  {expiry:'2026-11-17',kind:'Weekly',sessionDate:'2026-11-17',dte:.05,spot:25000,atm:25000,syn:25000,
+    brokerAtmIv:24,chain:[],iv:24},
+  {expiry:'2026-11-24',kind:'Weekly',sessionDate:'2026-11-17',dte:6,spot:25000,atm:25000,syn:25000,
+    brokerAtmIv:14,chain:[],iv:14}]};
+web.renderTab2Term();
+assert.equal(web.termChart.data.datasets[0].data[0].y,null,'0DTE is not a term point');
+assert.equal(web.termChart.data.datasets[0].data[1].y,14);
+assert.equal(web.termChart.data.datasets.length,3);
+const kinkDataset=web.termChart.data.datasets.find(ds=>ds.label.includes('Expiring front kink'));
+assert(kinkDataset,'Expiring front must be drawn as a labelled kink');
+assert.equal(kinkDataset.data[0].y,24);
+assert.equal(kinkDataset.data[1].y,14,'Kink overlay joins the first baseline point');
+assert(element('termMainTableBody').innerHTML.includes('0 · kink'));
+
+// Phase 4: strike GEX uses recorded OI and model gamma only.
+const gammaItem={spot:25000,chain:[
+  {k:24900,cOi:10,pOi:30,modelCallGamma:.0004,modelPutGamma:.0004},
+  {k:25000,cOi:50,pOi:20,modelCallGamma:.0005,modelPutGamma:.0005},
+  {k:25100,cOi:25,pOi:5,modelCallGamma:.0003,modelPutGamma:.0003}]};
+web.backtestMeta={lotSizes:{NIFTY:75,BANKNIFTY:30}};
+const gex=web.computeStrikeGexProfile(gammaItem,'NIFTY');
+assert.equal(gex.rows.length,3);
+assert.equal(gex.rows.find(row=>row.k===24900).gexCr,-375,'GEX uses the site lot size, not a hardcoded proxy');
+assert.equal(gex.pin.k,25000);
+assert.equal(gex.flip,24953);
+assert.equal(web.computeStrikeGexProfile({spot:25000,chain:[{k:25000}]},'NIFTY').rows.length,0);
+assert.equal(web.interpolateOiDataDecayPct(555),0);
+assert.equal(web.interpolateOiDataDecayPct(600),-15.5);
+assert.equal(web.interpolateOiDataDecayPct(780),-35);
+assert.equal(web.interpolateOiDataDecayPct(930),-100);
 
 // The shipped history may contain IV only with provenance; pre-capture years stay empty.
 const charts = vm.runInContext('OptionsCharts',web);

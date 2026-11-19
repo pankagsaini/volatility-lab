@@ -114,4 +114,22 @@ assert.equal(status.pure_snapshot_capture_only, false);
 values.set('PURE_SNAPSHOT_CAPTURE_ONLY', 'true');
 cached.delete('DOGET_STATUS_JSON');
 assert.equal(JSON.parse(get({action: 'status', key: 'secret'}).text).pure_snapshot_capture_only, true);
+// The expiry desk accepts only paired two-sided books at the fixed anchor and
+// the nearest listed strike to spot; no LTP fallback and no distance synthesis.
+const quoteAt = new Date().toISOString();
+const leg = (bid, ask) => ({market_data: {quote_source: 'Upstox /v2/market-quote/quotes', quote_timestamp: quoteAt,
+  bid_price: bid, ask_price: ask, bid_qty: 75, ask_qty: 75}, option_greeks: {iv: 24}});
+const dualRec = {label: 'NIFTY|2026-11-17', retrieved_at: quoteAt, straddle_anchor_strike: 25000, data: [
+  {underlying_spot_price: 25040, strike_price: 25000, call_options: leg(41, 43), put_options: leg(21, 23)},
+  {underlying_spot_price: 25040, strike_price: 25050, call_options: leg(18, 20), put_options: leg(48, 50)}]};
+const dual = cloud.dualStraddlePoint_(dualRec, quoteAt);
+assert.equal(dual.rollAtm, 25050, 'Rolling strike is the nearest listed strike to spot');
+assert.equal(dual.anchorK, 25000);
+assert.equal(dual.rollStrad, 68);
+assert.equal(dual.anchorStrad, 64);
+assert.equal(cloud.dualStraddlePoint_({...dualRec, data: [
+  {underlying_spot_price: 25040, strike_price: 25050, call_options: leg(18, 20),
+    put_options: {market_data: {quote_source: 'rest', quote_timestamp: quoteAt,
+      bid_price: 48, ask_price: 50, bid_qty: 75, ask_qty: 75}}}]}, quoteAt), null,
+  'One recorded leg is not a straddle mark');
 console.log('Collector audit regressions passed: aliases, shared cache, JSONP, legacy provenance, fees and EOD recovery.');
