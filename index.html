@@ -666,27 +666,6 @@
 
           <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
             <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
-              <span class="text-xs font-bold uppercase text-white">Expiring-chain wings: normalised moneyness and tick-floor flags</span>
-              <span id="zWingSource" class="text-[11px] mono text-slate-400">Recorded strikes only</span>
-            </div>
-            <table class="w-full text-left border-collapse text-xs mono">
-              <thead>
-                <tr class="border-b border-[#24344d] bg-[#090f1a] text-slate-300 font-bold">
-                  <th class="py-2 px-3">Strike</th>
-                  <th class="py-2 px-3 text-right">Offset</th>
-                  <th class="py-2 px-3 text-right">OTM side</th>
-                  <th class="py-2 px-3 text-right">OTM LTP</th>
-                  <th class="py-2 px-3 text-right">Model IV</th>
-                  <th class="py-2 px-3 text-right">z = ln(K/F)/(σ√T)</th>
-                  <th class="py-2 px-3 text-center">Floor flag</th>
-                </tr>
-              </thead>
-              <tbody id="zWingTableBody" class="divide-y divide-[#1a2639]"></tbody>
-            </table>
-          </div>
-
-          <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
-            <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
               <span class="text-xs font-bold uppercase text-white">Final 30-minute settlement-window tracker</span>
               <span id="zVwapHeaderNote" class="text-[11px] mono text-purple-300">Running mean of recorded spot prints</span>
             </div>
@@ -3068,31 +3047,6 @@
         if (gexSource) gexSource.textContent = gex.rows.length
           ? 'Source: ' + gex.rows.length + ' recorded strikes with a model gamma at lot ' + gex.lot + '. Zero-Γ is a strike-GEX proxy, not observed dealer positioning.'
           : 'Gamma unavailable: needs a fresh two-sided book plus verified rate and dividend inputs.';
-
-        // Phase 2 wing diagnostics
-        const wingBody = document.getElementById('zWingTableBody');
-        const wingSource = document.getElementById('zWingSource');
-        if (wingBody) {
-          const wings = (r.chain || []).filter(n => forward > 0 && Math.abs(n.k / forward - 1) <= .05)
-            .sort((a, b) => a.k - b.k);
-          wingBody.innerHTML = wings.map(node => {
-            const call = node.k >= forward, px = call ? node.cLtp : node.pLtp;
-            const modelIv = call ? node.modelCallIv : node.modelPutIv;
-            return '<tr class="' + (node.k === r.atm ? 'bg-sky-500/15 font-bold' : 'hover:bg-[#111c2d]') + '">' +
-              '<td class="py-2 px-3 text-white">' + node.k.toLocaleString('en-IN') + '</td>' +
-              '<td class="py-2 px-3 text-right text-slate-300">' + (node.k >= forward ? '+' : '') + (node.k - forward).toFixed(0) + '</td>' +
-              '<td class="py-2 px-3 text-right ' + (call ? 'text-sky-300' : 'text-violet-300') + '">' + (node.k === forward ? 'ATM' : call ? 'CE' : 'PE') + '</td>' +
-              '<td class="py-2 px-3 text-right text-slate-200">' + (px > 0 ? '₹' + px.toFixed(2) : '—') + '</td>' +
-              '<td class="py-2 px-3 text-right text-sky-300">' + formatLiveNumber(modelIv, 2, '%') + '</td>' +
-              '<td class="py-2 px-3 text-right text-white">' + formatLiveNumber(node.normZ, 2) + '</td>' +
-              '<td class="py-2 px-3 text-center">' + (node.isLotteryFloor ? '<span class="text-rose-300 font-bold">&lt; ₹2</span>' : '<span class="text-slate-500">—</span>') + '</td>' +
-              '</tr>';
-          }).join('') || '<tr><td colspan="7" class="py-5 text-center text-slate-400">No recorded strikes within ±5% of the forward.</td></tr>';
-          if (wingSource) wingSource.textContent = r.expiry + ' · z uses σ_ATM ' + formatLiveNumber(iv, 2, '%') +
-            ' and T_cal ' + (clock ? (clock.is0Dte ? Math.round(clock.minsLeft) + 'm' : clock.rawCalendarDays + 'd') : '—') +
-            ' · BF10Δ ' + (Number.isFinite(r.bf10Clean) ? (r.bf10Clean >= 0 ? '+' : '') + r.bf10Clean.toFixed(2) + ' pp clean' : '—') +
-            ' / ' + (Number.isFinite(r.bf10Raw) ? (r.bf10Raw >= 0 ? '+' : '') + r.bf10Raw.toFixed(2) + ' pp raw' : '—');
-        }
 
         // Phase 4B: final 30 minutes of the exchange session.
         const vwapBody = document.getElementById('zVwapTableBody');
