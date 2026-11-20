@@ -593,6 +593,11 @@ async function main() {
   assert.equal(web.REAL_HISTORICAL_1Y.NIFTY.length, 3);
   assert.deepEqual(clone(web.REAL_HISTORICAL_1Y.NIFTY[0]), oldHistory);
 
+  const missingOi=clone(next);
+  const noOiRow=missingOi.records.find(r=>r.label.startsWith('NIFTY|')).data[0];
+  delete noOiRow.call_options.market_data.oi;
+  assert.equal(web.normalizeLiveSnapshot(missingOi).catalog.NIFTY[0].chain.find(n=>n.k===noOiRow.strike_price).cOi,null,'Missing OI must not become a recorded zero');
+
   const savedCatalog = web.marketCatalog, savedHistory = web.REAL_HISTORICAL_1Y;
   const bad = clone(next); bad.retrieved_at = new Date(now + 1000).toISOString();
   bad.records = bad.records.filter(r => !r.label.startsWith('BANKNIFTY|'));

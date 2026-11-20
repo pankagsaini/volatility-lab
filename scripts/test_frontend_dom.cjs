@@ -18,7 +18,7 @@ const server = http.createServer((request,response) => {
   const target = path.resolve(root,'docs','.'+(name === '/' ? '/index.html' : name));
   if (!target.startsWith(path.join(root,'docs')+path.sep)) {response.writeHead(403);response.end();return;}
   fs.readFile(target,(error,data) => {
-    response.writeHead(error?404:200,{'Content-Type':target.endsWith('.html')?'text/html':target.endsWith('.js')?'application/javascript':'application/json'});
+    response.writeHead(error?404:200,{'Content-Type':target.endsWith('.html')?'text/html':target.endsWith('.js')?'application/javascript':target.endsWith('.css')?'text/css':'application/json'});
     response.end(error?'Missing asset':data);
   });
 });
@@ -34,6 +34,14 @@ const server = http.createServer((request,response) => {
     await page.waitForFunction(()=>window._vlDeskInitialized && window.Chart);
     assert((await page.locator('#kpiSpot').textContent()).includes('25,116'));
     assert.equal(await page.locator('#shareDesk').count(),0);
+    assert.equal(await page.locator('#workspaceTitle').textContent(),'Volatility research');
+    const captured=await page.evaluate(()=>window.marketCatalog.NIFTY[Number(document.getElementById('activeExpirySelect').value)].brokerAtmIv);
+    assert.equal(await page.locator('#kpiAtmIv').textContent(),captured.toFixed(2)+'%','Headline IV matches captured chart source');
+    await page.locator('#syncDesk').click();
+    await page.waitForFunction(()=>document.getElementById('syncDesk').getAttribute('aria-busy')==='false');
+    assert.match(await page.locator('#refreshStatus').textContent(),/Market refresh failed/,'Offline refresh is visibly reported');
+    assert.equal(await page.locator('#refreshButtonLabel').textContent(),'Refresh');
+    if(process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'research-desktop.png'),fullPage:true});
     assert.equal(await page.locator('#syncDesk').getAttribute('aria-label'),'Refresh market data');
     assert.equal(await page.locator('#kpiHv10Sub').count(),0);
     assert.equal(await page.locator('#smileKpiStrip').count(),0);
@@ -197,6 +205,13 @@ const server = http.createServer((request,response) => {
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Read-only archive/);
     assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/\d+ recorded closes/);
     assert.equal(await page.locator('#fwdKpiClosedNet').textContent(),'—');
+    assert.match(await page.locator('#paperArchiveCount').textContent(),/0 verified/);
+    assert(!(await page.locator('#paperArchiveDetails').evaluate(n=>n.open)),'Long archive is collapsed, not removed');
+    for(const row of await page.locator('#fwdScorecardBody tr').all()) {
+      for(const col of [3,4,5,6,7,8,10]) assert.equal((await row.locator('td').nth(col).textContent()).trim(),'—','Missing paper performance must not be displayed as zero');
+    }
+    assert.equal(await page.locator('#fwdOpenPositionsBody button').count(),0,'Read-only positions must not offer a nonfunctional close action');
+    if(process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'paper-final.png'),fullPage:true});
     await page.locator('#wsOptionsBtn').click();
     await page.locator('[data-tab="straddle"]').click();
     for (const mode of ['intraday','intra_iv','payoff']) await page.locator('[data-scmode="'+mode+'"]').click();
