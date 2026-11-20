@@ -1129,13 +1129,13 @@
             var meta = chart.getDatasetMeta(dsIdx);
             if (meta.hidden) return;
             ctx.save();
-            ctx.font = '700 10.5px "JetBrains Mono", monospace';
+            ctx.font = '500 12px "JetBrains Mono", monospace';
             ctx.fillStyle = ds.labelColor || ds.borderColor || '#ffffff';
             ctx.textAlign = 'center';
             if (ds.pointValueLabels) {
               const area = chart.chartArea;
               const occupied = occupiedLabels;
-              ctx.font = '10px sans-serif';
+              ctx.font = '12px sans-serif';
               for (let i=0; i<meta.data.length; i++) {
                 const value = ds.data[i], pt = meta.data[i];
                 const yValue = typeof value === 'object' ? value?.y : value;
@@ -1144,12 +1144,12 @@
                 const date = ds.pointValueLabels === 'expiry' ? value.expiry.slice(5).split('-').reverse().join('/') : '';
                 const w = Math.max(ctx.measureText(label).width,ctx.measureText(date).width)/2+2;
                 const x = Math.max(area.left+w,Math.min(area.right-w,pt.x));
-                const height = date ? 22 : 12;
-                const ys = [-15,19,-35,40].map(offset=>Math.max(area.top+11,Math.min(area.bottom-height,pt.y+offset)));
+                const height = date ? 28 : 15;
+                const ys = [-15,19,-35,40].map(offset=>Math.max(area.top+14,Math.min(area.bottom-height,pt.y+offset)));
                 const y = ys.find(y=>occupied.every(r=>Math.abs(x-r.x)>=w+r.w || Math.abs(y-r.y)>=height));
                 if (y === undefined) continue;
                 ctx.fillText(label,x,y);
-                if (date) ctx.fillText(date,x,y+11);
+                if (date) ctx.fillText(date,x,y+14);
                 occupied.push({x,y,w});
               }
               ctx.restore();
