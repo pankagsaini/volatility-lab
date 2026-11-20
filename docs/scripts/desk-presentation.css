@@ -64,3 +64,7 @@ td,th{padding-top:13px!important;padding-bottom:13px!important}td{font-weight:40
 
 #workspaceForwardTest table{min-width:1300px}
 #paperArchiveDetails{margin-top:20px}
+
+.scenario-heat-key{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;font-size:12px;color:#a5b6ca;margin:10px 0}
+.scenario-heat-key .heat-loss{color:#fda4af}.scenario-heat-key .heat-profit{color:#6ee7b7}
+#stressMatrixTableBody td{border:1px solid #263447;font-variant-numeric:tabular-nums}

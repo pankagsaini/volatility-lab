@@ -26,14 +26,40 @@ const OptionsCharts = (() => {
     return points.filter(p => session && day(p.snapshotId || p.markAt) === session)
       .map(p => ({...p, strad:p.markSource === 'paired_book_mid' && p.cQuoteAt && p.pQuoteAt ? p.strad : null}));
   }
-  function surface(rows, near) {
-    // Plot captured OTM observations only; no surface fitting or gap interpolation.
-    return rows.flatMap(row => (row.chain || []).filter(n => positive(n.k) && positive(row.spot)
-      && (!near || Math.abs(n.k / row.spot - 1) <= .10)).flatMap(n => {
-        const iv = n.k === row.atm && positive(n.uCallIv) && positive(n.uPutIv)
-          ? (n.uCallIv + n.uPutIv) / 2 : n.k < row.spot ? n.uPutIv : n.uCallIv;
-        return positive(iv) && positive(row.dte) ? [{strike:n.k, dte:row.dte, iv, expiry:row.expiry, asOf:row.ivCapturedAt || row.archivedAsOf || ''}] : [];
-      }));
+  function tooltipName(label) {
+    const name = String(label || '');
+    if (/EGARCH/i.test(name)) return 'EGARCH';
+    if (/^(Captured |ATM IV)/.test(name)) return 'IV';
+    if (/^Expiring front/.test(name)) return 'IV (0DTE)';
+    if (/^VRP Spread/.test(name)) return 'IV − HV30';
+    if (/^Spread:/.test(name)) return 'IV − HV10';
+    if (/^Reference Threshold/.test(name)) return 'Threshold';
+    if (/^Call \+ put/.test(name)) return 'Straddle';
+    if (/^Theoretical/.test(name)) return '√t benchmark';
+    if (/^OIData/.test(name)) return 'NSE median';
+    if (/^Call-minus-put/.test(name)) return 'Net OI gamma';
+    if (/^Underwater/.test(name)) return 'Drawdown';
+    if (/^Live Forward Intraday/.test(name)) return /Net/.test(name) ? 'Net MTM' : 'Gross MTM';
+    if (/^Cumulative/.test(name)) return /Net/.test(name) ? 'Cumulative net P&L' : 'Cumulative gross P&L';
+    if (/^Net P&L After/.test(name)) return 'Net P&L';
+    if (/^Expiry P&L/.test(name)) return 'Expiry P&L';
+    return name.replace(/\s*\([^)]*\)/g, '').trim();
+  }
+  function heatStyle(value, maxAbs) {
+    if (!Number.isFinite(value) || value === 0 || !(maxAbs > 0)) return 'background:#111b29;color:#dbe5f2';
+    // One symmetric scale for all cells; retain signed numbers for accessibility.
+    const intensity = Math.sqrt(Math.min(1, Math.abs(value) / maxAbs));
+    const lightness = (90 - 66 * intensity).toFixed(1);
+    const hue = value > 0 ? 153 : 355;
+    const l = Number(lightness) / 100, a = .52 * Math.min(l, 1-l);
+    const rgb = [0,8,4].map(n => {
+      const k = (n + hue / 30) % 12;
+      const channel = l - a * Math.max(-1, Math.min(k-3, 9-k, 1));
+      return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
+    });
+    const luminance = rgb[0]*.2126 + rgb[1]*.7152 + rgb[2]*.0722;
+    return 'background:hsl(' + hue + ' 52% ' + lightness + '%);color:' +
+      (luminance < .179 ? '#ffffff' : '#000000') + ';font-weight:600';
   }
   function forecast(state, symbol, row) {
     const record = state?.forecasts?.[symbol]?.expiries?.find(item => item.expiry === row.expiry);
@@ -60,5 +86,5 @@ const OptionsCharts = (() => {
     return {iv, egarch, aligned, training:record?.training_through || null,
       egarchGap:aligned && iv !== null && egarch !== null ? iv - egarch : null};
   }
-  return {smile, straddleSeries, surface, forecast, comparison, auditedTrade};
+  return {smile, straddleSeries, tooltipName, heatStyle, forecast, comparison, auditedTrade};
 })();

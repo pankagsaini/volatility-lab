@@ -124,13 +124,24 @@ const server = http.createServer((request,response) => {
     assert(Math.abs(Number.parseFloat(firstTerm[9]) - expectedSpread) < .011,'Term spread and header must use the same completed HV30');
     if (process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'term.png'),fullPage:true});
     await page.locator('[data-tab="smile"]').click();
-    await page.selectOption('#smileViewSelect','3D');
-    await page.waitForFunction(()=>document.getElementById('smileSurface').data?.[0]?.type==='scatter3d');
-    const near = await page.evaluate(()=>document.getElementById('smileSurface').data[0].x.length);
+    assert.equal(await page.locator('#smileViewSelect, #smileSurface').count(),0);
+    assert(await page.locator('#smileMainCanvas').isVisible());
+    assert(await page.evaluate(()=>{
+      const c=Chart.getChart('smileMainCanvas');
+      return c.options.plugins.tooltip.callbacks.label({dataset:c.data.datasets[0],parsed:{y:12.34}})==='IV: 12.34%';
+    }));
+    assert(await page.evaluate(()=>{
+      const c=Chart.getChart('termMainCanvas');
+      return c.data.datasets.filter(d=>d.label.includes('EGARCH')).every(d=>
+        c.options.plugins.tooltip.callbacks.label({dataset:d,parsed:{y:12.34}})==='EGARCH: 12.34%');
+    }));
+    assert(!await page.locator('#regimeHorizonTableBody').textContent().then(t=>t.includes('Yang–Zhang')));
+    assert.equal(await page.locator('[data-tab="zerodte"]').evaluate(e=>getComputedStyle(e).color),
+      await page.locator('[data-tab="trades"]').evaluate(e=>getComputedStyle(e).color));
+    const near = await page.locator('#smileMainTableBody tr').count();
     await page.selectOption('#smileRangeSelect','ALL');
-    const all = await page.evaluate(()=>document.getElementById('smileSurface').data[0].x.length);
+    const all = await page.locator('#smileMainTableBody tr').count();
     assert(all>=near && near>0);
-    await page.selectOption('#smileViewSelect','2D');
     await page.locator('#wsBacktestBtn').click();
     // Default mode is the full recorded baseline; rule-match mode is a strict subset of it.
     assert.notEqual(await page.locator('#resNetPnl').textContent(),'—');
@@ -215,11 +226,26 @@ const server = http.createServer((request,response) => {
     await page.locator('#wsOptionsBtn').click();
     await page.locator('[data-tab="straddle"]').click();
     for (const mode of ['intraday','intra_iv','payoff']) await page.locator('[data-scmode="'+mode+'"]').click();
+    // Exercise the intrinsic-value branch independently of date-sensitive pricing inputs.
+    const originalDte=await page.evaluate(()=>{
+      const row=window.marketCatalog.NIFTY[Number(document.getElementById('activeExpirySelect').value)];
+      const dte=row.dte; row.dte=1; return dte;
+    });
+    await page.selectOption('#stressStructureSelect','SHORT_STRADDLE');
+    await page.evaluate(()=>window.renderTab4Straddle());
+    assert.equal(await page.locator('#stressMatrixTableBody td[style*="background:"]').count(),25);
+    const heatColors=await page.locator('#stressMatrixTableBody td').evaluateAll(cells=>cells.map(c=>getComputedStyle(c).backgroundColor));
+    assert(new Set(heatColors).size>3,'Scenario magnitudes must have different intensities');
+    if (process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'scenario.png'),fullPage:true});
     await page.setViewportSize({width:390,height:844});
     assert(await page.evaluate(()=>document.documentElement.scrollWidth <= 390),'Mobile page overflow');
     const fits = await page.locator('#stressMatrixTableBody').evaluate(node=>node.parentElement.scrollWidth <= node.parentElement.parentElement.clientWidth+1);
     assert(fits,'Stress columns clipped');
     if (process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'mobile.png'),fullPage:true});
+    await page.evaluate(dte=>{
+      window.marketCatalog.NIFTY[Number(document.getElementById('activeExpirySelect').value)].dte=dte;
+      window.renderTab4Straddle();
+    },originalDte);
     await page.locator('[data-tab="term"]').click();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth <= 390),'Expiry comparison must scroll inside its panel on mobile');
     if (process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'mobile-term.png'),fullPage:true});
@@ -233,6 +259,6 @@ const server = http.createServer((request,response) => {
     await page.locator('#panel-smile summary').click();
     assert(await page.locator('#smileMainTableBody').isVisible());
     assert.deepEqual(errors,[]);
-    console.log('DOM passed: all workspaces/tabs, 10 expiries, 60 setups, real Chart.js reuse, captured 3D points, archive provenance, mobile stress table, zero missing IDs or JS errors.');
+    console.log('DOM passed: all workspaces/tabs, 10 expiries, 60 setups, real Chart.js reuse, captured smile points, archive provenance, mobile stress table, zero missing IDs or JS errors.');
   } finally { await browser.close(); server.close(); }
 })().catch(error=>{console.error(error);server.close();process.exitCode=1;});

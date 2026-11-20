@@ -261,7 +261,7 @@
             <button type="button" data-tab="smile" class="res-tab-btn seg-btn">Smile</button>
             <button type="button" data-tab="straddle" class="res-tab-btn seg-btn">Straddle &amp; scenarios</button>
             <button type="button" data-tab="trades" class="res-tab-btn seg-btn">Trade setups</button>
-            <button type="button" data-tab="zerodte" class="res-tab-btn seg-btn text-rose-300">Expiry day (0DTE)</button>
+            <button type="button" data-tab="zerodte" class="res-tab-btn seg-btn">Expiry day (0DTE)</button>
           </div>
 
           <!-- Context Controls for Tab 1 (Clean Metric & Horizon Selectors) -->
@@ -406,7 +406,7 @@
         </div>
 
         <!-- =============================================================== -->
-        <!-- TAB 3: SMILE, SKEW & STRIKE SURFACE (100% Real Upstox Chain)    -->
+        <!-- TAB 3: SMILE & SKEW (100% Real Upstox Chain)    -->
         <!-- =============================================================== -->
         <div id="panel-smile" class="hidden space-y-4">
           <div class="bg-[#080d16] border border-[#24344d] rounded-xl p-4">
@@ -414,9 +414,6 @@
               <span class="text-xs font-bold uppercase tracking-wider text-slate-200">
                 Captured broker smile · 10Δ put to 10Δ call
               </span>
-              <label class="text-xs text-slate-300">View
-                <select id="smileViewSelect" class="desk-select"><option value="2D">2D Smile</option><option value="3D">3D Vol Surface</option></select>
-              </label>
               <label class="text-xs text-slate-300">Strike range
                 <select id="smileRangeSelect" class="desk-select">
                   <option value="NEAR">Within 10% of spot</option>
@@ -427,7 +424,6 @@
             <div id="smile2dPanel" class="relative" style="height: 390px;">
               <canvas id="smileMainCanvas"></canvas>
             </div>
-            <div id="smileSurface" class="hidden" style="height:390px" aria-label="Captured volatility surface"></div>
             <div id="smileSource" class="text-xs text-slate-300 mt-2">
             </div>
           </div>
@@ -506,6 +502,7 @@
                   <tbody id="stressMatrixTableBody" class="divide-y divide-[#1a2639]"></tbody>
                 </table>
               </div>
+              <p class="scenario-heat-key"><span class="heat-loss">− Loss</span><span>0 Flat</span><span class="heat-profit">+ Profit</span><span>Deeper color = larger P&amp;L</span></p>
               <p id="stressModelNote" class="text-sm text-slate-300"></p>
                 <div id="stressGreeksStrip" class="text-xs leading-relaxed text-slate-300"></div>
                 <div id="atmGreeks" class="text-xs leading-relaxed text-sky-200"></div>
@@ -1213,7 +1210,13 @@
               borderWidth: 1,
               padding: 10,
               titleFont: { family: "'JetBrains Mono', monospace", size: 12, weight: '700' },
-              bodyFont: { family: "'JetBrains Mono', monospace", size: 12 }
+              bodyFont: { family: "'JetBrains Mono', monospace", size: 12 },
+              callbacks: {label: item => {
+                const name = OptionsCharts.tooltipName(item.dataset.label);
+                const value = item.parsed.y;
+                return name + ': ' + (Number.isFinite(value)
+                  ? (unit === '₹' ? '₹' + Math.round(value).toLocaleString('en-IN') : value.toFixed(2) + (unit || '')) : '—');
+              }}
             }
           },
           scales: {
@@ -1904,7 +1907,7 @@
                 borderWidth: 2.6,
                 pointRadius: totalLabels > 80 ? 2.5 : 3.5,
                 fill: false,
-                spanGaps: false,
+                spanGaps: true,
                 showLabels: false,
                 labelStep: labelStep,
                 labelSuffix: ' pp',
@@ -1919,7 +1922,7 @@
                 borderWidth: 2.1,
                 pointRadius: totalLabels > 80 ? 2 : 3,
                 fill: false,
-                spanGaps: false,
+                spanGaps: true,
                 showLabels: false,
                 tension: 0
               },
@@ -1949,7 +1952,7 @@
                 borderWidth: 2.8,
                 pointRadius: totalLabels > 80 ? 2.5 : 3.5,
                 fill: false,
-                spanGaps: false,
+                spanGaps: true,
                 showLabels: false,
                 labelStep: labelStep,
                 labelSuffix: '%',
@@ -1958,7 +1961,7 @@
               },
               {
                 label: 'HV10 (%)',
-                data: hv10Arr,
+                data: hv10Arr, spanGaps: true,
                 borderColor: '#a78bfa',
                 borderWidth: 2.3,
                 pointRadius: totalLabels > 80 ? 1 : 2.5,
@@ -1968,7 +1971,7 @@
               },
               {
                 label: 'HV30 (%)',
-                data: hv30Arr,
+                data: hv30Arr, spanGaps: true,
                 borderColor: '#10b981',
                 borderWidth: 2.4,
                 pointRadius: totalLabels > 80 ? 1 : 2.5,
@@ -1981,17 +1984,6 @@
           regimeChart = updateOrCreateChart(regimeChart, ctx, 'line', levelsData, chartOpts('%', false));
         }
 
-        regimeChart.options.plugins.tooltip.callbacks = {
-          afterBody: items => {
-            const index = items[0]?.dataIndex;
-            const point = slice[index];
-            const details = [];
-            if (point && observedIv(point) !== null) details.push('Captured ' +
-              new Date(point.snapshotId).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})
-              + ' IST · ' + point.expiry + ' · strike ' + point.atm);
-            return details;
-          }
-        };
         regimeChart.update('none');
 
         const latestRisk = fullSeries.filter(pt => Number.isFinite(pt.h30)).at(-1);
@@ -2024,7 +2016,6 @@
         document.getElementById('regimeRiskAsOf').textContent='Annualized · '+(latestRisk?.d || r.sessionDate || 'date unavailable');
         var windows = [
           { w: 'HV10', hv: hv10 }, { w: 'HV20', hv: hv20 }, { w: 'HV30', hv: hv30 },
-          { w: 'Yang–Zhang 20D', hv:window.VL_PUBLIC_STATE?.forecasts?.[activeSymbol]?.yang_zhang20, date:window.VL_PUBLIC_STATE?.forecasts?.[activeSymbol]?.training_through },
           { w: 'HV30 · 60-session mean', hv: observedMean(allH30.slice(-60)) },
           { w: 'HV30 · 1-year mean', hv: observedMean(allH30) }
         ];
@@ -2181,13 +2172,12 @@
         };
         opts.scales.x.ticks.callback = d => list.find(r => r.dte === d)?.expiry || '';
         opts.scales.x.title.text = 'Listed expiry · spaced by days remaining';
-        opts.plugins.tooltip.callbacks = {title: items => items.length ? items[0].raw.expiry + ' · ' + items[0].parsed.x.toFixed(1) + ' days' : '',
-          afterLabel: context => context.datasetIndex ? 'Forecast through ' + (OptionsCharts.forecast(window.VL_PUBLIC_STATE,activeSymbol,list[context.dataIndex])?.training_through || 'unavailable') + ' · ' + (OptionsCharts.forecast(window.VL_PUBLIC_STATE,activeSymbol,list[context.dataIndex])?.sessions || '—') + ' trading sessions' : ''};
+        opts.plugins.tooltip.callbacks = {...opts.plugins.tooltip.callbacks, title: items => items[0]?.raw.expiry || ''};
         termChart = updateOrCreateChart(termChart, ctx, 'line', termData, opts);
       }
 
       // ===================================================================
-      // TAB 3: SMILE, SKEW & STRIKE SURFACE (100% Real Upstox Chain Data)
+      // TAB 3: SMILE & SKEW (100% Real Upstox Chain Data)
       // ===================================================================
       function renderTab3Smile() {
         var r = currentRow();
@@ -2237,42 +2227,9 @@
         const smileData = {labels, datasets:[{label:'Captured IV (%)', data:marks.map(m => m ? m.iv : null),
           borderColor:'#38bdf8', pointRadius:5, showLabels:true, pointValueLabels:'iv', spanGaps:false, tension:0}]};
         const opts = chartOpts('%', false);
-        opts.plugins.tooltip.callbacks = {afterLabel: item => {
-          const m = marks[item.dataIndex];
-          return 'Strike ' + m.strike + (m.delta == null ? ' · call/put mean' : ' · broker Δ ' + m.delta.toFixed(3));
-        }};
         document.getElementById('smileSource').textContent = r.expiry + ' · ' + (r.ivCapturedAt ? new Date(r.ivCapturedAt).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})+' IST' : 'Capture time unavailable') +
           ' · Captured broker IV';
         smileChart = updateOrCreateChart(smileChart, ctx, 'line', smileData, opts);
-        const surface = document.getElementById('smileViewSelect').value === '3D';
-        document.getElementById('smile2dPanel').classList.toggle('hidden',surface);
-        document.getElementById('smileSurface').classList.toggle('hidden',!surface);
-        if (surface) renderCapturedSurface(showAll);
-        if (surface) document.getElementById('smileSource').textContent = 'Captured OTM IV points across listed expiries · ' + (r.ivCapturedAt || r.archivedAsOf || 'Capture time unavailable');
-      }
-
-      var plotlyLoad = null;
-      function renderCapturedSurface(showAll) {
-        const target = document.getElementById('smileSurface');
-        if (!window.Plotly) {
-          target.textContent = 'Loading captured surface…';
-          if (!plotlyLoad) plotlyLoad = new Promise((resolve,reject) => {
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js';
-            script.onload = resolve; script.onerror = reject; document.head.appendChild(script);
-          });
-          plotlyLoad.then(() => renderCapturedSurface(document.getElementById('smileRangeSelect').value === 'ALL'))
-            .catch(() => { target.textContent = '3D renderer unavailable. Captured quotes remain available in the table.'; plotlyLoad = null; });
-          return;
-        }
-        const points = OptionsCharts.surface(marketCatalog[activeSymbol] || [],!showAll);
-        if (!points.length) { target.textContent = 'No captured IV observations for this range.'; return; }
-        window.Plotly.react(target,[{type:'scatter3d',mode:'markers',x:points.map(p=>p.strike),y:points.map(p=>p.dte),z:points.map(p=>p.iv),
-          text:points.map(p=>p.expiry + ' · ' + p.asOf),hovertemplate:'Strike %{x}<br>%{text}<br>IV %{z:.2f}%<extra></extra>',
-          marker:{size:3,color:points.map(p=>p.iv),colorscale:[[0,'#10b981'],[.5,'#38bdf8'],[1,'#a78bfa']],opacity:.8}}],
-          {paper_bgcolor:'#080d16',font:{color:'#cbd5e1'},margin:{l:0,r:0,b:0,t:10},
-            scene:{xaxis:{title:'Strike'},yaxis:{title:'DTE'},zaxis:{title:'Captured IV (%)'},bgcolor:'#080d16'}},
-          {responsive:true,displaylogo:false});
       }
 
       // ===================================================================
@@ -2326,7 +2283,7 @@
           const opts = chartOpts('₹', true);
           opts.scales.x.type = 'linear';
           opts.scales.x.title = {display: true, text: 'Index level at expiry', color: '#cbd5e1'};
-          opts.plugins.tooltip.callbacks = {title: items => items.length ? 'Index ' + items[0].parsed.x.toLocaleString('en-IN') : ''};
+          opts.plugins.tooltip.callbacks = {...opts.plugins.tooltip.callbacks, title: items => items.length ? 'Index ' + items[0].parsed.x.toLocaleString('en-IN') : ''};
           const data = {datasets: [{label: 'Expiry P&L before fees (₹)', data: points, borderColor: '#10b981',
             pointRadius: 3, borderWidth: 2.5, tension: 0}]};
           straddleChart = updateOrCreateChart(straddleChart, ctx, 'line', data, opts);
@@ -2350,7 +2307,7 @@
           opts.scales.x.title = {display: true, text: 'Capture time (IST)', color: '#cbd5e1'};
           const timeLabel = value => String(Math.floor(value / 60)).padStart(2,'0') + ':' + String(Math.round(value % 60)).padStart(2,'0');
           opts.scales.x.ticks.callback = timeLabel;
-          opts.plugins.tooltip.callbacks = {title: items => items.length ? timeLabel(items[0].parsed.x) + ' IST' : ''};
+          opts.plugins.tooltip.callbacks = {...opts.plugins.tooltip.callbacks, title: items => items.length ? timeLabel(items[0].parsed.x) + ' IST' : ''};
           straddleChart = updateOrCreateChart(straddleChart, ctx, 'line', {datasets: [{
             label: ivMode ? 'Captured strike IV (%)' : 'Call + put book midpoints (points, before costs)',
             data, borderColor: ivMode ? '#38bdf8' : '#10b981',
@@ -2368,7 +2325,7 @@
           ? 'T+1 reaches expiry · intrinsic value'
           : canStress ? 'T+1 model estimate · ' + r.pricingModel + ' · constant IV shift and proportional forward move'
           : 'T+1 estimate unavailable · verified model inputs required';
-        document.getElementById('stressMatrixTableBody').innerHTML = [-2,-1,0,1,2].map(move => {
+        const matrix = [-2,-1,0,1,2].map(move => {
           const shiftedSpot = r.spot * (1 + move / 100);
           const shiftedForward = forward * (1 + move / 100);
           const cells = [-3,-1.5,0,1.5,3].map(shift => {
@@ -2380,10 +2337,15 @@
                   : black76Price(shiftedForward,l.strike,years,decision.rate,(l.iv+shift)/100,l.call);
               return total + units * l.qty * (mark - l.entryPx);
             }, 0) : NaN;
-            return '<td class="py-2 px-2">' + (Number.isFinite(value) ? fmtInr(Math.round(value), true) : '—') + '</td>';
-          }).join('');
-          return '<tr><th class="py-2 px-2 text-left">' + move + '%</th>' + cells + '</tr>';
-        }).join('');
+            return Number.isFinite(value) ? Math.round(value) : null;
+          });
+          return {move, cells};
+        });
+        const maxAbs = Math.max(0, ...matrix.flatMap(row => row.cells).filter(Number.isFinite).map(Math.abs));
+        document.getElementById('stressMatrixTableBody').innerHTML = matrix.map(({move,cells}) =>
+          '<tr><th class="py-2 px-2 text-left">' + move + '%</th>' + cells.map(value =>
+            '<td class="py-2 px-2" style="' + OptionsCharts.heatStyle(value,maxAbs) + '">' +
+            (value === null ? '—' : fmtInr(value, true)) + '</td>').join('') + '</tr>').join('');
         document.getElementById('stressGreeksStrip').textContent = legs.map(l =>
           (l.qty > 0 ? 'Buy ' : 'Sell ') + Math.abs(l.qty) + ' × ' + l.strike + (l.call ? ' CE' : ' PE') +
           ' @ ' + (l.entryPx === null ? '—' : '₹' + l.entryPx.toFixed(2))).join(' · ');
@@ -5113,7 +5075,6 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           document.querySelector('[data-tab="smile"]').click();
         });
         document.getElementById('smileRangeSelect').addEventListener('change', renderTab3Smile);
-        document.getElementById('smileViewSelect').addEventListener('change', renderTab3Smile);
         populateExpiryDropdown();
         updateMarketClock();
         initForwardTest();
