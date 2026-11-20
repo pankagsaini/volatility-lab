@@ -14,6 +14,7 @@ class Clock extends Date {
 const cloud = vm.createContext({Date: Clock});
 vm.runInContext(gs, cloud);
 const web = vm.createContext({Date: Clock});
+vm.runInContext(fs.readFileSync(path.join(root,"scripts/freeze-policy.js"),"utf8"), web);
 vm.runInContext(html.match(/var STRATEGY_CAPITAL_PER_LOT = \{[\s\S]*?\};/)[0], web);
 for (const name of ['formatLiveNumber', 'liveNumber', 'liveTimestamp', 'liveBookValid', 'brokerIvPercent',
                     'brokerWingIv_', 'buildStrategyLegs_', 'expiryPayoff', 'positionalGateOpen', 'evaluateStrategiesForExpiry']) {

@@ -126,7 +126,11 @@ assert.equal(minutesClock.closeMins,940,'Close must come from the exchange calen
 assert.equal(web.expiryClock('2026-11-17','2026-11-16T09:30:00Z').is0Dte,false);
 assert.equal(web.expiryClock('2026-11-17','2026-11-16T09:30:00Z').rawCalendarDays,1);
 assert.equal(web.expiryClock('2026-11-17','2026-11-16T09:30:00Z').tCal,(1480/1440)/365);
-assert.equal(web.isExpiryRollWindow('2026-11-17','2026-11-16T10:15:00Z'),true,'15:45 IST on T-1 rolls');
+assert.equal(web.isExpiryRollWindow('2026-11-17','2026-11-16T09:59:59Z'),false,'15:29:59 IST on T−1 stays');
+assert.equal(web.isExpiryRollWindow('2026-11-17','2026-11-16T10:00:00Z'),true,'15:30 IST on T−1 rolls');
+assert.equal(web.expiryClock('2026-11-17','2026-11-17T15:40:00+05:30').tCal,0);
+assert.equal(web.expiryClock('2026-12-29','2026-12-29T15:30:01+05:30').tVol,0);
+assert.equal(web.expiryClock('2026-12-29','2026-12-29T15:30:01+05:30').closeMins,930);
 assert.equal(web.isExpiryRollWindow('2026-11-17','2026-11-16T09:30:00Z'),false,'15:00 IST on T-1 stays');
 assert.equal(web.isExpiryRollWindow('2026-11-17','2026-11-17T03:45:00Z'),true,'Expiry morning rolls');
 web.marketCatalog={NIFTY:[{expiry:'2026-11-17'},{expiry:'2026-11-24'}]};
@@ -205,6 +209,10 @@ web.activeSymbol='BANKNIFTY'; web.renderTab6ZeroDteDesk();
 assert(web.zerodteStraddleChart.data.datasets[3].data.every(p=>p===null),'NIFTY study cannot become BANKNIFTY evidence');
 web.activeSymbol='NIFTY'; zeroItem.expiry='2026-11-23'; web.renderTab6ZeroDteDesk();
 assert.equal(web.zerodteStraddleChart.data.labels.length,0,'0DTE desk must not plot next-week decay');
+zeroItem.expiry='2026-11-17';
+zeroItem.dualIntraday = ['14:59','15:00','15:30','15:31'].map((t,i)=>({markAt:'2026-11-17T'+t+':00+05:30',spot:[100,200,400,800][i],anchorK:25000,anchorStrad:100,rollStrad:100,rollAtm:25000}));
+web.renderTab6ZeroDteDesk();
+assert.equal(element('zKpiVwap').textContent,'300.00','Only captured prints inside the desk window contribute');
 web.activeZeroDteMode='pct';
 
 
@@ -342,12 +350,12 @@ for(const row of archive) {
     gross += (m[1]==='S'?-1:1)*ratio*(exit-entry);
   }
   const lot = row.unitLegs/sumRatio;
-  assert(Number.isInteger(lot)&&lot>0,'Lot size is integral');
+  assert.equal(lot,btMeta.lotSizes[row.sym],'Archived quantity must match the verified contract lot');
   assert(Math.abs(gross*lot-row.gross) <= 0.11*sumRatio*lot+1,'Gross reproduces from recorded marks');
 }
 const sample = archive.find(r=>r.date==='2026-11-02'&&r.sym==='NIFTY'&&r.strat==='S1');
-assert.equal(sample.gross,90.0,'Known 11-02 S1 gross reproduces');
-assert.equal(sample.capital,26174,'Known 11-02 S1 capital reproduces');
+assert.equal(sample.gross,78.0,'Known 11-02 S1 gross reproduces');
+assert.equal(sample.capital,22684,'Known 11-02 S1 capital reproduces');
 assert.equal(sample.exp,'2026-11-09');
 assert.equal(sample.hvAsOf,'2026-10-30');
 assert(btMeta.excluded.every(e=>e.reason.length>0),'Every excluded session states why');

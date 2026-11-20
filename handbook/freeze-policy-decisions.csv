@@ -1,0 +1,15 @@
+source,available_at,sha256,gate_blocked,gate_status,new_open_ids
+2026-11-11_snapshot_092042_complete.json.gz,2026-11-11T09:20:42.479000+05:30,21db8f696106059263b82b97e92f09f2d4f70f5abd853dcb2e08fc408d276aaf,True,NFO holiday/session status was not validated by the market-data collector.,
+2026-11-11_snapshot_092543_complete.json.gz,2026-11-11T09:25:43.677000+05:30,8c382927c920bf429d41dc135470fcfc47023d0af3df7a5e364117f70f735965,True,NFO holiday/session status was not validated by the market-data collector.,
+2026-11-12_snapshot_092042_complete.json.gz,2026-11-12T09:20:42.489000+05:30,dfd4811544c18fea68d8936f7ff9bfdca5969ae3c5c5be35b37c21c94b3591b2,True,NFO holiday/session status was not validated by the market-data collector.,
+2026-11-12_snapshot_092542_complete.json.gz,2026-11-12T09:25:42.469000+05:30,44cbc21fb708e23f6e855cbef1033cef040a5e33279a32849808d567442dfe17,True,NFO holiday/session status was not validated by the market-data collector.,
+2026-11-13_snapshot_092042_complete.json.gz,2026-11-13T09:20:47.565000+05:30,1a19cf6c462ea9c335e498571e4d3efcd74d110193b8fb9cda209f179ca2b2f9,False,Live Forward Session Active (2026-11-13 · 13 Nov 09:20 IST),
+2026-11-13_snapshot_092542_complete.json.gz,2026-11-13T09:25:48.430000+05:30,9cd69b03c07b861980a3663a81bba6c8ca6c68f6d0134691a629b99d63a98afc,False,Live Forward Session Active (2026-11-13 · 13 Nov 09:25 IST),
+2026-11-16_snapshot_092042_complete.json.gz,2026-11-16T09:20:45.222000+05:30,877c860ace28359472a387047403cb26f5226e58b435b5a993a936c87f0359d6,False,Live Forward Session Active (2026-11-16 · 16 Nov 09:20 IST),
+2026-11-16_snapshot_092542_complete.json.gz,2026-11-16T09:25:45.236000+05:30,7bfb3939f133a79a2edc7bee1fc279e712bff581e55022bb5bd56a45a8e6d3cf,False,Live Forward Session Active (2026-11-16 · 16 Nov 09:25 IST),
+2026-11-17_snapshot_092042_complete.json.gz,2026-11-17T09:20:46.450000+05:30,a207f8b57b285e4c53e9911522f1825438b5c5595bb1e57fa3e84e3e29844286,False,Live Forward Session Active (2026-11-17 · 17 Nov 09:20 IST),
+2026-11-17_snapshot_092544_complete.json.gz,2026-11-17T09:25:54.674000+05:30,dfdf3c20cd43cf4ab1444d5e2b828a4b3aa45009c5a58f3f117bddb0a73a152d,False,Live Forward Session Active (2026-11-17 · 17 Nov 09:25 IST),
+2026-11-18_snapshot_092043_complete.json.gz,2026-11-18T09:20:47.904000+05:30,761d3c13c7df2d888e9053a74e2ccc62c4886ebaf8196a6d6dfc0a6311b264b9,False,Live Forward Session Active (2026-11-18 · 18 Nov 09:20 IST),
+2026-11-18_snapshot_092542_complete.json.gz,2026-11-18T09:25:44.400000+05:30,f21e482db96e73d602ceee97949429d3dfd4eecd3ba207b93ee45ad8bba9afcc,False,Live Forward Session Active (2026-11-18 · 18 Nov 09:25 IST),
+2026-11-19_snapshot_092043_complete.json.gz,2026-11-19T09:20:46.017000+05:30,df2d5751fe3eea87199daa390d57f7ac3a10691994abb01033bc4c694290dc02,False,Live Forward Session Active (2026-11-19 · 19 Nov 09:20 IST),
+2026-11-19_snapshot_092543_complete.json.gz,2026-11-19T09:25:44.818000+05:30,e1f67e2d290a5e25a487e1f7200b843bffc576f4dca95bffaa116ae6af98204c,False,Live Forward Session Active (2026-11-19 · 19 Nov 09:25 IST),OPEN-20261119-NIF-1123-S2

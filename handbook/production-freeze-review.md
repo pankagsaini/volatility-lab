@@ -1,0 +1,48 @@
+# Volatility Lab | production freeze review
+20 November 2026 · independent engineering and quantitative review · NSE NIFTY / BANKNIFTY
+
+**Verdict: NOT READY for an investor-performance or unattended-production sign-off.** The research policy can be locked for prospective paper observation. Positive expectancy, continuity across historical ledger stores, and uninterrupted autonomous capture have not been established. Source audited: default branch `master`, commit [13ff5a86f84d8579b9a7283eff46e5b105e17184](https://github.com/pankagsaini/volatility-lab/tree/13ff5a86f84d8579b9a7283eff46e5b105e17184). Baseline line citations in the appendices refer to this revision; implementation citations refer to the candidate patch.
+
+| Area | Score / 100 | Evidence and decision |
+|---|---:|---|
+| Data pipeline | 65 | Raw hashes and timestamped captures are available. 385 of 386 minute slots on 19 Nov; only 235 on 13 Nov. Full-day account quota and uninterrupted evaluator operation unproven. [Capture audit](freeze-integrity.md) |
+| Pricing math | 82 | Dated rate and dividend, expiry-matched futures, strict synthetic spread gate, GEX units and dual clocks reviewed. Constituent settlement prices, dealer positioning and executable multi-leg size remain separate from the displayed proxies. [Pricing and tabs](freeze-integrity.md) |
+| Strategy expectancy | 20 | 216 baseline scenarios over 18 days, 28 original filter matches and zero matched trades with qualifying two-sided books at both endpoints. The revised exact-minute replay produced one close. [Per-strategy attribution and stress](freeze-expectancy.md) |
+| Paper trading engine | 65 | Independent Python / GAS replay on 385 captured frames agrees on a target exit. Stops, stale books, carry and retry are exercised by tests. Ten pre-change cloud closes reconcile to raw books; one intraday exit was two days late. [Paper reconciliation](freeze-paper.md) |
+| Investor readiness | 35 | A reviewer can trace evidence and costs. No independently reserved forward cohort has demonstrated an edge, historical continuity is unresolved, and capital is a proxy. [Stress data](freeze-stress.csv) · [Ledger differences](freeze-paper.md) |
+
+Scores are qualitative audit judgments, not probabilities. Pricing reproducibility receives more credit than proxy accuracy. Research expectancy receives little credit until independent after-cost returns exist. The paper score distinguishes a reproducible engine from verified ongoing operation.
+
+## What may enter paper observation
+
+Retain S1 (defined-risk short VRP) and S4 (put-skew weighted condor) as positional research. Exit at the earlier book-observed stop, target, or scheduled prior trading session close-out. Retain S2 (cheap-volatility long straddle) and S5 (intraday theta fly) as intraday research. S3 and S6 remain observation-only: there is no verified event-release input or executable matched hedge proving a basis trade. Use the existing preset thresholds with exact scheduled minutes, a two-day minimum, and the front listed contract. All open trades retain their entry policy and fixed legs. No threshold was selected by optimizing these returns. The legacy archive uses different timing and holding assumptions and is explicitly labeled in Workspace 2.
+
+Policy: `volatility_lab/data/freeze_policy.json:2`; Python decision: `volatility_lab/core/freeze_policy.py:9`; Apps Script: `volatility_lab/cloud/apps_script/Code.gs:2174`, `:2181`, `:2204`, `:2520`; UI: `docs/index.html:2475`. The revised historical walk invokes the production Python state machine at `scripts/freeze_policy_walk.py:18`; its captured-book traces agree with Apps Script on the observed 19 Nov trade. Workspace 2 exposes the frozen replay and Workspace 3 reads the ledger with dated marks. The archived LTP screen and custom strategy sandbox must not be interpreted as the revised engine's returns.
+
+## P0 acceptance gates
+
+1. **Ledger continuity.** Keep the original bundled and Drive ledgers, raw captures and backups. The 20 Nov morning snapshot and bundle have 29 common closed IDs, 44 bundle-only and seven cloud-only. Quarantine unmatched historical records from any track record. Do not merge or delete by timestamp. The safe mirror refuses to overwrite a conflicting book. A prospective cohort needs its own policy tag, immutable starting export, and a documented break in series. [Ledger evidence and commands](freeze-paper.md)
+2. **Forward capture and exit delivery.** Observe the deployed collector through regular entry minutes, a full session, overnight carry and an actual final close. Demonstrate fail-closed behavior across missing data and restart, reconcile the raw observations independently, and record measured execution/runtime headroom. A missing necessary entry or exit observation must be reported as missed or pending. Quota exhaustion and failure-free live execution cannot be certified from the available snapshot counter. [Daily coverage](freeze-integrity.md)
+3. **Performance claims.** Lock this policy and reserve subsequent sessions. Report cohort returns and costs by regime, underlying and holding horizon with clustered daily uncertainty; keep accumulating outcomes until the precision is useful for the intended capital decision. A historical target exit and a deterministic fixture stop cannot establish investable expectancy. [Original and revised results](freeze-expectancy.md)
+
+## P1 disclosures and allocator questions
+
+| Question | Defensible answer |
+|---|---|
+| How many independent profitable observations survived execution filters? | No original rule matches had both endpoints validated; the revised historical walk recorded one S2 trade. NIFTY and BANKNIFTY trades on one day are correlated. No stand-alone prospective Sharpe or success rate is established. [Stress](freeze-expectancy.md) |
+| Could the basket fill at the reported price after all costs? | The paper engine checks side, timestamp and displayed quantity on each leg. It charges the stated fee schedule and the audit reprices at 0/1/2/5 adverse ticks per leg per side. Book refresh latency, legging, partial fills, impact and queue priority remain unmeasured. Check actual contract notes before using account-specific fees. [Fees](https://upstox.com/brokerage-charges/) · [Stress method](freeze-expectancy.md) |
+| What happens if the market gaps through a stop or closes without a fresh book? | The stop is a decision on a captured liquidation mark. Gaps, outages and thin wings can make the executable loss larger. An expired unresolved position goes to manual settlement reconciliation. The legacy delayed exit illustrates that risk. [Paper audit](freeze-paper.md) |
+| Can an allocator reproduce the record without trusting a dashboard screenshot? | A reviewer with private archive access can check compressed-file hashes, trigger receipt, per-leg books, sizes, charges and exit. The public artifacts record provenance. Drive content and a hash made during review do not constitute independently timestamped immutable custody. [Hash manifest](freeze-source-hashes.csv) · [Decision audit](freeze-policy-decisions.csv) |
+| How much capital could this support, and what does ROC mean? | The denominator is a one-lot capital assumption or scenario margin proxy. There is no broker portfolio margin history, size ladder, cash account NAV or capacity test. Daily-P&L risk ratios are descriptive. Do not extrapolate them to portfolio returns. [Metrics and definitions](freeze-expectancy.md) |
+
+## P2 explicitly deferred
+
+Additional strategy structures, calibration, a 3D surface, return projections, broker order routing, additional indicators and investor presentation work are outside this freeze. Retain the discretionary toolkit as research context and disclose stale or model-derived values as described in the [six-tab review](freeze-integrity.md).
+
+## Daily five-step SOP
+
+1. **Before open:** Verify exchange session and expiries, live collector mode, scheduled trigger, dated risk inputs, quota headroom, latest Drive backup and open/pending positions. Record the policy version, timestamp and expected decision minutes. Separate legacy exposure.
+2. **09:20/09:25 IST:** Preserve each complete report or a missed-decision entry. Check nearest expiry, completed prior close, per-leg event time, displayed size and sides. Record signal/no signal and source hash. Missed windows are not chased.
+3. **Intraday:** Monitor snapshot age and gaps, check portfolio and individual liquidation marks, stop/target status and current executable books. Use the term/smile/history for context; check the timestamp before discretionary use. A missing mark stays unavailable.
+4. **15:15 through close:** Confirm which intraday and prior-expiry-session positions were due; record actual book/time or pending exit. Carry only explicitly tagged positional positions. Handle expired unresolved positions with official settlement evidence. Preserve the final capture and check the EOD job separately.
+5. **Post-close and next morning:** Run the read-only sync into the dedicated mirror, compare filtered IDs/legs/net to the Workspace 3 export, hash source files, retain fees and record open discrepancies. Journal daily cohort P&L, drawdown, missing minutes, runtime and observed fills; verify pending EOD recovery next morning. Do not revise the strategy in response to a day's result. [Mirror instructions](freeze-paper.md)

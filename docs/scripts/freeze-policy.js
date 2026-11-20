@@ -1,0 +1,14 @@
+const FREEZE_RULES = {
+  "S1": {"minute": 560, "dte": [2,10], "holding": "positional", "filters": {"vrp":[2,15],"hv30":[8,16]}},
+  "S2": {"minute": 565, "dte": [3,7], "holding": "intraday", "filters": {"vrp":[-15,-1.5]}},
+  "S3": {"holding": "observe", "reason": "No point-in-time event confirmation"},
+  "S4": {"minute": 560, "dte": [3,14], "holding": "positional", "filters": {"rr25":[2.5,12],"vrp":[1,15]}},
+  "S5": {"minute": 560, "dte": [2,6], "holding": "intraday", "filters": {"vrp":[1,15]}},
+  "S6": {"holding": "observe", "reason": "No matched executable basis hedge"}
+};
+function freezeEntryAllowed(code, minute, metrics) {
+  const rule = FREEZE_RULES[code];
+  if (!rule || rule.holding === 'observe' || minute !== rule.minute) return false;
+  return Object.entries({...rule.filters, dte:rule.dte}).every(([key, bounds]) =>
+    Number.isFinite(metrics[key]) && metrics[key] >= bounds[0] && metrics[key] <= bounds[1]);
+}

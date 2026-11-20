@@ -1066,7 +1066,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
                 "day": day,
                 "retrieved_at": timestamp,
                 "nfo_session_validated": True,
-                "risk_metrics": {"NIFTY": {"as_of": day, "hv10": 14.0, "hv30": 15.0}},
+                "risk_metrics": {"NIFTY": {"as_of": "2026-11-09", "hv10": 14.0, "hv30": 15.0}},
                 "records": [{"label": "NIFTY|2026-11-17", "retrieved_at": timestamp, "data": rows}],
             }
 
@@ -1109,8 +1109,8 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
             ledger=after_11_mid,
             now_ist="2026-11-11T15:15:00+05:30",
         )
-        self.assertEqual(len(after_11_close["open_positions"]), 0)
-        self.assertGreater(len(after_11_close["closed_trades"]), 0)
+        self.assertEqual({p["strat"] for p in after_11_close["open_positions"]}, {"S1"})
+        self.assertTrue(all(p["holding"] == "positional" for p in after_11_close["open_positions"]))
         for tr in after_11_close["closed_trades"]:
             self.assertEqual(tr["date"], "2026-11-11")
             self.assertEqual(tr["exitTime"], "15:15 IST")

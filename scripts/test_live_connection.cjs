@@ -7,8 +7,14 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const gs = fs.readFileSync(process.env.COLLECTOR_SOURCE_PATH || path.join(root, 'volatility_lab/cloud/apps_script/Code.gs'), 'utf8');
+// The offline Python evaluator reads this same contract; reject drift in either deployed JS copy.
+const policy = fs.readFileSync(path.join(root,'scripts/freeze-policy.js'),'utf8').trim().replaceAll('\r\n','\n');
+assert(gs.replaceAll('\r\n','\n').includes(policy));
+assert.equal(policy,fs.readFileSync(path.join(root,'docs/scripts/freeze-policy.js'),'utf8').trim().replaceAll('\r\n','\n'));
+const schema=JSON.parse(fs.readFileSync(path.join(root,'volatility_lab/data/freeze_policy.json'),'utf8'));
+assert.equal(JSON.stringify(vm.runInNewContext(policy+';FREEZE_RULES')),JSON.stringify(schema));
 const clone = value => JSON.parse(JSON.stringify(value));
-let now = Date.parse('2026-11-13T04:30:00Z');
+let now = Date.parse('2026-11-13T03:50:00Z');
 class Clock extends Date {
   constructor(...args) { super(...(args.length ? args : [now])); }
   static now() { return now; }
@@ -52,7 +58,7 @@ function candles() {
   for (let i = 70; i >= 0; i--) {
     const date = new Date(now - i * 86400000);
     if ([0, 6].includes(date.getUTCDay())) continue;
-    close *= Math.exp(rows.length % 2 ? 0.003 : -0.003);
+    close *= Math.exp(rows.length % 2 ? 0.007 : -0.007);
     rows.push([date.toISOString().slice(0, 10) + 'T00:00:00+05:30', close, close, close, close, 100, 0]);
   }
   return rows.reverse(); // Real API returns newest first, including possible current-day input.
@@ -345,7 +351,7 @@ async function main() {
   assert.equal(report.status, 'complete', JSON.stringify(report.errors));
   assert(report.forward_test_ledger.open_positions.length > 0, 'valid collector inputs must reach evaluator: ' + JSON.stringify({rejections:report.forward_rejections, metrics: report.risk_metrics, mkt:cloud.getNseMarketStatusIST(new Clock())}));
   assert.equal(report.risk_metrics.NIFTY.as_of, '2026-11-12');
-  const expectedHv = Math.sqrt(30 / 29) * 0.003 * Math.sqrt(245) * 100;
+  const expectedHv = Math.sqrt(30 / 29) * 0.007 * Math.sqrt(245) * 100;
   assert(Math.abs(report.risk_metrics.NIFTY.hv30 - expectedHv) < 1e-10);
   assert.deepEqual(['2026-07-31','2026-08-03','2026-12-07'].map(cloud.regularCloseMinutes_),[930,940,945]);
   assert.equal(cloud.indexExpiryMillis_('2026-12-08'),Date.parse('2026-12-08T15:30:00+05:30'));

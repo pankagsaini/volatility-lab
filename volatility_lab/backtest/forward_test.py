@@ -1,21 +1,15 @@
-"""Automated Forward Testing (Live Paper-Trading) Engine for Volatility Lab (S1-S6).
+"""Event-time NSE paper engine and local replica of the Apps Script ledger.
 
-100% Real-Data Forward Testing engine (v19.1 Clean-Slate Edition) that:
-1. Separates historical backtest sessions (2026-11-02 to 2026-11-09, which belong strictly to
-   Strategy Backtest Workspace 2) from Forward Test (Auto Paper) Workspace 3.
-2. Enforces a strict forward-only trigger gate: MIN_FORWARD_DATE = '2026-11-11' AND live NSE
-   market hours (09:15-15:30 IST). Never auto-triggers on historical snapshots (< '2026-11-11')
-   or when the market is closed.
-3. Starts with a clean-slate ledger (0 Open Positions, 0 Closed Trades prior to 2026-11-11,
-   status='ARMED_WAITING_FOR_NEXT_SESSION') and automatically places the first forward trades
-   when live Upstox option-chain captures begin on 2026-11-11 09:20 IST onwards, marks them
-   to market against timestamped, two-sided option books, and auto-closes them at 15:15 IST or on SL/TP hit.
+Research-v1 evaluates the nearest listed expiry at the strategy's specified minute.
+Entries and liquidation marks require complete, depth-qualified L1 books. The
+--sync command mirrors the authoritative ledger without creating new trades.
 """
 from __future__ import annotations
 from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 
 import copy
+from volatility_lab.core.freeze_policy import RULES, entry_allowed
 import hashlib
 import json
 import re
@@ -81,7 +75,7 @@ def _quote_timestamp_is_fresh(observed: datetime | str | None, reference: dateti
     if observed_dt is None or reference_dt is None:
         return False
     age_seconds = (reference_dt - observed_dt).total_seconds()
-    return -30.0 <= age_seconds <= MAX_FORWARD_QUOTE_AGE_SECONDS
+    return 0.0 <= age_seconds <= MAX_FORWARD_QUOTE_AGE_SECONDS
 
 
 def _quote_event_timestamp(market_data: dict[str, Any]) -> datetime | str | None:
@@ -118,7 +112,7 @@ def _risk_vol_metrics(payload: dict[str, Any], symbol: str, session_day: str) ->
                     - datetime.strptime(as_of, "%Y-%m-%d").date()).days
     except ValueError:
         return None, None
-    if age_days < 0 or age_days > 5:
+    if age_days <= 0 or age_days > 5:
         return None, None
     if item.get("units") == "annualized_percent":
         def annualized_percent(key):
@@ -237,7 +231,7 @@ STRATEGY_NAMES: dict[str, str] = {
     "S1": "S1 · VRP Harvest Iron Condor",
     "S2": "S2 · Gamma Expansion Long Straddle",
     "S3": "S3 · Post-Event Front-Week Crush Fly",
-    "S4": "S4 · Steep Put Skew Ratio (1x2)",
+    "S4": "S4 · Put-weighted Skew Condor",
     "S5": "S5 · Intraday Theta Iron Butterfly",
     "S6": "S6 · Synthetic Basis Skewed Condor",
 }
@@ -423,7 +417,7 @@ def sanitize_forward_ledger(raw_ledger: dict[str, Any] | None) -> dict[str, Any]
     return base
 
 
-def compute_position_charges(day: str, symbol: str, legs: list[dict[str, Any]], lots: int = 1, include_exit: bool = True) -> float:
+def compute_position_charges(day: str, symbol: str, legs: list[dict[str, Any]], lots: int = 1, include_exit: bool = True, exit_day: str | None = None) -> float:
     """Compute exact Upstox statutory + brokerage charges for a multi-leg option position."""
     lot_qty = (65 if str(symbol).upper() == "NIFTY" else 30) * max(1, int(lots))
     total = 0.0
@@ -436,7 +430,7 @@ def compute_position_charges(day: str, symbol: str, legs: list[dict[str, Any]], 
         c_open = broker_charges.charge(day, "opt", e_px, qty, "sell" if side < 0 else "buy", brokerage=20.0)
         total += sum(c_open.values())
         if include_exit:
-            c_close = broker_charges.charge(day, "opt", x_px, qty, "buy" if side < 0 else "sell", brokerage=20.0)
+            c_close = broker_charges.charge(exit_day or day, "opt", x_px, qty, "buy" if side < 0 else "sell", brokerage=20.0)
             total += sum(c_close.values())
     return round(total, 2)
 
@@ -634,6 +628,8 @@ def evaluate_strategies_for_chain(
     forward_basis: float | None = None,
     quote_reference: datetime | str | None = None,
     require_event_timestamps: bool = False,
+    decision_minute: int | None = None,
+    calendar_dte: float | None = None,
 ) -> list[dict[str, Any]]:
     """Evaluate all 6 quantitative strategies (S1-S6) on a real Upstox option chain."""
     sym = str(symbol).upper()
@@ -717,6 +713,9 @@ def evaluate_strategies_for_chain(
 
     results = []
     for s_code, is_trig, metrics_txt in trig_defs:
+        if decision_minute is not None:
+            is_trig = entry_allowed(s_code, minute=decision_minute, dte=calendar_dte, vrp=vrp30,
+                                    hv30=hv30_value, rr25=rev25_value)
         legs = build_strategy_legs(sym, K, s_code)
         has_missing_quote = False
         for l in legs:
@@ -799,6 +798,28 @@ def exit_thresholds(strategy, cap, max_cr, max_loss, sl_rule, tp_rule):
     return sl_thresh, tp_thresh
 
 
+def scheduled_exit_at(session_day: str, expiry: str, holding: str) -> datetime:
+    """Regular close-out is 15:15; short special sessions use close minus 15 minutes."""
+    day = datetime.fromisoformat(session_day).date()
+    if holding == "positional":
+        day = datetime.fromisoformat(expiry).date() - timedelta(days=1)
+        while not session_window(day):
+            day -= timedelta(days=1)
+    window = session_window(day)
+    if not window:
+        raise ValueError(f"No sourced trading hours for {day}")
+    return max(window[0], min(datetime.combine(day, datetime.min.time(), tzinfo=IST_TZ)
+                              + timedelta(hours=15, minutes=15), window[1] - timedelta(minutes=15)))
+
+
+def _is_due(position, reference, legacy_close):
+    stamp = _parse_aware_timestamp(reference)
+    deadline = _parse_aware_timestamp(position.get("scheduled_exit_at"))
+    if deadline is not None and stamp is not None:
+        return stamp >= deadline
+    return legacy_close or (stamp is not None and str(position.get("date") or "") < stamp.date().isoformat())
+
+
 def mark_open_positions_to_market(
     open_positions: list[dict[str, Any]],
     live_chains: dict[str, list[dict[str, Any]]],
@@ -835,6 +856,17 @@ def mark_open_positions_to_market(
             pos["staleReason"] = "Forward record lacks a symbol or expiry; automatic marking and exit are withheld."
             still_open.append(pos)
             continue
+        stamp = _parse_aware_timestamp(reference_timestamp)
+        try:
+            expired = stamp is not None and stamp > expiry_close(exp)
+        except (ValueError, TypeError):
+            expired = True
+        if expired:
+            pos.update(freshness="STALE", exit_pending=True, manual_reconciliation_required=True,
+                       staleReason="Expired contract without an executable exit; reconcile against settlement.")
+            still_open.append(pos)
+            continue
+        scheduled_exit = _is_due(pos, reference_timestamp, auto_close_intraday_1515)
         exit_was_pending = bool(pos.get("exit_pending"))
         position_lots = int(pos.get("lots", 1))
         lot_qty = LOT_SIZES[sym] * position_lots
@@ -870,7 +902,7 @@ def mark_open_positions_to_market(
         pos["freshness"] = "FRESH" if all_legs_fresh else "STALE"
         if not all_legs_fresh:
             pos["staleReason"] = f"Missing live quote, stale quote, or non-executable book in snapshot for {key}"
-            if auto_close_intraday_1515 or pos.get("exit_pending"):
+            if scheduled_exit or pos.get("exit_pending"):
                 pos["exit_pending"] = True
         else:
             pos.pop("staleReason", None)
@@ -884,13 +916,15 @@ def mark_open_positions_to_market(
                 qty = lot_qty * int(leg.get("mult", 1))
                 gross += (e_px - cur_px) * qty if int(leg["side"]) < 0 else (cur_px - e_px) * qty
             pos["grossMtm"] = round(gross, 2)
-            pos["estCharges"] = compute_position_charges(pos.get("date", MIN_FORWARD_DATE), sym, pos["legs"], lots=position_lots, include_exit=True)
+            pos["estCharges"] = compute_position_charges(pos.get("date", MIN_FORWARD_DATE), sym, pos["legs"], lots=position_lots, include_exit=True,
+                                                       exit_day=stamp.date().isoformat() if stamp else None)
             pos["netMtm"] = round(pos["grossMtm"] - pos["estCharges"], 2)
             pos["markedAt"] = current_time_ist
+            pos["mark_at"] = stamp.isoformat() if stamp else None
 
         mtm_path = list(pos.get("mtmPath") or [])
         mtm_path.append({"t": current_time_ist, "gross": pos.get("grossMtm") if all_legs_fresh else None,
-                         "iv": pos.get("curIv") if all_legs_fresh else None, "fresh": all_legs_fresh})
+                         "at": stamp.isoformat() if stamp else None, "fresh": all_legs_fresh})
         if all_legs_fresh and require_event_timestamps:
             mtm_path[-1]["exit_prices"] = [leg["curPx"] for leg in legs]
             mtm_path[-1]["quote_times"] = [leg["markQuoteAt"] for leg in legs]
@@ -902,16 +936,20 @@ def mark_open_positions_to_market(
         max_cr = pos["maxCredit"] = max(0.0, bounds["netPremium"])
         max_loss = bounds["maxLoss"]
 
-        sl_thresh, tp_thresh = exit_thresholds(pos["strat"], cap, max_cr, max_loss, sl_rule, tp_rule)
+        position_sl, position_tp = (("SL_50_MAXLOSS", "TP_50_30") if pos.get("policy_version") == "research-v1"
+                                    else (sl_rule, tp_rule))
+        sl_thresh, tp_thresh = exit_thresholds(pos["strat"], cap, max_cr, max_loss, position_sl, position_tp)
 
         close_reason = None
         # OPERATIONAL SAFETY: Stale marks CANNOT drive automated SL/TP exits!
         if all_legs_fresh and sl_thresh is not None and pos["grossMtm"] <= sl_thresh:
-            close_reason = f"Stop-Loss Hit ({sl_rule})"
+            close_reason = f"Stop-Loss Hit ({position_sl})"
         elif all_legs_fresh and tp_thresh is not None and pos["grossMtm"] >= tp_thresh:
-            close_reason = f"Target Hit ({tp_rule})"
-        elif all_legs_fresh and (auto_close_intraday_1515 or exit_was_pending):
-            close_reason = "15:15 IST Auto-Close (delayed until fresh quote)" if exit_was_pending else "15:15 IST Auto-Close"
+            close_reason = f"Target Hit ({position_tp})"
+        elif all_legs_fresh and (scheduled_exit or exit_was_pending):
+            close_reason = ("Prior-session scheduled exit" if pos.get("holding") == "positional" else "15:15 IST Auto-Close")
+            if exit_was_pending:
+                close_reason += " (delayed until fresh quote)"
 
         if close_reason:
             for l in pos["legs"]:
@@ -926,6 +964,9 @@ def mark_open_positions_to_market(
                 "entryTime": pos.get("trigTime", "09:20 IST"),
                 "triggerTime": pos.get("triggerTime", f"{s_day}T09:20:00+05:30"),
                 "exitTime": current_time_ist,
+                "exit_at": stamp.isoformat() if stamp else None,
+                "exit_session_date": stamp.date().isoformat() if stamp else s_day,
+                **{k:pos[k] for k in ("available_at", "policy_version", "holding", "scheduled_exit_at", "frontScope") if k in pos},
                 "sym": sym,
                 "exp": exp,
                 "kind": pos.get("kind", "Weekly"),
@@ -972,7 +1013,7 @@ def process_live_upstox_snapshot(
         state["gate_message"] = "Snapshot is incomplete; no trigger or mark was processed."
         return state
 
-    snap_ts = now_ist or payload.get("timestamp") or payload.get("as_of") or payload.get("retrieved_at")
+    snap_ts = now_ist or payload.get("available_at") or payload.get("retrieved_at") or payload.get("timestamp") or payload.get("as_of")
     snap_dt = _parse_aware_timestamp(snap_ts)
     if snap_dt is None and isinstance(now_ist, datetime) and now_ist.tzinfo is None:
         snap_dt = now_ist.replace(tzinfo=IST_TZ)
@@ -996,30 +1037,30 @@ def process_live_upstox_snapshot(
         state["gate_message"] = "NFO holiday/session status was not validated by the market-data collector."
         return state
 
+    previous = _parse_aware_timestamp(state.get("updated_at"))
+    if previous and snap_dt <= previous:
+        # Idempotent replay preserves the caller's complete prior state.
+        return copy.deepcopy(ledger) if ledger is not None else state
+    raw_capture = _parse_aware_timestamp(payload.get("available_at") or payload.get("retrieved_at"))
+    if raw_capture and raw_capture != snap_dt:
+        state.update(gate_blocked=True, gate_message="Processing clock differs from captured report time.")
+        return state
+
     state["gate_blocked"] = False
     state["gate_message"] = f"Live Forward Session Active ({snapshot_day} · {mkt['time_label']})"
 
     # Extract live option chains from payload.records or payload.chains
     live_chains: dict[str, list[dict[str, Any]]] = {}
     live_chain_timestamps: dict[str, datetime | str | None] = {}
-    spot_map: dict[str, float] = {}
     records = payload.get("records") or []
     for rec in records:
         if not isinstance(rec, dict):
             continue
         lbl = str(rec.get("label") or "")
         data = rec.get("data")
-        if lbl == "quotes" and isinstance(data, dict):
-            if "NSE_INDEX:Nifty 50" in data:
-                spot_map["NIFTY"] = float(data["NSE_INDEX:Nifty 50"].get("last_price") or 0.0)
-            if "NSE_INDEX:Nifty Bank" in data:
-                spot_map["BANKNIFTY"] = float(data["NSE_INDEX:Nifty Bank"].get("last_price") or 0.0)
-        elif "|" in lbl and isinstance(data, list) and data:
+        if "|" in lbl and isinstance(data, list) and data:
             live_chains[lbl] = data
             live_chain_timestamps[lbl] = rec.get("retrieved_at") or rec.get("as_of") or rec.get("timestamp")
-            sym_part = lbl.split("|", 1)[0]
-            if sym_part not in spot_map:
-                spot_map[sym_part] = float(data[0].get("underlying_spot_price") or 0.0)
 
     if not live_chains and isinstance(payload.get("chains"), dict):
         for k_lbl, c_rows in payload["chains"].items():
@@ -1028,12 +1069,13 @@ def process_live_upstox_snapshot(
                 live_chain_timestamps[str(k_lbl)] = (payload.get("chain_timestamps") or {}).get(str(k_lbl))
 
     if not live_chains:
-        if snapshot_day >= MIN_FORWARD_DATE and mkt["mins"] >= 915:
+        if snapshot_day >= MIN_FORWARD_DATE:
             for position in state["open_positions"]:
                 position["freshness"] = "STALE"
                 position["staleReason"] = "No live option-chain record at scheduled close"
-                position["exit_pending"] = True
-            if state["open_positions"]:
+                if _is_due(position, snap_dt, mkt["mins"] >= 915):
+                    position["exit_pending"] = True
+            if any(p.get("exit_pending") for p in state["open_positions"]):
                 state["status"] = "EXIT_PENDING_MISSING_QUOTES"
         state["intraday_mtm_series"] = [
             point for point in state.get("intraday_mtm_series", [])
@@ -1051,11 +1093,11 @@ def process_live_upstox_snapshot(
             "open_count": len(state["open_positions"]),
             "closed_count": len([
                 trade for trade in state["closed_trades"]
-                if str(trade.get("session_date") or trade.get("date") or "")[:10] == snapshot_day
+                if str(trade.get("exit_session_date") or trade.get("session_date") or trade.get("date") or "")[:10] == snapshot_day
             ]),
             "integrity_status": "WITHHELD_NO_LIVE_OPTION_CHAIN",
         })
-        state["updated_at"] = f"{snapshot_day}T{mkt['hm']}:00+05:30"
+        state["updated_at"] = snap_dt.isoformat()
         return state
 
     # 1. Trigger new forward trades at >= 09:20 IST and < 15:15 IST
@@ -1069,14 +1111,17 @@ def process_live_upstox_snapshot(
     }
 
     reference_time = snap_dt
-    if 560 <= mkt["mins"] < 915:
+    if any(rule.get("minute") == mkt["mins"] for rule in RULES.values()):
         eligible_expiries: dict[str, list[str]] = {"NIFTY": [], "BANKNIFTY": []}
-        for label in live_chains:
+        listed_labels = set(live_chains) | {str(rec.get("label") or "") for rec in records if isinstance(rec, dict)}
+        for label in listed_labels:
+            if "|" not in label:
+                continue
             sym_part, exp_part = label.split("|", 1)
-            if sym_part in eligible_expiries and exp_part >= snapshot_day:
+            if sym_part in eligible_expiries and re.fullmatch(r"\d{4}-\d{2}-\d{2}", exp_part) and exp_part >= snapshot_day:
                 eligible_expiries[sym_part].append(exp_part)
         front_expiries = {
-            "NIFTY": set(sorted(set(eligible_expiries["NIFTY"]))[:2]),
+            "NIFTY": set(sorted(set(eligible_expiries["NIFTY"]))[:1]),
             "BANKNIFTY": set(sorted(set(eligible_expiries["BANKNIFTY"]))[:1]),
         }
         for lbl, chain_rows in live_chains.items():
@@ -1086,12 +1131,12 @@ def process_live_upstox_snapshot(
             if chain_dt is None or not _quote_timestamp_is_fresh(chain_ts, reference_time):
                 continue
             chain_mkt = get_nse_market_status_ist(chain_dt)
-            if chain_mkt["isoDay"] != snapshot_day or not chain_mkt["open"] or not (560 <= chain_mkt["mins"] < 915):
+            if chain_mkt["isoDay"] != snapshot_day or not chain_mkt["open"] or chain_mkt["mins"] != mkt["mins"]:
                 continue
             is_front = exp in front_expiries.get(sym, set())
-            if front_scope_only and not is_front:
+            if not is_front:  # Research-v1 always trades the nearest listed expiry.
                 continue
-            spot_val = spot_map.get(sym) or float(chain_rows[0].get("underlying_spot_price") or 0.0)
+            spot_val = float(chain_rows[0].get("underlying_spot_price") or 0.0)
             if not np.isfinite(spot_val) or spot_val <= 0:
                 continue
             metrics = payload.get("risk_metrics")
@@ -1127,15 +1172,22 @@ def process_live_upstox_snapshot(
                 trig_time_str=chain_mkt["time_label"],
                 forward_basis=forward_basis,
                 quote_reference=chain_dt,
+                decision_minute=mkt["mins"],
+                calendar_dte=seconds_to_expiry / 86400.0,
                 require_event_timestamps=True,
             )
             for setup in eval_setups:
                 s_key = f"{sym}|{exp}|{setup['strat']}"
                 if setup.get("triggered") and s_key not in existing_keys:
-                    setup["triggerTime"] = chain_dt.isoformat()
+                    holding = RULES[setup["strat"]]["holding"]
+                    deadline = scheduled_exit_at(snapshot_day, exp, holding)
+                    if deadline <= snap_dt:
+                        continue
+                    setup.update(triggerTime=snap_dt.isoformat(), available_at=snap_dt.isoformat(),
+                                 policy_version="research-v1", holding=holding, scheduled_exit_at=deadline.isoformat())
                     setup["provenance_status"] = "VALIDATED_EVENT_QUOTES"
                     setup["frontScope"] = is_front
-                    setup["mtmPath"] = [{"t": chain_mkt["hm"], "gross": 0.0, "iv": setup["entryIv"]}]
+                    setup["mtmPath"] = []  # The first liquidation mark must cross the exit book.
                     state["open_positions"].append(setup)
                     existing_keys.add(s_key)
 
@@ -1161,7 +1213,7 @@ def process_live_upstox_snapshot(
     # missing quote into a deceptively current P&L value.
     session_closed = [
         trade for trade in state["closed_trades"]
-        if str(trade.get("session_date") or trade.get("date") or "")[:10] == snapshot_day
+        if str(trade.get("exit_session_date") or trade.get("session_date") or trade.get("date") or "")[:10] == snapshot_day
     ]
     marks_withheld = any(not is_valid_forward_record(t) for t in session_closed) or any(
         str(position.get("freshness") or "").upper() != "FRESH"
@@ -1206,7 +1258,7 @@ def process_live_upstox_snapshot(
         )
     ]
     state["intraday_mtm_series"].append(mtm_point)
-    state["updated_at"] = f"{snapshot_day}T{mkt['hm']}:00+05:30"
+    state["updated_at"] = snap_dt.isoformat()
     state["status"] = (
         "ACTIVE_LIVE_SESSION"
         if still_open
@@ -1240,7 +1292,7 @@ def simulate_forward_portfolio(
             continue
         if sym_filter not in ("ALL", "BOTH") and pos["sym"] != sym_filter:
             continue
-        if scope_filter == "FRONT" and not pos.get("frontScope", True):
+        if scope_filter == "FRONT" and pos.get("frontScope") is not True:
             continue
         if strat_filter != "ALL" and pos["strat"] != strat_filter:
             continue
@@ -1262,13 +1314,15 @@ def simulate_forward_portfolio(
             continue
         if strat_filter != "ALL" and tr["strat"] != strat_filter:
             continue
+        if scope_filter == "FRONT" and tr.get("frontScope") is not True:
+            continue
         t = copy.deepcopy(tr)
         scale = lots / t.get("lots", 1)
         cap = float(t["capital"]) * scale
         bounds = expiry_payoff(t["legs"], LOT_SIZES[t["sym"]] * lots)
         max_cr = max(0, bounds["netPremium"])
         max_loss = bounds["maxLoss"]
-        chg = compute_position_charges(t.get("date", MIN_FORWARD_DATE), t["sym"], t["legs"], lots=lots, include_exit=True)
+        chg = compute_position_charges(t.get("date", MIN_FORWARD_DATE), t["sym"], t["legs"], lots=lots, include_exit=True, exit_day=t.get("exit_session_date"))
 
         sl_thresh, tp_thresh = exit_thresholds(t["strat"], cap, max_cr, max_loss, sl_rule, tp_rule)
 
@@ -1415,3 +1469,83 @@ def evaluate_forward_test_scorecard(
         })
     out["scorecard"] = scorecard
     return out
+
+
+
+def sync_forward_ledger(source: Path | None = None, data_dir: Path | None = None) -> tuple[Path, bool]:
+    """Mirror the collector's ledger, never replay snapshots into the canonical Drive book."""
+    import gzip
+    from urllib.request import urlopen
+    from volatility_lab.runtime.settings import load_settings
+
+    if source is not None:
+        opener = gzip.open if source.suffix == ".gz" else open
+        with opener(source, "rt", encoding="utf-8-sig") as fp:
+            raw = json.load(fp)
+        if isinstance(raw, dict) and "forward_test_ledger" in raw:
+            if raw.get("status") != "complete" or raw.get("provider") != "Upstox" or raw.get("nfo_session_validated") is not True:
+                raise ValueError("Cannot mirror a ledger from an unvalidated capture.")
+            raw = raw["forward_test_ledger"]
+    else:
+        settings = load_settings()
+        if settings.offline or not settings.cloud_url:
+            raise ValueError("A source file or an online, configured Apps Script endpoint is required.")
+        with urlopen(settings.cloud_url + "?action=forward_ledger", timeout=40) as response:
+            raw = json.load(response)
+    _validate_ledger(raw)
+    if raw.get("schema") != 2 or raw.get("provenance_schema") != "event-quotes-v1":
+        raise ValueError("Unrecognized source ledger provenance.")
+    stamp = _parse_aware_timestamp(raw.get("updated_at"))
+    if stamp is None or stamp > datetime.now(IST_TZ):
+        raise ValueError("Invalid source ledger timestamp.")
+    clean = sanitize_forward_ledger(raw)
+    location = Path(data_dir or DATA_DIR)
+    location.mkdir(parents=True, exist_ok=True)
+    target = location / LEDGER_FILENAME
+    current = load_forward_ledger(location)
+    revision = current.pop("_ledger_revision", None)
+    def trade_key(record):
+        return tuple(record.get(k) for k in ("session_date", "sym", "exp", "strat"))
+
+    incoming_open = {trade_key(t): t for t in clean["open_positions"]}
+    incoming_closed = {trade_key(t): t for t in clean["closed_trades"]}
+    if (len(incoming_open) != len(clean["open_positions"]) or len(incoming_closed) != len(clean["closed_trades"])
+            or incoming_open.keys() & incoming_closed.keys()):
+        raise ValueError("Conflicting position identities in incoming ledger.")
+    if revision:
+        if current == clean:
+            return target, False
+        previous = _parse_aware_timestamp(current.get("updated_at"))
+        if not previous or stamp <= previous:
+            raise ValueError("Source is older or conflicts with the local ledger at the same timestamp.")
+        for bucket in ("open_positions", "closed_trades"):
+            for record in current[bucket]:
+                key = trade_key(record)
+                successor = incoming_closed.get(key)
+                if successor is None and bucket == "open_positions":
+                    successor = incoming_open.get(key)
+                if successor is None:
+                    raise ValueError("Incoming ledger loses prior positions. Reconcile the two books.")
+                if bucket == "closed_trades" and any(
+                        record.get(k) != successor.get(k) for k in ("id", "triggerTime", "gross", "charges", "net", "legs")):
+                    raise ValueError("Incoming ledger changes a recorded close. Reconcile the two books.")
+    clean["_ledger_revision"] = revision
+    return save_forward_ledger(clean, location), True
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Mirror the authoritative Apps Script paper ledger to local storage.")
+    parser.add_argument("--sync", action="store_true", required=True)
+    parser.add_argument("--source", type=Path, help="Local collector ledger or complete snapshot (.json/.json.gz)")
+    parser.add_argument("--data-dir", type=Path, help="Directory containing forward_test_ledger.json")
+    args = parser.parse_args()
+    try:
+        path, changed = sync_forward_ledger(args.source, args.data_dir)
+    except (ValueError, RuntimeError, OSError) as exc:
+        parser.exit(1, f"Ledger sync failed: {exc}\n")
+    print(f"{'Updated' if changed else 'Unchanged'} {path}")
+
+
+if __name__ == "__main__":
+    main()

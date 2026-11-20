@@ -178,7 +178,7 @@ class TestCollectorAuditFixes(unittest.TestCase):
         ledger = copy.deepcopy(forward_test.CLEAN_SLATE_LEDGER)
         trade = {"session_date": "2026-11-11", "date": "2026-11-11",
                  "triggerTime": "2026-11-11T09:20:10+05:30", "sym": "NIFTY",
-                 "exp": "2026-11-17", "strat": "S2", "capital": 1000, "gross": 100,
+                 "exp": "2026-11-17", "strat": "S2", "frontScope": True, "capital": 1000, "gross": 100,
                  "legs": [{"side": 1, "type": "CE", "strike": 25000, "entryPx": 100,
                            "exitPx": 102}], "mtmPath": [{"t": "12:30", "fresh": True, "gross": -650,
                            "exit_prices": [90], "quote_times": ["2026-11-11T12:30:00+05:30"]}]}
