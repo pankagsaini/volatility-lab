@@ -116,7 +116,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
                 "day": "2026-11-11",
                 "retrieved_at": timestamp,
                 "nfo_session_validated": True,
-                "risk_metrics": {"NIFTY": {"as_of": "2026-11-11", "hv10": 14.0, "hv30": 15.0}},
+                "risk_metrics": {"NIFTY": {"as_of": "2026-11-09", "hv10": 14.0, "hv30": 15.0}},
                 "records": [{"label": "NIFTY|2026-11-17", "retrieved_at": timestamp, "data": rows}],
             }
 
@@ -132,9 +132,20 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         closed = forward_test.process_live_upstox_snapshot(
             payload("2026-11-11T15:15:00+05:30"), ledger=midday, now_ist="2026-11-11T15:15:00+05:30",
         )
-        self.assertEqual(closed["open_positions"], [])
-        self.assertGreater(len(closed["closed_trades"]), 0)
-        self.assertTrue(all(tr["exitTime"] == "15:15 IST" for tr in closed["closed_trades"]))
+        self.assertEqual({p["strat"] for p in closed["open_positions"]}, {"S1"})
+        self.assertEqual(forward_test.process_live_upstox_snapshot(payload("2026-11-11T15:15:00+05:30"), ledger=closed), closed)
+        self.assertEqual(forward_test.process_live_upstox_snapshot(payload("2026-11-11T09:20:00+05:30"), ledger=closed), closed)
+        # A missed T-1 capture still makes the next executable book due before expiry.
+        overdue = payload("2026-11-17T09:20:10+05:30")
+        overdue["day"] = "2026-11-17"
+        overdue_state = forward_test.process_live_upstox_snapshot(overdue, ledger=closed)
+        self.assertFalse(overdue_state["open_positions"])
+        held = next(t for t in overdue_state["closed_trades"] if t["strat"] == "S1")
+        self.assertEqual(held["exit_session_date"], "2026-11-17")
+        self.assertEqual(held["policy_version"], "research-v1")
+        self.assertEqual(held["triggerTime"], held["available_at"])
+        self.assertEqual(held["scheduled_exit_at"], "2026-11-16T15:15:00+05:30")
+        self.assertTrue(all(leg["exitQuoteAt"] == held["exit_at"] for leg in held["legs"]))
 
     def test_partial_snapshot_cannot_create_or_mark_forward_positions(self):
         timestamp = "2026-11-11T09:20:00+05:30"
@@ -150,7 +161,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
             "day": "2026-11-11",
             "retrieved_at": timestamp,
             "nfo_session_validated": True,
-            "risk_metrics": {"NIFTY": {"as_of": "2026-11-11", "hv10": 14.0, "hv30": 15.0}},
+            "risk_metrics": {"NIFTY": {"as_of": "2026-11-09", "hv10": 14.0, "hv30": 15.0}},
             "records": [{"label": "NIFTY|2026-11-17", "retrieved_at": timestamp, "data": rows}],
         }
         complete_state = forward_test.process_live_upstox_snapshot(
@@ -334,7 +345,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertIn("function executableQuote_(node, type, side, quantity, isExit, referenceTimestamp)", code)
         self.assertIn("[bid, ask, bidQty, askQty].every(Number.isFinite)", code)
         self.assertIn("Number.isFinite(ch.spot) || ch.spot <= 0", code)
-        self.assertIn("mins >= 915 || Boolean(pos.exit_pending)", code)
+        self.assertIn("forwardDue_(pos,snapshotDay,report.retrieved_at)", code)
         self.assertIn("delayed until fresh quote", code)
         self.assertIn("function listDriveFilesPage_(folderId, pageToken, orderBy)", code)
         self.assertIn("'modifiedTime desc'", code)

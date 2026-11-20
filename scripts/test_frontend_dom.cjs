@@ -74,7 +74,7 @@ const server = http.createServer((request,response) => {
       return rolling && rolling.data.every(pt=>pt===null||pt.y===null);
     }),'Rolling straddle stays blank until the collector records it');
     assert.match(await page.locator('#zGexSource').textContent(),/recorded strikes|Gamma unavailable/);
-    assert.match(await page.locator('#zVwapHeaderNote').textContent(),/15:10/);
+    assert.match(await page.locator('#zVwapHeaderNote').textContent(),/15:00–15:30/);
     assert.match(await page.locator('#zBennettSummaryStrip').textContent(),/Breakeven band|Bennett/);
     await page.locator('[data-zmode="inr"]').click();
     assert.match(await page.locator('[data-zmode="inr"]').getAttribute('class'),/active/);

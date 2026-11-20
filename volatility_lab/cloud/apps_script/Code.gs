@@ -1179,6 +1179,7 @@ function capture_(mode, recovery) {
     try {
       if (ledgerError) throw ledgerError;
       if (report.enrichment_status === 'failed') throw new Error('Timestamped quote enrichment unavailable');
+      report.available_at = report.retrieved_at;
       const forwardLedger = evaluateForwardTest_(report, ledger, ledgerState);
       if (!forwardLedger) throw new Error('Forward evaluator returned no ledger');
       report.forward_test_status = 'complete';
@@ -2162,6 +2163,44 @@ function timestampMillis_(timestamp) {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
+const FREEZE_RULES = {
+  "S1": {"minute": 560, "dte": [2,10], "holding": "positional", "filters": {"vrp":[2,15],"hv30":[8,16]}},
+  "S2": {"minute": 565, "dte": [3,7], "holding": "intraday", "filters": {"vrp":[-15,-1.5]}},
+  "S3": {"holding": "observe", "reason": "No point-in-time event confirmation"},
+  "S4": {"minute": 560, "dte": [3,14], "holding": "positional", "filters": {"rr25":[2.5,12],"vrp":[1,15]}},
+  "S5": {"minute": 560, "dte": [2,6], "holding": "intraday", "filters": {"vrp":[1,15]}},
+  "S6": {"holding": "observe", "reason": "No matched executable basis hedge"}
+};
+function freezeEntryAllowed(code, minute, metrics) {
+  const rule = FREEZE_RULES[code];
+  if (!rule || rule.holding === 'observe' || minute !== rule.minute) return false;
+  return Object.entries({...rule.filters, dte:rule.dte}).every(([key, bounds]) =>
+    Number.isFinite(metrics[key]) && metrics[key] >= bounds[0] && metrics[key] <= bounds[1]);
+}
+
+function forwardDeadline_(day, expiry, holding) {
+  // Consult the already-cached full year calendar. No broker calls in this path.
+  const p = props_(), calendar = readJsonProperty_(p,'MARKET_CALENDAR',{}) || {};
+  const overrides = readJsonProperty_(p,'SPECIAL_SESSIONS_JSON',{}) || {};
+  let cursor = Date.parse((holding === 'positional' ? expiry : day)+'T00:00:00Z');
+  if (holding === 'positional') cursor -= 86400000;
+  for (let i=0;i<16;i++,cursor-=86400000) {
+    const date=new Date(cursor), iso=date.toISOString().slice(0,10), yr=iso.slice(0,4);
+    const special=overrides[iso] || SPECIAL_SESSIONS[iso] || calendarSpecial_(calendar,iso);
+    const known=NSE_FO_HOLIDAYS[yr] || (calendar.year===yr && calendar.closed);
+    if (!special && !known) return null;
+    if (!special && ([0,6].includes(date.getUTCDay()) || known.includes(iso) || calendar.closed?.includes(iso))) continue;
+    const mins=Math.max(special?.startMins || 555, Math.min(915,(special?.endMins || regularCloseMinutes_(iso))-15));
+    return new Date(Date.parse(iso+'T00:00:00+05:30')+mins*60000).toISOString();
+  }
+  return null;
+}
+
+function forwardDue_(pos, day, at) {
+  const deadline = pos.scheduled_exit_at || (String(pos.session_date || pos.date || day).slice(0,10)+'T15:15:00+05:30');
+  return Date.parse(at) >= Date.parse(deadline) || pos.exit_pending === true;
+}
+
 function forwardExitThresholds_(strategy, bounds) {
   return {
     stop: bounds.maxLoss === null ? -Infinity : -0.50 * bounds.maxLoss,
@@ -2191,7 +2230,7 @@ function forwardQuoteFresh_(timestamp, referenceTimestamp) {
   const reference = referenceTimestamp === undefined ? Date.now() : timestampMillis_(referenceTimestamp);
   if (!Number.isFinite(observed) || !Number.isFinite(reference)) return false;
   const age = reference - observed;
-  return age >= -30000 && age <= MAX_FORWARD_QUOTE_AGE_MS;
+  return age >= 0 && age <= MAX_FORWARD_QUOTE_AGE_MS;
 }
 
 function executableQuote_(node, type, side, quantity, isExit, referenceTimestamp) {
@@ -2314,6 +2353,7 @@ function sanitizeForwardLedger_(raw) {
   if (legacy) base.intraday_mtm_series = base.intraday_mtm_series.map(pt =>
     Object.assign({}, pt, {gross_mtm:null, net_mtm:null, integrity_status:'UNVERIFIED_RECORD'}));
   if (raw.updated_at) base.updated_at = raw.updated_at;
+  if (raw.last_snapshot_at) base.last_snapshot_at = raw.last_snapshot_at;
   base.status = base.open_positions.concat(base.closed_trades).some(pos => pos.integrity_status === 'UNVERIFIED_RECORD')
     ? 'INTEGRITY_REVIEW_REQUIRED'
     : ((base.open_positions.length || base.closed_trades.length)
@@ -2462,7 +2502,7 @@ function forwardRiskMetrics_(report, sym, snapshotDay) {
   const asOfMs = Date.parse(asOf + 'T00:00:00Z');
   const sessionMs = Date.parse(snapshotDay + 'T00:00:00Z');
   const ageDays = (sessionMs - asOfMs) / 86400000;
-  if (!Number.isFinite(ageDays) || ageDays < 0 || ageDays > 5) {
+  if (!Number.isFinite(ageDays) || ageDays <= 0 || ageDays > 5) {
     return { hv10: NaN, hv30: NaN, item: null };
   }
   return {
@@ -2498,11 +2538,15 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
     return ledger;
   }
 
+  if (Date.parse(ledger.last_snapshot_at) >= snapDate.getTime() && (ledger.open_positions.length || ledger.closed_trades.length || ledger.intraday_mtm_series.length)) {
+    report.forward_test_ledger = ledger; return ledger;
+  }
+  ledger.last_snapshot_at=report.retrieved_at;
   if (!report.records.length) {
     ledger.open_positions.forEach(pos => {
       pos.freshness = 'STALE';
       pos.staleReason = 'No live option-chain records in snapshot';
-      if (mins >= 915) pos.exit_pending = true;
+      if (forwardDue_(pos,snapshotDay,report.retrieved_at)) pos.exit_pending = true;
     });
     ledger.intraday_mtm_series = (Array.isArray(ledger.intraday_mtm_series) ? ledger.intraday_mtm_series : [])
       .filter(point => !(String(point.session_date || point.date || '').slice(0, 10) === snapshotDay && String(point.t || '') === hmLabel));
@@ -2513,7 +2557,7 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
       gross_mtm: null,
       net_mtm: null,
       open_count: ledger.open_positions.length,
-      closed_count: ledger.closed_trades.filter(trade => String(trade.session_date || trade.date || '').slice(0, 10) === snapshotDay).length,
+      closed_count: ledger.closed_trades.filter(trade => String(trade.exit_session_date || trade.session_date || trade.date || '').slice(0, 10) === snapshotDay).length,
       integrity_status: 'WITHHELD_NO_LIVE_OPTION_CHAIN'
     });
     ledger.updated_at = snapDate.toISOString();
@@ -2571,15 +2615,21 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
     )
   );
 
-  if (mins >= 560 && mins < 915) {
+  const fronts={};
+  for (const rec of report.records) {
+    const [symbol, expiry] = String(rec.label || '').split('|');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(expiry) && indexExpiryMillis_(expiry)>snapDate.getTime() && (!fronts[symbol] || expiry<fronts[symbol])) fronts[symbol]=expiry;
+  }
+  if (Object.values(FREEZE_RULES).some(rule => rule.minute===mins)) {
     Object.keys(chainMap).forEach(key => {
       const parts = key.split('|');
       const sym = parts[0], exp = parts[1];
+      if (exp !== fronts[sym]) return;
       const ch = chainMap[key];
       const chainMkt = ch && ch.mkt;
       if (!ch || !Number.isFinite(ch.spot) || ch.spot <= 0 || !ch.fresh || !chainMkt
           || chainMkt.isoDay !== snapshotDay || !chainMkt.open
-          || chainMkt.mins < 560 || chainMkt.mins >= 915) { reject(key, 'Missing or stale chain / ineligible session'); return; }
+          || chainMkt.mins !== mins || timestampMillis_(ch.retrievedAt)>snapDate.getTime()) { reject(key, 'Missing or stale chain / ineligible session'); return; }
       const step = sym === 'NIFTY' ? 50 : 100;
       const lotQty = sym === 'NIFTY' ? 65 : 30;
       const K = Math.round(ch.spot / step) * step;
@@ -2605,31 +2655,14 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
       const hv30Valid = Number.isFinite(hv30) && hv30 > 0;
       if (!hv10Valid || !hv30Valid) reject(key, 'HV10/HV30 unavailable or stale; dependent strategies withheld');
       const vrp30 = hv30Valid ? Number((iv - hv30).toFixed(2)) : NaN;
-      const vrp10 = hv10Valid ? Number((iv - hv10).toFixed(2)) : NaN;
-      const call25 = brokerWingIv_(ch.strikes, 'c', ch.retrievedAt);
-      const put25 = brokerWingIv_(ch.strikes, 'p', ch.retrievedAt);
-      const wingsFresh = Number.isFinite(call25) && Number.isFinite(put25);
-      const rev25 = put25 - call25;
-      const bfly25 = (put25 + call25) / 2 - iv;
-      const metricsItem = riskMetrics.item;
-      const basisExpiry = metricsItem ? String(metricsItem.forward_basis_expiry || '').slice(0, 10) : '';
-      const basisTime = metricsItem ? metricsItem.forward_basis_timestamp : null;
-      const basis = metricsItem && basisExpiry === exp && forwardQuoteFresh_(basisTime, ch.retrievedAt)
-        ? Number(metricsItem.forward_basis) : NaN;
-      const basisValid = Number.isFinite(basis);
-
-      const trigs = [
-        ['S1', hv30Valid && vrp30 >= 1.50 && hv30 <= 16.5 && dte >= 2 && dte <= 35, hv30Valid ? 'IV ' + iv + '% · HV30 ' + hv30 + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp' : 'HV30 unavailable'],
-        ['S2', hv10Valid && hv30Valid && (vrp30 <= -0.25 || iv < hv10), hv10Valid && hv30Valid ? 'IV ' + iv + '% · HV10 ' + hv10 + '% · IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp' : 'IV/HV inputs unavailable'],
-        ['S3', hv30Valid && iv >= 15.2 && vrp30 >= 1.0 && dte <= 22, hv30Valid ? 'ATM IV ' + iv + '% · VRP ' + (vrp30 >= 0 ? '+' : '') + vrp30 + ' pp · DTE ' + dte + 'd' : 'HV30 unavailable'],
-        ['S4', wingsFresh && rev25 >= 1.50 && dte >= 5, wingsFresh ? 'RR25 ' + (rev25 >= 0 ? '+' : '') + rev25 + ' pp · BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp' : '25-delta wing IV unavailable'],
-        ['S5', hv10Valid && vrp10 >= 0.80 && dte <= 16, hv10Valid ? 'IV−HV10 ' + (vrp10 >= 0 ? '+' : '') + vrp10 + ' pp · HV10 ' + hv10 + '% · DTE ' + dte + 'd' : 'HV10 unavailable'],
-        ['S6', (basisValid && Math.abs(basis) >= (sym === 'NIFTY' ? 10.0 : 35.0)) || (wingsFresh && Math.abs(bfly25) >= 0.25), basisValid ? 'Forward basis ' + (basis >= 0 ? '+' : '') + basis + ' pts · BF25 ' + (Number.isFinite(bfly25) ? (bfly25 >= 0 ? '+' : '') + bfly25 : 'unavailable') + ' pp' : (wingsFresh ? 'BF25 ' + (bfly25 >= 0 ? '+' : '') + bfly25 + ' pp' : 'Validated forward basis and wing IV unavailable')]
-      ];
-
-      trigs.forEach(item => {
-        const sCode = item[0], isTrig = item[1], metricsTxt = item[2];
-        if (!isTrig || existingKeys.has(sym + '|' + exp + '|' + sCode)) return;
+      const rr25 = brokerWingIv_(ch.strikes,'p',ch.retrievedAt) - brokerWingIv_(ch.strikes,'c',ch.retrievedAt);
+      const metrics={vrp:vrp30,hv30,rr25,dte:secondsToExpiry/86400};
+      Object.keys(FREEZE_RULES).forEach(sCode => {
+        if (!freezeEntryAllowed(sCode,mins,metrics) || existingKeys.has(sym+'|'+exp+'|'+sCode)) return;
+        const holding=FREEZE_RULES[sCode].holding;
+        const deadline=forwardDeadline_(snapshotDay, exp, holding);
+        if (!deadline || Date.parse(deadline)<=snapDate.getTime()) return;
+        const metricsTxt='IV '+iv+'% · VRP '+vrp30+' pp';
         const legs = buildStrategyLegs_(sym, K, sCode);
         let invalidQuote = false;
         legs.forEach(l => {
@@ -2656,7 +2689,8 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
           id: 'OPEN-' + snapshotDay.replace(/-/g, '') + '-' + sym.slice(0, 3) + '-' + exp.replace(/-/g, '').slice(4) + '-' + sCode,
           date: snapshotDay,
           session_date: snapshotDay,
-          triggerTime: ch.retrievedAt,
+          triggerTime: report.retrieved_at, available_at:report.retrieved_at,
+          policy_version:"research-v1", holding, scheduled_exit_at:deadline,
           provenance_status: 'VALIDATED_EVENT_QUOTES',
           trigTime: chainMkt.timeIstLabel,
           markedAt: chainMkt.timeIstLabel,
@@ -2664,13 +2698,14 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
           exp: exp,
           kind: dte <= 10 ? 'Weekly' : 'Monthly',
           dte: dte,
-          frontScope: dte <= 16,
+          frontScope: true,
           strat: sCode,
           stratName: STRATEGY_NAMES[sCode],
           metrics: metricsTxt,
           legs: legs,
           capital: Math.max(cap, -payoff.netPremium),
           ...payoff,
+          path_source:"archived snapshot forward_test_ledger",
           maxCredit: Math.max(0, payoff.netPremium),
           entryIv: iv,
           curIv: iv,
@@ -2685,6 +2720,9 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
 
   const stillOpen = [];
   ledger.open_positions.forEach(pos => {
+    if (snapDate.getTime()>indexExpiryMillis_(pos.exp)) {
+      pos.freshness="STALE"; pos.manual_reconciliation_required=true; pos.staleReason="Expired without a verified liquidation"; stillOpen.push(pos); return;
+    }
     if (!isValidForwardRecord_(pos)) {
       pos.freshness = 'STALE';
       pos.integrity_status = 'UNVERIFIED_RECORD';
@@ -2699,7 +2737,7 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
     const lots = Number(pos.lots || 1);
     const lotQty = (pos.sym === 'NIFTY' ? 65 : 30) * lots;
     const legs = Array.isArray(pos.legs) ? pos.legs : [];
-    let allLegsFresh = Boolean(ch && ch.fresh && legs.length);
+    let allLegsFresh = Boolean(ch && ch.fresh && legs.length && timestampMillis_(ch.retrievedAt)<=snapDate.getTime());
     let gross = 0.0;
     const marks = [];
     legs.forEach(l => {
@@ -2718,7 +2756,7 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
     if (!allLegsFresh) {
       pos.freshness = 'STALE';
       pos.staleReason = !ch || !ch.fresh ? 'Missing or stale option-chain timestamp' : 'Missing or insufficient executable bid/ask depth';
-      if (positionMkt.mins >= 915 || pos.exit_pending) pos.exit_pending = true;
+      if (forwardDue_(pos,snapshotDay,report.retrieved_at)) pos.exit_pending = true;
       stillOpen.push(pos);
       return;
     }
@@ -2735,12 +2773,13 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
     pos.estCharges = positionCharges_(pos.legs, pos.sym, true, lots);
     pos.netMtm = Number((pos.grossMtm - pos.estCharges).toFixed(2));
     pos.markedAt = positionMkt.timeIstLabel;
+    pos.mark_at=report.retrieved_at;
 
     // Reprice legacy open positions from their recorded fills before applying exits.
     const bounds = expiryPayoff(pos.legs, lotQty);
     Object.assign(pos, bounds, {maxCredit: Math.max(0, bounds.netPremium)});
     const {stop: slThresh, target: tpThresh} = forwardExitThresholds_(pos.strat, bounds);
-    const isIntradayExit = positionMkt.mins >= 915 || Boolean(pos.exit_pending);
+    const isIntradayExit = forwardDue_(pos,snapshotDay,report.retrieved_at);
 
     if (pos.grossMtm <= slThresh || pos.grossMtm >= tpThresh || isIntradayExit) {
       const reason = pos.grossMtm <= slThresh
@@ -2753,6 +2792,9 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
         session_date: pos.session_date || pos.date || snapshotDay,
         triggerTime: pos.triggerTime || (snapshotDay + 'T09:20:00+05:30'),
         entryTime: pos.trigTime || '09:20 IST',
+        path_source:pos.path_source,
+        policy_version:pos.policy_version || 'legacy', holding:pos.holding || 'intraday', scheduled_exit_at:pos.scheduled_exit_at || null,
+        frontScope:pos.frontScope, exit_at:report.retrieved_at, exit_session_date:snapshotDay,
         exitTime: positionMkt.hmLabel + ' IST',
         sym: pos.sym,
         exp: pos.exp,
@@ -2784,7 +2826,7 @@ function evaluateForwardTest_(report, ledger, ledgerState) {
   // unverified position mark.  The series explicitly withholds the point so
   // display consumers cannot mistake an old total for a current valuation.
   const sessionClosed = ledger.closed_trades.filter(trade =>
-    String(trade.session_date || trade.date || '').slice(0, 10) === snapshotDay
+    String(trade.exit_session_date || trade.session_date || trade.date || '').slice(0, 10) === snapshotDay
   );
   const marksWithheld = sessionClosed.some(trade => !isValidForwardRecord_(trade)) || stillOpen.some(pos =>
     String(pos.freshness || '').toUpperCase() !== 'FRESH'
