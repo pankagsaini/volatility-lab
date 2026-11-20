@@ -163,6 +163,10 @@ cloud.apiAll_ = requests => requests.map(req => {
   lockedUsage = null;
   budgetAt(79.99);
   scheduler.scheduledCapture();
+  assert.deepEqual(attempts, [], 'ordinary slots preserve the close-out reserve');
+  minute = 915;
+  scheduler.scheduledCapture();
+  assert.deepEqual(attempts, ['snapshot'], '15:15 can still run after the ordinary cap');
   minute = 944; // The derivatives market closes at 15:40 on this date.
   budgetAt(84.99);
   scheduler.scheduledCapture();
