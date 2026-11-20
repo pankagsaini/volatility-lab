@@ -1441,7 +1441,12 @@ function scheduledCapture() {
   }
 
   const policy = runtimePolicy_(properties);
-  const limit = (mode === 'eod' ? policy.total_minutes : policy.snapshot_minutes) * 60000;
+  // Preserve one bounded capture attempt within the snapshot allowance for the first
+  // executable close-out book. The separate EOD allowance still serves daily candles.
+  const exitMinute = Math.max(snapStart, Math.min(915, snapEnd-15));
+  const snapshotMs = policy.snapshot_minutes * 60000;
+  const reserve = mins < exitMinute ? Math.min(CAPTURE_SAFE_DEADLINE_MS, snapshotMs) : 0;
+  const limit = mode === 'eod' ? policy.total_minutes * 60000 : snapshotMs-reserve;
   const pauseMessage = mode + ' runtime admission limit reached (' + limit / 60000 + ' minutes). ' + today;
   let budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now());
   if (budget.ms >= limit) {
