@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Volatility Lab — NSE Options Quant Desk</title>
-  <meta name="description" content="Institutional NSE Options Quantitative Volatility Desk for NIFTY 50 &amp; BANKNIFTY — Real Upstox Implied Volatility, Term Structure, Volatility Smile, Intraday Straddle &amp; 6-Strategy Empirical Backtest." />
+  <meta name="description" content="Volatility research for NIFTY 50 and BANKNIFTY. Explore captured options data, expiry risk, dated forecasts and recorded strategy replays." />
   <meta property="og:title" content="Volatility Lab — NSE Options Quant Desk" />
-  <meta property="og:description" content="NIFTY 50 &amp; BANKNIFTY Real-Time Implied Volatility, VRP Regime, Forward Volatility Term Structure, OTM Smile &amp; 6-Strategy Upstox Backtest." />
+  <meta property="og:description" content="A focused workspace for Indian index volatility research, captured market data and strategy replay." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://volatilitylab.in/" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -164,6 +164,7 @@
     }
       #workspaceBacktest table { min-width: 1050px; }
   </style>
+  <link rel="stylesheet" href="scripts/desk-presentation.css?v=20261120" />
 </head>
 <body class="min-h-screen">
 
@@ -173,48 +174,39 @@
     <span id="deskToastText">Updated</span>
   </div>
 
-  <div class="max-w-[1540px] mx-auto px-3 sm:px-6 pt-3 pb-10 space-y-3.5">
+  <div class="lab-shell">
 
     <!-- =================================================================== -->
     <!-- SINGLE COMPACT DESK BAR (With Market-Hours Gate & Status Badge)     -->
     <!-- =================================================================== -->
-    <header class="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#0d1522] border border-[#24344d] border-l-4 border-l-sky-500 rounded-xl">
-      <div class="flex flex-wrap items-center gap-3">
-        <div class="flex items-center gap-2">
-          <span class="text-sky-400 font-bold text-lg">❖</span>
-          <span class="font-extrabold text-base tracking-tight text-white">Volatility Lab</span>
-        </div>
-
-        <!-- Primary Workspace Switcher -->
-        <div class="seg-group" role="tablist" aria-label="Workspace">
-          <button type="button" id="wsOptionsBtn" class="seg-btn active" role="tab">Research</button>
-          <button type="button" id="wsBacktestBtn" class="seg-btn" role="tab">Backtest archive</button>
-          <button type="button" id="wsForwardBtn" class="seg-btn" role="tab">Paper trading</button>
-        </div>
-
-        <!-- Global Index & Expiry Controls (Visible in Options Mode) -->
-        <div id="headerOptionsControls" class="flex flex-wrap items-center gap-2">
-          <div class="seg-group" id="symbolSegmented">
-            <button type="button" data-sym="NIFTY" class="sym-btn seg-btn active mono">NIFTY 50</button>
-            <button type="button" data-sym="BANKNIFTY" class="sym-btn seg-btn mono">BANKNIFTY</button>
-          </div>
-          <select id="activeExpirySelect" aria-label="Listed Expiry" class="desk-select mono"></select>
-        </div>
+    <header class="lab-header">
+      <a href="#" class="lab-brand" aria-label="Volatility Lab home">
+        <svg viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="11" fill="#152439" stroke="#354f6d"/><path d="M8 25 15 13 21 27 32 12" stroke="#91c5fb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="12" r="2.5" fill="#8dd8bc"/></svg>
+        <span>Volatility Lab<span class="brand-caption block">Indian index options research</span></span>
+      </a>
+      <div class="seg-group" role="tablist" aria-label="Workspace">
+        <button type="button" id="wsOptionsBtn" class="seg-btn active" role="tab" aria-selected="true" aria-controls="workspaceOptions">Research</button>
+        <button type="button" id="wsBacktestBtn" class="seg-btn" role="tab" aria-selected="false" aria-controls="workspaceBacktest">Backtest archive</button>
+        <button type="button" id="wsForwardBtn" class="seg-btn" role="tab" aria-selected="false" aria-controls="workspaceForwardTest">Paper trading</button>
       </div>
-
-      <!-- Right: Clean Market Context & Dynamic Market-Hours Gate Pill -->
-      <div class="flex items-center gap-3 mono text-xs">
-        <button type="button" id="syncDesk" aria-label="Refresh market data" title="Refresh market data" class="text-sky-300 text-lg">⟳</button>
-        <span class="text-slate-300 hidden sm:inline">INDIA VIX: <strong id="headerVixVal" class="text-sky-300">—</strong></span>
-        <span id="marketClockPill" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#070b12] border border-[#334155] text-slate-300 font-semibold">
-          <span id="livePulseDot" class="hidden w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span id="marketClockText">Checking market status</span>
-        </span>
+      <div class="header-actions">
+        <span id="marketClockPill"><span id="livePulseDot" class="hidden"></span><span id="marketClockText">Checking market status</span></span>
+        <button type="button" id="syncDesk" aria-label="Refresh market data" title="Check for the latest captured market data" aria-busy="false" class="refresh-button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9"/></svg><span id="refreshButtonLabel">Refresh</span>
+        </button>
       </div>
     </header>
-    <div class="flex flex-wrap justify-between gap-2 px-1 text-xs text-slate-300">
-      <span id="snapshotAsOf" class="mono"></span>
-      <span id="liveCaptureIntegrity" role="status">Checking live connection…</span>
+    <section class="workspace-intro" aria-labelledby="workspaceTitle">
+      <div><h1 id="workspaceTitle">Volatility research</h1><p id="workspaceDescription">Understand the curve. Compare volatility. Explore expiry risk.</p></div>
+      <div id="headerOptionsControls" class="context-controls">
+        <div class="seg-group" id="symbolSegmented" aria-label="Market index"><button type="button" data-sym="NIFTY" class="sym-btn seg-btn active">NIFTY 50</button><button type="button" data-sym="BANKNIFTY" class="sym-btn seg-btn">BANKNIFTY</button></div>
+        <select id="activeExpirySelect" aria-label="Listed Expiry" class="desk-select mono"></select>
+      </div>
+    </section>
+    <div class="data-status-bar">
+      <span id="snapshotAsOf"></span><span id="liveCaptureIntegrity" role="status">Checking market data…</span>
+      <span>India VIX <strong id="headerVixVal" class="text-slate-200">—</strong></span>
+      <span id="refreshStatus" role="status" aria-live="polite"></span>
     </div>
 
     <!-- =================================================================== -->
@@ -225,36 +217,36 @@
       <!-- ROW 1: 6 PURE QUANTITATIVE KPI CARDS (Zero Trading Tips) -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         <div class="kpi-card border-t-2 border-t-sky-400">
-          <div class="text-[11px] font-bold uppercase text-slate-300">Spot &amp; Futures</div>
+          <div class="text-[11px] font-bold uppercase text-slate-300">Spot / matched forward</div>
           <div id="kpiSpot" class="text-lg mono font-extrabold text-white mt-0.5">—</div>
           <div id="kpiForwardSub" class="text-[11px] mono text-slate-300 mt-0.5">—</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-sky-400">
-          <div class="text-[11px] font-bold uppercase text-slate-300">ATM IV</div>
+          <div class="text-[11px] font-bold uppercase text-slate-300">Captured ATM IV</div>
           <div id="kpiAtmIv" class="text-lg mono font-extrabold text-sky-300 mt-0.5">—</div>
           <div id="kpiIvRankSub" class="text-[11px] mono text-slate-300 mt-0.5">—</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-emerald-400">
-          <div class="text-[11px] font-bold uppercase text-slate-300">HV10 &amp; HV30 (Realized)</div>
+          <div class="text-[11px] font-bold uppercase text-slate-300">Realized volatility · 10 / 30D</div>
           <div id="kpiHvGarch" class="text-lg mono font-extrabold text-emerald-300 mt-0.5">—</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-emerald-400">
-          <div class="text-[11px] font-bold uppercase text-slate-300">VRP Spread (IV − HV30)</div>
+          <div class="text-[11px] font-bold uppercase text-slate-300">IV − realized volatility</div>
           <div id="kpiVrpSpread" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">—</div>
           <div id="kpiGarchGapSub" class="text-[11px] mono text-sky-300 mt-0.5">—</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-purple-400">
-          <div class="text-[11px] font-bold uppercase text-slate-300">1σ Expected Move</div>
+          <div class="text-[11px] font-bold uppercase text-slate-300">1σ move to expiry</div>
           <div id="kpiExpMove" class="text-lg mono font-extrabold text-white mt-0.5">—</div>
           <div id="kpiSafeBandSub" class="text-[11px] mono text-violet-300 mt-0.5">—</div>
         </div>
 
         <div class="kpi-card border-t-2 border-t-purple-400">
-          <div class="text-[11px] font-bold uppercase text-slate-300">25Δ Skew &amp; Butterfly</div>
+          <div class="text-[11px] font-bold uppercase text-slate-300">25Δ skew / butterfly</div>
           <div id="kpiSkew25" class="text-lg mono font-extrabold text-violet-300 mt-0.5">—</div>
           <div id="kpiSkewSub" class="text-[11px] mono text-slate-300 mt-0.5">—</div>
         </div>
@@ -313,7 +305,7 @@
                 <thead>
                   <tr class="border-b border-[#24344d] text-slate-300">
                     <th class="py-2 px-3">Metric</th>
-                    <th class="py-2 px-3 text-right">Current</th>
+                    <th class="py-2 px-3 text-right">Latest recorded</th>
                     <th class="py-2 px-3 text-right">Observations</th>
                     <th class="py-2 px-3 text-right">Median</th>
                     <th class="py-2 px-3 text-right">Mean</th>
@@ -328,14 +320,14 @@
             <div class="lg:col-span-5 overflow-x-auto rounded-xl border border-[#24344d] bg-[#080d16]">
               <div class="px-3.5 py-2 bg-[#111c2d] border-b border-[#24344d] flex justify-between items-center">
                 <span class="text-xs font-bold uppercase text-white">Realized volatility</span>
-                <span class="text-[11px] mono text-sky-300">Annualized</span>
+                <span id="regimeRiskAsOf" class="text-[11px] mono text-slate-400">Annualized</span>
               </div>
               <table class="risk-table w-full text-left border-collapse text-xs mono">
                 <thead>
                   <tr class="border-b border-[#24344d] text-slate-300">
                     <th class="py-2 px-3">Window</th>
                     <th class="py-2 px-3 text-right text-sky-300">Realized HV</th>
-                    <th class="py-2 px-3 text-right">IV − HV Spread</th>
+                    <th class="py-2 px-3 text-right" title="Selected expiry captured IV minus realized volatility. Blank when source dates do not align.">IV − HV Spread</th>
                   </tr>
                 </thead>
                 <tbody id="regimeHorizonTableBody" class="divide-y divide-[#1a2639]"></tbody>
@@ -441,7 +433,7 @@
           </div>
 
           <details class="research-details">
-            <summary>Option chain · captured quotes &amp; model values</summary>
+            <summary>Option chain · captured quotes &amp; model values</summary><p class="research-caption px-4 py-3">Smile points use the nearest OTM broker delta within ±0.025; ATM uses the captured call/put mean. Headline 25Δ skew and butterfly interpolate the captured delta curve. Missing quotes remain gaps.</p>
           <div class="overflow-auto max-h-[520px] rounded-xl border border-[#24344d] bg-[#080d16]">
             <table class="w-full text-right border-collapse text-xs mono">
               <thead class="sticky top-0">
@@ -982,7 +974,7 @@
           <div id="fwdKpiClosedNetSub" class="text-[11px] mono text-slate-300 mt-0.5">0 Auto-Triggered · Gross: ₹0</div>
         </div>
         <div class="kpi-card border-t-2 border-t-sky-400">
-          <div class="text-[11px] font-bold uppercase text-slate-300">Capital deployed (₹)</div>
+          <div class="text-[11px] font-bold uppercase text-slate-300">Recorded capital (₹)</div>
           <div id="fwdKpiCapital" class="text-lg mono font-extrabold text-sky-300 mt-0.5">₹0</div>
           <div id="fwdKpiCapitalSub" class="text-[11px] mono text-slate-300 mt-0.5">SPAN+Exp (0 Pos) · Unit Cap: ₹56,074</div>
         </div>
@@ -1083,10 +1075,11 @@
       </div>
 
       <!-- Panel 2 — Completed Auto-Triggered Intraday Forward Trade Ledger -->
+      <details id="paperArchiveDetails" class="research-details"><summary>Closed trade records · <span id="paperArchiveCount">Checking records</span></summary>
       <div class="overflow-x-auto rounded-xl border border-[#24344d] bg-[#0d1522]">
         <div class="px-4 py-2.5 bg-[#111c2d] border-b border-[#24344d] flex flex-wrap items-center justify-between gap-2">
           <span class="text-xs font-bold uppercase text-white">Closed paper trades</span>
-          <span class="text-[11px] mono text-slate-300">Strictly live forward trades triggered from 2026-11-11 09:20 IST onwards · Zero historical backtest contamination</span>
+          <span class="text-[11px] mono text-slate-300">Recorded simulated entries and exits · separate from backtests</span>
         </div>
         <table class="w-full text-left border-collapse text-xs mono">
           <thead>
@@ -1107,8 +1100,10 @@
         </table>
       </div>
 
+      </details>
     </main>
 
+    <footer class="workspace-footnote"><strong>Volatility Lab · Indian index options</strong><span>Captured data &amp; research estimates · Simulated results are not live trading performance.</span></footer>
   </div>
 
   <script>
@@ -1134,13 +1129,13 @@
             var meta = chart.getDatasetMeta(dsIdx);
             if (meta.hidden) return;
             ctx.save();
-            ctx.font = '700 10.5px "JetBrains Mono", monospace';
+            ctx.font = '500 12px "JetBrains Mono", monospace';
             ctx.fillStyle = ds.labelColor || ds.borderColor || '#ffffff';
             ctx.textAlign = 'center';
             if (ds.pointValueLabels) {
               const area = chart.chartArea;
               const occupied = occupiedLabels;
-              ctx.font = '10px sans-serif';
+              ctx.font = '12px sans-serif';
               for (let i=0; i<meta.data.length; i++) {
                 const value = ds.data[i], pt = meta.data[i];
                 const yValue = typeof value === 'object' ? value?.y : value;
@@ -1149,12 +1144,12 @@
                 const date = ds.pointValueLabels === 'expiry' ? value.expiry.slice(5).split('-').reverse().join('/') : '';
                 const w = Math.max(ctx.measureText(label).width,ctx.measureText(date).width)/2+2;
                 const x = Math.max(area.left+w,Math.min(area.right-w,pt.x));
-                const height = date ? 22 : 12;
-                const ys = [-15,19,-35,40].map(offset=>Math.max(area.top+11,Math.min(area.bottom-height,pt.y+offset)));
+                const height = date ? 28 : 15;
+                const ys = [-15,19,-35,40].map(offset=>Math.max(area.top+14,Math.min(area.bottom-height,pt.y+offset)));
                 const y = ys.find(y=>occupied.every(r=>Math.abs(x-r.x)>=w+r.w || Math.abs(y-r.y)>=height));
                 if (y === undefined) continue;
                 ctx.fillText(label,x,y);
-                if (date) ctx.fillText(date,x,y+11);
+                if (date) ctx.fillText(date,x,y+14);
                 occupied.push({x,y,w});
               }
               ctx.restore();
@@ -1208,7 +1203,7 @@
             legend: {
               position: 'top',
               align: 'start',
-              labels: { color: '#ffffff', font: { family: "'Plus Jakarta Sans', sans-serif", size: 12, weight: '600' }, boxWidth: 14, padding: 14 }
+              labels: { color: '#ffffff', font: { family: "'Plus Jakarta Sans', sans-serif", size: 13, weight: '500' }, boxWidth: 14, padding: 18 }
             },
             tooltip: {
               backgroundColor: '#070b12',
@@ -1225,30 +1220,30 @@
             x: {
               ticks: customXCallback ? {
                 color: '#e2e8f0',
-                font: { family: "'JetBrains Mono', monospace", size: 10.5, weight: '600' },
+                font: { family: "'JetBrains Mono', monospace", size: 12, weight: '500' },
                 maxRotation: 0,
                 autoSkip: false,
                 callback: customXCallback
               } : {
                 color: '#e2e8f0',
-                font: { family: "'JetBrains Mono', monospace", size: 11, weight: '600' },
+                font: { family: "'JetBrains Mono', monospace", size: 12, weight: '500' },
                 maxRotation: 0,
                 autoSkip: true,
                 maxTicksLimit: window.innerWidth < 640 ? 4 : 10
               },
-              grid: { color: 'rgba(148, 163, 184, 0.14)' }
+              grid: { color: 'rgba(148, 163, 184, 0.08)' }
             },
             y: {
               ticks: {
                 color: '#ffffff',
-                font: { family: "'JetBrains Mono', monospace", size: 11.5, weight: '600' },
+                font: { family: "'JetBrains Mono', monospace", size: 12, weight: '500' },
                 precision: unit === '₹' ? 0 : undefined,
                 callback: function(v) { if (unit === '₹') return '₹' + Math.round(v).toLocaleString('en-IN'); var num = Number(v); var formatted = isFinite(num) ? (Math.abs(num - Math.round(num)) < 1e-4 ? String(Math.round(num)) : num.toFixed(2)) : String(v); return formatted + (unit || ''); }
               },
               grid: {
                 color: function(c) {
                   if (zeroLine && c.tick && c.tick.value === 0) return 'rgba(255,255,255,0.5)';
-                  return 'rgba(148, 163, 184, 0.16)';
+                  return 'rgba(148, 163, 184, 0.09)';
                 }
               }
             }
@@ -1802,18 +1797,15 @@
         if (!r) return;
         enrichItemWithBlack76(r);
         const completed = (REAL_HISTORICAL_1Y[activeSymbol] || []).find(row => row.hvCloseDate === r.sessionDate);
-        var vrp30 = observedSpread(r.iv, completed?.h30 ?? r.hv30);
-        var vrp10 = observedSpread(r.iv, completed?.h10 ?? r.hv10);
-        var movePts = r.spot > 0 && r.iv > 0 && r.dte >= 0 ? r.spot * (r.iv / 100.0) * Math.sqrt(r.dte / 365.0) : NaN;
+        var capturedIv = r.brokerAtmIv > 0 ? r.brokerAtmIv : null;
+        var vrp30 = observedSpread(capturedIv, completed?.h30 ?? r.hv30);
+        var vrp10 = observedSpread(capturedIv, completed?.h10 ?? r.hv10);
+        var movePts = r.spot > 0 && capturedIv > 0 && r.dte >= 0 ? r.spot * (capturedIv / 100.0) * Math.sqrt(r.dte / 365.0) : NaN;
         var movePct = (movePts / r.spot) * 100.0;
         var low = Math.round(r.spot - movePts);
         var high = Math.round(r.spot + movePts);
 
-        var b76C = (r.b76CallIv != null && r.b76CallIv > 0 ? r.b76CallIv : null);
-        var b76P = (r.b76PutIv != null && r.b76PutIv > 0 ? r.b76PutIv : null);
-        var uC = (r.upstoxCallIv != null && r.upstoxCallIv > 0 ? r.upstoxCallIv : (r.cIv || null));
-        var uP = (r.upstoxPutIv != null && r.upstoxPutIv > 0 ? r.upstoxPutIv : (r.pIv || null));
-        var atmIvVal = (r.b76AtmIv != null && r.b76AtmIv > 0) ? r.b76AtmIv : r.iv;
+        var atmIvVal = capturedIv;
         var dispFwd = isFinite(r.syn) && r.syn > 0 ? r.syn : null;
         document.getElementById('kpiSpot').textContent = r.spot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         document.getElementById('kpiForwardSub').textContent = 'Matched fut: ' + formatLiveNumber(r.fut, 1) + ' · Syn. fut: ' + (dispFwd ? dispFwd.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—');
@@ -1826,7 +1818,10 @@
         document.getElementById('kpiGarchGapSub').textContent = vrp30 === null ? 'Missing ATM IV or HV30' : 'IV − HV10 ' + formatLiveNumber(vrp10,2,' pp');
         document.getElementById('kpiExpMove').textContent = Number.isFinite(movePts) ? '±' + Math.round(movePts) + ' pts (±' + movePct.toFixed(2) + '%)' : '—';
         document.getElementById('kpiSafeBandSub').textContent = Number.isFinite(movePts) ? '1σ Band: ' + low.toLocaleString('en-IN') + ' – ' + high.toLocaleString('en-IN') : 'Missing IV or expiry inputs';
-        document.getElementById('kpiSkew25').textContent = (r.rev25 >= 0 ? '+' : '') + formatLiveNumber(r.rev25, 2) + ' / ' + (r.bfly25 >= 0 ? '+' : '') + formatLiveNumber(r.bfly25, 2) + ' pp';
+        const put25=capturedDeltaIv(r.chain,'p',-.25),call25=capturedDeltaIv(r.chain,'c',.25);
+        const skew=observedSpread(put25,call25),butterfly=Number.isFinite(put25)&&Number.isFinite(call25)&&capturedIv>0?(put25+call25)/2-capturedIv:null;
+        const signed=value=>Number.isFinite(value)?(value>=0?'+':'')+value.toFixed(2):'—';
+        document.getElementById('kpiSkew25').textContent=signed(skew)+' / '+signed(butterfly)+' pp';
         document.getElementById('kpiSkewSub').textContent = 'RR25 (Put−Call) · BF25 · PCR ' + formatLiveNumber(r.pcr, 2);
         var vixEl = document.getElementById('headerVixVal');
         if (vixEl) vixEl.textContent = formatIv(r.vix);
@@ -2002,21 +1997,22 @@
         const latestRisk = fullSeries.filter(pt => Number.isFinite(pt.h30)).at(-1);
         const hv10 = latestRisk?.h10 ?? r.hv10, hv20 = latestRisk?.h20 ?? r.hv20, hv30 = latestRisk?.h30 ?? r.hv30;
         var allH30 = fullSeries.map(pt => chartNumber(pt.h30));
-        var front = (marketCatalog[activeSymbol] || [])[0] || r;
-        var stIv = distribution(fullSeries.map(observedIv), front.brokerAtmIv, '%');
+        const latestIv = fullSeries.filter(pt=>observedIv(pt)!==null).at(-1);
+        const latestPair = fullSeries.filter(pt=>observedIv(pt)!==null && chartNumber(pt.h30)!==null).at(-1);
+        var stIv = distribution(fullSeries.map(observedIv), latestIv ? observedIv(latestIv) : null, '%');
         var stH10 = distribution(fullSeries.map(pt => chartNumber(pt.h10)), hv10, '%');
         var stH30 = distribution(allH30, hv30, '%');
-        var stVrp = distribution(fullSeries.map(pt => observedSpread(observedIv(pt), pt.h30)), observedSpread(front.brokerAtmIv, hv30), ' pp');
+        var stVrp = distribution(fullSeries.map(pt => observedSpread(observedIv(pt), pt.h30)), latestPair ? observedSpread(observedIv(latestPair),latestPair.h30) : null, ' pp');
 
         document.getElementById('regimeRankTableBody').innerHTML = [
-          { m: 'Front ATM IV (%)', s: stIv },
-          { m: 'HV10 (10-Day Realized)', s: stH10 },
-          { m: 'HV30 (30-Day Realized)', s: stH30 },
-          { m: 'VRP Spread (IV − HV30)', s: stVrp }
+          { m: 'Front ATM IV (%)', s: stIv, date:latestIv?.d },
+          { m: 'HV10 (10-Day Realized)', s: stH10, date:latestRisk?.d },
+          { m: 'HV30 (30-Day Realized)', s: stH30, date:latestRisk?.d },
+          { m: 'VRP Spread (IV − HV30)', s: stVrp, date:latestPair?.d }
         ].map(function(row) {
           return '<tr class="hover:bg-[#111c2d]">' +
             '<td class="py-2 px-3 font-bold text-white">' + row.m + '</td>' +
-            '<td class="py-2 px-3 text-right font-bold text-sky-300">' + row.s.c + '</td>' +
+            '<td class="py-2 px-3 text-right font-bold text-sky-300">' + row.s.c + '<div class="text-slate-400 text-[11px] font-normal">' + (row.date || '—') + '</div></td>' +
             '<td class="py-2 px-3 text-right text-slate-300">' + row.s.count + '</td>' +
             '<td class="py-2 px-3 text-right text-slate-300">' + row.s.med + '</td>' +
             '<td class="py-2 px-3 text-right text-slate-300">' + row.s.mean + '</td>' +
@@ -2025,16 +2021,17 @@
           '</tr>';
         }).join('');
 
+        document.getElementById('regimeRiskAsOf').textContent='Annualized · '+(latestRisk?.d || r.sessionDate || 'date unavailable');
         var windows = [
           { w: 'HV10', hv: hv10 }, { w: 'HV20', hv: hv20 }, { w: 'HV30', hv: hv30 },
-          { w: 'Yang–Zhang 20D', hv:window.VL_PUBLIC_STATE?.forecasts?.[activeSymbol]?.yang_zhang20 },
+          { w: 'Yang–Zhang 20D', hv:window.VL_PUBLIC_STATE?.forecasts?.[activeSymbol]?.yang_zhang20, date:window.VL_PUBLIC_STATE?.forecasts?.[activeSymbol]?.training_through },
           { w: 'HV30 · 60-session mean', hv: observedMean(allH30.slice(-60)) },
           { w: 'HV30 · 1-year mean', hv: observedMean(allH30) }
         ];
         document.getElementById('regimeHorizonTableBody').innerHTML = windows.map(function(item) {
-          return '<tr><td class="py-2 px-3">' + item.w + '</td>' +
+          return '<tr><td class="py-2 px-3">' + item.w + (item.date ? '<div class="text-slate-400 text-[11px]">'+item.date+'</div>' : '') + '</td>' +
             '<td class="py-2 px-3 text-right">' + formatLiveNumber(item.hv, 2, '%') + '</td>' +
-            '<td class="py-2 px-3 text-right">' + formatLiveNumber(observedSpread(r.iv, item.hv), 2, ' pp') + '</td></tr>';
+            '<td class="py-2 px-3 text-right">' + formatLiveNumber((item.date || latestRisk?.d || r.sessionDate) === r.sessionDate ? observedSpread(r.brokerAtmIv, item.hv) : null, 2, ' pp') + '</td></tr>';
         }).join('');
       }
 
@@ -2218,7 +2215,7 @@
           rowsHtml +=
             '<tr class="' + (k === r.atm ? 'bg-sky-500/15 font-bold' : 'hover:bg-[#111c2d]') + '">' +
               '<td class="py-2 px-3 text-left text-white">' + zone + '</td>' +
-              '<td class="py-2 px-3 text-slate-300">' + (node.cOi || 0).toLocaleString('en-IN') + 'k</td>' +
+              '<td class="py-2 px-3 text-slate-300">' + formatLiveNumber(node.cOi,1,'k') + '</td>' +
               '<td class="py-2 px-3 text-emerald-300">' + cLtpTxt + '</td>' +
               '<td class="py-2 px-3 text-slate-200">' + cDelTxt + '</td>' +
               '<td class="py-2 px-3 text-sky-200">' + formatLiveNumber(node.modelCallIv,2,'%') + ' / ' + formatLiveNumber(node.modelCallDelta,3) + '</td>' +
@@ -2228,7 +2225,7 @@
               '<td class="py-2 px-3 text-violet-200">' + formatLiveNumber(node.modelPutIv,2,'%') + ' / ' + formatLiveNumber(node.modelPutDelta,3) + '</td>' +
               '<td class="py-2 px-3 text-slate-200">' + pDelTxt + '</td>' +
               '<td class="py-2 px-3 text-sky-300">' + pLtpTxt + '</td>' +
-              '<td class="py-2 px-3 text-slate-300">' + (node.pOi || 0).toLocaleString('en-IN') + 'k</td>' +
+              '<td class="py-2 px-3 text-slate-300">' + formatLiveNumber(node.pOi,1,'k') + '</td>' +
               '<td class="py-2 px-3 font-bold text-emerald-300">' + otmIvTxt + '</td>' +
             '</tr>';
         }
@@ -2244,8 +2241,8 @@
           const m = marks[item.dataIndex];
           return 'Strike ' + m.strike + (m.delta == null ? ' · call/put mean' : ' · broker Δ ' + m.delta.toFixed(3));
         }};
-        document.getElementById('smileSource').textContent = r.expiry + ' · ' + (r.ivCapturedAt || 'Capture time unavailable') +
-          ' · Nearest OTM broker delta within ±0.025. ATM requires both IVs. Gaps indicate missing quotes.';
+        document.getElementById('smileSource').textContent = r.expiry + ' · ' + (r.ivCapturedAt ? new Date(r.ivCapturedAt).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})+' IST' : 'Capture time unavailable') +
+          ' · Captured broker IV';
         smileChart = updateOrCreateChart(smileChart, ctx, 'line', smileData, opts);
         const surface = document.getElementById('smileViewSelect').value === '3D';
         document.getElementById('smile2dPanel').classList.toggle('hidden',surface);
@@ -4039,6 +4036,7 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         var unverified = state.closed.filter(t => t.provenance_status !== 'VALIDATED_EVENT_QUOTES' || t.integrity_status === 'UNVERIFIED_RECORD');
         var closedList = state.closed.filter(t => !unverified.includes(t));
         var lots = state.lots;
+        document.getElementById('paperArchiveCount').textContent=state.closed.length+' recorded · '+closedList.length+' verified · '+unverified.length+' unverified';
 
         var markedOpenList = openList.filter(function(x) { return x.hasCurrentMark; });
         var withheldOpenCount = openList.length - markedOpenList.length;
@@ -4065,12 +4063,12 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
 
         // Update 6 KPI Cards
         var elOpenCnt = document.getElementById('fwdKpiOpenCount');
-        if (elOpenCnt) elOpenCnt.textContent = openList.length + ' Open';
+        if (elOpenCnt) elOpenCnt.textContent = openList.length + (forwardLedger.source_authority === 'dated_archive' ? ' Recorded' : ' Open');
         var elOpenSub = document.getElementById('fwdKpiOpenSub');
         if (elOpenSub) {
           elOpenSub.textContent = (openList.length === 0 && closedList.length === 0)
             ? forwardStatusLabel()
-            : (openExpCount + ' Active Expiries (Live Forward)');
+            : (openExpCount + ' recorded expiries');
         }
 
         var elOpenMtm = document.getElementById('fwdKpiOpenMtm');
@@ -4150,9 +4148,7 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
                 '<td class="py-2.5 px-2.5 text-right whitespace-nowrap">' + (p.hasCurrentMark ? ('<span class="font-extrabold ' + (p.simNetMtm >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(p.simNetMtm), p.simNetMtm !== 0) + '</span> <span class="text-[10.5px] ' + (p.simRocPct >= 0 ? 'text-sky-300' : 'text-rose-300') + '">(' + (p.simRocPct >= 0 ? '+' : '') + p.simRocPct.toFixed(2) + '%)</span>') : '<span class="text-slate-400">WITHHELD</span>') + '</td>' +
                 '<td class="py-2.5 px-2.5 text-center whitespace-nowrap">' + p.slTpStatus + '</td>' +
                 '<td class="py-2.5 px-2.5 text-center whitespace-nowrap">' +
-                  '<button type="button" onclick="window.closeForwardPosition(\'' + p.id + '\')" class="px-2.5 py-1 rounded bg-rose-950/70 hover:bg-rose-600 text-rose-200 hover:text-white border border-rose-500/50 font-bold text-[10.5px] transition">' +
-                    'Close Position' +
-                  '</button>' +
+                  '<span class="text-slate-400 text-xs">Read-only</span>' +
                 '</td>' +
               '</tr>';
             }).join('');
@@ -4178,29 +4174,34 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           var wPct = cSub.length ? (wCnt / cSub.length) * 100.0 : 0.0;
           var pSum = cSub.filter(function(x) { return x.simNet > 0; }).reduce(function(a, x) { return a + x.simNet; }, 0);
           var nSum = Math.abs(cSub.filter(function(x) { return x.simNet < 0; }).reduce(function(a, x) { return a + x.simNet; }, 0));
-          var scPf = nSum > 0 ? (pSum / nSum) : (pSum > 0 ? 99.9 : 0.0);
+          var scPf = nSum > 0 ? (pSum / nSum) : (pSum > 0 ? Infinity : 0.0);
           var unitCap = Math.max(0, oSub.concat(cSub).reduce(function(m, x) { return Math.max(m, x.simCapital); }, 0));
           var scRoc = (unitCap > 0 && (oSub.length > 0 || cSub.length > 0)) ? (totNet / unitCap) * 100.0 : 0.0;
 
-          barNetData.push(ledgerReady ? Math.round(cNet) : null);
-          barOpenData.push(ledgerReady && markedOSub.length === oSub.length ? Math.round(oNet) : null);
+          const unverifiedSc=unverified.filter(x=>x.strat===sc).length;
+          const closedKnown=cSub.length>0 && !unverifiedSc;
+          const openKnown=oSub.length>0 && markedOSub.length===oSub.length;
+          const totalKnown=(oSub.length>0||cSub.length>0) && markedOSub.length===oSub.length && !unverifiedSc;
+          barNetData.push(ledgerReady && closedKnown ? Math.round(cNet) : null);
+          barOpenData.push(ledgerReady && openKnown ? Math.round(oNet) : null);
 
           var statusBadgeHtml = (oSub.length === 0 && cSub.length === 0)
             ? '<span class="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold text-[10px]">' + (ledgerReady ? 'No trades' : 'Waiting for ledger') + '</span>'
-            : '<span class="px-2 py-0.5 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 font-bold text-[10px]">PF ' + scPf.toFixed(2) + ' · ACTIVE</span>';
+            : '<span class="px-2 py-0.5 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 font-bold text-[10px]">PF ' + (Number.isFinite(scPf)?scPf.toFixed(2):'∞') + ' · Recorded</span>';
 
+          if (!totalKnown) statusBadgeHtml='<span class="text-slate-400">'+(unverifiedSc ? unverifiedSc+' unverified closes' : oSub.length ? 'Marks unavailable' : 'No verified trades')+'</span>';
           scHtml += '<tr onclick="document.getElementById(\'fwdStrategyFilter\').value=\'' + sc + '\'; renderForwardWorkspace();" class="cursor-pointer hover:bg-[#111c2d]">' +
             '<td class="py-2 px-3 font-bold text-sky-300">' + (STRATEGY_NAMES_MAP[sc] || sc) + '</td>' +
             '<td class="py-2 px-3 text-right text-white font-semibold">' + oSub.length + ' Open</td>' +
             '<td class="py-2 px-3 text-right text-white font-semibold">' + cSub.length + ' Closed</td>' +
-            '<td class="py-2 px-3 text-right font-bold ' + (wPct >= 50 ? 'text-emerald-400' : 'text-slate-300') + '">' + wPct.toFixed(1) + '%</td>' +
-            '<td class="py-2 px-3 text-right ' + (oNet >= 0 ? 'text-emerald-300' : 'text-rose-400') + '">' + fmtInr(Math.round(oNet), oNet !== 0) + '</td>' +
-            '<td class="py-2 px-3 text-right ' + (cGross >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + fmtInr(Math.round(cGross), cGross !== 0) + '</td>' +
-            '<td class="py-2 px-3 text-right text-slate-300">' + (cChg > 0 ? '-' : '') + fmtInr(Math.round(cChg), false) + '</td>' +
-            '<td class="py-2 px-3 text-right font-extrabold ' + (cNet >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtInr(Math.round(cNet), cNet !== 0) + ' Net P&amp;L</td>' +
-            '<td class="py-2 px-3 text-right font-extrabold ' + (totNet >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + fmtInr(Math.round(totNet), totNet !== 0) + '</td>' +
+            '<td class="py-2 px-3 text-right font-bold ' + (wPct >= 50 ? 'text-emerald-400' : 'text-slate-300') + '">' + (closedKnown ? wPct.toFixed(1)+'%' : '—') + '</td>' +
+            '<td class="py-2 px-3 text-right ' + (oNet >= 0 ? 'text-emerald-300' : 'text-rose-400') + '">' + (openKnown ? fmtInr(Math.round(oNet), oNet !== 0) : '—') + '</td>' +
+            '<td class="py-2 px-3 text-right ' + (cGross >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + (closedKnown ? fmtInr(Math.round(cGross), cGross !== 0) : '—') + '</td>' +
+            '<td class="py-2 px-3 text-right text-slate-300">' + (closedKnown ? (cChg > 0 ? '-' : '') + fmtInr(Math.round(cChg), false) : '—') + '</td>' +
+            '<td class="py-2 px-3 text-right font-extrabold ' + (cNet >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + (closedKnown ? fmtInr(Math.round(cNet), cNet !== 0) : '—') + '</td>' +
+            '<td class="py-2 px-3 text-right font-extrabold ' + (totNet >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + (totalKnown ? fmtInr(Math.round(totNet), totNet !== 0) : '—') + '</td>' +
             '<td class="py-2 px-3 text-right text-sky-300">' + fmtInr(unitCap, false) + ' Recorded Capital</td>' +
-            '<td class="py-2 px-3 text-right font-bold ' + (scRoc >= 0 ? 'text-emerald-300' : 'text-rose-400') + '">' + (scRoc > 0 ? '+' : '') + scRoc.toFixed(2) + '% ROC</td>' +
+            '<td class="py-2 px-3 text-right font-bold ' + (scRoc >= 0 ? 'text-emerald-300' : 'text-rose-400') + '">' + (totalKnown ? (scRoc > 0 ? '+' : '') + scRoc.toFixed(2)+'%' : '—') + '</td>' +
             '<td class="py-2 px-3 text-right whitespace-nowrap">' + statusBadgeHtml + '</td>' +
           '</tr>';
         });
@@ -4784,7 +4785,8 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
               node[prefix + 'Ask'] = liveNumber(md.ask_price);
               node[prefix + 'BidQty'] = liveNumber(md.bid_qty);
               node[prefix + 'AskQty'] = liveNumber(md.ask_qty);
-              node[prefix + 'Oi'] = liveNumber(md.oi) / 1000;
+              const oi = liveNumber(md.oi);
+              node[prefix + 'Oi'] = Number.isFinite(oi) && oi >= 0 ? oi / 1000 : null;
               node[prefix + 'QuoteAt'] = md.quote_timestamp || md.feed_timestamp || md.currentTs || md.ts || null;
               node[prefix + 'Iv'] = liveNumber(greek.iv);
               node[prefix + 'Delta'] = liveNumber(greek.delta);
@@ -4943,6 +4945,7 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         setLiveCaptureIntegrity(message, open && !fresh ? 'text-violet-300' : 'text-slate-300');
       }
 
+      var lastCloudRefresh = {kind:'idle'};
       var liveSnapshotRequest = null;
       var loadedCloudCapture = false;
       var liveSnapshotAccepted = false;
@@ -4950,12 +4953,14 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         var st = updateMarketClock();
         if (!forceFetch && !st.isOpen) return Promise.resolve(false);
         if (liveSnapshotRequest) return liveSnapshotRequest;
+        lastCloudRefresh = {kind:'loading'};
         const since = loadedCloudCapture ? '&since=' + encodeURIComponent(lastSyncedRetrievedAt) : '';
         liveSnapshotRequest = fetch(CLOUD_EXEC_URL + '?_cb=' + Date.now() + since, {cache:'no-store',
           signal:typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(35000) : undefined})
           .then(function(resp) { if (!resp.ok) throw new Error('Cloud HTTP error'); return resp.json(); })
           .then(function(payload) {
             const integrity = payload.capture_integrity;
+            lastCloudRefresh = {kind:'unchanged'};
             const stamp = liveTimestamp(payload.retrieved_at), previous = liveTimestamp(lastSyncedRetrievedAt);
             if (payload.unchanged === true && loadedCloudCapture && stamp === previous) {
               const age = (Date.now() - stamp)/1000;
@@ -4965,7 +4970,7 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
               return false;
             }
             if (!validCloudCapture(payload)) throw new Error('Incomplete capture');
-            if (stamp < previous) return false;
+            if (stamp < previous) { lastCloudRefresh = {kind:'older'}; return false; }
             const fresh = isFreshValidatedCloudSnapshot(payload);
             if (stamp === previous && loadedCloudCapture) {
               liveSnapshotAccepted = fresh;
@@ -4983,6 +4988,7 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
               ? Math.max(0, marketCatalog[activeSymbol].findIndex(function(x) { return x.expiry === selectedExpiry; }))
               : getDefaultActiveExpiryIdx(activeSymbol, payload.retrieved_at);
             lastSyncedRetrievedAt = payload.retrieved_at;
+            lastCloudRefresh = {kind:'updated'};
             loadedCloudCapture = true;
             liveSnapshotAccepted = fresh;
             TradingSessions.apply(payload.exchange_calendar);
@@ -4995,10 +5001,11 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
             showCaptureState(integrity, updateMarketClock().isOpen, fresh);
             return true;
           })
-          .catch(function() {
+          .catch(function(error) {
+            lastCloudRefresh = {kind:'unavailable',timedOut:error?.name==='TimeoutError'||error?.name==='AbortError'};
             liveSnapshotAccepted = false;
             updateMarketClock();
-            setLiveCaptureIntegrity(updateMarketClock().isOpen ? 'Collector unavailable · showing the dated snapshot above' : 'Last recorded session snapshot', 'text-violet-300');
+            setLiveCaptureIntegrity('Connection unavailable · showing the dated snapshot', 'text-violet-300');
             return false;
           })
           .finally(function() { liveSnapshotRequest = null; });
@@ -5034,27 +5041,63 @@ var backtestMeta = {"schema":1,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         if (document.hidden) return;
         try {
           const response = await fetch('live_state.json', {cache:'no-store', signal:AbortSignal.timeout(10000)});
-          if (!response.ok) return;
+          if (!response.ok) return {kind:'unavailable'};
           const state = await response.json();
           const newer = Date.parse(state.forecast_update?.generated_at);
           const current = Date.parse(window.VL_PUBLIC_STATE?.forecast_update?.generated_at) || 0;
-          if (!Number.isFinite(newer) || newer <= current) return;
+          if (!Number.isFinite(newer) || newer <= current) return {kind:'unchanged'};
           for (const symbol of ['NIFTY','BANKNIFTY']) {
             const series = state.forecasts?.[symbol];
-            if (!series || !/^\d{4}-\d{2}-\d{2}$/.test(series.training_through) || !Array.isArray(series.expiries)) return;
-            if (series.training_through < (window.VL_PUBLIC_STATE?.forecasts?.[symbol]?.training_through || '')) return;
+            if (!series || !/^\d{4}-\d{2}-\d{2}$/.test(series.training_through) || !Array.isArray(series.expiries)) return {kind:'unavailable'};
+            if (series.training_through < (window.VL_PUBLIC_STATE?.forecasts?.[symbol]?.training_through || '')) return {kind:'unavailable'};
           }
           window.VL_PUBLIC_STATE.forecasts = state.forecasts;
           window.VL_PUBLIC_STATE.forecast_update = state.forecast_update;
           renderActiveOptionsTab();
-        } catch (_) { /* Retain the last dated forecasts when publication is unavailable. */ }
+          return {kind:'updated'};
+        } catch (_) { return {kind:'unavailable'}; }
+      }
+
+      var manualRefreshInFlight = false;
+      async function refreshDesk() {
+        if (manualRefreshInFlight) return;
+        manualRefreshInFlight = true;
+        const button=document.getElementById('syncDesk'), label=document.getElementById('refreshButtonLabel'), status=document.getElementById('refreshStatus');
+        button.disabled=true;button.setAttribute('aria-busy','true');label.textContent='Refreshing';
+        status.textContent='Checking the latest market capture and published forecasts…';
+        try {
+          const outcomes=await Promise.allSettled([syncLiveCloudSnapshot(true),refreshPublishedForecasts()]);
+          const cloud=lastCloudRefresh, forecast=outcomes[1].status==='fulfilled'?outcomes[1].value:null;
+          const clock=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Kolkata'})+' IST';
+          let message=outcomes[0].status==='rejected'||cloud.kind==='unavailable'
+            ? (cloud.timedOut?'Market refresh timed out':'Market refresh failed')+' · showing the dated snapshot.'
+            : cloud.kind==='updated'?'Market data updated.'
+            : cloud.kind==='older'?'No newer usable capture · latest accepted snapshot retained.'
+            : 'No newer market capture available.';
+          if (!forecast || forecast.kind==='unavailable') message+=' Forecast refresh unavailable.';
+          else if (forecast.kind==='updated') message+=' Forecasts updated.';
+          status.textContent='Checked '+clock+' · '+message;
+        } finally {
+          manualRefreshInFlight=false;button.disabled=false;button.setAttribute('aria-busy','false');label.textContent='Refresh';
+        }
+      }
+      function updateWorkspacePresentation() {
+        const choices=[['wsOptionsBtn','Volatility research','Understand the curve. Compare volatility. Explore expiry risk.'],
+          ['wsBacktestBtn','Historical strategy replay','Test entry and exit rules against recorded option captures.'],
+          ['wsForwardBtn','Paper trading monitor','Review recorded signals and simulated positions.']];
+        choices.forEach(([id,title,description])=>{
+          const button=document.getElementById(id),active=button.classList.contains('active');
+          button.setAttribute('aria-selected',String(active));
+          if(active){document.getElementById('workspaceTitle').textContent=title;document.getElementById('workspaceDescription').textContent=description;}
+        });
       }
 
       function initVolatilityLabDesk() {
         if (window._vlDeskInitialized) return;
         window._vlDeskInitialized = true;
         window.VL_PUBLIC_STATE = JSON.parse(document.getElementById('deskPublicState').textContent);
-        document.getElementById('syncDesk').addEventListener('click', () => { syncLiveCloudSnapshot(true); refreshPublishedForecasts(); });
+        document.getElementById('syncDesk').addEventListener('click', refreshDesk);
+        ['wsOptionsBtn','wsBacktestBtn','wsForwardBtn'].forEach(id=>document.getElementById(id).addEventListener('click',updateWorkspacePresentation));
         var idxFilterEl = document.getElementById('tradeIdIndexFilter');
         if (idxFilterEl) {
           idxFilterEl.addEventListener('change', function() {

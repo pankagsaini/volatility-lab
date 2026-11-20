@@ -91,6 +91,8 @@ web.renderTab1Regime();
 assert.deepEqual(Array.from(web.regimeChart.data.datasets[0].data),[20,null,22]);
 assert.deepEqual(Array.from(web.regimeChart.data.datasets[1].data),[12,null,13]);
 assert.equal(web.regimeChart.data.datasets[0].spanGaps,false);
+assert(element('regimeRankTableBody').innerHTML.includes('22.00%'),'Latest recorded IV comes from history, not an older selected snapshot');
+assert(element('regimeRankTableBody').innerHTML.includes('2026-11-12'),'Latest values disclose their source date');
 const historyRows = web.REAL_HISTORICAL_1Y.NIFTY;
 historyRows[1].closingEstimate = {asOf:'2026-11-11T15:30:00+05:30',iv:21,model:'BSM',expiry:'2026-11-17',atm:25000};
 web.renderTab1Regime();
@@ -360,3 +362,4 @@ for(const rows of Object.values(embedded)) for(const row of rows) {
 console.log('Frontend regressions passed: missing data, sourced IV, statistics, forward variance, actual payoff legs and capture times.');
 
 require('./test_backtest_replay.cjs');
+require('./test_desk_refresh.cjs');
