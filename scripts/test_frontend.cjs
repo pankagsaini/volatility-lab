@@ -213,10 +213,11 @@ const charts = vm.runInContext('OptionsCharts',web);
 const comparisonState = {forecasts:{NIFTY:{expiries:[{expiry:'2026-11-17',as_of:'2026-11-11T15:40:00+05:30',training_through:'2026-11-11',egarch:17,ewma:null}]}}};
 const comparisonRow = {expiry:'2026-11-17',ivCapturedAt:'2026-11-11T15:45:00+05:30',brokerAtmIv:20};
 assert.equal(charts.comparison(comparisonState,'NIFTY',comparisonRow).egarchGap,3);
-for (const stamp of ['2026-11-12T15:45:00+05:30','2026-11-11T15:30:00+05:30','invalid']) {
+assert.equal(charts.comparison(comparisonState,'NIFTY',{...comparisonRow,ivCapturedAt:'2026-11-12T15:45:00+05:30'}).egarchGap,3);
+for (const stamp of ['2026-11-11T15:30:00+05:30','invalid']) {
   const result = charts.comparison(comparisonState,'NIFTY',{...comparisonRow,ivCapturedAt:stamp});
   assert.equal(result.egarch,17,'Dated reference remains visible');
-  assert.equal(result.egarchGap,null,'Stale, future, or undated forecasts cannot yield a current comparison gap');
+  assert.equal(result.egarchGap,null,'Future or undated forecasts cannot yield a current comparison gap');
 }
 assert.equal(charts.comparison(comparisonState,'NIFTY',{...comparisonRow,brokerAtmIv:null,iv:22}).egarchGap,null,'Model IV cannot fill comparison');
 assert.equal(charts.comparison({},'NIFTY',comparisonRow).egarch,null);
@@ -374,3 +375,9 @@ assert.equal(charts.heatStyle(null,100),charts.heatStyle(0,100));
 assert.notEqual(charts.heatStyle(10,100),charts.heatStyle(100,100));
 assert.equal(charts.heatStyle(100,100).replace('153','355'),charts.heatStyle(-100,100));
 assert.match(element('stressMatrixTableBody').innerHTML,/background:/);
+
+const legCase={atm:25000,modelDecision:{model:'black76'},chain:[{k:25000,modelPutIv:14,uCallIv:16,pLtp:100,cLtp:105}]};
+const testedLegs=web.scenarioLegs(legCase,'NIFTY','SHORT_STRADDLE');
+assert.equal(testedLegs[0].iv,14);
+assert.equal(testedLegs[1].iv,16);
+assert.equal(testedLegs[1].brokerIvUsed,true);

@@ -79,12 +79,13 @@ const OptionsCharts = (() => {
     const forecastAt = Date.parse(record?.as_of);
     const day = stamp => Number.isFinite(stamp) ? new Date(stamp + 19800000).toISOString().slice(0,10) : '';
     // Older forecasts remain visible as dated references, never as current edges.
-    const aligned = !!record && Number.isFinite(captured) && forecastAt <= captured
-      && day(forecastAt) === day(captured) && record.training_through <= day(captured);
+    const available = !!record && Number.isFinite(captured) && forecastAt <= captured
+      && record.training_through <= day(forecastAt);
+    const aligned = available && day(forecastAt) === day(captured);
     const iv = positive(row.brokerAtmIv) ? row.brokerAtmIv : null;
     const egarch = positive(record?.egarch) ? record.egarch : null;
     return {iv, egarch, aligned, training:record?.training_through || null,
-      egarchGap:aligned && iv !== null && egarch !== null ? iv - egarch : null};
+      egarchGap:available && iv !== null && egarch !== null ? iv - egarch : null};
   }
   return {smile, straddleSeries, tooltipName, heatStyle, forecast, comparison, auditedTrade};
 })();
