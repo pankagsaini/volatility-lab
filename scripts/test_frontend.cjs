@@ -90,7 +90,7 @@ web.REAL_HISTORICAL_1Y={NIFTY:[{...observation,d:'2026-11-09',l:'09 Nov',h10:12,
 web.renderTab1Regime();
 assert.deepEqual(Array.from(web.regimeChart.data.datasets[0].data),[20,null,22]);
 assert.deepEqual(Array.from(web.regimeChart.data.datasets[1].data),[12,null,13]);
-assert.equal(web.regimeChart.data.datasets[0].spanGaps,false);
+assert.equal(web.regimeChart.data.datasets[0].spanGaps,true);
 assert(element('regimeRankTableBody').innerHTML.includes('22.00%'),'Latest recorded IV comes from history, not an older selected snapshot');
 assert(element('regimeRankTableBody').innerHTML.includes('2026-11-12'),'Latest values disclose their source date');
 const historyRows = web.REAL_HISTORICAL_1Y.NIFTY;
@@ -235,8 +235,6 @@ assert.equal(stable.length,1); assert.equal(stable[0].strad,200);
 assert.equal(charts.straddleSeries({atm:25000,expiry:base.expiry,intraday:[{...base,markSource:null} ]})[0].strad,null);
 assert.equal(charts.straddleSeries({atm:25000,expiry:base.expiry,intraday:[{...base,snapshotId:'invalid'}]}).length,0,'Malformed timestamp cannot crash chart');
 assert.equal(charts.straddleSeries({atm:25000,expiry:base.expiry,intraday:[]}).length,0);
-assert.equal(charts.surface([{spot:100,atm:100,dte:2,chain:[{k:100,uCallIv:20,uPutIv:22},{k:130,uCallIv:25},{k:90,modelPutIv:15}]}],true).length,1);
-assert.equal(charts.surface([{spot:100,atm:100,dte:2,chain:[{k:100,uCallIv:20,uPutIv:22},{k:130,uCallIv:25}]}],false).length,2);
 assert.equal(charts.auditedTrade({date:'2026-11-02',gross:1,charges:1,capital:100}),false,'Legacy display rows lack execution evidence');
 const verified = {provenance_status:'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK',decision_at:'2026-11-11T09:20:00+05:30',available_at:'2026-11-09T16:00:00+05:30',entry_source:'capture-a',exit_source:'capture-b',unitLegs:260,gross:20,charges:10,capital:1000};
 assert.equal(charts.auditedTrade(verified),true);
@@ -363,3 +361,16 @@ console.log('Frontend regressions passed: missing data, sourced IV, statistics, 
 
 require('./test_backtest_replay.cjs');
 require('./test_desk_refresh.cjs');
+
+assert.equal(charts.surface,undefined);
+assert(!element('regimeHorizonTableBody').innerHTML.includes('Yang–Zhang'));
+assert(!html.includes('plotly.min.js'));
+assert.equal(charts.tooltipName('DTE-matched EGARCH RV (%)'),'EGARCH');
+assert.equal(charts.tooltipName('Captured ATM IV · term baseline'),'IV');
+const tooltip = web.chartOpts('%',false).plugins.tooltip.callbacks.label;
+assert.equal(tooltip({dataset:{label:'Captured IV (%)'},parsed:{y:15.725}}),'IV: 15.72%');
+assert.equal(tooltip({dataset:{label:'DTE-matched EGARCH RV (%)'},parsed:{y:17}}),'EGARCH: 17.00%');
+assert.equal(charts.heatStyle(null,100),charts.heatStyle(0,100));
+assert.notEqual(charts.heatStyle(10,100),charts.heatStyle(100,100));
+assert.equal(charts.heatStyle(100,100).replace('153','355'),charts.heatStyle(-100,100));
+assert.match(element('stressMatrixTableBody').innerHTML,/background:/);
