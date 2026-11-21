@@ -12,6 +12,7 @@ import numpy as np
 from collector_support import atomic_json,read_json,data_lock,STATE
 from volatility_lab.core.market_calendar import CalendarHorizonError, session_window
 from volatility_lab.pricing.pricing_policy import number
+from volatility_lab.ingestion.snapshot_risk import prior_close_metrics
 ROOT=PACKAGE_ROOT
 DATA=runtime_data_dir()
 STORE=DATA/'google_archive'
@@ -144,6 +145,10 @@ def validate_report(obj, *, historical=False):
             raise ValueError('Invalid listed future')
         if any(not isinstance(e,str) for e in entry['option_expiries']):
             raise ValueError('Invalid option expiry')
+    if obj.get('capture_profile') == 'minute_snapshots_only' and 'risk_metrics' not in obj:
+        session = stamp.tz_convert('Asia/Kolkata').date()
+        metrics = {symbol: prior_close_metrics(_cached_one_year_csv(symbol), session) for symbol in indices}
+        return {**obj, 'risk_metrics': metrics}
     return obj
 
 

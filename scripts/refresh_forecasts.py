@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from urllib.request import urlopen
 
 import pandas as pd
@@ -49,7 +49,7 @@ def merge_candles(existing, candles, expected):
 
 
 def fetch(url, params):
-    with urlopen(url + '?' + urlencode(params), timeout=45) as response:
+    with urlopen(url + ('?' + urlencode(params) if params else ''), timeout=45) as response:
         payload = json.load(response)
     if not isinstance(payload, dict) or payload.get('error'):
         raise ValueError('Broker relay returned an error.')
@@ -72,8 +72,12 @@ def refresh(now=None):
             name = symbol.lower() + '_one_year.csv'
             existing = pd.read_csv(ROOT / 'volatility_lab/data' / name)
             start = pd.Timestamp(existing.Date.max()).date() - timedelta(days=7)
-            payload = fetch(url, {'action': 'candles', 'instrument': key, 'interval': 'days/1',
-                                  'from_date': str(start), 'to_date': str(expected)})
+            instrument = quote(key, safe='')
+            endpoint = f'https://api.upstox.com/v3/historical-candle/{instrument}/days/1/{expected}/{start}'
+            response = fetch(endpoint, {})
+            if response.get('status') != 'success':
+                raise ValueError('Daily candle request failed')
+            payload = response.get('data') or {}
             frame = merge_candles(existing, payload.get('candles', []), expected)
             frame.to_csv(data / name, index=False, date_format='%Y-%m-%d')
         state = build(html, data, as_of=now, catalogue=catalogue)

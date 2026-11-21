@@ -23,7 +23,8 @@ def timestamp(value):
 def snapshot(path):
     with gzip.open(path, "rt", encoding="utf-8") as reader:
         payload = json.load(reader)
-    if validate_report(payload, historical=True)["mode"] != "snapshot":
+    payload = validate_report(payload, historical=True)
+    if payload["mode"] != "snapshot":
         raise ValueError(f"Invalid archive {path.name}")
     return payload
 

@@ -331,9 +331,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
 
     def test_apps_script_guards_property_size_and_never_fabricates_entry_price(self):
         code = (ROOT / "volatility_lab" / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
-        self.assertIn("EOD_PENDING_DAY_", code)
-        self.assertIn("function loadPendingEod_()", code)
-        self.assertIn("function savePendingEod_(pending)", code)
+        self.assertNotIn("function savePendingEod_", code)
         self.assertIn("const SNAPSHOT_RETENTION_DAYS = 0", code)
         self.assertIn("retention: 'indefinite'", code)
         self.assertNotIn("retentionDays === undefined", code)
@@ -346,10 +344,9 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertIn("timeoutSeconds: 8", code)
         self.assertIn("timeoutSeconds: 30", code)
         self.assertIn("timeoutSeconds: 15", code)
-        self.assertIn("timeoutSeconds: 60", code)
+        self.assertIn("timeoutSeconds: 12", code)
         self.assertNotIn("timeoutSeconds: 240", code)
         self.assertIn("Date.now() - started > CAPTURE_SAFE_DEADLINE_MS", code)
-        self.assertIn("Date.now() - started > 45000", code)
         self.assertEqual(code.count("if (budget.ms >= limit)"), 2)
         self.assertIn("function readRuntimeBudget_(properties, key, nowMs)", code)
         self.assertIn("windowEndMs", code)

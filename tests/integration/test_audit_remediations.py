@@ -209,10 +209,10 @@ class TestTrack2CloudAndDownloaders(unittest.TestCase):
         code_gs = cgs_path.read_text(encoding="utf-8")
         # 1. Resolve the special-session window before skipping ordinary weekends.
         sched_idx = code_gs.index("function scheduledCapture()")
-        sched_body = code_gs[sched_idx:code_gs.index("function reconcilePriorSession()", sched_idx)]
-        guard = sched_body.index("if (weekend && !sp) {")
+        sched_body = code_gs[sched_idx:code_gs.index("function auditStatus()", sched_idx)]
+        guard = sched_body.index("if (weekend && !sp)")
         self.assertLess(sched_body.index("const session = marketWindow_(now);"), guard)
-        self.assertLess(guard, sched_body.index("reconcilePriorSession()"))
+        self.assertNotIn("reconcilePriorSession()", sched_body)
         # 2. Artificial + 1000ms budget padding removed
         self.assertNotIn("Date.now() - started + 1000", code_gs)
         # 3. 401/403 retry storm prevention present
@@ -1535,10 +1535,10 @@ class TestV20Black76AndQuotaOptimizations(unittest.TestCase):
         self.assertIn("CacheService.getScriptCache()", code_gs)
         self.assertIn("const SNAPSHOT_RETENTION_DAYS = 0", code_gs)
         self.assertIn("retention: 'indefinite'", code_gs)
-        self.assertIn("CAPTURE_SAFE_DEADLINE_MS = 180000", code_gs)
+        self.assertIn("CAPTURE_SAFE_DEADLINE_MS = 45000", code_gs)
         self.assertIn("payload.nfo_session_validated !== true", code_gs)
-        self.assertIn("capCompletedEodDays_(", code_gs)
-        self.assertIn("MAX_COMPLETED_EOD_DAYS = 30", code_gs)
+        self.assertNotIn("reconcilePriorSession()", code_gs)
+        self.assertIn("minute_snapshots_only", code_gs)
 
         repo_root = HERE_DIR
         for rel in ("docs/index.html", "index.html"):
