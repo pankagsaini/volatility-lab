@@ -46,3 +46,20 @@ def test_publisher_uses_new_close_even_when_iv_snapshot_is_older(monkeypatch):
     assert series['training_through'] == '2026-11-13'
     assert series['expiries'][0]['egarch'] == 14
     assert 'ewma' not in series['expiries'][0]
+
+
+def test_snapshot_risk_uses_prior_dated_closes_only():
+    from volatility_lab.ingestion.snapshot_risk import prior_close_metrics
+    import math
+    from statistics import stdev
+
+    dates = pd.date_range('2026-10-01', periods=40)
+    frame = pd.DataFrame({'Date': dates.strftime('%Y-%m-%d'), 'Close': [100 + i for i in range(40)]})
+    session = dates[-1].date()
+    metrics = prior_close_metrics(frame, session)
+    returns = [math.log((100 + i) / (99 + i)) for i in range(9, 39)]
+    assert metrics['as_of'] == str(dates[-2].date())
+    assert metrics['hv30'] == pytest.approx(stdev(returns) * 100 * math.sqrt(245))
+    frame.loc[39, 'Close'] = 9999
+    assert prior_close_metrics(frame, session) == metrics
+    assert prior_close_metrics(frame.iloc[:10], session) == {}

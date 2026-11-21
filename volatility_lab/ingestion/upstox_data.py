@@ -126,6 +126,12 @@ class UpstoxDataClient:
     def chain(self,key,expiry):
         return self._get('/v2/option/chain',{'instrument_key':key,'expiry_date':expiry})
 
+    def minute_candles(self, key, day):
+        encoded = quote(key, safe='')
+        if str(day) == str(datetime.now(IST).date()):
+            return self._get('/v3/historical-candle/intraday/' + encoded + '/minutes/1')
+        return self._get(f'/v3/historical-candle/{encoded}/minutes/1/{day}/{day}')
+
     def daily(self,key,start,end):
         return self._get('/v3/historical-candle/'+quote(key,safe='')+'/days/1/'+str(end)+'/'+str(start))
 

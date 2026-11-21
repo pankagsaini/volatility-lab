@@ -1,5 +1,5 @@
 """Publish dated, read-only desk references from the canonical local archive."""
-from datetime import datetime
+from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
 import hashlib
 import json
@@ -13,6 +13,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from volatility_lab.backtest.forward_test import sanitize_forward_ledger  # noqa: E402
+from volatility_lab.ingestion.snapshot_risk import prior_close_metrics  # noqa: E402
 from volatility_lab.core.vol_lib import rv_snapshot  # noqa: E402
 from volatility_lab.core.market_calendar import session_window  # noqa: E402
 from volatility_lab.forecasting.expiry_forecast import term_structure_forecast  # noqa: E402
@@ -55,6 +56,7 @@ def build(html, data, as_of=None, catalogue=None):
         anchor = pd.Timestamp(closing_window[1])
         risk = rv_snapshot(frame)
         series = {'training_through': through, 'yang_zhang20': 100 * risk['yang_zhang_rv'], 'expiries': []}
+        series['closing_risk'] = prior_close_metrics(frame, date.fromisoformat(through) + timedelta(days=1))
         for row in sorted(rows, key=lambda entry: entry['expiry']):
             if row['expiry'] <= through:
                 continue

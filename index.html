@@ -12,6 +12,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070b12' stroke='%238b5cf6' stroke-width='3'/%3E%3Cpath d='M32 10 L52 32 L32 54 L12 32 Z' fill='%2338bdf8' fill-opacity='0.18' stroke='%2338bdf8' stroke-width='3'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%2334d399'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="scripts/snapshot-metrics.js"></script>
   <script src="scripts/trading-sessions.js"></script>
   <script src="scripts/freeze-policy.js?v=research-v1"></script>
   <script src="scripts/options-charts.js?v=20261120-chart-values-2"></script>
@@ -4753,6 +4754,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           }).sort(function(a, b) { return a.k - b.k; });
           var atm = chain.reduce(function(a, b) { return Math.abs(a.k - spot) <= Math.abs(b.k - spot) ? a : b; });
           var risk = payload.risk_metrics && payload.risk_metrics[sym];
+          if (!risk) risk = window.VL_PUBLIC_STATE?.forecasts?.[sym]?.closing_risk;
           var riskAge = risk ? (Date.parse(sessionDay) - Date.parse(risk.as_of)) / 86400000 : NaN;
           var validRisk = risk && risk.units === 'annualized_percent' && riskAge > 0 && riskAge <= 5;
           var metadata = payload.catalogue && payload.catalogue.indices && payload.catalogue.indices[sym];
@@ -4845,7 +4847,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
               anchorK: anchorK > 0 ? anchorK : item.straddleStrike,
               anchorStrad: anchorStrad > 0 ? anchorStrad : null, source: 'paired_book_mid'});
           }
-          const liveDual = rec.dual_straddle && typeof rec.dual_straddle === 'object' && !Array.isArray(rec.dual_straddle) ? rec.dual_straddle : null;
+          const liveDual = rec.dual_straddle && typeof rec.dual_straddle === 'object' && !Array.isArray(rec.dual_straddle) ? rec.dual_straddle : dualStraddlePoint_(rec, asOf);
           const dualTime = liveDual ? liveTimestamp(liveDual.markAt) : NaN;
           if (Number.isFinite(dualTime) && dualTime <= captured
               && new Date(dualTime + 19800000).toISOString().slice(0,10) === sessionDay) {

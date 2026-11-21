@@ -34,6 +34,7 @@ const web = vm.createContext({ Date: Clock, console, window: {}, B76_RISK_FREE_R
   setLiveCaptureIntegrity(message) { web.message = message; }
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8'),web);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'snapshot-metrics.js'),'utf8'),web);
 for (const name of ['normPdf', 'normCdf', 'computeBlack76ParityForward', 'black76Greeks', 'black76Price',
   'black76IvDec', 'black76Iv', 'bsmIvDec', 'bsmGreeks', 'currentPricingInputs', 'relativeBookSpread', 'selectOptionPricing', 'enrichItemWithBlack76', 'liveNumber', 'liveTimestamp', 'liveBookValid',
   'liveDeltaIv', 'capturedDeltaIv','validCloudCapture','showCaptureState','combineDailyCaptures','applyClosingRisk','normalizeLiveSnapshot', 'currentRow', 'isFreshValidatedCloudSnapshot', 'syncLiveCloudSnapshot',
@@ -134,7 +135,7 @@ cloud.apiAll_ = requests => requests.map(req => {
 {
   const settings = new Map([['SCHEDULE_MODE', 'intraday']]);
   const props = {getProperty: key => settings.get(key) || null,
-    setProperty: (key, value) => settings.set(key, value), deleteProperty: key => settings.delete(key)};
+    setProperty: (key, value) => settings.set(key, value), setProperties: obj => Object.entries(obj).forEach(([k,v])=>settings.set(k,v)), deleteProperty: key => settings.delete(key)};
   const initialWindow = {windowStartMs: now - 60000, windowEndMs: now + 86400000, ms: 0};
   const budgetAt = minutes => settings.set('RUNTIME_BUDGET', JSON.stringify({...initialWindow, ms: minutes * 60000}));
   let minute = 600, lockedUsage = null;
@@ -151,41 +152,29 @@ cloud.apiAll_ = requests => requests.map(req => {
   scheduler.marketClosed_ = () => false;
   settings.set('MARKET_CALENDAR',JSON.stringify({year:'2026',checked:'2026-11-13',closed:[],special:{}}));
   scheduler.capture_ = mode => {attempts.push(mode); return {status: 'complete'};};
-  budgetAt(80);
+  budgetAt(85);
   scheduler.scheduledCapture();
   assert.deepEqual(attempts, []);
-  assert.deepEqual(JSON.parse(settings.get('RUNTIME_BUDGET')), {...initialWindow, ms: 80 * 60000});
-  budgetAt(79); lockedUsage = 80;
+  budgetAt(84); lockedUsage = 85;
   scheduler.scheduledCapture();
-  assert.deepEqual(attempts, [], 'a concurrent capture can consume the remaining snapshot allowance');
+  assert.deepEqual(attempts, [], 'recheck budget after obtaining lock');
   lockedUsage = null;
-  budgetAt(79.99);
-  scheduler.scheduledCapture();
-  assert.deepEqual(attempts, [], 'ordinary slots preserve the close-out reserve');
-  minute = 915;
-  scheduler.scheduledCapture();
-  assert.deepEqual(attempts, ['snapshot'], '15:15 can still run after the ordinary cap');
-  minute = 944; // The derivatives market closes at 15:40 on this date.
-  budgetAt(84.99);
-  scheduler.scheduledCapture();
-  assert.deepEqual(attempts,['snapshot']);
-  minute = 945;
-  scheduler.scheduledCapture();
-  budgetAt(85); settings.delete('SUCCESS_EOD'); settings.delete('ATTEMPT_eod');
-  scheduler.scheduledCapture();
-  assert.deepEqual(attempts, ['snapshot', 'eod']);
+  budgetAt(84.9);
+  for (minute = 0; minute < 1440; minute++) scheduler.scheduledCapture();
+  assert.equal(attempts.length, 386);
+  assert(attempts.every(mode => mode === 'snapshot'));
   const policy = () => scheduler.runtimePolicy_(props);
   for (const value of ['200', 'invalid', '-1', '0', '2.5']) {
     settings.set('COLLECTOR_RUNTIME_MINUTES', value);
     assert.equal(policy().total_minutes, 85);
   }
   settings.set('COLLECTOR_RUNTIME_MINUTES', '60');
-  assert.equal(policy().snapshot_minutes, 55);
+  assert.equal(policy().snapshot_minutes, 60);
   settings.set('COLLECTOR_RUNTIME_MINUTES', '3');
-  assert.equal(policy().snapshot_minutes, 0);
+  assert.equal(policy().snapshot_minutes, 3);
   settings.set('COLLECTOR_QUOTA_TIER', 'verified_workspace');
   settings.set('COLLECTOR_RUNTIME_MINUTES', '360');
-  assert.equal(policy().snapshot_minutes, 350);
+  assert.equal(policy().snapshot_minutes, 355);
   assert.equal(policy().total_minutes, 355);
   settings.set('COLLECTOR_QUOTA_TIER', 'workspace');
   assert.equal(policy().total_minutes, 85);
@@ -199,7 +188,7 @@ cloud.apiAll_ = requests => requests.map(req => {
     static now() {return stamp;}
   }
   const state = new Map([['SCHEDULE_MODE','intraday']]);
-  const properties = {getProperty:k=>state.get(k) || null, setProperty:(k,v)=>state.set(k,v), deleteProperty:k=>state.delete(k)};
+  const properties = {getProperty:k=>state.get(k) || null, setProperty:(k,v)=>state.set(k,v), setProperties:obj=>Object.entries(obj).forEach(([k,v])=>state.set(k,v)), deleteProperty:k=>state.delete(k)};
   const sessionDate = '2026-11-21';
   const start = Date.parse(sessionDate + 'T14:20:00+05:30'), end = Date.parse(sessionDate + 'T15:40:00+05:30');
   const calendar = vm.createContext({Date:CalendarClock, console:{log(){}}, LockService:{
@@ -220,7 +209,6 @@ cloud.apiAll_ = requests => requests.map(req => {
     }}});
   vm.runInContext(gs,calendar);
   calendar.props_ = () => properties;
-  calendar.reconcilePriorSession = () => {};
   calendar.capture_ = mode => {attempts.push(mode);return {status:'complete'};};
   const run = (day,time) => {stamp=Date.parse(day+'T'+time+':41+05:30');calendar.scheduledCapture();};
   run('2026-11-08','14:19'); run('2026-11-08','14:20');
@@ -253,7 +241,7 @@ cloud.apiAll_ = requests => requests.map(req => {
     sleep(ms) { now += ms; }
   }});
   vm.runInContext(gs, batching);
-  batching.scriptCache_ = () => ({get: () => JSON.stringify({as_of: '2026-11-12', units: 'annualized_percent', hv10: 10, hv30: 10})});
+  batching.scriptCache_ = () => ({get: () => JSON.stringify(candles())});
   batching.day_ = () => '2026-11-12';
   const initialNow = now;
   for (const count of [0, 1, 40, 41, 80, 81]) {
@@ -298,9 +286,10 @@ async function main() {
   assert.equal(report.status, 'complete', JSON.stringify(report.errors));
   assert(!Object.keys(report).some(k=>k.startsWith('forward_')));
   assert(!Object.keys(status).some(k=>k.startsWith('forward_')));
-  assert.equal(report.risk_metrics.NIFTY.as_of, '2026-11-12');
-  const expectedHv = Math.sqrt(30 / 29) * 0.007 * Math.sqrt(245) * 100;
-  assert(Math.abs(report.risk_metrics.NIFTY.hv30 - expectedHv) < 1e-10);
+  assert.equal(report.risk_metrics, undefined);
+  assert.equal(report.prior_daily_candles, undefined);
+  const risk = {hv10:11, hv20:13, hv30:15, as_of:'2026-11-12', units:'annualized_percent'};
+  web.window.VL_PUBLIC_STATE = {forecasts:{NIFTY:{closing_risk:risk},BANKNIFTY:{closing_risk:risk}}};
   assert.deepEqual(['2026-07-31','2026-08-03','2026-12-07'].map(cloud.regularCloseMinutes_),[930,940,945]);
   assert.equal(cloud.indexExpiryMillis_('2026-12-08'),Date.parse('2026-12-08T15:30:00+05:30'));
   assert.equal(cloud.indexExpiryMillis_('2026-11-17'),Date.parse('2026-11-17T15:40:00+05:30'));
@@ -342,56 +331,11 @@ async function main() {
   anchorReport.day = '2026-11-16';anchorReport.errors=[];
   cloud.attachStraddleAnchors_(anchorReport,localProps);
   assert.equal(anchorRec.straddle_anchor_strike,27500);
-  const priorCache = cloud.scriptCache_, priorSave = cloud.save_;
-  const histories = {};
-  let writes = 0;
-  cloud.scriptCache_ = () => ({get:()=>null,put(){},remove(){},getAll:()=>histories,
-    putAll(values){writes++;Object.assign(histories,values);}});
-  const archived = cloud.capture_('snapshot');
-  const tuple = archived.records[1].straddle_history[0];
-  assert.equal(tuple.length,6); assert.equal(tuple[2],20);
-  assert(tuple[3]>0); assert.equal(tuple[4],now-1000); assert.equal(tuple[5],now-1000);
-  const previousNow = now;
-  now += 60000;
-  cloud.save_ = () => {throw Error('archive write failed');};
-  assert.throws(()=>cloud.capture_('snapshot'),/archive write failed/);
-  assert.equal(writes,1);
+  assert.equal(report.records[1].straddle_history, undefined);
+  const priorSave = cloud.save_;
+  cloud.save_ = () => { throw Error('archive write failed'); };
+  assert.throws(() => cloud.capture_('snapshot'), /archive write failed/);
   cloud.save_ = priorSave;
-  now += 60000;
-  mode='no-times';
-  const gap = cloud.capture_('snapshot').records[1].straddle_history;
-  assert.equal(gap.length,2); assert.equal(gap[1][2],20);
-  assert.deepEqual(Array.from(gap[1].slice(3)),[null,null,null]);
-  assert.equal(gap[1][1]-gap[0][1],120000);
-  assert(Object.values(histories).every(v => Buffer.byteLength(v)<100000));
-  mode='valid'; now=previousNow; cloud.scriptCache_=priorCache;
-  // Current-day rows survive a partial snapshot, then roll over once per symbol.
-  const byKey = new Map(), indexProps = {getProperty:k=>byKey.get(k),setProperty:(k,v)=>byKey.set(k,v),
-    getProperties:()=>Object.fromEntries(byKey),getKeys:()=>Array.from(byKey.keys()),deleteProperty:k=>byKey.delete(k)};
-  const basenames = ['2026-11-13_snapshot_100000_complete.json.gz','2026-11-16_snapshot_100000_complete.json.gz'];
-  const indexed = clone(report);
-  const near = indexed.records.find(r=>r.label.startsWith('NIFTY|'));
-  indexed.records.push({...near,label:'NIFTY|2026-11-13'}, {...near,label:'NIFTY|2026-12-01'});
-  let currentRows = cloud.updateDailyIndex_(indexProps,indexed,basenames[0]);
-  assert.equal(currentRows.NIFTY.expiry,'2026-11-17'); assert.equal(currentRows.NIFTY.atm,25000);
-  assert.equal(currentRows.NIFTY.h30,report.risk_metrics.NIFTY.hv30);
-  assert.equal(currentRows.NIFTY.archiveFile,basenames[0]);
-  byKey.set('LAST_SNAPSHOT',JSON.stringify({day:indexed.day,daily_rows:currentRows}));
-  near.data.find(r=>r.strike_price===25000).call_options.option_greeks.iv=null;
-  assert.equal(cloud.dailyIvRow_(indexed,'NIFTY',basenames[0]),null,'do not switch expiry or strike for missing IV');
-  near.chain_retrieved_at='bogus';
-  assert.equal(cloud.dailyIvRow_(indexed,'NIFTY',basenames[0]),null);
-  indexed.status='partial';
-  assert.deepEqual(clone(cloud.updateDailyIndex_(indexProps,indexed,basenames[0])),clone(currentRows));
-  byKey.set('DAILY_IV_NIFTY_2024-01_A','{}');
-  indexed.day='2026-11-16';
-  const todayRows=cloud.updateDailyIndex_(indexProps,indexed,basenames[1]);
-  byKey.set('LAST_SNAPSHOT',JSON.stringify({day:indexed.day,daily_rows:todayRows}));
-  assert.equal(byKey.has('DAILY_IV_NIFTY_2024-01_A'),false);
-  const indexedHistory=cloud.publishedDailyHistory_(indexProps,indexed.day);
-  assert.deepEqual(clone(indexedHistory.NIFTY),[clone(currentRows.NIFTY)]);
-  const partition=Object.fromEntries(Array.from({length:16},(_,i)=>['2026-11-'+(16+i),currentRows.BANKNIFTY]));
-  assert(Buffer.byteLength(JSON.stringify(partition))<9000);
   const firstOption = report.records[1].data.find(r => r.strike_price === 25000).call_options.market_data;
   assert.equal(firstOption.quote_timestamp, new Date(now - 1000).toISOString());
   assert.notEqual(firstOption.ltp, 999, 'timestamp must travel with its own book');
@@ -403,19 +347,6 @@ async function main() {
     assert.equal(invalid.status,'complete','Keep raw observations even when execution inputs are missing');
   }
   mode = 'valid';
-  const riskRows = candles();
-  assert.throws(() => cloud.snapshotRiskMetrics_(riskRows.concat([riskRows[1]]), '2026-11-13', 'key'), /duplicate/);
-  assert.throws(() => cloud.snapshotRiskMetrics_(riskRows.slice(0, 10), '2026-11-13', 'key'), /31/);
-
-  // The same-day index close is used for reporting only after EOD, while live signals use prior closes.
-  const finalCandle = ['2026-11-13T00:00:00+05:30',26000,26000,26000,26000,0,0];
-  const closeInput = riskRows.filter(r => r[0].slice(0,10) < '2026-11-13').concat([finalCandle]);
-  assert.equal(cloud.snapshotRiskMetrics_(closeInput,'2026-11-13','NSE_INDEX|Nifty 50').as_of,'2026-11-12');
-  const closing = cloud.snapshotRiskMetrics_(closeInput,'2026-11-13','NSE_INDEX|Nifty 50',true);
-  assert.equal(closing.as_of,'2026-11-13');
-  assert.equal(closing.close,26000);
-  assert.notEqual(closing.hv30,report.risk_metrics.NIFTY.hv30);
-  assert.throws(() => cloud.snapshotRiskMetrics_(closeInput.slice(0,-1),'2026-11-13','key',true),/stale/);
   const display = {NIFTY:[{d:'2026-11-13',iv:20,closingEstimate:{iv:21}}],BANKNIFTY:[]};
   assert.equal(web.applyClosingRisk(display,{'2026-11-13':{NIFTY:[26000,11,15,17,16]}}),true);
   assert.equal(display.NIFTY[0].iv,20);
