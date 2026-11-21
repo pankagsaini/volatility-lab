@@ -273,6 +273,40 @@ const server = http.createServer((request,response) => {
     await page.locator('#panel-smile summary').click();
     assert(await page.locator('#smileMainTableBody').isVisible());
     assert.deepEqual(errors,[]);
+    for (const viewport of [{width:1440,height:1000},{width:390,height:844}]) {
+      const client = await browser.newContext({viewport, isMobile:viewport.width < 500});
+      try {
+        const tab = await client.newPage();
+        await tab.clock.setFixedTime(new Date('2026-11-21T08:30:00Z'));
+        const errors = [];
+        tab.on('pageerror', error => errors.push(error.message));
+        const stamp = '2026-11-20T08:46:46.852Z';
+        const leg = {option_greeks:{iv:17.25},market_data:{ltp:100,oi:2500}};
+        const records = ['NIFTY','BANKNIFTY'].map((sym,i) => {
+          const spot = i ? 55050 : 25350;
+          return {label:sym+'|2026-11-23',retrieved_at:stamp,data:[{
+            underlying_spot_price:spot,strike_price:spot,call_options:leg,put_options:leg
+          }]};
+        });
+        const snapshot = {provider:'Upstox',schema:1,mode:'snapshot',status:'complete',
+          day:'2026-11-20',retrieved_at:stamp,nfo_session_validated:true,records};
+        let available = true;
+        await tab.route('https://script.google.com/**', route => route.abort());
+        await tab.route('**/latest-snapshot.json', route => available
+          ? route.fulfill({json:snapshot}) : route.abort());
+        await tab.goto('http://127.0.0.1:'+server.address().port);
+        async function assertFriday() {
+          await tab.waitForFunction(() => /20 Nov 2026.*14:16/.test(document.getElementById('snapshotAsOf').textContent));
+          assert.equal(await tab.locator('#kpiAtmIv').textContent(),'17.25%');
+          assert.match(await tab.locator('#kpiSpot').textContent(),/25,350/);
+        }
+        await assertFriday();
+        available = false;
+        await tab.reload();
+        await assertFriday();
+        assert.deepEqual(errors,[]);
+      } finally { await client.close(); }
+    }
     console.log('DOM passed: all workspaces/tabs, 10 expiries, 60 setups, real Chart.js reuse, captured smile points, archive provenance, mobile stress table, zero missing IDs or JS errors.');
   } finally { await browser.close(); server.close(); }
 })().catch(error=>{console.error(error);server.close();process.exitCode=1;});
