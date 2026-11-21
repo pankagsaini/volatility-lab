@@ -1,0 +1,9 @@
+[build]
+  base = "private-site"
+  command = "node prepare.mjs"
+  publish = "public"
+  functions = "functions"
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["bundle/**"]

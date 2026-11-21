@@ -119,6 +119,10 @@ jobs:
       - name: Verify model selection and official input guards
         run: node scripts/test_pricing_policy.cjs
 
+      - name: Check private password login and protected data routes
+        working-directory: private-site
+        run: node prepare.mjs && node --test test.mjs
+
       - name: Exercise the published desk in Chrome
         run: |
           npm install --prefix "$RUNNER_TEMP/desk-browser" --no-save --ignore-scripts playwright@1.62.1
