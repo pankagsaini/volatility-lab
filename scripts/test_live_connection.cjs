@@ -37,7 +37,7 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'trading-sessions.js'),'utf8
 vm.runInContext(fs.readFileSync(path.join(__dirname,'snapshot-metrics.js'),'utf8'),web);
 for (const name of ['normPdf', 'normCdf', 'computeBlack76ParityForward', 'black76Greeks', 'black76Price',
   'black76IvDec', 'black76Iv', 'bsmIvDec', 'bsmGreeks', 'currentPricingInputs', 'relativeBookSpread', 'selectOptionPricing', 'enrichItemWithBlack76', 'liveNumber', 'liveTimestamp', 'liveBookValid',
-  'liveDeltaIv', 'capturedDeltaIv','validCloudCapture','showCaptureState','combineDailyCaptures','applyClosingRisk','normalizeLiveSnapshot', 'currentRow', 'isFreshValidatedCloudSnapshot', 'syncLiveCloudSnapshot',
+  'liveDeltaIv', 'capturedDeltaIv','validCloudCapture','showCaptureState','combineDailyCaptures','applyClosingRisk','normalizeLiveSnapshot', 'currentRow', 'isFreshValidatedCloudSnapshot', 'applyMarketSnapshot', 'rememberMarketSnapshot', 'restoreMarketSnapshot', 'syncLiveCloudSnapshot',
   'istDayAndMinute','nextTradingDay','expiryClock','isExpiryRollWindow','getDefaultActiveExpiryIdx']) {
   vm.runInContext(browserFunction(name), web);
 }

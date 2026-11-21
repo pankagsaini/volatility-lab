@@ -1316,7 +1316,8 @@
         var fresh = st.isOpen && liveSnapshotAccepted && age >= -30 && age <= 120;
         txt.textContent = st.isOpen ? (fresh ? 'Live quotes' : 'Market open · quotes not live') : st.status;
         const asOf = document.getElementById('snapshotAsOf');
-        if (asOf) asOf.textContent = 'Snapshot · ' + new Date(lastSyncedRetrievedAt).toLocaleString('en-GB',
+        if (asOf) asOf.textContent = snapshotSource === 'archive' && ['idle', 'loading'].includes(lastCloudRefresh?.kind)
+          ? 'Loading latest snapshot…' : (snapshotSource === 'archive' ? 'Dated archive · ' : 'Snapshot · ') + new Date(lastSyncedRetrievedAt).toLocaleString('en-GB',
           {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'Asia/Kolkata'}) + ' IST';
         if (fresh) {
           pill.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 font-semibold';
@@ -1512,7 +1513,8 @@
 
       function loadPricingInputs() {
         if (pricingInputs && Date.now() - pricingInputsLoadedAt < 3600000) return Promise.resolve();
-        return fetch('pricing-inputs.json', {cache:'no-store'}).then(response => {
+        return fetch('pricing-inputs.json', {cache:'no-store',
+          signal:typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined}).then(response => {
           if (!response.ok) throw new Error('Official pricing inputs unavailable');
           return response.json();
         }).then(data => {
@@ -4906,6 +4908,49 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
       var liveSnapshotRequest = null;
       var loadedCloudCapture = false;
       var liveSnapshotAccepted = false;
+      var snapshotSource = 'archive';
+      function applyMarketSnapshot(payload) {
+        var next = normalizeLiveSnapshot(payload); // Validate and derive everything before committing state.
+        var selected = currentRow();
+        var selectedExpiry = selected && selected.expiry;
+        marketCatalog = next.catalog;
+        REAL_HISTORICAL_1Y = next.history;
+        window.marketCatalog = marketCatalog;
+        window.REAL_HISTORICAL_1Y = REAL_HISTORICAL_1Y;
+        activeExpiryIdx = userSelectedExpiryManually
+          ? Math.max(0, marketCatalog[activeSymbol].findIndex(function(x) { return x.expiry === selectedExpiry; }))
+          : getDefaultActiveExpiryIdx(activeSymbol, payload.retrieved_at);
+        lastSyncedRetrievedAt = payload.retrieved_at;
+        latestSnapshotDay = next.sessionDay;
+        TradingSessions.apply(payload.exchange_calendar);
+        latestAsOfLabel = new Date(liveTimestamp(payload.retrieved_at) + 19800000).toISOString().slice(0, 16).replace('T', ' ') + ' IST';
+      }
+
+      function rememberMarketSnapshot(payload) {
+        try { localStorage.setItem('vl.market.snapshot.v1', JSON.stringify(payload)); } catch (_) {}
+      }
+
+      function restoreMarketSnapshot(payload) {
+        if (!validCloudCapture(payload) || liveTimestamp(payload.retrieved_at) <= liveTimestamp(lastSyncedRetrievedAt)) return false;
+        applyMarketSnapshot(payload);
+        snapshotSource = 'saved';
+        return true;
+      }
+
+      async function loadPublishedSnapshot() {
+        try {
+          const response = await fetch('latest-snapshot.json', {cache:'no-cache'});
+          if (!response.ok) return;
+          const payload = await response.json();
+          if (!restoreMarketSnapshot(payload)) return;
+          rememberMarketSnapshot(payload);
+          populateExpiryDropdown();
+          updateMarketClock();
+          renderActiveOptionsTab();
+          renderForwardWorkspace();
+        } catch (_) { /* The collector request continues independently. */ }
+      }
+
       function syncLiveCloudSnapshot(forceFetch) {
         var st = updateMarketClock();
         if (!forceFetch && !st.isOpen) return Promise.resolve(false);
@@ -4934,22 +4979,12 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
               showCaptureState(integrity, updateMarketClock().isOpen, fresh);
               return false;
             }
-            var next = normalizeLiveSnapshot(payload); // Validate and derive everything before committing state.
-            var selected = currentRow();
-            var selectedExpiry = selected && selected.expiry;
-            marketCatalog = next.catalog;
-            REAL_HISTORICAL_1Y = next.history;
-            window.marketCatalog = marketCatalog;
-            window.REAL_HISTORICAL_1Y = REAL_HISTORICAL_1Y;
-            activeExpiryIdx = userSelectedExpiryManually
-              ? Math.max(0, marketCatalog[activeSymbol].findIndex(function(x) { return x.expiry === selectedExpiry; }))
-              : getDefaultActiveExpiryIdx(activeSymbol, payload.retrieved_at);
-            lastSyncedRetrievedAt = payload.retrieved_at;
+            applyMarketSnapshot(payload);
+            rememberMarketSnapshot(payload);
             lastCloudRefresh = {kind:'updated'};
             loadedCloudCapture = true;
+            snapshotSource = 'cloud';
             liveSnapshotAccepted = fresh;
-            TradingSessions.apply(payload.exchange_calendar);
-            latestAsOfLabel = new Date(liveTimestamp(payload.retrieved_at) + 19800000).toISOString().slice(0, 16).replace('T', ' ') + ' IST';
             populateExpiryDropdown();
             updateMarketClock();
             renderActiveOptionsTab();
@@ -5079,6 +5114,8 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         if (window._vlDeskInitialized) return;
         window._vlDeskInitialized = true;
         window.VL_PUBLIC_STATE = JSON.parse(document.getElementById('deskPublicState').textContent);
+        try { restoreMarketSnapshot(JSON.parse(localStorage.getItem('vl.market.snapshot.v1'))); } catch (_) {}
+        loadPublishedSnapshot();
         document.getElementById('syncDesk').addEventListener('click', refreshDesk);
         ['wsOptionsBtn','wsBacktestBtn','wsForwardBtn'].forEach(id=>document.getElementById(id).addEventListener('click',updateWorkspacePresentation));
         var idxFilterEl = document.getElementById('tradeIdIndexFilter');

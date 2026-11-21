@@ -63,6 +63,15 @@ def refresh(now=None):
     url = config['web_app_url']
     html = (ROOT / 'index.html').read_text(encoding='utf-8')
     snapshot = fetch(url, {})
+    # Ship a same-origin cold-start copy even if the independent forecast refresh fails later.
+    # Only expose fields consumed by the desk from the public read endpoint.
+    if (snapshot.get('provider') == 'Upstox' and snapshot.get('schema') == 1
+            and snapshot.get('status') == 'complete' and snapshot.get('mode') == 'snapshot'
+            and snapshot.get('nfo_session_validated') is True and snapshot.get('records')):
+        fields = ('provider', 'schema', 'status', 'mode', 'nfo_session_validated', 'day', 'retrieved_at',
+                  'records', 'catalogue', 'risk_metrics', 'exchange_calendar', 'daily_history', 'closing_risk')
+        saved = {key: snapshot[key] for key in fields if key in snapshot}
+        (ROOT / 'docs/latest-snapshot.json').write_text(json.dumps(saved, separators=(',', ':'), allow_nan=False))
     catalogue = snapshot.get('catalogue', {}).get('indices', {})
     # Stage both histories and model output before replacing any published files.
     with tempfile.TemporaryDirectory(prefix='vl-forecast-') as temp:
