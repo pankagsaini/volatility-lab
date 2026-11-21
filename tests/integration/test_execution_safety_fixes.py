@@ -337,16 +337,9 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertIn("const SNAPSHOT_RETENTION_DAYS = 0", code)
         self.assertIn("retention: 'indefinite'", code)
         self.assertNotIn("retentionDays === undefined", code)
-        self.assertIn("function forwardQuoteFresh_(timestamp, referenceTimestamp)", code)
-        self.assertIn("const FORWARD_SESSION_WINDOWS_ = {}", code)
-        self.assertIn("session = marketWindow_(d)", code)
+        self.assertIn("function captureQuoteFresh_(timestamp, referenceTimestamp)", code)
         self.assertIn("customSpecial[today] || SPECIAL_SESSIONS[today]", code)
-        self.assertNotIn("isoDay === '2026-11-10'", code)
-        self.assertIn("function executableQuote_(node, type, side, quantity, isExit, referenceTimestamp)", code)
-        self.assertIn("[bid, ask, bidQty, askQty].every(Number.isFinite)", code)
-        self.assertIn("Number.isFinite(ch.spot) || ch.spot <= 0", code)
-        self.assertIn("forwardDue_(pos,snapshotDay,report.retrieved_at)", code)
-        self.assertIn("delayed until fresh quote", code)
+        self.assertNotIn("function executableQuote_", code)
         self.assertIn("function listDriveFilesPage_(folderId, pageToken, orderBy)", code)
         self.assertIn("'modifiedTime desc'", code)
         self.assertNotIn("method: 'delete'", code)
@@ -367,11 +360,6 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertNotIn("file.setTrashed(true)", code)
         self.assertNotIn("|| 25.0", code)
         self.assertNotIn("close_price || 0", code)
-        self.assertIn("WITHHELD_STALE_OR_UNVERIFIED_POSITION", code)
-        self.assertIn("WITHHELD_NO_LIVE_OPTION_CHAIN", code)
-        self.assertIn("mode === 'snapshot' && report.status !== 'complete'", code)
-        self.assertIn("withheld_incomplete_snapshot", code)
-        self.assertIn("Forward test requires a complete snapshot", code)
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the Apps Script helper")
     def test_apps_script_runtime_budget_uses_a_rolling_24_hour_window(self):
@@ -392,22 +380,6 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         ])
         result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-
-    @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the Apps Script helper")
-    def test_apps_script_option_gst_matches_python_charge_schedule(self):
-        code = (ROOT / "volatility_lab" / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
-        start = code.index("function upstoxOptionCharge_(")
-        end = code.index("\nfunction positionCharges_(", start)
-        helper = code[start:end]
-        script = helper + "\nprocess.stdout.write(String(upstoxOptionCharge_(100, 75, true)));"
-        result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        js_total = float(result.stdout)
-
-        import broker_charges
-
-        python_parts = broker_charges.charge("2026-11-11", "Options", 100.0, 75, "sell")
-        self.assertAlmostEqual(js_total, sum(python_parts.values()), places=9)
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the browser Black-76 helpers")
     def test_browser_black76_handles_expiry_and_keeps_missing_inputs_unpriced(self):
@@ -460,10 +432,12 @@ class TestExecutionSafetyFixes(unittest.TestCase):
 
     def test_browser_forward_workspace_never_recalculates_or_persists_cloud_ledger(self):
         html = self._read_docs_html()
-        self.assertIn("Cloud ledger · paper trading", html)
+        self.assertIn("Automated paper trading", html)
         self.assertIn("MTM WITHHELD — STALE MARK", html)
         self.assertIn("isFreshValidatedCloudSnapshot(payload)", html)
-        self.assertIn("isFreshCloudForwardLedger(cloudLedger, snapshot)", html)
+        self.assertIn("acceptPublishedPaperBook(book)", html)
+        self.assertNotIn("action=forward_ledger", html)
+        self.assertNotIn("markForwardPositionsFromPayload", html)
         self.assertIn("Browser-side forward-trade construction is disabled", html)
         self.assertNotIn("forwardOpenPositions.push", html)
         self.assertNotIn("forwardClosedTrades.unshift", html)

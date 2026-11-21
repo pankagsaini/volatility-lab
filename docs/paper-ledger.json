@@ -1,0 +1,21 @@
+{
+  "capture_audit": {
+    "exceptions": 0,
+    "processed": 0
+  },
+  "closed_trades": [],
+  "cohort_kind": "prospective",
+  "inception_date": "2026-11-23",
+  "intraday_mtm_series": [],
+  "last_capture_at": null,
+  "min_trigger_date": "2026-11-23",
+  "open_positions": [],
+  "policy_version": "research-v1",
+  "prospective_start": "2026-11-23",
+  "provenance_schema": "event-quotes-v1",
+  "schema": 2,
+  "source_authority": "python_paper_worker",
+  "status": "ARMED_WAITING_FOR_FIRST_CAPTURE",
+  "updated_at": null,
+  "version": "forward-test-v20.1-event-time-gated"
+}

@@ -906,20 +906,20 @@
         <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#1e2d42]">
           <div class="flex flex-wrap items-center gap-2.5">
             <span class="px-2.5 py-1 rounded-md bg-sky-500/15 border border-sky-400/40 text-sky-300 font-extrabold text-xs mono">
-              Cloud ledger · paper trading
+              Automated paper trading
             </span>
-            <button type="button" id="fwdAutoModeToggle" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-bold text-xs mono transition hover:bg-emerald-900/80">
+            <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-bold text-xs mono transition hover:bg-emerald-900/80">
               <span id="fwdAutoPulseDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span id="fwdAutoModeLabel">CLOUD LEDGER · AWAITING VALIDATED SNAPSHOT</span>
-            </button>
+              <span id="fwdAutoModeLabel">Awaiting paper book</span>
+            </span>
             <span id="fwdLastMarkedBadge" class="text-[11px] mono text-slate-300">
-              Waiting for cloud ledger
+              Awaiting published paper book
             </span>
 
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <button type="button" id="fwdScanNowBtn" class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs transition">
-              Refresh Cloud Ledger
+              Refresh paper book
             </button>
             <button type="button" id="fwdExportCsvBtn" class="px-3 py-1.5 rounded-lg bg-[#090f1a] hover:bg-slate-800 text-sky-300 font-bold text-xs border border-sky-500/40">
               Export Forward Ledger CSV
@@ -938,7 +938,7 @@
           </div>
           <div>
             <label for="fwdPolicyFilter" class="block text-xs mb-1">Paper cohort</label>
-            <select id="fwdPolicyFilter" class="desk-select mono w-full"><option value="ALL">All recorded policies</option><option value="research-v1">Research v1</option><option value="legacy">Legacy</option></select>
+            <select id="fwdPolicyFilter" class="desk-select mono w-full"><option value="research-v1" selected>Prospective paper book</option><option value="legacy">Historical archive</option></select>
           </div><div>
             <label for="fwdExpiryScope" class="block text-xs font-bold text-slate-200 mb-1">Expiry Scope</label>
             <select id="fwdExpiryScope" class="desk-select mono w-full">
@@ -966,7 +966,7 @@
         <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Open positions</div>
           <div id="fwdKpiOpenCount" class="text-lg mono font-extrabold text-white mt-0.5">0 Open</div>
-          <div id="fwdKpiOpenSub" class="text-[11px] mono text-emerald-300 mt-0.5">Waiting for cloud ledger</div>
+          <div id="fwdKpiOpenSub" class="text-[11px] mono text-emerald-300 mt-0.5">Awaiting published paper book</div>
         </div>
         <div class="kpi-card border-t-2 border-t-emerald-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Unrealized P&amp;L (₹)</div>
@@ -1001,7 +1001,7 @@
           <div>
             <span class="text-xs font-bold uppercase text-white">Open paper positions</span>
             <p id="fwdOpenTableSub" class="text-[11px] mono text-slate-300 mt-0.5">
-              Waiting for the cloud ledger.
+              Waiting for the published paper book.
             </p>
           </div>
         </div>
@@ -3787,14 +3787,14 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
       function forwardStatusLabel() {
         if (forwardLedger.source_authority === 'dated_archive') return 'Read-only archive · ' + new Date(forwardLedger.updated_at).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'}) + ' IST';
         const labels = {
-          WAITING_FOR_CLOUD_LEDGER: 'Waiting for cloud ledger',
-          WAITING_FOR_VALIDATED_CLOUD_LEDGER: 'Waiting for a valid cloud ledger',
+          WAITING_FOR_PAPER_LEDGER: 'Awaiting the published paper book',
           ARMED_WAITING_FOR_NEXT_SESSION: 'Waiting for next session',
           ACTIVE_LIVE_SESSION: 'Session active',
           SESSION_COMPLETED_1515_IST: 'Session completed',
           INTEGRITY_REVIEW_REQUIRED: 'Ledger needs review'
         };
-        return (labels[forwardLedger.status] || 'Cloud ledger received') + (forwardLedger.updated_at ? ' · '+new Date(forwardLedger.updated_at).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'})+' IST' : '');
+        if (forwardLedger.status === 'ARMED_WAITING_FOR_FIRST_CAPTURE') return 'Awaiting first prospective capture · starts ' + forwardLedger.min_trigger_date;
+        return (labels[forwardLedger.status] || 'Published paper book') + (forwardLedger.updated_at ? ' · '+new Date(forwardLedger.updated_at).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'})+' IST' : '');
       }
 
       var FORWARD_CLEAN_LEDGER_TEMPLATE = {
@@ -3802,14 +3802,16 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         version: 'forward-test-v20.1-event-time-gated',
         inception_date: '2026-11-11',
         min_trigger_date: '2026-11-11',
-        updated_at: '2026-11-10T13:15:00+05:30',
-        status: 'WAITING_FOR_CLOUD_LEDGER',
-        source_authority: 'apps_script_cloud',
+        updated_at: null,
+        status: 'WAITING_FOR_PAPER_LEDGER',
+        source_authority: 'unavailable',
         open_positions: [],
         closed_trades: [],
         intraday_mtm_series: []
       };
 
+      var publishedPaperBook = null;
+      var paperRefreshFailed = false;
       var forwardOpenPositions = [];
       var forwardClosedTrades = [];
       var forwardIntradayMtmSeries = [];
@@ -3828,9 +3830,10 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
       };
 
       function syncForwardLedgerGlobals() {
-        if (!forwardLedger || !['apps_script_cloud','dated_archive'].includes(forwardLedger.source_authority)) {
-          forwardLedger = JSON.parse(JSON.stringify(FORWARD_CLEAN_LEDGER_TEMPLATE));
-        }
+        const archive = window.VL_PUBLIC_STATE?.ledger;
+        const showArchive = document.getElementById('fwdPolicyFilter').value === 'legacy';
+        forwardLedger = showArchive && archive?.source_authority === 'dated_archive'
+          ? archive : (publishedPaperBook || FORWARD_CLEAN_LEDGER_TEMPLATE);
         forwardOpenPositions = Array.isArray(forwardLedger.open_positions) ? forwardLedger.open_positions : [];
         forwardClosedTrades = Array.isArray(forwardLedger.closed_trades) ? forwardLedger.closed_trades : [];
         forwardIntradayMtmSeries = Array.isArray(forwardLedger.intraday_mtm_series) ? forwardLedger.intraday_mtm_series : [];
@@ -3860,43 +3863,26 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
             localStorage.removeItem(FWD_STORAGE_KEY);
           }
         } catch (e) {}
-        forwardOpenPositions = [];
-        forwardClosedTrades = [];
-        forwardIntradayMtmSeries = [];
-        const archive = window.VL_PUBLIC_STATE?.ledger;
-        forwardLedger = JSON.parse(JSON.stringify(archive?.source_authority === 'dated_archive' ? archive : FORWARD_CLEAN_LEDGER_TEMPLATE));
         syncForwardLedgerGlobals();
         return forwardLedger;
       }
 
-      function isFreshCloudForwardLedger(cloudLedger, snapshot) {
-        if (!cloudLedger || !snapshot) return false;
-        var ledgerAt = Date.parse(cloudLedger.updated_at || '');
-        var snapshotAt = Date.parse(snapshot.retrieved_at || '');
-        return Number.isFinite(ledgerAt) && Number.isFinite(snapshotAt)
-          && ledgerAt >= snapshotAt - 120000
-          && ledgerAt <= Date.now() + 30000;
-      }
-
-      function applyCloudForwardLedger(cloudLedger, snapshot) {
-        if (!cloudLedger || typeof cloudLedger !== 'object'
-            || Number(cloudLedger.schema) !== 2 || cloudLedger.version !== 'forward-test-v20.1-event-time-gated'
-            || !Array.isArray(cloudLedger.open_positions)
-            || !Array.isArray(cloudLedger.closed_trades)
-            || !Array.isArray(cloudLedger.intraday_mtm_series)
-            || String(cloudLedger.min_trigger_date || '').slice(0, 10) < MIN_FORWARD_DATE
-            || !isFreshCloudForwardLedger(cloudLedger, snapshot)) return false;
-        if (forwardLedger.source_authority === 'apps_script_cloud' && Date.parse(forwardLedger.updated_at)>Date.parse(cloudLedger.updated_at)) return false;
-        forwardLedger = JSON.parse(JSON.stringify(cloudLedger));
-        const proven = forwardLedger.provenance_schema === 'event-quotes-v1';
-        forwardLedger.open_positions.concat(forwardLedger.closed_trades).forEach(row => {
-          const trigger = Date.parse(row.triggerTime || row.trigTime || '');
-          if (!proven || !Number.isFinite(trigger) || String(row.session_date || row.date || '') < MIN_FORWARD_DATE) {
-            row.integrity_status = 'UNVERIFIED_RECORD'; row.provenance_status = 'LEGACY_UNVERIFIED'; row.freshness = 'STALE';
-          }
-        });
-        if (!proven) forwardLedger.intraday_mtm_series = [];
-        forwardLedger.source_authority = 'apps_script_cloud';
+      function acceptPublishedPaperBook(book) {
+        if (!book || book.source_authority !== 'python_paper_worker' || book.cohort_kind !== 'prospective' ||
+            book.policy_version !== 'research-v1' || book.schema !== 2 ||
+            book.version !== 'forward-test-v20.1-event-time-gated' || book.provenance_schema !== 'event-quotes-v1' ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(book.min_trigger_date || '') || book.min_trigger_date < MIN_FORWARD_DATE ||
+            ![book.open_positions,book.closed_trades,book.intraday_mtm_series].every(Array.isArray)) return false;
+        const at = Date.parse(book.updated_at);
+        const empty = !book.open_positions.length && !book.closed_trades.length && !book.intraday_mtm_series.length;
+        if (book.updated_at === null && book.status !== 'ARMED_WAITING_FOR_FIRST_CAPTURE') return false;
+        const previous = Date.parse(publishedPaperBook?.updated_at);
+        if ((!Number.isFinite(at) && !(empty && book.updated_at === null)) || at > Date.now() ||
+            (Number.isFinite(previous) && (!Number.isFinite(at) || at < previous))) return false;
+        const trades = [...book.open_positions,...book.closed_trades];
+        if (trades.some(row => !row || row.policy_version !== 'research-v1' ||
+            !Number.isFinite(Date.parse(row.triggerTime)) || String(row.session_date || row.date || '') < book.min_trigger_date)) return false;
+        publishedPaperBook = book;
         syncForwardLedgerGlobals();
         return true;
       }
@@ -3904,14 +3890,20 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
       let paperLedgerRequest=null;
       function refreshPaperLedger() {
         if (paperLedgerRequest) return paperLedgerRequest;
-        // The ledger remains auditable after the market closes. Mark freshness is checked per position.
-        paperLedgerRequest=fetch(CLOUD_EXEC_URL+'?action=forward_ledger',{cache:'no-store',signal:AbortSignal.timeout(35000)})
-          .then(async res=>{
-            if (!res.ok) return false;
-            const ledger=await res.json();
-            if (!applyCloudForwardLedger(ledger,{retrieved_at:ledger.updated_at})) return false;
-            renderForwardWorkspace(); return true;
-          }).catch(()=>false).finally(()=>{paperLedgerRequest=null;});
+        const remote = 'https://raw.githubusercontent.com/pankagsaini/volatility-lab/paper-feed/paper-ledger.json';
+        paperLedgerRequest=(async () => {
+          for (const [source, url] of [['feed',remote+'?v='+Date.now()],['bundled','./paper-ledger.json']]) {
+            try {
+              const response=await fetch(url,{cache:'no-store',credentials:'omit',signal:AbortSignal.timeout(12000)});
+              if (response.ok && acceptPublishedPaperBook(await response.json())) {
+                paperRefreshFailed = source !== 'feed';
+                return true;
+              }
+            } catch { /* Try the published backup and retain any newer accepted book. */ }
+          }
+          paperRefreshFailed = true;
+          return false;
+        })().finally(()=>{paperLedgerRequest=null;renderForwardWorkspace();});
         return paperLedgerRequest;
       }
 
@@ -3935,7 +3927,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
       }
 
       function buildStrategyLegsForItem(item, sym, stratCode) {
-        throw new Error('Browser-side forward-trade construction is disabled; use the cloud ledger.');
+        throw new Error('Browser-side forward-trade construction is disabled; use the published paper book.');
       }
 
       function forwardNumber(value, fallback) {
@@ -3945,16 +3937,19 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
       }
 
       function forwardMarkStatusHtml(position) {
+        if (position.provenance_status === 'GAP_AFFECTED') {
+          return '<span class="text-amber-300">MTM withheld · incomplete capture path</span>';
+        }
         if (String(position.integrity_status || '') === 'UNVERIFIED_RECORD' || position.manual_reconciliation_required) {
           return '<span class="px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/50 text-rose-300 font-bold text-[10px]">INTEGRITY REVIEW REQUIRED</span>';
         }
         if (position.exit_pending) {
           return '<span class="px-2 py-0.5 rounded bg-sky-500/20 border border-sky-500/50 text-sky-300 font-bold text-[10px]">EXIT PENDING FRESH QUOTE</span>';
         }
-        if (String(position.freshness || '').toUpperCase() !== 'FRESH') {
+        if (!position.hasCurrentMark || String(position.freshness || '').toUpperCase() !== 'FRESH') {
           return '<span class="px-2 py-0.5 rounded bg-violet-500/20 border border-violet-500/50 text-violet-300 font-bold text-[10px]">MTM WITHHELD — STALE MARK</span>';
         }
-        return '<span class="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-[10px]">VALIDATED CLOUD MARK</span>';
+        return '<span class="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-[10px]">VALIDATED PAPER MARK</span>';
       }
 
       function evaluateFwdSetupState() {
@@ -3962,10 +3957,10 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         var idxFilter = (document.getElementById('fwdIndexFilter') && document.getElementById('fwdIndexFilter').value) || 'ALL';
         var expScope = (document.getElementById('fwdExpiryScope') && document.getElementById('fwdExpiryScope').value) || 'FRONT';
         var stratFilter = (document.getElementById('fwdStrategyFilter') && document.getElementById('fwdStrategyFilter').value) || 'ALL';
-        // Position size, exit rules, marks, and costs are fixed by the cloud ledger.
+        // Position size, exit rules, marks, and costs are fixed by the published paper book.
 
         const cohort = document.getElementById('fwdPolicyFilter').value;
-        const policyMatches = row => cohort === 'ALL' || (row.policy_version || 'legacy') === cohort;
+        const policyMatches = row => cohort === 'legacy' || row.policy_version === 'research-v1';
         var openFiltered = forwardOpenPositions.filter(function(pos) {
           if (!policyMatches(pos)) return false;
           if (idxFilter !== 'ALL' && pos.sym !== idxFilter) return false;
@@ -3979,9 +3974,9 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           p.simCharges = forwardNumber(p.estCharges, 0.0);
           p.simNetMtm = forwardNumber(p.netMtm, p.simGrossMtm - p.simCharges);
           p.simRocPct = p.simCapital > 0 ? (p.simNetMtm / p.simCapital) * 100.0 : 0.0;
-          p.hasCurrentMark = forwardLedger.source_authority === 'apps_script_cloud' && Date.now()-Date.parse(forwardLedger.updated_at) <= 120000 && String(p.freshness || '').toUpperCase() === 'FRESH'
+          p.hasCurrentMark = forwardLedger.source_authority === 'python_paper_worker' && Date.now()-Date.parse(forwardLedger.updated_at) <= 120000 && String(p.freshness || '').toUpperCase() === 'FRESH'
             && String(p.integrity_status || '') !== 'UNVERIFIED_RECORD'
-            && (!p.mark_at || (Date.now()-Date.parse(p.mark_at)>=0 && Date.now()-Date.parse(p.mark_at)<=120000)) && p.provenance_status==='VALIDATED_EVENT_QUOTES' && [p.grossMtm,p.netMtm,p.estCharges].every(Number.isFinite) && !p.manual_reconciliation_required;
+            && (Date.now()-Date.parse(p.mark_at)>=0 && Date.now()-Date.parse(p.mark_at)<=120000) && p.provenance_status==='VALIDATED_EVENT_QUOTES' && [p.grossMtm,p.netMtm,p.estCharges].every(Number.isFinite) && !p.manual_reconciliation_required;
           p.slTpStatus = forwardMarkStatusHtml(p);
           return p;
         });
@@ -4000,15 +3995,15 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           t.simCharges = forwardNumber(t.charges, 0.0);
           t.simNet = forwardNumber(t.net, t.simGross - t.simCharges);
           t.simExitTime = t.exit_at ? new Date(t.exit_at).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})+' IST' : t.exitTime || 'Not recorded';
-          t.simExitReason = t.exitReason || 'Cloud ledger close';
+          t.simExitReason = t.exitReason || 'Recorded close';
           t.simRocPct = t.simCapital > 0 ? (t.simNet / t.simCapital) * 100.0 : 0.0;
           return t;
         });
 
         return {
           lots: 1,
-          slRule: 'CLOUD_RECORDED',
-          tpRule: 'CLOUD_RECORDED',
+          slRule: 'WORKER_RECORDED',
+          tpRule: 'WORKER_RECORDED',
           open: openFiltered,
           closed: closedFiltered
         };
@@ -4018,11 +4013,13 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         syncForwardLedgerGlobals();
         const ledgerReady = !String(forwardLedger.status).startsWith('WAITING_FOR_');
         const badge = document.getElementById('fwdLastMarkedBadge');
-        if (badge) badge.textContent = forwardStatusLabel();
+        const exceptions = forwardLedger.capture_audit?.exceptions;
+        const gapNote = Number.isInteger(exceptions) && exceptions > 0 ? ' · '+exceptions+' capture exceptions' : '';
+        if (badge) badge.textContent = forwardStatusLabel() + gapNote + (paperRefreshFailed && forwardLedger.source_authority !== 'dated_archive' ? ' · Latest feed unavailable' : '');
         const modeLabel = document.getElementById('fwdAutoModeLabel');
-        if (modeLabel) modeLabel.textContent = forwardLedger.source_authority === 'dated_archive' ? 'Paper trading · dated archive' : 'Paper trading · cloud ledger';
+        if (modeLabel) modeLabel.textContent = forwardLedger.source_authority === 'dated_archive' ? 'Paper trading · dated archive' : 'Prospective paper book';
         const dot = document.getElementById('fwdAutoPulseDot');
-        if (dot) dot.classList.toggle('hidden', !ledgerReady || forwardLedger.status !== 'ACTIVE_LIVE_SESSION');
+        if (dot) dot.classList.toggle('hidden', !ledgerReady || forwardLedger.source_authority !== 'python_paper_worker' || Date.now()-Date.parse(forwardLedger.updated_at)>120000 || forwardLedger.status !== 'ACTIVE_LIVE_SESSION');
         const openSub = document.getElementById('fwdOpenTableSub');
         if (openSub) openSub.textContent = ledgerReady ? 'Positions matching your filters' : forwardStatusLabel();
         var state = evaluateFwdSetupState();
@@ -4086,7 +4083,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         var elCap = document.getElementById('fwdKpiCapital');
         if (elCap) elCap.textContent = fmtInr(Math.round(openCap), false);
         var elCapSub = document.getElementById('fwdKpiCapitalSub');
-        if (elCapSub) elCapSub.textContent = 'Cloud-recorded capital (' + openList.length + ' Pos) · Reference: ' + fmtInr(singleSetPeakCap, false);
+        if (elCapSub) elCapSub.textContent = 'Recorded capital (' + openList.length + ' Pos) · Reference: ' + fmtInr(singleSetPeakCap, false);
 
         var elRoc = document.getElementById('fwdKpiRoc');
         if (elRoc) {
@@ -4200,7 +4197,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           '</tr>';
         });
         var scBody = document.getElementById('fwdScorecardBody');
-        if (scBody) scBody.innerHTML = ledgerReady ? scHtml : '<tr><td colspan="12" class="p-6 text-center text-slate-300">Waiting for the cloud ledger.</td></tr>';
+        if (scBody) scBody.innerHTML = ledgerReady ? scHtml : '<tr><td colspan="12" class="p-6 text-center text-slate-300">Waiting for the published paper book.</td></tr>';
 
         // Render Panel 2: Closed Auto-Triggered Forward Trade Ledger
         var closedTbody = document.getElementById('fwdClosedLedgerBody');
@@ -4229,7 +4226,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           if (!closedList.length) closedTbody.replaceChildren();
           unverified.forEach(trade => {
             const row = closedTbody.insertRow();
-            [trade.date,trade.sym + ' · ' + trade.exp,trade.strat,'Archive · execution evidence unavailable'].forEach((value,index) => {
+            [trade.date,trade.sym + ' · ' + trade.exp,trade.strat,trade.provenance_status === 'GAP_AFFECTED' ? 'Incomplete capture path · excluded from performance' : 'Execution evidence unavailable'].forEach((value,index) => {
               const cell = row.insertCell(); cell.textContent = value; cell.className = 'py-2 px-2 text-slate-300';
               if (index === 3) cell.colSpan = 7;
             });
@@ -4245,16 +4242,16 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
               ? sessionSeries.map(function(pt) { return pt.time_ist || (pt.t + ' IST'); })
               : [];
             var mGross = sessionSeries.length
-              ? sessionSeries.map(function(pt) { return chartNumber(pt.gross_mtm); })
+              ? sessionSeries.map(function(pt) { return forwardLedger.source_authority === 'python_paper_worker' && pt.integrity_status === 'VALIDATED_FRESH_EXECUTABLE_MARKS' ? chartNumber(pt.gross_mtm) : null; })
               : [];
             var mNet = sessionSeries.length
-              ? sessionSeries.map(function(pt) { return chartNumber(pt.net_mtm); })
+              ? sessionSeries.map(function(pt) { return forwardLedger.source_authority === 'python_paper_worker' && pt.integrity_status === 'VALIDATED_FRESH_EXECUTABLE_MARKS' ? chartNumber(pt.net_mtm) : null; })
               : [];
             var mData = {
               labels: mLabels,
               datasets: [
                 {
-                  label: 'Live Forward Intraday Gross MTM (₹)',
+                  label: 'Whole book · recorded gross MTM (₹)',
                   data: mGross,
                   borderColor: '#38bdf8',
                   backgroundColor: 'rgba(56, 189, 248, 0.10)',
@@ -4268,7 +4265,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
                   labelDecimals: 0
                 },
                 {
-                  label: 'Live Forward Intraday Net MTM After Upstox Costs (₹)',
+                  label: 'Whole book · recorded net MTM (₹)',
                   data: mNet,
                   borderColor: '#10b981',
                   borderWidth: 2.2,
@@ -4346,7 +4343,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
       }
 
       window.closeForwardPosition = function(posId) {
-        toast('Cloud-ledger positions are read-only in the browser; no local close was applied.');
+        toast('Paper book positions are read-only in the browser; no local close was applied.');
       };
 
       window.autoForwardTrackSetup = function(stratCode, symName, expiryDate) {
@@ -4357,35 +4354,10 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         var wsFwd = document.getElementById('wsForwardBtn');
         if (wsFwd) wsFwd.click();
 
-        // Entries, exits, and marks are generated only by the cloud ledger.
+        // Entries, exits, and marks are generated only by the published paper book.
         // This click intentionally just filters the read-only workspace.
-        toast('Cloud-ledger setup selected; browser-side trade creation is disabled.');
+        toast('Paper book setup selected; browser-side trade creation is disabled.');
         return false;
-      };
-
-      window.markForwardPositionsFromPayload = function(payload) {
-        // The Drive-backed Apps Script ledger is the sole authority for entry,
-        // exit and MTM.  A browser may display it, but must never manufacture
-        // positions from an LTP-only payload or a localStorage copy.
-        var cloudLedger = payload && payload.forward_test_ledger;
-        var cloudEligible = isFreshValidatedCloudSnapshot(payload)
-          && cloudLedger && typeof cloudLedger === 'object';
-        if (!cloudEligible || !applyCloudForwardLedger(cloudLedger, payload)) {
-          // Keep the last accepted book while the independently timestamped ledger refreshes.
-          refreshPaperLedger();
-          syncForwardLedgerGlobals();
-          var missingBadge = document.getElementById('fwdLastMarkedBadge');
-          if (missingBadge) missingBadge.innerHTML = 'Status: <strong class="text-sky-300">WAITING_FOR_VALIDATED_CLOUD_LEDGER</strong>';
-          setLiveCaptureIntegrity('Live snapshot validated, but the forward ledger is stale or incomplete and has been withheld.', 'text-sky-300');
-          renderForwardWorkspace();
-          return false;
-        }
-        var cloudBadge = document.getElementById('fwdLastMarkedBadge');
-        if (cloudBadge) {
-          cloudBadge.innerHTML = 'Cloud ledger: <strong class="text-emerald-300">' + String(forwardLedger.status || 'READY') + '</strong>';
-        }
-        renderForwardWorkspace();
-        return true;
       };
 
       // Workspace Switching (Options Desk / Strategy Backtest / Forward Test Auto Paper)
@@ -4440,26 +4412,12 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         }
       });
 
-      var fwdAutoBtn = document.getElementById('fwdAutoModeToggle');
-      if (fwdAutoBtn) {
-        fwdAutoBtn.addEventListener('click', function() {
-          var cloudDot = document.getElementById('fwdAutoPulseDot');
-          var cloudLabel = document.getElementById('fwdAutoModeLabel');
-          if (cloudDot) cloudDot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
-          if (cloudLabel) cloudLabel.textContent = 'CLOUD LEDGER · AUTOMATION CONTROLLED BY APPS SCRIPT';
-          toast('The cloud collector controls forward-test automation; the browser is display-only.');
-        });
-      }
-
-      var fwdScanBtn = document.getElementById('fwdScanNowBtn');
-      if (fwdScanBtn) {
-        fwdScanBtn.addEventListener('click', function() {
-          syncLiveCloudSnapshot(true);
-          toast('Refreshing the validated cloud ledger.');
-        });
-      }
-
-
+      const fwdRefresh = document.getElementById('fwdScanNowBtn');
+      fwdRefresh.addEventListener('click', async () => {
+        fwdRefresh.disabled = true;
+        try { await refreshPaperLedger(); }
+        finally { fwdRefresh.disabled = false; }
+      });
 
       var fwdCsvBtn = document.getElementById('fwdExportCsvBtn');
       if (fwdCsvBtn) {
@@ -4991,7 +4949,6 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
             TradingSessions.apply(payload.exchange_calendar);
             latestAsOfLabel = new Date(liveTimestamp(payload.retrieved_at) + 19800000).toISOString().slice(0, 16).replace('T', ' ') + ' IST';
             populateExpiryDropdown();
-            if (fresh && st.isOpen && payload.forward_test_status !== 'failed' && typeof window.markForwardPositionsFromPayload === 'function') window.markForwardPositionsFromPayload(payload);
             updateMarketClock();
             renderActiveOptionsTab();
             renderForwardWorkspace();
@@ -5064,7 +5021,12 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         status.textContent='Checking the latest market capture and published forecasts…';
         try {
           const paperVisible=document.getElementById('workspaceForwardTest')?.classList?.contains('hidden')===false;
-          const outcomes=await Promise.allSettled([syncLiveCloudSnapshot(true),refreshPublishedForecasts(),paperVisible ? refreshPaperLedger() : false]);
+          if (paperVisible) {
+            const ok=await refreshPaperLedger();
+            status.textContent=ok ? forwardStatusLabel() : 'Paper feed unavailable · latest accepted book retained';
+            return;
+          }
+          const outcomes=await Promise.allSettled([syncLiveCloudSnapshot(true),refreshPublishedForecasts()]);
           const cloud=lastCloudRefresh, forecast=outcomes[1].status==='fulfilled'?outcomes[1].value:null;
           const clock=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Kolkata'})+' IST';
           let message=outcomes[0].status==='rejected'||cloud.kind==='unavailable'
@@ -5088,6 +5050,27 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           button.setAttribute('aria-selected',String(active));
           if(active){document.getElementById('workspaceTitle').textContent=title;document.getElementById('workspaceDescription').textContent=description;}
         });
+      }
+
+      let lastMarketPoll = -Infinity, lastClosingPoll = -Infinity;
+      function visibleOptions() {
+        return !document.hidden && !document.getElementById('workspaceOptions').classList.contains('hidden');
+      }
+      function pollMarketDesk(onReturn = false) {
+        if (!visibleOptions()) return;
+        const now = Date.now(), cur = getMarketSessionState(), session = TradingSessions.session(cur.day);
+        const active = cur.isOpen || (session && cur.mins >= session.endMins && cur.mins < session.endMins + 2);
+        if ((active || (onReturn && !loadedCloudCapture)) && now-lastMarketPoll >= 30000 && !liveSnapshotRequest) {
+          lastMarketPoll = now;
+          loadPricingInputs().then(() => {
+            if (visibleOptions()) return syncLiveCloudSnapshot(true);
+            lastMarketPoll = -Infinity;
+          });
+        }
+        if (session && cur.mins >= session.endMins+5 && cur.mins < session.endMins+95 && now-lastClosingPoll >= 120000) {
+          lastClosingPoll = now;
+          refreshClosingRisk(cur.day);
+        }
       }
 
       function initVolatilityLabDesk() {
@@ -5119,22 +5102,16 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         renderForwardWorkspace();
         refreshPublishedForecasts();
         setInterval(refreshPublishedForecasts, 300000);
-        loadPricingInputs().then(() => syncLiveCloudSnapshot(true));
+        setInterval(() => {
+          if (!document.hidden && !document.getElementById('workspaceForwardTest').classList.contains('hidden')) refreshPaperLedger();
+        }, 60000);
+        pollMarketDesk(true);
+        document.addEventListener('visibilitychange', () => pollMarketDesk(true));
+        wsOptionsBtn.addEventListener('click', () => pollMarketDesk(true));
         setInterval(function() {
           updateMarketClock();
         }, 15000);
-        setInterval(function() {
-          var cur = updateMarketClock();
-          const session = TradingSessions.session(cur.day);
-          if (cur.isOpen || (session && cur.mins >= session.endMins && cur.mins < session.endMins + 2)) {
-            loadPricingInputs().then(() => syncLiveCloudSnapshot(true));
-          }
-        }, 30000);
-        setInterval(function() {
-          const cur = getMarketSessionState(), session = TradingSessions.session(cur.day);
-          if (session && cur.mins >= session.endMins + 5 && cur.mins < session.endMins + 95)
-            refreshClosingRisk(cur.day);
-        }, 120000);
+        setInterval(pollMarketDesk, 30000);
       }
 
       if (document.readyState === 'loading') {

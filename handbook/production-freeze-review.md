@@ -3,6 +3,8 @@
 
 **Verdict: NOT READY for an investor-performance or unattended-production sign-off.** The research policy can be locked for prospective paper observation. Positive expectancy, continuity across historical ledger stores, and uninterrupted autonomous capture have not been established. Source audited: default branch `master`, commit [13ff5a86f84d8579b9a7283eff46e5b105e17184](https://github.com/pankagsaini/volatility-lab/tree/13ff5a86f84d8579b9a7283eff46e5b105e17184). Baseline line citations in the appendices refer to this revision; implementation citations refer to the candidate patch.
 
+**21 November operating update.** Apps Script v21 captures and serves Upstox data. The Python worker now owns paper entries, marks and exits. Results and Apps Script source references below describe the dated audit. [Current worker and publication](freeze-paper.md#daily-processing-and-publication)
+
 | Area | Score / 100 | Evidence and decision |
 |---|---:|---|
 | Data pipeline | 65 | Raw hashes and timestamped captures are available. 385 of 386 minute slots on 19 Nov; only 235 on 13 Nov. Full-day account quota and uninterrupted evaluator operation unproven. [Capture audit](freeze-integrity.md) |

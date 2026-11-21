@@ -1,8 +1,8 @@
-"""Event-time NSE paper engine and local replica of the Apps Script ledger.
+"""Event-time NSE paper engine driven by the local raw-capture archive.
 
 Research-v1 evaluates the nearest listed expiry at the strategy's specified minute.
 Entries and liquidation marks require complete, depth-qualified L1 books. The
---sync command mirrors the authoritative ledger without creating new trades.
+--sync command advances the Python-owned ledger using already captured evidence.
 """
 from __future__ import annotations
 from volatility_lab.runtime.settings import data_dir as runtime_data_dir
@@ -966,7 +966,7 @@ def mark_open_positions_to_market(
                 "exitTime": current_time_ist,
                 "exit_at": stamp.isoformat() if stamp else None,
                 "exit_session_date": stamp.date().isoformat() if stamp else s_day,
-                **{k:pos[k] for k in ("available_at", "policy_version", "holding", "scheduled_exit_at", "frontScope") if k in pos},
+                **{k:pos[k] for k in ("available_at", "policy_version", "holding", "scheduled_exit_at", "frontScope", "path_status", "unobserved_path_since", "entry_capture", "entry_capture_sha256") if k in pos},
                 "sym": sym,
                 "exp": exp,
                 "kind": pos.get("kind", "Weekly"),
@@ -1113,7 +1113,10 @@ def process_live_upstox_snapshot(
     reference_time = snap_dt
     if any(rule.get("minute") == mkt["mins"] for rule in RULES.values()):
         eligible_expiries: dict[str, list[str]] = {"NIFTY": [], "BANKNIFTY": []}
-        listed_labels = set(live_chains) | {str(rec.get("label") or "") for rec in records if isinstance(rec, dict)}
+        catalogue = (payload.get("catalogue") or {}).get("indices", {})
+        catalogue_labels = {f"{symbol}|{expiry}" for symbol, scope in catalogue.items()
+                            for expiry in scope.get("option_expiries", [])}
+        listed_labels = catalogue_labels | set(live_chains) | {str(rec.get("label") or "") for rec in records if isinstance(rec, dict)}
         for label in listed_labels:
             if "|" not in label:
                 continue
@@ -1215,10 +1218,12 @@ def process_live_upstox_snapshot(
         trade for trade in state["closed_trades"]
         if str(trade.get("exit_session_date") or trade.get("session_date") or trade.get("date") or "")[:10] == snapshot_day
     ]
-    marks_withheld = any(not is_valid_forward_record(t) for t in session_closed) or any(
+    marks_withheld = any(not is_valid_forward_record(t) or t.get("provenance_status") == "GAP_AFFECTED"
+                         for t in session_closed) or any(
         str(position.get("freshness") or "").upper() != "FRESH"
         or str(position.get("integrity_status") or "") == "UNVERIFIED_RECORD"
         or bool(position.get("manual_reconciliation_required"))
+        or position.get("provenance_status") == "GAP_AFFECTED"
         for position in still_open
     )
     mtm_point: dict[str, Any] = {
@@ -1473,25 +1478,19 @@ def evaluate_forward_test_scorecard(
 
 
 def sync_forward_ledger(source: Path | None = None, data_dir: Path | None = None) -> tuple[Path, bool]:
-    """Mirror the collector's ledger, never replay snapshots into the canonical Drive book."""
+    """Import a legacy ledger into a separate local comparison directory."""
     import gzip
-    from urllib.request import urlopen
-    from volatility_lab.runtime.settings import load_settings
-
-    if source is not None:
-        opener = gzip.open if source.suffix == ".gz" else open
-        with opener(source, "rt", encoding="utf-8-sig") as fp:
-            raw = json.load(fp)
-        if isinstance(raw, dict) and "forward_test_ledger" in raw:
-            if raw.get("status") != "complete" or raw.get("provider") != "Upstox" or raw.get("nfo_session_validated") is not True:
-                raise ValueError("Cannot mirror a ledger from an unvalidated capture.")
-            raw = raw["forward_test_ledger"]
-    else:
-        settings = load_settings()
-        if settings.offline or not settings.cloud_url:
-            raise ValueError("A source file or an online, configured Apps Script endpoint is required.")
-        with urlopen(settings.cloud_url + "?action=forward_ledger", timeout=40) as response:
-            raw = json.load(response)
+    if source is None:
+        raise ValueError("Legacy import requires an explicit local --source.")
+    opener = gzip.open if source.suffix == ".gz" else open
+    with opener(source, "rt", encoding="utf-8-sig") as fp:
+        raw = json.load(fp)
+    if isinstance(raw, dict) and "forward_test_ledger" in raw:
+        if raw.get("status") != "complete" or raw.get("provider") != "Upstox" or raw.get("nfo_session_validated") is not True:
+            raise ValueError("Cannot mirror a ledger from an unvalidated capture.")
+        raw = raw["forward_test_ledger"]
+    if raw.get("source_authority") == "python_paper_worker":
+        raise ValueError("A live worker ledger cannot be imported into an archive mirror.")
     _validate_ledger(raw)
     if raw.get("schema") != 2 or raw.get("provenance_schema") != "event-quotes-v1":
         raise ValueError("Unrecognized source ledger provenance.")
@@ -1502,6 +1501,8 @@ def sync_forward_ledger(source: Path | None = None, data_dir: Path | None = None
     location = Path(data_dir or DATA_DIR)
     location.mkdir(parents=True, exist_ok=True)
     target = location / LEDGER_FILENAME
+    if target.exists() and _read_ledger(target)[0].get("source_authority") == "python_paper_worker":
+        raise ValueError("Refusing to import a historical book over the prospective worker.")
     current = load_forward_ledger(location)
     revision = current.pop("_ledger_revision", None)
     def trade_key(record):
@@ -1535,16 +1536,25 @@ def sync_forward_ledger(source: Path | None = None, data_dir: Path | None = None
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Mirror the authoritative Apps Script paper ledger to local storage.")
-    parser.add_argument("--sync", action="store_true", required=True)
-    parser.add_argument("--source", type=Path, help="Local collector ledger or complete snapshot (.json/.json.gz)")
+    from volatility_lab.backtest import paper_worker
+    parser = argparse.ArgumentParser(description="Maintain the local paper ledger from read-only archived snapshots.")
+    parser.add_argument("--sync", action="store_true", help="Process unconsumed archived snapshots")
+    parser.add_argument("--source", type=Path, help="Explicit legacy local ledger import, outside the worker directory")
     parser.add_argument("--data-dir", type=Path, help="Directory containing forward_test_ledger.json")
+    paper_worker.worker_options(parser)
     args = parser.parse_args()
+    if not (args.sync or args.process_archive):
+        parser.error("Choose --sync or --process-archive.")
+    if args.source and (not args.data_dir or args.start_date or args.watch or args.process_archive or args.public_output or args.replay):
+        parser.error("Use --sync --source FILE --data-dir SEPARATE_LEGACY_DIR for historical comparison only.")
     try:
-        path, changed = sync_forward_ledger(args.source, args.data_dir)
+        if args.source:
+            path, changed=sync_forward_ledger(args.source,args.data_dir)
+            print(f"{'Updated' if changed else 'Unchanged'} legacy mirror {path}")
+        else:
+            paper_worker.run_command(args)
     except (ValueError, RuntimeError, OSError) as exc:
         parser.exit(1, f"Ledger sync failed: {exc}\n")
-    print(f"{'Updated' if changed else 'Unchanged'} {path}")
 
 
 if __name__ == "__main__":
