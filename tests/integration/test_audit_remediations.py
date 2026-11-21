@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 21726)
-Total output lines: 1690
-
 #!/usr/bin/env python3
 """Comprehensive verification suite testing all 5 audit tracks of Volatility Lab remediations."""
 from datetime import datetime, date, timezone, timedelta
@@ -798,7 +795,131 @@ class TestTrack9MasterAuditAnd6StrategyBacktest(unittest.TestCase):
             "contracts": [
                 {"expiry": "2026-11-12", "strike": 24000.0, "kind": "PE", "bid": 80.0, "ask": 82.0, "iv": 15.0, "delta": -0.25, "gamma": 0.001, "theta": -10.0, "vega": 12.0},
                 {"expiry": "2026-11-12", "strike": 24200.0, "kind": "CE", "bid": 150.0, "ask": 152.0, "iv": 14.0, "delta": 0.50, "gamma": 0.002, "theta": -15.0, "vega": 18.0},
-                {"expiry": "2026-11-12", "strike": 24200.0, "kind": "PE", "bid": 145.0, "ask": 147.0, "iv"…1726 tokens truncated… [40.0, 40.0, 40.0, 40.0, 200],
+                {"expiry": "2026-11-12", "strike": 24200.0, "kind": "PE", "bid": 145.0, "ask": 147.0, "iv": 14.2, "delta": -0.50, "gamma": 0.002, "theta": -15.0, "vega": 18.0},
+                {"expiry": "2026-11-12", "strike": 24400.0, "kind": "CE", "bid": 75.0, "ask": 77.0, "iv": 14.5, "delta": 0.25, "gamma": 0.001, "theta": -10.0, "vega": 12.0},
+            ],
+        }
+        ctx = trade_review.option_book(payload, "2026-11-12")
+        self.assertIn("book", ctx)
+        self.assertIn("chain", ctx)
+        self.assertIn("stamp", ctx)
+        self.assertIn("strike", ctx)
+        self.assertIn("Kind", ctx["book"].columns)
+        self.assertIn("Type", ctx["chain"].columns)
+        pf = trade_review.parity_forward(ctx)
+        self.assertIn("forward", pf)
+        fr = trade_review.freshness(ctx)
+        self.assertIsInstance(fr, str)
+        self.assertTrue("Book captured " + str(ctx["stamp"]) + " · " + fr)
+        self.assertIn("fresh", fr._meta)
+        pos = trade_review.make_position(ctx, 24000.0, 24400.0)
+        res = trade_review.stress_position(ctx, pos, 1.0, 50.0)
+        self.assertIn("grid", res)
+        scenarios, summary = res
+        self.assertIsInstance(scenarios, pd.DataFrame)
+        self.assertIn("Spot move %", scenarios.columns)
+        self.assertIsInstance(summary, dict)
+
+        # 3. broker_charges 5-arg & 6-arg compatibility + refresh() + Stamp duty key
+        c1 = broker_charges.charge("2026-11-06", "Options", 150.0, 75, "sell", 20.0)
+        c2 = broker_charges.charge("2026-11-06", "futures", -1, 24200.0, 75, 20.0)
+        self.assertIn("Stamp duty", c1)
+        self.assertGreater(c1["STT"], 0.0)
+        self.assertGreater(c2["STT"], 0.0)
+        self.assertIsInstance(broker_charges.refresh(), dict)
+
+        # 4. backtest_common load_blacklist & market_calendar CalendarHorizonError
+        self.assertIsInstance(backtest_common.load_blacklist(), dict)
+        self.assertTrue(issubclass(market_calendar.CalendarHorizonError, ValueError))
+
+        # 5. strategy_backtest legacy helpers & backtest_jobs pandas import
+        self.assertEqual(strategy_backtest.sizing({"sizing_mode": "broker_lot_size", "lots": 2}), ("broker_lot_size", 2))
+        self.assertEqual(strategy_backtest.broker_lot_size({"lot_size": 75}), 75)
+        self.assertTrue(hasattr(backtest_jobs, "pd"))
+
+
+
+    def test_v16_zero_synthetic_data_strict_real_captures_only(self):
+        """Verify strict 100% real data policy:
+        1. Zero daily-OHLC-to-1-minute interpolation when intraday option captures are absent (records explicit skip).
+        2. HV30 in backtest_signals is strictly shifted by 1 session (.shift(1)); timestamp-less daily rows do not become EOD signals.
+        3. 15:15 IST exits without enough traded volume remain mark-only and excluded from realized P&L.
+        """
+        import tempfile
+        import backtest_engine as be
+        import backtest_signals as bs
+        import strategy_backtest as sb
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_data = Path(tmp) / "data"
+            tmp_data.mkdir(parents=True, exist_ok=True)
+            # Write a 40-day OHLC CSV so HV30 is available
+            df_ohlc = _synthetic_ohlc(45, daily_ret=0.01, end_date="2026-11-06")
+            df_ohlc["Date"] = pd.to_datetime(df_ohlc["Date"]).dt.strftime("%Y-%m-%d")
+            csv_p = tmp_data / "nifty_one_year.csv"
+            df_ohlc.to_csv(csv_p, index=False)
+
+            mon_db = tmp_data / "monitor.sqlite"
+            with closing(sqlite3.connect(mon_db)) as con:
+                con.execute(
+                    "CREATE TABLE expiry_observations (symbol TEXT, date TEXT, expiry TEXT, iv REAL, spread REAL, source TEXT, config TEXT)"
+                )
+                con.execute(
+                    "INSERT INTO expiry_observations VALUES ('NIFTY', '2026-11-05', '2026-11-12', 15.2, 2.1, 'Upstox', 'default')"
+                )
+                con.commit()
+
+            orig_data_dir, orig_root, orig_sig_path = be.DATA_DIR, be.ROOT, bs.PATH
+            try:
+                be.DATA_DIR = tmp_data
+                be.ROOT = tmp_data / "backtest_1minute"
+                bs.PATH = mon_db
+
+                # 1. Verify load() does NOT synthesize intraday series from daily CSV / daily expiry_observations
+                contracts, series, _ = be.load("NIFTY", "2026-11-05", "2026-11-05")
+                self.assertEqual(len(contracts), 0)
+                self.assertEqual(len(series), 0)
+                trades_df, skips_df = sb.simulate(
+                    {"symbol": "NIFTY", "start": "2026-11-05", "end": "2026-11-05", "entry": "09:20", "exit": "15:15", "template": "Short straddle"},
+                    contracts, series, []
+                )
+                self.assertEqual(len(trades_df), 0)
+                self.assertEqual(len(skips_df), 1)
+                self.assertEqual(skips_df.iloc[0]["Reason"], "No real captured intraday option data for session")
+
+                # 2. Timestamp-less daily rows cannot be assigned an invented 15:30 availability time.
+                sigs = bs.load_signals("NIFTY", path=mon_db)
+                self.assertEqual(sigs, [])
+
+                # 3. A stale zero-volume wing mark is not an executable 15:15 fill.
+                day = "2026-11-06"
+                exp = "2026-11-12"
+                c_list = [
+                    {"instrument_key": "K_CE_S", "trading_symbol": "CE_S", "instrument_type": "CE", "strike_price": 24500.0, "expiry": exp, "lot_size": 75},
+                    {"instrument_key": "K_PE_S", "trading_symbol": "PE_S", "instrument_type": "PE", "strike_price": 24500.0, "expiry": exp, "lot_size": 75},
+                    {"instrument_key": "K_CE_B", "trading_symbol": "CE_B", "instrument_type": "CE", "strike_price": 24800.0, "expiry": exp, "lot_size": 75},
+                    {"instrument_key": "K_PE_B", "trading_symbol": "PE_B", "instrument_type": "PE", "strike_price": 24200.0, "expiry": exp, "lot_size": 75},
+                ]
+                ticks = {
+                    "NSE_INDEX|Nifty 50": {
+                        f"{day} 09:19": [24500.0, 24500.0, 24500.0, 24500.0, 1000],
+                        f"{day} 09:20": [24500.0, 24500.0, 24500.0, 24500.0, 1000],
+                        f"{day} 15:15": [24750.0, 24750.0, 24750.0, 24750.0, 1000],
+                    },
+                    "K_CE_S": {
+                        f"{day} 09:20": [150.0, 150.0, 150.0, 150.0, 500],
+                        f"{day} 15:15": [320.0, 320.0, 320.0, 320.0, 500],
+                    },
+                    "K_PE_S": {
+                        f"{day} 09:20": [140.0, 140.0, 140.0, 140.0, 500],
+                        f"{day} 15:15": [60.0, 60.0, 60.0, 60.0, 500],
+                    },
+                    "K_CE_B": {
+                        f"{day} 09:20": [45.0, 45.0, 45.0, 45.0, 200],
+                        f"{day} 15:15": [110.0, 110.0, 110.0, 110.0, 200],
+                    },
+                    "K_PE_B": {
+                        f"{day} 09:20": [40.0, 40.0, 40.0, 40.0, 200],
                         f"{day} 14:30": [15.0, 15.0, 15.0, 15.0, 100],
                         f"{day} 15:15": [15.0, 15.0, 15.0, 15.0, 0],  # 0 volume at 15:15 on OTM wing!
                     },
