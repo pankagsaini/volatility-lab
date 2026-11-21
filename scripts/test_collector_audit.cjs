@@ -6,7 +6,6 @@ const vm = require('node:vm');
 const source = fs.readFileSync(process.env.COLLECTOR_SOURCE_PATH || path.join(__dirname, '../volatility_lab/cloud/apps_script/Code.gs'), 'utf8').replace(/\r\n/g,'\n');
 const values = new Map();
 const cached = new Map();
-let reads = 0;
 const cloud = vm.createContext({
   Date, console,
   PropertiesService: {getScriptProperties: () => ({
@@ -27,37 +26,21 @@ const cloud = vm.createContext({
   LockService: {getScriptLock: () => ({tryLock: () => true, releaseLock: () => {}})},
 });
 vm.runInContext(source, cloud);
-cloud.loadForwardLedger_ = () => { reads++; return {schema: 2, closed_trades: [], open_positions: []}; };
 const get = parameter => cloud.doGet({parameter});
-assert.equal(JSON.parse(get({action: 'ledger'}).text).schema, 2);
-assert.equal(JSON.parse(get({action: 'forward_ledger'}).text).schema, 2);
-assert.equal(reads, 1, 'Aliases must share the raw JSON cache');
-const jsonp = get({action: 'ledger', callback: 'onLedger'});
-assert.equal(jsonp.mime, 'javascript');
-let received;
-vm.runInNewContext(jsonp.text, {onLedger: value => { received = value; }});
-assert.equal(received.schema, 2);
-for (const callback of ['x);alert(1)//', 'obj.call', 'constructor.constructor', 'x[',
-                        'a'.repeat(65)]) {
-  assert.equal(JSON.parse(get({action: 'ledger', callback}).text).error, 'Invalid callback');
+for (const action of ['ledger','forward_ledger']) {
+  assert.equal(JSON.parse(get({action}).text).error, 'Unknown data action');
 }
 values.set('LATEST_SNAPSHOT_FILE_ID', 'fixture');
-cached.set('DOGET_LATEST_SNAPSHOT_JSON_fixture', JSON.stringify({status: 'complete'}));
+cached.set('DOGET_CAPTURE_DATA_V1_fixture', JSON.stringify({status: 'complete'}));
 assert.equal(JSON.parse(get({action: 'latest'}).text).status, 'complete');
-assert.equal(get({action: 'latest', callback: 'onSnapshot'}).mime, 'javascript');
-const legacy = cloud.sanitizeForwardLedger_({
-  schema: 2, version: 'forward-test-v20.1-event-time-gated',
-  open_positions: [], closed_trades: [{
-    session_date: '2026-11-11', triggerTime: '2026-11-11T09:20:00+05:30', net: 100,
-  }], intraday_mtm_series: [{session_date: '2026-11-11', net_mtm: 100}],
-});
-assert.equal(legacy.closed_trades[0].provenance_status, 'LEGACY_UNVERIFIED');
-assert.equal(legacy.closed_trades[0].net, 100);
-assert.equal(legacy.intraday_mtm_series[0].net_mtm, null);
-assert.equal(cloud.isValidForwardRecord_(legacy.closed_trades[0]), false);
-// Current options buy fees: brokerage + all exchange components + SEBI + stamp + GST.
-const expected = 20 + 3553 + 10 + 300 + 0.18 * (20 + 3553);
-assert(Math.abs(cloud.upstoxOptionCharge_(10000, 1000, false) - expected) < 1e-8);
+const jsonp=get({action: 'latest',callback:'onSnapshot'});
+assert.equal(jsonp.mime,'javascript');
+let received;
+vm.runInNewContext(jsonp.text,{onSnapshot: value=>{received=value;}});
+assert.equal(received.status,'complete');
+for (const callback of ['x);alert(1)//','obj.call','constructor.constructor','x[','a'.repeat(65)]) {
+  assert.equal(JSON.parse(get({action:'latest',callback}).text).error,'Invalid callback');
+}
 const stored = [];
 cloud.save_ = (name, payload) => {stored.push({name, payload}); return 'file-id';};
 cloud.catalogue_ = () => ({indices:{NIFTY:{futures:[]},BANKNIFTY:{futures:[]}}});
@@ -108,12 +91,12 @@ assert.equal(backfill.recovered, 2);
 assert.deepEqual(recovered.map(row => row.day), ['2026-11-16', '2026-11-17']);
 assert.deepEqual(recovered.map(row => row.fileId), ['partial-16', 'partial-17']);
 assert.deepEqual(backfill.sessions.map(row => row.status), ['complete', 'complete']);
+cached.set('DOGET_STATUS_JSON',JSON.stringify({legacy:true}));
+values.set('LAST_SNAPSHOT',JSON.stringify({status:'complete',forward_test_ledger:{private:true}}));
 const status = JSON.parse(get({action: 'status', key: 'secret'}).text);
 assert.deepEqual(status.eod_pending, []);
-assert.equal(status.pure_snapshot_capture_only, false);
-values.set('PURE_SNAPSHOT_CAPTURE_ONLY', 'true');
-cached.delete('DOGET_STATUS_JSON');
-assert.equal(JSON.parse(get({action: 'status', key: 'secret'}).text).pure_snapshot_capture_only, true);
+assert.equal(status.collection_only, true);
+assert.deepEqual(JSON.parse(status.last_snapshot),{status:'complete'});
 // The expiry desk accepts only paired two-sided books at the fixed anchor and
 // the nearest listed strike to spot; no LTP fallback and no distance synthesis.
 const quoteAt = new Date().toISOString();
@@ -132,7 +115,7 @@ assert.equal(cloud.dualStraddlePoint_({...dualRec, data: [
     put_options: {market_data: {quote_source: 'rest', quote_timestamp: quoteAt,
       bid_price: 48, ask_price: 50, bid_qty: 75, ask_qty: 75}}}]}, quoteAt), null,
   'One recorded leg is not a straddle mark');
-console.log('Collector audit regressions passed: aliases, shared cache, JSONP, legacy provenance, fees and EOD recovery.');
+console.log('Collector audit regressions passed: retired ledger routes, snapshot JSONP, cache and EOD recovery.');
 
 // Automatic recovery fairness, cooldowns, quota accounting and session safety.
 {

@@ -976,7 +976,8 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
             html = _read_html_audit_range(p)
             self.assertIn('id="workspaceForwardTest"', html)
             for ctrl_id in (
-                "fwdAutoModeToggle",
+                "fwdAutoModeLabel",
+                "fwdPolicyFilter",
                 "fwdIndexFilter",
                 "fwdExpiryScope",
                 "fwdStrategyFilter",
@@ -996,9 +997,11 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
             ):
                 self.assertIn(f'id="{ctrl_id}"', html, f"Missing {ctrl_id} in {rel}")
             self.assertNotIn('id="fwdResetSeedBtn"', html)
-            self.assertIn("Cloud ledger · paper trading", html)
+            self.assertNotIn('id="fwdAutoModeToggle"', html)
+            self.assertIn("Prospective paper book", html)
             self.assertIn("liveCaptureIntegrity", html)
-            self.assertIn("CLOUD LEDGER", html)
+            self.assertIn("Refresh paper book", html)
+            self.assertNotIn("action=forward_ledger", html)
             self.assertIn("NIFTY 50 (Lot 65)", html)
             self.assertIn("ARMED_WAITING_FOR_NEXT_SESSION", html)
 
@@ -1116,40 +1119,15 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
             self.assertEqual(tr["exitTime"], "15:15 IST")
             self.assertIn("15:15 IST", tr["exitReason"])
 
-    def test_34_cloud_code_gs_forward_test_24x7_hooks(self):
-        code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
-        self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", code_gs)
-        self.assertIn("function getNseMarketStatusIST(", code_gs)
-        self.assertIn("function evaluateForwardTest_(report, ledger, ledgerState)", code_gs)
-        self.assertIn("function loadForwardLedger_(state)", code_gs)
-        self.assertIn("function saveForwardLedger_(ledger, state)", code_gs)
-        self.assertIn("forward_test_ledger.json", code_gs)
-        self.assertIn("report.forward_test_ledger = ledger", code_gs)
-
+    def test_34_cloud_archives_market_data_without_an_execution_engine(self):
+        code = (PATCH_DIR / "cloud/apps_script/Code.gs").read_text(encoding="utf-8")
+        self.assertIn("enrichSnapshotInputs_(report, started,", code)
+        for forbidden in ("function evaluateForwardTest_", "function loadForwardLedger_", "function saveForwardLedger_", "forward_test_ledger.json"):
+            self.assertNotIn(forbidden, code)
 
 
 class TestTrack10DataIntegrityAndPackaging(unittest.TestCase):
-    """Verify paper-trading data integrity, quote freshness, engine configuration parity & wheel packaging."""
-
-    def test_35_parity_between_python_and_apps_script_constants(self):
-        """Assert Python and Apps Script engines agree on lot sizes, capital and constants."""
-        from forward_test import LOT_SIZES, STRATEGY_CAPITAL_PER_LOT, MIN_FORWARD_DATE
-        self.assertEqual(LOT_SIZES["NIFTY"], 65)
-        self.assertEqual(LOT_SIZES["BANKNIFTY"], 30)
-        self.assertEqual(MIN_FORWARD_DATE, "2026-11-11")
-
-        code_gs = (PATCH_DIR / "cloud" / "apps_script" / "Code.gs").read_text(encoding="utf-8")
-        self.assertIn("const lotQty = sym === 'NIFTY' ? 65 : 30;", code_gs)
-        self.assertIn("const lotQty = (pos.sym === 'NIFTY' ? 65 : 30) * lots;", code_gs)
-        self.assertNotIn("sym === 'NIFTY' ? 75 : 30", code_gs)
-        self.assertIn("const MIN_FORWARD_DATE = '2026-11-11';", code_gs)
-
-        # Assert capital parity for S1-S6
-        for sym in ("NIFTY", "BANKNIFTY"):
-            for sc in ("S1", "S2", "S3", "S4", "S5", "S6"):
-                py_cap = STRATEGY_CAPITAL_PER_LOT[sym][sc]
-                pattern = f"{sc}: {py_cap}"
-                self.assertIn(pattern, code_gs, f"Missing or mismatched {sym} {sc} capital in Code.gs")
+    """Verify quote freshness and packaging."""
 
     def test_36_quote_absence_and_no_price_fabrication(self):
         """Verify evaluate_strategies_for_chain never fabricates fill prices when leg quotes are missing."""

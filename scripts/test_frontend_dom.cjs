@@ -212,7 +212,21 @@ const server = http.createServer((request,response) => {
     assert(await page.locator('#cx_on_vrp').isChecked(),'Preset entry bounds remain available for custom replay');
     assert.equal(await page.locator('#cx_min_vrp').inputValue(),'3');
     assert.equal(await page.locator('#btLedgerBody tr').count(),18,'Preset baseline remains independently available');
+    const paperBook={schema:2,version:'forward-test-v20.1-event-time-gated',source_authority:'python_paper_worker',cohort_kind:'prospective',policy_version:'research-v1',
+      provenance_schema:'event-quotes-v1',min_trigger_date:'2026-11-23',updated_at:null,status:'ARMED_WAITING_FOR_FIRST_CAPTURE',
+      open_positions:[],closed_trades:[],intraday_mtm_series:[]};
+    const feed='https://raw.githubusercontent.com/**/paper-feed/paper-ledger.json*';
+    await page.route(feed,r=>r.fulfill({json:paperBook}));
     await page.locator('#wsForwardBtn').click();
+    await page.waitForFunction(()=>window.forwardLedger?.source_authority==='python_paper_worker');
+    assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Awaiting first prospective capture/);
+    assert.equal(await page.locator('#paperArchiveCount').textContent(),'0 recorded · 0 verified · 0 unverified');
+    await page.route(feed,r=>r.abort());
+    await page.route('**/paper-ledger.json',r=>r.fulfill({json:{...paperBook,source_authority:'apps_script_cloud'}}));
+    await page.locator('#fwdScanNowBtn').click();
+    await page.waitForFunction(()=>document.getElementById('fwdLastMarkedBadge').textContent.includes('Latest feed unavailable'));
+    assert.equal(await page.evaluate(()=>window.forwardLedger.source_authority),'python_paper_worker');
+    await page.selectOption('#fwdPolicyFilter','legacy');
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Read-only archive/);
     assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/\d+ recorded closes/);
     assert.equal(await page.locator('#fwdKpiClosedNet').textContent(),'—');

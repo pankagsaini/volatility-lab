@@ -9,7 +9,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const gs = fs.readFileSync(process.env.COLLECTOR_SOURCE_PATH || path.join(root, 'volatility_lab/cloud/apps_script/Code.gs'), 'utf8');
 // The offline Python evaluator reads this same contract; reject drift in either deployed JS copy.
 const policy = fs.readFileSync(path.join(root,'scripts/freeze-policy.js'),'utf8').trim().replaceAll('\r\n','\n');
-assert(gs.replaceAll('\r\n','\n').includes(policy));
+assert(!gs.includes('function evaluateForwardTest_'));
 assert.equal(policy,fs.readFileSync(path.join(root,'docs/scripts/freeze-policy.js'),'utf8').trim().replaceAll('\r\n','\n'));
 const schema=JSON.parse(fs.readFileSync(path.join(root,'volatility_lab/data/freeze_policy.json'),'utf8'));
 assert.equal(JSON.stringify(vm.runInNewContext(policy+';FREEZE_RULES')),JSON.stringify(schema));
@@ -100,8 +100,6 @@ cloud.catalogue_ = () => ({indices: {
   NIFTY: {futures: [], option_expiries: ['2026-11-17']},
   BANKNIFTY: {futures: [], option_expiries: ['2026-11-23']}
 }});
-cloud.loadForwardLedger_ = () => cloud.cleanSlateForwardLedger_();
-cloud.saveForwardLedger_ = () => 'fixture-ledger';
 cloud.save_ = () => 'fixture-report';
 let mode = 'valid';
 const keysToOptions = new Map();
@@ -279,7 +277,7 @@ cloud.apiAll_ = requests => requests.map(req => {
       label: 'NIFTY|2026-11-17', retrieved_at: new Date(now).toISOString(),
       data: options.map(o => ({call_options: o, put_options: o}))
     }]};
-    batching.enrichSnapshotInputs_(report, now, null, true);
+    batching.enrichSnapshotInputs_(report, now, true);
     assert.deepEqual(seen, options.map(o => o.instrument_key), 'every unique leg gets a full quote');
     assert(groups.every(size => size <= 40));
     assert.equal(groups.length, Math.ceil(count / 40));
@@ -289,71 +287,17 @@ cloud.apiAll_ = requests => requests.map(req => {
   now = initialNow;
 }
 
-// Real load/save path, including exact prior bytes, retries and fresh evaluation state.
-{
-  const ledgerProperties = new Map(), files = new Map();
-  let reads = 0, scans = 0, failPrimary = false, failBackup = false;
-  const ledgerCloud = vm.createContext({Date: Clock, MimeType: {PLAIN_TEXT: 'text/plain'}});
-  vm.runInContext(gs, ledgerCloud);
-  const makeFile = (name, content) => {
-    const file = {content, getId: () => name, isTrashed: () => false,
-      getBlob: () => ({getDataAsString: () => {reads++; return file.content;}}),
-      setContent(value) {
-        if ((name.endsWith('.json') && failPrimary) || (name.endsWith('.bak') && failBackup)) throw Error('write failed');
-        file.content = value;
-      }};
-    files.set(name, file); return file;
-  };
-  ledgerCloud.props_ = () => ({getProperty: k => ledgerProperties.get(k), setProperty: (k, v) => ledgerProperties.set(k, v)});
-  ledgerCloud.scriptCache_ = () => null;
-  ledgerCloud.DriveApp = {getFileById: id => files.get(id)};
-  ledgerCloud.folder_ = () => ({
-    getFilesByName(name) {scans++; let remaining = files.has(name); return {
-      hasNext: () => remaining, next: () => {remaining = false; return files.get(name);}
-    };},
-    createFile: makeFile
-  });
-  const original = JSON.stringify(ledgerCloud.cleanSlateForwardLedger_(), null, 4);
-  const primary = makeFile('forward_test_ledger.json', original);
-  const state = {};
-  const ledger = ledgerCloud.loadForwardLedger_(state);
-  ledgerCloud.saveForwardLedger_(ledger, state);
-  assert.equal(reads, 1, 'save reuses the validated load under the same lock');
-  const backup = files.get('forward_test_ledger.bak');
-  assert.equal(backup.content, original, 'backup preserves exact previous bytes');
-  const firstSaved = primary.content, firstScans = scans;
-  ledger.intraday_mtm_series.push({session_date: '2026-11-13', t: '10:01'});
-  ledgerCloud.saveForwardLedger_(ledger, state);
-  assert.equal(reads, 1); assert.equal(scans, firstScans);
-  assert.equal(backup.content, firstSaved);
-  failBackup = true;
-  const beforeFailure = primary.content;
-  assert.throws(() => ledgerCloud.saveForwardLedger_(ledger, state), /write failed/);
-  assert.equal(primary.content, beforeFailure); assert.equal(state.loaded, false);
-  failBackup = false; failPrimary = true;
-  assert.throws(() => ledgerCloud.saveForwardLedger_(ledger, state), /write failed/);
-  assert.equal(backup.content, beforeFailure); assert.equal(state.loaded, false);
-  failPrimary = false;
-  ledgerCloud.saveForwardLedger_(ledger, state);
-  const beforeReload = reads;
-  ledgerCloud.loadForwardLedger_({});
-  assert.equal(reads, beforeReload + 1, 'new evaluation always reads Drive');
-  const priorReads = reads;
-  ledgerCloud.saveForwardLedger_(ledger);
-  assert.equal(reads, priorReads + 1, 'legacy save validates the current primary');
-  primary.content = '{';
-  assert.throws(() => ledgerCloud.saveForwardLedger_(ledger), /Invalid forward ledger/);
-}
 async function main() {
-  // Exercise capture_ itself through the real evaluator, with documented response shapes.
+  // Exercise capture_ itself through the data-only collector, with documented response shapes.
   const report = cloud.capture_('snapshot');
   const status = JSON.parse(properties.get('LAST_SNAPSHOT'));
-  for (const field of ['fetch_seconds', 'evaluation_seconds', 'archive_seconds']) {
+  for (const field of ['fetch_seconds', 'archive_seconds']) {
     assert.equal(typeof status[field], 'number');
     assert.equal(status[field], report[field]);
   }
   assert.equal(report.status, 'complete', JSON.stringify(report.errors));
-  assert(report.forward_test_ledger.open_positions.length > 0, 'valid collector inputs must reach evaluator: ' + JSON.stringify({rejections:report.forward_rejections, metrics: report.risk_metrics, mkt:cloud.getNseMarketStatusIST(new Clock())}));
+  assert(!Object.keys(report).some(k=>k.startsWith('forward_')));
+  assert(!Object.keys(status).some(k=>k.startsWith('forward_')));
   assert.equal(report.risk_metrics.NIFTY.as_of, '2026-11-12');
   const expectedHv = Math.sqrt(30 / 29) * 0.007 * Math.sqrt(245) * 100;
   assert(Math.abs(report.risk_metrics.NIFTY.hv30 - expectedHv) < 1e-10);
@@ -366,24 +310,14 @@ async function main() {
     r.call_options.option_greeks.delta = (33-i)/34;
     r.put_options.option_greeks.delta = -(i+1)/34;
   });
-  const selected = cloud.quoteStrikes_({label:'NIFTY|2026-11-17',data:longChain},
-    {open_positions:[{sym:'NIFTY',exp:'2026-11-17',legs:[{strike:24200}]}]});
-  assert(selected.has(24200)); assert(selected.has(25000)); assert(selected.size < longChain.length);
-  for (const strat of ['S1','S2','S3','S4','S5','S6']) {
-    cloud.buildStrategyLegs_('NIFTY',25000,strat).forEach(l => assert(selected.has(l.strike)));
-  }
-  const loadLedger = cloud.loadForwardLedger_;
-  cloud.loadForwardLedger_ = () => {throw new Error('fixture ledger unavailable');};
-  const failedLedger = cloud.capture_('snapshot');
-  assert.equal(failedLedger.status,'complete');
-  assert.equal(failedLedger.forward_test_status,'failed');
-  assert.equal(failedLedger.records[1].data.length,33);
-  cloud.loadForwardLedger_ = loadLedger;
+  const selected = cloud.quoteStrikes_({label:'NIFTY|2026-11-17',data:longChain});
+  assert(selected.has(25000) && selected.has(24500) && selected.has(25500));
+  assert(selected.size < longChain.length);
   const enrich = cloud.enrichSnapshotInputs_;
   cloud.enrichSnapshotInputs_ = () => {throw new Error('fixture enrichment failure');};
   const rawOnly = cloud.capture_('snapshot');
   assert.equal(rawOnly.status,'complete'); assert.equal(rawOnly.enrichment_status,'failed');
-  assert.equal(rawOnly.forward_test_status,'failed'); assert.equal(rawOnly.records[1].data[0].call_options.market_data.ltp,999);
+  assert(!('forward_test_status' in rawOnly)); assert.equal(rawOnly.records[1].data[0].call_options.market_data.ltp,999);
   cloud.enrichSnapshotInputs_ = enrich;
   cloud.ContentService = {MimeType:{JSON:'json'},createTextOutput:text => ({setMimeType:() => JSON.parse(text)})};
   properties.set('LATEST_SNAPSHOT_FILE_ID',status.file_id);
@@ -465,9 +399,8 @@ async function main() {
   for (const failure of ['stale', 'no-times', 'no-history']) {
     mode = failure; cache.clear();
     const invalid = cloud.capture_('snapshot');
-    if (failure !== 'no-history') assert.equal(invalid.forward_test_ledger.open_positions.length, 0);
-    else assert(!invalid.forward_test_ledger.open_positions.some(p => ['S1','S2','S3','S5'].includes(p.strat)));
-    assert(invalid.forward_rejections.length > 0, failure + ' needs a rejection reason');
+    assert(!('forward_test_ledger' in invalid));
+    assert.equal(invalid.status,'complete','Keep raw observations even when execution inputs are missing');
   }
   mode = 'valid';
   const riskRows = candles();

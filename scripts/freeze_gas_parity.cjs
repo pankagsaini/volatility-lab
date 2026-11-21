@@ -1,4 +1,4 @@
-/* Compare the deployed evaluator source with the Python freeze cohort using read-only archives.
+/* Compare the historical pre-separation evaluator with the Python freeze cohort using read-only archives.
    Run from the repository: node scripts/freeze_gas_parity.cjs <private archive directory> */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -34,7 +34,9 @@ function formatDate(d, tz, spec) {
   return String(formats[spec]);
 }
 const env=vm.createContext({Date:SnapshotClock,Utilities:{formatDate},console});
-vm.runInContext(fs.readFileSync(path.join(root,'volatility_lab/cloud/apps_script/Code.gs'),'utf8'),env);
+const baseline='f3419a76990333263691299d8cb2dad651721f63';
+const legacy = require('node:child_process').execFileSync('git',['show',baseline+':volatility_lab/cloud/apps_script/Code.gs'],{cwd:root,encoding:'utf8'});
+vm.runInContext(legacy,env);
 const calendar={year:'2026',checked:day,closed:[],special:{}};
 const mockProperties=new Map([['MARKET_CALENDAR',JSON.stringify(calendar)]]);
 env.props_=()=>({getProperty:key=>mockProperties.get(key)||null,setProperty:(k,v)=>mockProperties.set(k,v)});
