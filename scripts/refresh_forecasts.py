@@ -6,7 +6,7 @@ import shutil
 import sys
 import tempfile
 from urllib.parse import quote, urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 import pandas as pd
 
@@ -49,7 +49,11 @@ def merge_candles(existing, candles, expected):
 
 
 def fetch(url, params):
-    with urlopen(url + ('?' + urlencode(params) if params else ''), timeout=45) as response:
+    request = Request(url + ('?' + urlencode(params) if params else ''), headers={
+        'User-Agent': 'VolatilityLab/1.0 (daily candle publisher; +https://volatilitylab.in)',
+        'Accept': 'application/json',
+    })
+    with urlopen(request, timeout=45) as response:
         payload = json.load(response)
     if not isinstance(payload, dict) or payload.get('error'):
         raise ValueError('Broker relay returned an error.')
