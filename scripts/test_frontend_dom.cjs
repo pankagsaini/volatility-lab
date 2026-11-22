@@ -219,13 +219,24 @@ const server = http.createServer((request,response) => {
     await page.route(feed,r=>r.fulfill({json:paperBook}));
     await page.locator('#wsForwardBtn').click();
     await page.waitForFunction(()=>window.forwardLedger?.source_authority==='python_paper_worker');
-    assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Awaiting first prospective capture/);
+    assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Awaiting first (prospective|published market) capture/);
     assert.equal(await page.locator('#paperArchiveCount').textContent(),'0 recorded · 0 verified · 0 unverified');
     await page.route(feed,r=>r.abort());
-    await page.route('**/paper-ledger.json',r=>r.fulfill({json:{...paperBook,source_authority:'apps_script_cloud'}}));
+    const apiFeed='https://api.github.com/repos/pankagsaini/volatility-lab/contents/paper-ledger.json*';
+    const sourceStamp=new Date(Date.now()-300000).toISOString();
+    const publishedBook={...paperBook,status:'ARMED_WAITING_FOR_NEXT_SESSION',updated_at:sourceStamp};
+    await page.route(apiFeed,r=>{
+      assert.equal(r.request().headers().accept,'application/vnd.github.raw+json');
+      return r.fulfill({json:publishedBook});
+    });
+    await page.locator('#fwdScanNowBtn').click();
+    await page.waitForFunction(ts=>window.forwardLedger?.updated_at===ts,sourceStamp);
+    assert(!(await page.locator('#fwdLastMarkedBadge').textContent()).includes('Latest feed unavailable'));
+    await page.route(apiFeed,r=>r.abort());
+    await page.route('**/paper-ledger.json',r=>r.fulfill({json:paperBook}));
     await page.locator('#fwdScanNowBtn').click();
     await page.waitForFunction(()=>document.getElementById('fwdLastMarkedBadge').textContent.includes('Latest feed unavailable'));
-    assert.equal(await page.evaluate(()=>window.forwardLedger.source_authority),'python_paper_worker');
+    assert.equal(await page.evaluate(()=>window.forwardLedger.updated_at),sourceStamp,'An older Pages bundle cannot roll back a newer accepted book');
     await page.selectOption('#fwdPolicyFilter','legacy');
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Read-only archive/);
     assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/\d+ recorded closes/);
