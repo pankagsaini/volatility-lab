@@ -970,7 +970,7 @@
           <div id="fwdKpiOpenSub" class="text-[11px] mono text-emerald-300 mt-0.5">Awaiting published paper book</div>
         </div>
         <div class="kpi-card border-t-2 border-t-emerald-400">
-          <div class="text-[11px] font-bold uppercase text-slate-300">Unrealized P&amp;L (₹)</div>
+          <div class="text-[11px] font-bold uppercase text-slate-300">Unrealized P&amp;L at capture (₹)</div>
           <div id="fwdKpiOpenMtm" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">₹0</div>
           <div id="fwdKpiOpenMtmSub" class="text-[11px] mono text-slate-300 mt-0.5">Gross: ₹0 · Est Cost: ₹0</div>
         </div>
@@ -3789,22 +3789,12 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
       const LEGACY_FWD_STORAGE_KEY = 'vl_forward_ledger_v19';
       function forwardStatusLabel() {
         if (forwardLedger.source_authority === 'dated_archive') return 'Read-only archive · ' + new Date(forwardLedger.updated_at).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'}) + ' IST';
-        const labels = {
-          WAITING_FOR_PAPER_LEDGER: 'Awaiting the published paper book',
-          ARMED_WAITING_FOR_NEXT_SESSION: 'Waiting for next session',
-          ACTIVE_LIVE_SESSION: 'Session active',
-          SESSION_COMPLETED_1515_IST: 'Session completed',
-          INTEGRITY_REVIEW_REQUIRED: 'Ledger needs review'
-        };
-        const market = getMarketSessionState();
-        const captureAt = Date.parse(forwardLedger.updated_at);
-        if (market.isOpen && market.day >= forwardLedger.min_trigger_date && forwardLedger.source_authority === 'python_paper_worker') {
-          if (!Number.isFinite(captureAt)) return 'Awaiting first published market capture';
-          const ageMinutes = Math.floor((Date.now()-captureAt)/60000);
-          if (Date.now()-captureAt > 120000) return 'Paper book delayed · last capture ' + ageMinutes + ' min ago';
-        }
+        if (forwardLedger.source_authority !== 'python_paper_worker') return 'Awaiting the published paper book';
         if (forwardLedger.status === 'ARMED_WAITING_FOR_FIRST_CAPTURE') return 'Awaiting first prospective capture · starts ' + forwardLedger.min_trigger_date;
-        return (labels[forwardLedger.status] || 'Published paper book') + (forwardLedger.updated_at ? ' · '+new Date(forwardLedger.updated_at).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'})+' IST' : '');
+        const stamp = Date.parse(forwardLedger.updated_at);
+        if (!Number.isFinite(stamp)) return 'Awaiting the first dated batch';
+        const asOf = new Date(stamp).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'});
+        return 'Captures processed through ' + asOf + ' IST';
       }
 
       var FORWARD_CLEAN_LEDGER_TEMPLATE = {
@@ -3966,7 +3956,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         if (!position.hasCurrentMark || String(position.freshness || '').toUpperCase() !== 'FRESH') {
           return '<span class="px-2 py-0.5 rounded bg-violet-500/20 border border-violet-500/50 text-violet-300 font-bold text-[10px]">MTM WITHHELD — STALE MARK</span>';
         }
-        return '<span class="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-[10px]">VALIDATED PAPER MARK</span>';
+        return '<span class="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-[10px]">VERIFIED AT CAPTURE</span>';
       }
 
       function evaluateFwdSetupState() {
@@ -3991,9 +3981,10 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           p.simCharges = forwardNumber(p.estCharges, 0.0);
           p.simNetMtm = forwardNumber(p.netMtm, p.simGrossMtm - p.simCharges);
           p.simRocPct = p.simCapital > 0 ? (p.simNetMtm / p.simCapital) * 100.0 : 0.0;
-          p.hasCurrentMark = forwardLedger.source_authority === 'python_paper_worker' && Date.now()-Date.parse(forwardLedger.updated_at) <= 120000 && String(p.freshness || '').toUpperCase() === 'FRESH'
+          const markAgeAtCapture = Date.parse(forwardLedger.updated_at) - Date.parse(p.mark_at);
+          p.hasCurrentMark = forwardLedger.source_authority === 'python_paper_worker' && String(p.freshness || '').toUpperCase() === 'FRESH'
             && String(p.integrity_status || '') !== 'UNVERIFIED_RECORD'
-            && (Date.now()-Date.parse(p.mark_at)>=0 && Date.now()-Date.parse(p.mark_at)<=120000) && p.provenance_status==='VALIDATED_EVENT_QUOTES' && [p.grossMtm,p.netMtm,p.estCharges].every(Number.isFinite) && !p.manual_reconciliation_required;
+            && (markAgeAtCapture >= 0 && markAgeAtCapture <= 120000) && p.provenance_status==='VALIDATED_EVENT_QUOTES' && [p.grossMtm,p.netMtm,p.estCharges].every(Number.isFinite) && !p.manual_reconciliation_required;
           p.slTpStatus = forwardMarkStatusHtml(p);
           return p;
         });
@@ -4034,7 +4025,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         const gapNote = Number.isInteger(exceptions) && exceptions > 0 ? ' · '+exceptions+' capture exceptions' : '';
         if (badge) badge.textContent = forwardStatusLabel() + gapNote + (paperRefreshFailed && forwardLedger.source_authority !== 'dated_archive' ? ' · Latest feed unavailable' : '');
         const modeLabel = document.getElementById('fwdAutoModeLabel');
-        if (modeLabel) modeLabel.textContent = forwardLedger.source_authority === 'dated_archive' ? 'Paper trading · dated archive' : 'Prospective paper book';
+        if (modeLabel) modeLabel.textContent = forwardLedger.source_authority === 'dated_archive' ? 'Paper trading · dated archive' : 'Scheduled paper batch';
         const dot = document.getElementById('fwdAutoPulseDot');
         if (dot) dot.classList.toggle('hidden', !ledgerReady || forwardLedger.source_authority !== 'python_paper_worker' || Date.now()-Date.parse(forwardLedger.updated_at)>120000 || forwardLedger.status !== 'ACTIVE_LIVE_SESSION');
         const openSub = document.getElementById('fwdOpenTableSub');

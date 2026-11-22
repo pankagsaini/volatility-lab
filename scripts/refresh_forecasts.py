@@ -56,39 +56,53 @@ def fetch(url, params):
     return payload
 
 
-def refresh(now=None):
+def refresh_daily_candles(data, expected):
+    for symbol, key in KEYS.items():
+        name = symbol.lower() + '_one_year.csv'
+        existing = pd.read_csv(ROOT / 'volatility_lab/data' / name)
+        start = pd.Timestamp(existing.Date.max()).date() - timedelta(days=7)
+        instrument = quote(key, safe='')
+        endpoint = f'https://api.upstox.com/v3/historical-candle/{instrument}/days/1/{expected}/{start}'
+        response = fetch(endpoint, {})
+        if response.get('status') != 'success':
+            raise ValueError('Daily candle request failed')
+        payload = response.get('data') or {}
+        frame = merge_candles(existing, payload.get('candles', []), expected)
+        frame.to_csv(data / name, index=False, date_format='%Y-%m-%d')
+
+
+def refresh(now=None, paper_history=None):
     now = now or datetime.now(IST)
     expected = completed_session(now)
     config = json.loads((ROOT / 'volatility_lab/cloud/apps_script/sync_config.json').read_text())
     url = config['web_app_url']
     html = (ROOT / 'index.html').read_text(encoding='utf-8')
-    snapshot = fetch(url, {})
-    # Ship a same-origin cold-start copy even if the independent forecast refresh fails later.
-    # Only expose fields consumed by the desk from the public read endpoint.
-    if (snapshot.get('provider') == 'Upstox' and snapshot.get('schema') == 1
-            and snapshot.get('status') == 'complete' and snapshot.get('mode') == 'snapshot'
-            and snapshot.get('nfo_session_validated') is True and snapshot.get('records')):
-        fields = ('provider', 'schema', 'status', 'mode', 'nfo_session_validated', 'day', 'retrieved_at',
-                  'records', 'catalogue', 'risk_metrics', 'exchange_calendar', 'daily_history', 'closing_risk')
-        saved = {key: snapshot[key] for key in fields if key in snapshot}
-        (ROOT / 'docs/latest-snapshot.json').write_text(json.dumps(saved, separators=(',', ':'), allow_nan=False))
-    catalogue = snapshot.get('catalogue', {}).get('indices', {})
     # Stage both histories and model output before replacing any published files.
     with tempfile.TemporaryDirectory(prefix='vl-forecast-') as temp:
         data = Path(temp)
+        # The paper worker can consume the same verified daily candles when the
+        # independent live catalogue or forecast step is unavailable.
+        candle_error = None
+        try:
+            refresh_daily_candles(data, expected)
+            if paper_history is not None:
+                from scripts.paper_risk_history import write_bundle
+                write_bundle(data, paper_history)
+        except Exception as exc:
+            candle_error = exc
+        snapshot = fetch(url, {})
+        # Publish the same-origin snapshot even when the candle request failed.
+        if (snapshot.get('provider') == 'Upstox' and snapshot.get('schema') == 1
+                and snapshot.get('status') == 'complete' and snapshot.get('mode') == 'snapshot'
+                and snapshot.get('nfo_session_validated') is True and snapshot.get('records')):
+            fields = ('provider', 'schema', 'status', 'mode', 'nfo_session_validated', 'day', 'retrieved_at',
+                      'records', 'catalogue', 'risk_metrics', 'exchange_calendar', 'daily_history', 'closing_risk')
+            saved = {key: snapshot[key] for key in fields if key in snapshot}
+            (ROOT / 'docs/latest-snapshot.json').write_text(json.dumps(saved, separators=(',', ':'), allow_nan=False))
+        if candle_error is not None:
+            raise candle_error
+        catalogue = snapshot.get('catalogue', {}).get('indices', {})
         shutil.copyfile(ROOT / 'volatility_lab/data/forward_test_ledger.json', data / 'forward_test_ledger.json')
-        for symbol, key in KEYS.items():
-            name = symbol.lower() + '_one_year.csv'
-            existing = pd.read_csv(ROOT / 'volatility_lab/data' / name)
-            start = pd.Timestamp(existing.Date.max()).date() - timedelta(days=7)
-            instrument = quote(key, safe='')
-            endpoint = f'https://api.upstox.com/v3/historical-candle/{instrument}/days/1/{expected}/{start}'
-            response = fetch(endpoint, {})
-            if response.get('status') != 'success':
-                raise ValueError('Daily candle request failed')
-            payload = response.get('data') or {}
-            frame = merge_candles(existing, payload.get('candles', []), expected)
-            frame.to_csv(data / name, index=False, date_format='%Y-%m-%d')
         state = build(html, data, as_of=now, catalogue=catalogue)
         for series in state['forecasts'].values():
             if series['training_through'] != str(expected):
@@ -111,4 +125,7 @@ def refresh(now=None):
 
 
 if __name__ == '__main__':
-    refresh()
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--paper-history', type=Path)
+    refresh(paper_history=parser.parse_args().paper_history)
