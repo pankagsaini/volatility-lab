@@ -1003,7 +1003,7 @@ class TestV19AutomatedForwardTesting(unittest.TestCase):
             self.assertIn("Refresh paper book", html)
             self.assertNotIn("action=forward_ledger", html)
             self.assertIn("NIFTY 50 (Lot 65)", html)
-            self.assertIn("ARMED_WAITING_FOR_NEXT_SESSION", html)
+            self.assertIn("Captures processed through", html)
 
     def test_33_python_forward_test_clean_slate_and_2026_11_11_simulation(self):
         import copy
