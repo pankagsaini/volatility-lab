@@ -263,11 +263,54 @@ const server = http.createServer((request,response) => {
     }
     assert(csv.some(line=>line.startsWith('"CLOSED_UNVERIFIED","gap"') && line.includes('delayed until fresh quote')));
     assert(!(await page.locator('#fwdLastMarkedBadge').textContent()).includes('Latest feed unavailable'));
+    for (const [now, behind] of [
+      ['2026-11-23T11:10:59+05:30', false],
+      ['2026-11-23T13:50:00+05:30', true],
+      ['2026-11-24T13:50:00+05:30', false],
+      ['2026-11-25T08:59:00+05:30', false],
+      ['2026-11-28T13:50:00+05:30', false],
+    ]) {
+      await page.clock.setFixedTime(new Date(now));
+      await page.evaluate(()=>window.renderForwardWorkspace());
+      const status=await page.locator('#fwdLastMarkedBadge').textContent();
+      assert.equal(status.includes('Coverage behind schedule'),behind,now);
+      if (behind) {
+        assert.match(status,/09:55/);
+        assert.match(status,/expected through 10:48 IST/);
+      }
+    }
+    for (const [now, captured, behind] of [
+      ['13:50', '14:30', false],
+      ['18:00', '14:30', true],
+      ['21:30', '15:40', false],
+    ]) {
+      await page.clock.setFixedTime(new Date('2026-11-08T'+now+':00+05:30'));
+      const status=await page.evaluate(clock=>{
+        const book=window.forwardLedger;
+        const original={...book};
+        Object.assign(book,{min_trigger_date:'2026-11-01',last_capture_at:'2026-11-08T'+clock+':00+05:30'});
+        window.renderForwardWorkspace();
+        const label=document.getElementById('fwdLastMarkedBadge').textContent;
+        delete book.last_capture_at;
+        Object.assign(book,original);
+        return label;
+      },captured);
+      assert.equal(status.includes('Coverage behind schedule'),behind,now);
+      if (behind) assert.match(status,/expected through 15:40 IST/);
+    }
+    await page.clock.setFixedTime(new Date('2026-11-23T13:50:00+05:30'));
     await page.route(apiFeed,r=>r.abort());
     await page.route('**/paper-ledger.json',r=>r.fulfill({json:paperBook}));
     await page.locator('#fwdScanNowBtn').click();
     await page.waitForFunction(()=>document.getElementById('fwdLastMarkedBadge').textContent.includes('Latest feed unavailable'));
     assert.equal(await page.evaluate(()=>window.forwardLedger.updated_at),sourceStamp,'An older Pages bundle cannot roll back a newer accepted book');
+    const caughtUp='2026-11-23T11:13:00+05:30';
+    await page.route(feed,r=>r.fulfill({json:{...publishedBook,updated_at:caughtUp,last_capture_at:'2026-11-23T10:48:45+05:30'}}));
+    await page.locator('#fwdScanNowBtn').click();
+    await page.waitForFunction(ts=>window.forwardLedger.updated_at===ts,caughtUp);
+    const caughtUpBadge=await page.locator('#fwdLastMarkedBadge').textContent();
+    assert.match(caughtUpBadge,/10:48/);
+    assert(!caughtUpBadge.includes('Coverage behind schedule'));
     await page.selectOption('#fwdPolicyFilter','legacy');
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Read-only archive/);
     assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/\d+ recorded closes/);

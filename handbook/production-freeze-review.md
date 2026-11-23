@@ -5,7 +5,7 @@
 
 **21 November operating update.** Apps Script v21 captures and serves Upstox data. The Python worker now owns paper entries, marks and exits. Results and Apps Script source references below describe the dated audit. [Current worker and publication](freeze-paper.md#daily-processing-and-publication)
 
-**23 November operating update.** The v23 collector reserves runtime for the scheduled exit and final minute. The hosted publisher verifies cohort inception and archives, records missing capture and liquidation observations, and reports session coverage, overdue exits, overnight carry and after-cost paper outcomes. A single status read reports the collector's own rolling runtime allowance. The three historical closes with conflicting economics are identified in the ledger comparison. Investor-performance sign-off remains open pending forward observations. [Reconciliation and current controls](freeze-paper.md)
+**23 November operating update.** The v23 collector reserves runtime for the scheduled exit and final minute. The hosted publisher checks frozen rules and archived leg quotes, reports overdue exits, and separates delayed observations from scheduled fills. Independent reconciliation now covers all 11 historical closes that included timestamped leg evidence in the 20 November afternoon export. Their net paper result was −₹75,633.26 after modeled fees. The other 26 closes in that export remain quarantined. The scorecard below records the 20 November baseline. Investor-performance sign-off requires new forward observations. [Reconciliation and current controls](freeze-paper.md)
 
 | Area | Score / 100 | Evidence and decision |
 |---|---:|---|

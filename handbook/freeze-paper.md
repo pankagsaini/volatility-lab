@@ -13,7 +13,7 @@ The bundled `volatility_lab/data/forward_test_ledger.json` (header at line 1) ha
 
 Replacing the OPEN prefix with FWD did not match any of the 20 bundled open positions to cloud closes. A newer timestamp is insufficient to reconcile the two books. The replica refused to replace a copy of the bundled ledger (CLI status 1). Its SHA-256 stayed `dfeeb8bf32c9d770dae198ff15012eca30fc51c74c5d0d7a9e5a6bb955cee641`. The independently created cloud replica had SHA-256 `9ceefe82ed30bd780a243adff9b27aa16cf1fa152d00cfcb01b2093df3863ab0`. Historical union, P&L aggregation across these two books, and reclassification of their common IDs require statement-level adjudication. The audit did not rewrite either book.
 
-## Ten independently matched closes under the prior policy
+## Independently matched closes under the prior policy
 
 On 23 November both preserved exports still matched the SHA-256 values above. A second comparison used trade ID, instrument, strategy, date, leg contract and side, multiplier, entry and exit prices, gross, fees and net. Of the 29 shared closed IDs, 26 had matching recorded terms and were labeled legacy-unverified in the cloud export. Three IDs had conflicting terms. Their net paper amounts were:
 
@@ -44,6 +44,17 @@ Private file references below use the stem `YYYY-MM-DD_snapshot_HHMMSS_complete.
 
 One BANKNIFTY S4 booked under the prior intraday policy entered on 17 Nov and closed on 19 Nov. Matching prices proves the economics of those two observations. It does not prove a timely scheduled exit on 17 Nov. The bundled split and this delay are independent reasons to avoid presenting an uninterrupted historical forward track record.
 
+**20 November afternoon export, rechecked 23 November.** The archive at 14:16:43 IST contains 37 closed trades. Its compressed SHA-256 is `ccc0cdd5df6b87279e568ed3173d7baa7f949fb334b71491b65230ef1eae2e81`. The additional validated close was FWD-20261120-BAN-1123-S5, the 23 November BANKNIFTY expiry. The paper position opened at 09:20:48 IST and hit its stop at 12:22:46 IST on 20 November. All four entry and four exit observations matched their bid or ask, quote time and displayed size for 30 units per leg.
+
+| Leg | Recorded entry ₹ | Recorded exit ₹ |
+|---|---:|---:|
+| Sell 62,900 call | 350.15 | 1,184.60 |
+| Sell 62,900 put | 463.40 | 92.40 |
+| Buy 63,400 call | 172.75 | 778.45 |
+| Buy 62,400 put | 242.65 | 45.45 |
+
+Gross was −₹1,648.50, modeled fees were ₹305.99 and net was −₹1,954.49. The source files were `2026-11-20_snapshot_092043_complete.json.gz` (compressed SHA-256 `0c7c43c689ba7c59fdb2e0c4929081c34a3cb536559076d061b5a231f88106ad`) and `2026-11-20_snapshot_122242_complete.json.gz` (`937d30f9982cc3acb308f5fb8f81678560671a57fe2ca8cf9581fca2467dcc73`). Across all **11 matched prior-policy closes**, gross was **−₹71,548.00**, fees **₹4,085.26** and net **−₹75,633.26**. Each of the 26 remaining closed records in this afternoon export lacks a complete set of entry and exit leg timestamps. They remain quarantined.
+
 ## What the patch enforces
 
 - The pre-patch Python module ended after returning its scorecard, so executing the file did nothing. The prospective worker now owns its own ledger, reads existing timestamped captures on the private Drive mirror and never calls the relay or broker. See `volatility_lab/backtest/paper_worker.py:82`, `:117` and `:163`. The separate historical comparison import accepts only an explicit local ledger/snapshot file (`volatility_lab/backtest/forward_test.py:1480`). It refuses rollback, changed closes, duplicates and missing trades. A successful historical import cannot publish a new cohort.
@@ -60,7 +71,7 @@ The external worker was also run twice on 15 consecutive archived 19 Nov reports
 
 ## Daily processing and publication
 
-The prospective cohort starts on **23 November 2026**. Apps Script collects the one-minute Upstox snapshots. The standard GitHub-hosted Linux runner builds the dashboard's paper dataset at **10:49, 15:49 and 20:49 IST** every day, including special weekend sessions. GitHub controls when a scheduled run starts. The public timestamp is the last processed capture. A manual dispatch uses the same workflow and checkpoint. [Paper batch runs](https://github.com/pankagsaini/volatility-lab/actions/workflows/paper-batch.yml)
+The prospective cohort starts on **23 November 2026**. Apps Script collects the one-minute Upstox snapshots. The standard GitHub-hosted Linux runner is scheduled at **10:49, 15:49 and 20:49 IST** every day, including special weekend sessions. A second trigger 22 minutes after each slot checks for a successful paper batch that started since the slot and finished processing its listed archive backlog. If GitHub cannot confirm one, the worker resumes from its checkpoint. GitHub controls delivery of both triggers. The public timestamp is the last processed capture. A manual dispatch uses the same workflow and checkpoint. [Paper batch runs](https://github.com/pankagsaini/volatility-lab/actions/workflows/paper-batch.yml)
 
 The dedicated Drive reader has Viewer access to the private archive folder. The worker reads complete captures chronologically, reconstructs risk inputs from dated index closes, checks executable quotes and applies each strategy at capture time. A batch handles up to 400 captures. If the runner starts late, it resumes at the saved cursor. If required prior-session closes are missing, it retries at the next run. Missing capture intervals remain visible as exceptions. A fresh quote at a later time cannot establish how a position traded inside a gap.
 
@@ -75,6 +86,8 @@ For offline analysis, use `python -m volatility_lab.forward_test --sync --replay
 New decision receipts are generated by the same call that evaluates the frozen rules. At 09:20 IST this covers S1, S4 and S5 on both indices. At 09:25 IST it covers S2. Each receipt binds the results to the SHA-256 of the uncompressed archive JSON. Earlier accepted minutes without receipts keep their original status. The archive may be replayed independently to investigate them.
 
 **23 November morning check.** An isolated replay of the original 09:15–09:25 captures with the dated 20 November closing history reproduced the empty book. The front contracts for both NIFTY and BANKNIFTY expired on 23 November. All six 09:20 evaluations and both 09:25 evaluations failed their minimum DTE. The uncompressed source hashes were `fb40742e9978b459096d3e2e0f54ffe3968c16e0abcd0d9b9ece6b20f7d968c1` and `db405e689cd28d2cbe4aa203e06e36d119af331fdd205e6f7db44c339f22d18e`, respectively. The original prospective checkpoint remains unchanged for those decisions.
+
+**23 November midday publication.** The 10:49 IST scheduled batch had no run in GitHub's history by 13:50. A manual hosted batch resumed the existing checkpoint and processed the archive through 13:49:45 IST. All 275 minute files were present. The paper worker recorded 274 distinct availability minutes because the 10:32 capture finished at 10:33:01 IST. The 10:33 capture also finished during that minute. The public book had zero open positions and zero closes. [Hosted run](https://github.com/pankagsaini/volatility-lab/actions/runs/45137688526)
 
 For every new entry and exit the worker independently compares the saved leg prices, side, quote timestamps and displayed quantities with the same archived report. At close it recomputes gross, dated fees and net. An inconsistency blocks publication. A fill after the scheduled exit minute retains its observed time and price and is identified as delayed. A position that expires without an executable exit requires settlement reconciliation, including when the report has no option chains.
 
