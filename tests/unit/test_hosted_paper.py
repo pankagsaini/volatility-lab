@@ -67,7 +67,9 @@ def test_ordered_catchup_atomic_checkpoints_and_public_export(tmp_path):
     })
     first = tmp_path / "runner1"
     metadata, public = hosted.build_batch(archive, first, DAY, max_captures=2)
+    evidence = metadata.pop("session_evidence")["sessions"][0]
     assert metadata == {"cursor": name("091610"), "pending": None, "more": True, "processed": 2}
+    assert (evidence["complete_slots"], evidence["partial_only_slots"], evidence["applied_slots"]) == (3, 1, 2)
     assert [p.name for p in archive.downloads] == [name("091510"), name("091610")]
     assert all(not p.exists() and first not in p.parents for p in archive.downloads)
     second = tmp_path / "runner2"
@@ -99,6 +101,7 @@ def test_malformed_newest_is_retried_then_older_corruption_quarantined(tmp_path)
     assert (tmp_path / LEDGER).read_bytes() == before
     archive.rows[name("091710")] = report("091710")
     metadata, public = hosted.build_batch(archive, tmp_path, DAY, max_captures=1)
+    assert metadata.pop("session_evidence")["sessions"][0]["applied_slots"] == 1
     assert metadata == {"processed": 0, "cursor": name("091610"), "pending": None, "more": True}
     assert public["capture_audit"] == {"processed": 1, "exceptions": 1}
     metadata, public = hosted.build_batch(archive, tmp_path, DAY)
@@ -208,8 +211,9 @@ def test_wait_for_the_previous_session_for_each_index_before_consuming(tmp_path,
         name("091710"): report("091710"),
     })
     work = tmp_path / "state"
-    with pytest.raises(hosted.MissingPriorClose, match="BANKNIFTY.*2026-11-20"):
+    with pytest.raises(hosted.MissingPriorClose, match="BANKNIFTY.*2026-11-20") as pending:
         hosted.build_batch(archive, work, DAY)
+    assert pending.value.session_evidence["sessions"][0]["applied_slots"] == 1
     checkpoint = json.loads((work / LEDGER).read_bytes())["worker_checkpoint"]
     assert checkpoint["cursor"] == name("091510") and checkpoint["quarantine"] == []
     assert [p.name for p in archive.downloads] == [name("091510"), name("091610")]
@@ -283,3 +287,75 @@ def test_bounded_download_rejects_truncated_or_oversized_stream(tmp_path, monkey
     monkeypatch.setattr(hosted.requests, "get", lambda *a, **k: Response([b"abc"]))
     with pytest.raises(RuntimeError, match="transfer was incomplete"):
         reader.download(hosted.Capture(name("091510"), "id", size=4), tmp_path / "short")
+
+
+def test_window_evidence_separates_archive_start_from_paper_report_and_partial(tmp_path):
+    archive = MemoryArchive({
+        name("091955"): report("092002"), name("092005"): report("092020"), name("092500"): b"bad",
+        DAY + "_snapshot_092005_partial.json.gz": b"partial", DAY + "_snapshot_151543_partial.json.gz": b"partial",
+    })
+    meta, _ = hosted.build_batch(archive, tmp_path, DAY, max_captures=1)
+    row = meta["session_evidence"]["sessions"][0]
+    by_time = {w["time"]: w for w in row["windows"]}
+    assert row["phase"] == "ended" and row["elapsed_slots"] == row["total_slots"] == 386
+    assert (row["complete_slots"], row["partial_only_slots"], row["absent_slots"], row["applied_slots"]) == (3, 1, 382, 1)
+    assert by_time["09:20"]["paper"] == "accepted"
+    assert by_time["09:20"]["paper_entries"] == by_time["09:20"]["paper_exits"] == 0
+    assert by_time["09:25"]["paper"] == "processing_pending"
+    assert by_time["15:15"]["archive"] == "partial" and by_time["15:40"]["archive"] == "absent"
+    archive.rows[name("092500")] = report("092510")
+    meta, _ = hosted.build_batch(archive, tmp_path, DAY)
+    row = meta["session_evidence"]["sessions"][0]
+    # The two reports available at 09:20 count as one distinct accepted minute.
+    assert row["applied_slots"] == 2
+    assert row["windows"][1]["paper"] == "accepted"
+    assert row["windows"][2]["paper"] == "no_accepted_report"
+    # An old checkpoint never claims a complete receipt history after an upgrade.
+    path = tmp_path / LEDGER
+    state = json.loads(path.read_bytes())
+    del state["worker_checkpoint"]["session_receipts"]
+    path.write_text(json.dumps(state))
+    archive.rows[name("151500")] = report("151505")
+    meta, _ = hosted.build_batch(archive, tmp_path, DAY)
+    row = meta["session_evidence"]["sessions"][0]
+    assert row["applied_history_partial"] and row["applied_slots"] == 1
+    assert row["windows"][0]["paper"] == "unverified" and row["windows"][2]["paper"] == "accepted"
+    assert all("_partial." not in p.name for p in archive.downloads)
+
+
+def test_silent_days_special_session_and_current_minute(tmp_path):
+    from volatility_lab.backtest.session_evidence import format_session_evidence, session_evidence
+
+    archive = MemoryArchive({})
+    meta, _ = hosted.build_batch(archive, tmp_path, DAY)
+    as_of = datetime.fromisoformat("2026-11-25T09:20:31+05:30")
+    state = json.loads((tmp_path / LEDGER).read_bytes())
+    rows = session_evidence({}, state, as_of)["sessions"]
+    assert [r["day"] for r in rows] == ["2026-11-25", DAY]  # 24 Nov is an exchange holiday.
+    assert rows[0]["phase"] == "in_progress" and rows[0]["elapsed_slots"] == rows[0]["absent_slots"] == 5
+    assert rows[0]["windows"][0]["archive"] == "not_due"
+    assert rows[1]["phase"] == "ended" and rows[1]["absent_slots"] == 386
+    state["prospective_start"] = "2026-11-08"
+    special = session_evidence({}, state, datetime.fromisoformat("2026-11-08T16:00+05:30"))["sessions"][0]
+    assert special["total_slots"] == 81 and [w["kind"] for w in special["windows"]] == ["exit", "close"]
+    assert [w["time"] for w in special["windows"]] == ["15:15", "15:40"]
+    summary = format_session_evidence(meta["session_evidence"])
+    assert "15:15" in summary and "386" in summary
+    assert archive.folder_id not in summary and ".json.gz" not in summary
+
+
+def test_carry_overdue_and_quote_backed_execution_evidence(tmp_path):
+    from volatility_lab.backtest.session_evidence import session_evidence
+
+    hosted.build_batch(MemoryArchive({}), tmp_path, DAY)
+    state = json.loads((tmp_path / LEDGER).read_bytes())
+    stamp = "2026-11-25T15:15:45+05:30"
+    base = {"triggerTime": DAY + "T09:20:20+05:30", "scheduled_exit_at": "2026-11-25T15:15:00+05:30",
+            "entry_capture_sha256": "entry_hash", "exit_capture_sha256": "exit_hash",
+            "legs": [{"entryPx": 22, "entryQuoteAt": DAY + "T09:20:18+05:30", "exitPx": 20, "exitQuoteAt": stamp}]}
+    mark = {"at": stamp, "fresh": True, "quote_times": [stamp], "exit_prices": [20]}
+    state["closed_trades"] = [dict(base, exit_at=stamp, mtmPath=[mark])]
+    state["open_positions"] = [dict(base, mtmPath=[dict(mark, quote_times=[])])]
+    next_session = session_evidence({}, state, datetime.fromisoformat("2026-11-25T16:00:00+05:30"))["sessions"][0]
+    assert next_session["carried_in"] == 2 and next_session["carry_with_fresh_mark"] == 1
+    assert next_session["overdue_open"] == 1 and next_session["windows"][2]["paper_exits"] == 1

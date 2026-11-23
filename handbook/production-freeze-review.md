@@ -5,6 +5,8 @@
 
 **21 November operating update.** Apps Script v21 captures and serves Upstox data. The Python worker now owns paper entries, marks and exits. Results and Apps Script source references below describe the dated audit. [Current worker and publication](freeze-paper.md#daily-processing-and-publication)
 
+**23 November operating update.** The v23 collector reserves runtime for the scheduled exit and final minute. The hosted publisher verifies cohort inception and archives, records missing capture and liquidation observations, and reports session coverage, overdue exits, overnight carry and after-cost paper outcomes. A single status read reports the collector's own rolling runtime allowance. The three historical closes with conflicting economics are identified in the ledger comparison. Investor-performance sign-off remains open pending forward observations. [Reconciliation and current controls](freeze-paper.md)
+
 | Area | Score / 100 | Evidence and decision |
 |---|---:|---|
 | Data pipeline | 65 | Raw hashes and timestamped captures are available. 385 of 386 minute slots on 19 Nov; only 235 on 13 Nov. Full-day account quota and uninterrupted evaluator operation unproven. [Capture audit](freeze-integrity.md) |

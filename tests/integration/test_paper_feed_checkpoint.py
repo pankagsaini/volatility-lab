@@ -90,6 +90,77 @@ def test_encrypted_restart_and_missing_checkpoint(tmp_path, monkeypatch):
         run("missing")
 
 
+def test_inception_export_policy_and_history_must_match(tmp_path, monkeypatch):
+    seed = Path(__file__).resolve().parents[2] / feed.PUBLIC
+    repo = tmp_path / "feed"
+    repo.mkdir()
+    git(repo, "init")
+    shutil.copyfile(seed, repo / feed.PUBLIC)
+    git(repo, "add", feed.PUBLIC)
+    git(repo, "commit", "-m", "Original book")
+    root = git(repo, "rev-parse", "HEAD")
+    monkeypatch.setattr(feed, "ARMED_COMMIT", root)
+    assert feed.feed_head(repo) == root
+    with monkeypatch.context() as m:
+        m.setitem(feed.RULES, "S2", dict(feed.RULES["S2"], minute=562))
+        with pytest.raises(ValueError, match="Active entry rules"):
+            feed.feed_head(repo)
+    with monkeypatch.context() as m:
+        m.setattr(feed, "INCEPTION_EXPORT_SHA256", "0" * 64)
+        with pytest.raises(ValueError, match="inception export"):
+            feed.feed_head(repo)
+    git(repo, "checkout", "--orphan", "replacement")
+    (repo / feed.SEALED).write_bytes(b"copied checkpoint")
+    git(repo, "add", ".")
+    git(repo, "commit", "-m", "Replacement history with credible-looking files")
+    with pytest.raises(ValueError, match="does not descend"):
+        feed.feed_head(repo)
+
+
+def test_open_to_closed_preserves_entry_and_quarantines_foreign_rows():
+    worker = feed.worker
+    day = feed.START
+    stamp = day + "T15:15:20+05:30"
+    entered = day + "T09:25:10+05:30"
+    first = day + "_snapshot_092508_complete.json.gz"
+    last = day + "_snapshot_151516_complete.json.gz"
+    leg = lambda kind: dict(strike=25000, type=kind, mult=1, side=1, entryPx=100, entryQuoteAt=entered)
+    expiry = "2026-11-30"
+    pos = dict(id="OPEN-20261123-NIF-1130-S2", date=day, session_date=day, strat="S2", sym="NIFTY", exp=expiry,
+               triggerTime=entered, available_at=entered, holding="intraday", policy_version="research-v1", lots=1,
+               capital=50000, legs=[leg("CE"), leg("PE")], entry_capture=first, entry_capture_sha256="1" * 64,
+               scheduled_exit_at=day + "T15:15:00+05:30", provenance_status="GAP_AFFECTED", path_status="INCOMPLETE_CAPTURE_PATH")
+    original = json.loads((Path(__file__).resolve().parents[2] / feed.PUBLIC).read_bytes())
+    original.update(open_positions=[pos], worker_checkpoint={"cursor": first})
+    feed.verify_trade_lineage(original)
+    book = {"strike": 25000}
+    for cp in ("c", "p"):
+        book.update({cp + "Bid": 99, cp + "Ask": 100, cp + "BidQty": 65, cp + "AskQty": 65,
+                     cp + "QuoteTimestamp": stamp})
+    key = "NIFTY|" + expiry
+    still_open, closed = worker.engine.mark_open_positions_to_market(
+        [copy.deepcopy(pos)], {key: [book]}, current_time_ist="15:15 IST",
+        live_chain_timestamps={key: stamp}, reference_timestamp=stamp, require_event_timestamps=True)
+    assert not still_open and len(closed) == 1
+    closed[0].update(exit_capture=last, exit_capture_sha256="2" * 64)
+    candidate = dict(original, open_positions=still_open, closed_trades=closed, worker_checkpoint={"cursor": last})
+    feed.verify_trade_lineage(candidate)
+    feed.verify_position_continuity(original, candidate)
+    with pytest.raises(ValueError, match="lose a position"):
+        feed.verify_position_continuity(original, dict(candidate, closed_trades=[]))
+    closed[0]["legs"][0]["entryPx"] += 1
+    with pytest.raises(ValueError, match="original entry"):
+        feed.verify_position_continuity(original, candidate)
+    for foreign in [dict(pos, policy_version="old"), dict(pos, session_date="2026-11-20"),
+                    dict(pos, entry_capture_sha256=None), dict(pos, strat="S6")]:
+        with pytest.raises(ValueError, match="prospective"):
+            feed.verify_trade_lineage(dict(original, open_positions=[foreign]))
+    with pytest.raises(ValueError, match="Duplicate"):
+        feed.verify_trade_lineage(dict(candidate, open_positions=[pos]))
+    with pytest.raises(ValueError, match="cohort"):
+        feed.verify_trade_lineage(dict(original, cohort_kind="historical_replay"))
+
+
 def test_preserve_published_closes_and_capture_time():
     prior = {"capture_audit": {"processed": 2, "exceptions": 0},
              "last_capture_at": "2026-11-23T10:00:00+05:30", "closed_trades": [{"id": "paper", "net": 42}]}

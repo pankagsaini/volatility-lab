@@ -922,6 +922,7 @@
             <button type="button" id="fwdScanNowBtn" class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs transition">
               Refresh paper book
             </button>
+            <a class="text-xs text-sky-300 underline" href="https://github.com/pankagsaini/volatility-lab/actions/workflows/paper-batch.yml">Session audit reports</a>
             <button type="button" id="fwdExportCsvBtn" class="px-3 py-1.5 rounded-lg bg-[#090f1a] hover:bg-slate-800 text-sky-300 font-bold text-xs border border-sky-500/40">
               Export Forward Ledger CSV
             </button>
@@ -976,22 +977,22 @@
         </div>
         <div class="kpi-card border-t-2 border-t-emerald-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Closed net P&amp;L (₹)</div>
-          <div id="fwdKpiClosedNet" class="text-lg mono font-extrabold text-emerald-400 mt-0.5">₹0</div>
-          <div id="fwdKpiClosedNetSub" class="text-[11px] mono text-slate-300 mt-0.5">0 Auto-Triggered · Gross: ₹0</div>
+          <div id="fwdKpiClosedNet" class="text-lg mono font-extrabold text-slate-300 mt-0.5">—</div>
+          <div id="fwdKpiClosedNetSub" class="text-[11px] mono text-slate-300 mt-0.5">Awaiting a verified close</div>
         </div>
         <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Recorded capital (₹)</div>
           <div id="fwdKpiCapital" class="text-lg mono font-extrabold text-sky-300 mt-0.5">₹0</div>
-          <div id="fwdKpiCapitalSub" class="text-[11px] mono text-slate-300 mt-0.5">SPAN+Exp (0 Pos) · Unit Cap: ₹56,074</div>
+          <div id="fwdKpiCapitalSub" class="text-[11px] mono text-slate-300 mt-0.5">Awaiting published paper book</div>
         </div>
         <div class="kpi-card border-t-2 border-t-sky-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Return on capital</div>
-          <div id="fwdKpiRoc" class="text-lg mono font-extrabold text-emerald-300 mt-0.5">0.00%</div>
-          <div id="fwdKpiRocSub" class="text-[11px] mono text-slate-300 mt-0.5">Total Net (₹0) / Unit Cap</div>
+          <div id="fwdKpiRoc" class="text-lg mono font-extrabold text-slate-300 mt-0.5">—</div>
+          <div id="fwdKpiRocSub" class="text-[11px] mono text-slate-300 mt-0.5">Portfolio capital history unavailable</div>
         </div>
         <div class="kpi-card border-t-2 border-t-purple-400">
           <div class="text-[11px] font-bold uppercase text-slate-300">Win rate &amp; profit factor</div>
-          <div id="fwdKpiWinPf" class="text-lg mono font-extrabold text-white mt-0.5">0.0% · PF 0.00</div>
+          <div id="fwdKpiWinPf" class="text-lg mono font-extrabold text-white mt-0.5">—</div>
           <div id="fwdKpiChargesSub" class="text-[11px] mono text-slate-300 mt-0.5">Upstox Statutory Costs: ₹0</div>
         </div>
       </div>
@@ -1013,8 +1014,8 @@
               <th class="py-2.5 px-2.5">Index &amp; Expiry (DTE)</th>
               <th class="py-2.5 px-2.5">Strategy (S1–S6)</th>
               <th class="py-2.5 px-2.5">Trigger Condition Met</th>
-              <th class="py-2.5 px-2.5">Exact Option Legs &amp; Entry LTP (₹)</th>
-              <th class="py-2.5 px-2.5">Current Leg LTP (₹)</th>
+              <th class="py-2.5 px-2.5">Option legs &amp; paper entry prices (₹)</th>
+              <th class="py-2.5 px-2.5">Liquidation prices at capture (₹)</th>
               <th class="py-2.5 px-2.5 text-right text-sky-300">Capital Used (₹)</th>
               <th class="py-2.5 px-2.5 text-right">Gross MTM (₹)</th>
               <th class="py-2.5 px-2.5 text-right">Upstox Charges (₹)</th>
@@ -1034,7 +1035,7 @@
             <span class="text-xs font-bold uppercase text-white">Paper P&amp;L history</span>
             <div class="seg-group" id="fwdChartModeGroup">
               <button type="button" data-fwdchart="intraday" class="fwdchart-btn seg-btn active">Latest session · whole-ledger MTM</button>
-              <button type="button" data-fwdchart="equity" class="fwdchart-btn seg-btn">Cumulative Forward Equity</button>
+              <button type="button" data-fwdchart="equity" class="fwdchart-btn seg-btn">Cumulative closed P&amp;L</button>
             </div>
           </div>
           <div class="relative" style="height: 320px;">
@@ -1072,7 +1073,7 @@
               <th class="py-2.5 px-3 text-right text-emerald-300">Closed Net P&amp;L (₹)</th>
               <th class="py-2.5 px-3 text-right text-sky-300">Total Forward Net (₹)</th>
               <th class="py-2.5 px-3 text-right text-sky-300">Unit Capital (₹)</th>
-              <th class="py-2.5 px-3 text-right text-emerald-300">Forward ROC %</th>
+              <th class="py-2.5 px-3 text-right">Exit sessions</th>
               <th class="py-2.5 px-3 text-right">Status / PF</th>
             </tr>
           </thead>
@@ -1094,7 +1095,7 @@
               <th class="py-2.5 px-2.5">Index &amp; Expiry (DTE)</th>
               <th class="py-2.5 px-2.5">Strategy (S1–S6)</th>
               <th class="py-2.5 px-2.5">09:20 IST Trigger Condition Met</th>
-              <th class="py-2.5 px-2.5">Exact Option Legs (Entry LTP → Exit LTP)</th>
+              <th class="py-2.5 px-2.5">Option legs (paper entry → exit)</th>
               <th class="py-2.5 px-2.5 text-center">Exit Reason / SL-TP</th>
               <th class="py-2.5 px-2.5 text-right text-sky-300">Capital Used (₹)</th>
               <th class="py-2.5 px-2.5 text-right">Gross P&amp;L (₹)</th>
@@ -3871,7 +3872,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         if (!book || book.source_authority !== 'python_paper_worker' || book.cohort_kind !== 'prospective' ||
             book.policy_version !== 'research-v1' || book.schema !== 2 ||
             book.version !== 'forward-test-v20.1-event-time-gated' || book.provenance_schema !== 'event-quotes-v1' ||
-            !/^\d{4}-\d{2}-\d{2}$/.test(book.min_trigger_date || '') || book.min_trigger_date < MIN_FORWARD_DATE ||
+            ![book.min_trigger_date,book.prospective_start,book.inception_date].every(day => day === '2026-11-23') ||
             ![book.open_positions,book.closed_trades,book.intraday_mtm_series].every(Array.isArray)) return false;
         const at = Date.parse(book.updated_at);
         const empty = !book.open_positions.length && !book.closed_trades.length && !book.intraday_mtm_series.length;
@@ -3997,7 +3998,17 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           return true;
         }).map(function(tr) {
           var t = JSON.parse(JSON.stringify(tr));
-          t.verifiedClose = t.provenance_status === 'VALIDATED_EVENT_QUOTES' && t.integrity_status !== 'UNVERIFIED_RECORD' && [t.gross,t.charges,t.net,t.capital].every(Number.isFinite);
+          const entryAt = Date.parse(t.triggerTime), exitAt = Date.parse(t.exit_at);
+          const freshAt = (stamp, at) => at - Date.parse(stamp) >= 0 && at - Date.parse(stamp) <= 120000;
+          const amounts = [t.gross,t.charges,t.net];
+          t.verifiedClose = forwardLedger.source_authority === 'python_paper_worker' &&
+            t.provenance_status === 'VALIDATED_EVENT_QUOTES' && t.integrity_status === 'VALIDATED_FRESH_EXECUTABLE_MARK' &&
+            !['INCOMPLETE_CAPTURE_PATH','INCOMPLETE_QUOTE_PATH'].includes(t.path_status) && !t.manual_reconciliation_required &&
+            amounts.every(v => Number.isFinite(v) && Number(v.toFixed(2)) === v) && t.charges >= 0 &&
+            Math.round(t.gross*100) - Math.round(t.charges*100) === Math.round(t.net*100) &&
+            exitAt >= entryAt && Array.isArray(t.legs) && t.legs.length > 0 && t.legs.every(l =>
+              l && Number.isFinite(l.entryPx) && l.entryPx > 0 && Number.isFinite(l.exitPx) && l.exitPx > 0 &&
+              freshAt(l.entryQuoteAt,entryAt) && freshAt(l.exitQuoteAt,exitAt));
           t.simCapital = forwardNumber(t.capital, 0.0);
           t.simGross = forwardNumber(t.gross, 0.0);
           t.simCharges = forwardNumber(t.charges, 0.0);
@@ -4054,11 +4065,9 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         var winRate = closedList.length ? (wins / closedList.length) * 100.0 : 0.0;
         var posSum = closedList.filter(function(x) { return x.simNet > 0; }).reduce(function(a, x) { return a + x.simNet; }, 0);
         var negSum = Math.abs(closedList.filter(function(x) { return x.simNet < 0; }).reduce(function(a, x) { return a + x.simNet; }, 0));
-        var pf = negSum > 0 ? (posSum / negSum).toFixed(2) : (posSum > 0 ? '∞' : '—');
+        var pf = negSum > 0 ? (posSum / negSum).toFixed(2) : '—';
 
         var singleSetPeakCap = Math.max(openCap, closedList.reduce(function(m, x) { return Math.max(m, x.simCapital); }, 0));
-        var totalForwardNet = closedNet + openNet;
-        var portfolioRoc = (singleSetPeakCap > 0 && (openList.length > 0 || closedList.length > 0)) ? (totalForwardNet / singleSetPeakCap) * 100.0 : 0.0;
 
         // Update 6 KPI Cards
         var elOpenCnt = document.getElementById('fwdKpiOpenCount');
@@ -4082,11 +4091,11 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
 
         var elClosedNet = document.getElementById('fwdKpiClosedNet');
         if (elClosedNet) {
-          elClosedNet.textContent = fmtInr(Math.round(closedNet), closedNet !== 0);
+          elClosedNet.textContent = closedList.length ? fmtInr(Math.round(closedNet), closedNet !== 0) : '—';
           elClosedNet.className = 'text-lg mono font-extrabold mt-0.5 ' + (closedNet >= 0 ? 'text-emerald-400' : 'text-rose-400');
         }
         var elClosedSub = document.getElementById('fwdKpiClosedNetSub');
-        if (elClosedSub) elClosedSub.textContent = closedList.length + ' Auto-Triggered · Gross: ' + fmtInr(Math.round(closedGross), closedGross !== 0);
+        if (elClosedSub) elClosedSub.textContent = closedList.length ? closedList.length + ' verified closes · Gross ' + fmtInr(Math.round(closedGross), closedGross !== 0) : 'Awaiting a verified close';
 
         var elCap = document.getElementById('fwdKpiCapital');
         if (elCap) elCap.textContent = fmtInr(Math.round(openCap), false);
@@ -4096,7 +4105,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         var elRoc = document.getElementById('fwdKpiRoc');
         if (elRoc) {
           elRoc.textContent = '—';
-          elRoc.className = 'text-lg mono font-extrabold mt-0.5 ' + (portfolioRoc >= 0 ? 'text-emerald-300' : 'text-rose-400');
+          elRoc.className = 'text-lg mono font-extrabold mt-0.5 text-slate-300';
         }
         var elRocSub = document.getElementById('fwdKpiRocSub');
         if (elRocSub) elRocSub.textContent = 'Portfolio capital history unavailable';
@@ -4104,7 +4113,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         var elWinPf = document.getElementById('fwdKpiWinPf');
         if (elWinPf) elWinPf.textContent = closedList.length ? winRate.toFixed(1) + '% · PF ' + pf : '—';
         var elChgSub = document.getElementById('fwdKpiChargesSub');
-        if (elChgSub) elChgSub.textContent = 'Upstox Statutory Costs: ' + fmtInr(Math.round(closedChg), false);
+        if (elChgSub) elChgSub.textContent = closedList.length ? 'Modeled fees ' + fmtInr(Math.round(closedChg), false) : 'Awaiting a verified close';
 
         if (unverified.length && !closedList.length) {
           [elClosedNet,elWinPf,elRoc].forEach(el => { if (el) el.textContent = '—'; });
@@ -4173,9 +4182,9 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           var wPct = cSub.length ? (wCnt / cSub.length) * 100.0 : 0.0;
           var pSum = cSub.filter(function(x) { return x.simNet > 0; }).reduce(function(a, x) { return a + x.simNet; }, 0);
           var nSum = Math.abs(cSub.filter(function(x) { return x.simNet < 0; }).reduce(function(a, x) { return a + x.simNet; }, 0));
-          var scPf = nSum > 0 ? (pSum / nSum) : (pSum > 0 ? Infinity : 0.0);
+          var scPf = nSum > 0 ? (pSum / nSum).toFixed(2) : '—';
           var unitCap = Math.max(0, oSub.concat(cSub).reduce(function(m, x) { return Math.max(m, x.simCapital); }, 0));
-          var scRoc = (unitCap > 0 && (oSub.length > 0 || cSub.length > 0)) ? (totNet / unitCap) * 100.0 : 0.0;
+          var exitSessions = new Set(cSub.map(t => t.exit_session_date).filter(Boolean)).size;
 
           const unverifiedSc=unverified.filter(x=>x.strat===sc).length;
           const closedKnown=cSub.length>0 && !unverifiedSc;
@@ -4186,7 +4195,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
 
           var statusBadgeHtml = (oSub.length === 0 && cSub.length === 0)
             ? '<span class="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold text-[10px]">' + (ledgerReady ? 'No trades' : 'Waiting for ledger') + '</span>'
-            : '<span class="px-2 py-0.5 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 font-bold text-[10px]">PF ' + (Number.isFinite(scPf)?scPf.toFixed(2):'∞') + ' · Recorded</span>';
+            : '<span class="px-2 py-0.5 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 font-bold text-[10px]">PF ' + scPf + ' · Recorded</span>';
 
           if (!totalKnown) statusBadgeHtml='<span class="text-slate-400">'+(unverifiedSc ? unverifiedSc+' unverified closes' : oSub.length ? 'Marks unavailable' : 'No verified trades')+'</span>';
           scHtml += '<tr onclick="document.getElementById(\'fwdStrategyFilter\').value=\'' + sc + '\'; renderForwardWorkspace();" class="cursor-pointer hover:bg-[#111c2d]">' +
@@ -4200,7 +4209,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
             '<td class="py-2 px-3 text-right font-extrabold ' + (cNet >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + (closedKnown ? fmtInr(Math.round(cNet), cNet !== 0) : '—') + '</td>' +
             '<td class="py-2 px-3 text-right font-extrabold ' + (totNet >= 0 ? 'text-sky-300' : 'text-rose-400') + '">' + (totalKnown ? fmtInr(Math.round(totNet), totNet !== 0) : '—') + '</td>' +
             '<td class="py-2 px-3 text-right text-sky-300">' + fmtInr(unitCap, false) + ' Recorded Capital</td>' +
-            '<td class="py-2 px-3 text-right font-bold ' + (scRoc >= 0 ? 'text-emerald-300' : 'text-rose-400') + '">' + (totalKnown ? (scRoc > 0 ? '+' : '') + scRoc.toFixed(2)+'%' : '—') + '</td>' +
+            '<td class="py-2 px-3 text-right text-slate-200">' + (closedKnown && exitSessions ? exitSessions : '—') + '</td>' +
             '<td class="py-2 px-3 text-right whitespace-nowrap">' + statusBadgeHtml + '</td>' +
           '</tr>';
         });
@@ -4219,7 +4228,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
                 '<td class="py-2 px-2.5 font-bold text-white whitespace-nowrap"><span class="px-1.5 py-0.5 mr-1 rounded bg-sky-950/80 border border-sky-500/40 text-sky-300 text-[10px]">' + t.sym + '</span>' + t.exp + ' <span class="text-slate-400 font-normal">(' + t.dte + 'd)</span></td>' +
                 '<td class="py-2 px-2.5 font-bold text-sky-300 whitespace-nowrap">' + (STRATEGY_NAMES_MAP[t.strat] || t.strat) + '</td>' +
                 '<td class="py-2 px-2.5 text-slate-200">' + t.trigReason + '</td>' +
-                '<td class="py-2 px-2.5 text-slate-300">' + t.legsText + '</td>' +
+                '<td class="py-2 px-2.5 text-slate-300">' + formatFwdLegs(t.legs, 'closed') + '</td>' +
                 '<td class="py-2 px-2.5 text-center whitespace-nowrap"><span class="px-2 py-0.5 rounded bg-[#16263d] border border-sky-500/30 text-sky-200 text-[10px] font-semibold">' + t.simExitReason + '</span></td>' +
                 '<td class="py-2 px-2.5 text-right font-bold text-sky-300 whitespace-nowrap">' + fmtInr(t.simCapital, false) + '</td>' +
                 '<td class="py-2 px-2.5 text-right ' + (t.simGross >= 0 ? 'text-sky-300' : 'text-rose-400') + ' whitespace-nowrap">' + fmtInr(Math.round(t.simGross), t.simGross !== 0) + '</td>' +
@@ -4289,7 +4298,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
             var eqNet = [];
             var eqGross = [];
             var runN = 0, runG = 0;
-            closedList.slice().reverse().forEach(function(t) {
+            closedList.slice().sort((a,b) => Date.parse(a.exit_at) - Date.parse(b.exit_at)).forEach(function(t) {
               runN += t.simNet;
               runG += t.simGross;
               eqLabels.push((t.exit_session_date || t.date).slice(5) + ' ' + t.sym.slice(0, 3) + ' ' + t.strat);
