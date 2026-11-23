@@ -359,3 +359,30 @@ def test_carry_overdue_and_quote_backed_execution_evidence(tmp_path):
     next_session = session_evidence({}, state, datetime.fromisoformat("2026-11-25T16:00:00+05:30"))["sessions"][0]
     assert next_session["carried_in"] == 2 and next_session["carry_with_fresh_mark"] == 1
     assert next_session["overdue_open"] == 1 and next_session["windows"][2]["paper_exits"] == 1
+    state["closed_trades"][0]["legs"][0]["exitQuoteAt"] = "2026-11-25T15:05:00+05:30"
+    state["closed_trades"][0]["mtmPath"][0]["exit_prices"] = [0]
+    invalid = session_evidence({}, state, datetime.fromisoformat("2026-11-25T16:00:00+05:30"))["sessions"][0]
+    assert invalid["carry_with_fresh_mark"] == invalid["windows"][2]["paper_exits"] == 0
+
+
+def test_decision_evidence_keeps_both_captures_and_survives_restart(tmp_path):
+    from volatility_lab.backtest.session_evidence import format_session_evidence
+
+    raw = {name("092005"): report("092005"), name("092020"): report("092020")}
+    archive = MemoryArchive(raw)
+    meta, public = hosted.build_batch(archive, tmp_path, DAY)
+    decisions = meta["session_evidence"]["sessions"][0]["entry_decisions"]
+    assert len(decisions) == 2 and all(len(item["decisions"]) == 6 for item in decisions)
+    assert [item["capture_sha256"] for item in decisions] == [
+        hashlib.sha256(gzip.decompress(raw[filename])).hexdigest() for filename in sorted(raw)]
+    assert all(row["outcome"] == "inputs_unavailable" for item in decisions for row in item["decisions"])
+    assert "entry_decisions" not in public and "private-folder" not in format_session_evidence(meta["session_evidence"])
+    restarted, _ = hosted.build_batch(archive, tmp_path, DAY)
+    assert restarted["session_evidence"]["sessions"][0]["entry_decisions"] == decisions
+
+    ledger = tmp_path / LEDGER
+    state = json.loads(ledger.read_bytes())
+    del state["worker_checkpoint"]["entry_decisions"]
+    ledger.write_text(json.dumps(state))
+    old, _ = hosted.build_batch(archive, tmp_path, DAY)
+    assert "09:20 IST · report accepted before detailed decisions were recorded" in format_session_evidence(old["session_evidence"])

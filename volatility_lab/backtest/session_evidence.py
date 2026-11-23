@@ -2,6 +2,7 @@
 
 from collections import Counter
 from datetime import date, timedelta
+from math import isfinite
 import re
 
 from volatility_lab.backtest import forward_test as engine
@@ -34,9 +35,14 @@ def _paper_events(state):
             stamp = engine._parse_aware_timestamp(trade.get(time_field))
             legs = trade.get("legs")
             if (stamp and trade.get(kind + "_capture_sha256") and legs
-                    and all(leg.get(leg_field) and leg.get(price_field) is not None for leg in legs)):
+                    and all(_valid_mark(leg.get(price_field), leg.get(leg_field), stamp) for leg in legs)):
                 counts[stamp.date().isoformat(), stamp.hour * 60 + stamp.minute, kind] += 1
     return counts
+
+
+def _valid_mark(price, quote, stamp):
+    return (type(price) in (int, float) and isfinite(price) and price > 0
+            and engine._quote_timestamp_is_fresh(quote, stamp))
 
 
 def _positions_at_session(state, opening, observed_until):
@@ -58,7 +64,8 @@ def _positions_at_session(state, opening, observed_until):
             quotes = mark.get("quote_times") or []
             prices = mark.get("exit_prices") or []
             if (at and opening <= at <= observed_until and mark.get("fresh") is True and legs
-                    and len(quotes) == len(prices) == legs and all(quotes)):
+                    and len(quotes) == len(prices) == legs
+                    and all(_valid_mark(px, quote, at) for px, quote in zip(prices, quotes))):
                 marked += 1
                 break
     return {"carried_in": carried, "carry_with_fresh_mark": marked, "overdue_open": overdue}
@@ -122,6 +129,7 @@ def session_evidence(inventory, state, as_of, first_queued=None):
             "total_slots": total, "elapsed_slots": elapsed, "complete_slots": complete_count,
             "partial_only_slots": partial_count, "absent_slots": elapsed - complete_count - partial_count,
             "applied_slots": len(applied.intersection(due)), "applied_history_partial": bool(unseen), "windows": windows,
+            "entry_decisions": cp.get("entry_decisions", {}).get(iso_day, []),
             **_positions_at_session(state, opening, min(as_of, closing + timedelta(minutes=1, microseconds=-1))),
         })
     return {"as_of": as_of.isoformat(timespec="seconds"), "sessions": sessions}
@@ -143,6 +151,23 @@ def format_session_evidence(evidence):
         for window in row["windows"]:
             lines.append(f"| {row['day']} | {window['time']} {window['kind']} | {window['archive']} | "
                          f"{window['paper']} | {window['paper_entries']} / {window['paper_exits']} |")
+    lines.extend(["", "### Scheduled entry decisions", ""])
+    for row in evidence["sessions"]:
+        detailed_minutes = set()
+        for receipt in row["entry_decisions"]:
+            stamp = engine._parse_aware_timestamp(receipt["available_at"])
+            detailed_minutes.add(stamp.strftime("%H:%M"))
+            lines.extend([f"**{stamp:%Y-%m-%d %H:%M:%S} IST** · archive JSON SHA-256 `{receipt['capture_sha256']}`",
+                          "", "| Underlying | Strategy | Front expiry | Result | Reason |",
+                          "|---|---|---|---|---|"])
+            for decision in receipt["decisions"]:
+                outcome = decision["outcome"].replace("_", " ")
+                reason = decision["reason"].replace("_", " ")
+                lines.append(f"| {decision['symbol']} | {decision['strategy']} | {decision['expiry'] or '—'} | {outcome} | {reason} |")
+            lines.append("")
+        for window in row["windows"]:
+            if window["kind"] == "entry" and window["paper"] == "accepted" and window["time"] not in detailed_minutes:
+                lines.append(f"{row['day']} {window['time']} IST · report accepted before detailed decisions were recorded.")
     lines.extend(["", "| Session | Paper positions carried in | Carried with a fresh mark | Due and still open |",
                   "|---|---:|---:|---:|"])
     for row in evidence["sessions"]:
