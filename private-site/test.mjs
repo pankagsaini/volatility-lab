@@ -20,9 +20,9 @@ function fixture() {
   };
   const handle = privateDesk({sessions,ownerId:user.id,ownerEmail:email,identity:origin+'/identity',collector:'https://collector.example/read',
     collectorKey:'test-key',bundle:resolve('bundle'),request,now:()=>state.time});
-  function call(path, {form, cookie, from=origin}={}) {
-    const headers = cookie ? {cookie} : {};
-    if (form) headers.origin=from;
+  function call(path, {form, cookie, from=origin, headers: extraHeaders={}}={}) {
+    const headers = cookie ? {cookie, ...extraHeaders} : {...extraHeaders};
+    if (from !== undefined) headers.origin=from;
     return handle(new Request(origin+path,{method:form?'POST':'GET',headers,body:form && new URLSearchParams(form)}));
   }
   return {call,state,rows};
@@ -40,6 +40,7 @@ test('invite, invalid login, different account, cross-origin submission',async()
   const {call,state,rows}=fixture();
   assert.equal((await call('/auth/invite',{form:{token:'example',password:'example-long-password'}})).headers.get('location'),'/login?status=setup');
   assert.equal((await call('/auth/login',{form:login,from:'https://other.example'})).status,403);
+  assert.equal((await call('/auth/login',{form:{...login,password:'wrong'},from:'https://custom.example',headers:{'x-forwarded-host':'custom.example','x-forwarded-proto':'https'}})).headers.get('location'),'/login?status=invalid');
   for (const form of [{...login,email:'other@example.test'},{...login,password:'wrong'}]) {
     assert.equal((await call('/auth/login',{form})).headers.get('location'),'/login?status=invalid');
   }
