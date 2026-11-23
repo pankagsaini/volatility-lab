@@ -70,7 +70,14 @@ export function privateDesk({ sessions, ownerEmail, ownerId, identity, collector
       const isPage = path === '/' || path === '/index.html' || path === '/login';
       const id = req.headers.get('cookie')?.match(/(?:^|;\s*)__Host-vl_session=([a-f0-9]{64})(?:;|$)/)?.[1];
       if (req.method === 'POST') {
-        if (req.headers.get('origin') !== url.origin) return result(null,403);
+        const fwdProto = (req.headers.get('x-forwarded-proto') || url.protocol.replace(':', '')).split(',')[0].trim();
+        const fwdHost = (req.headers.get('x-forwarded-host') || req.headers.get('host') || '').split(',')[0].trim();
+        const expectedOrigin = fwdHost ? `${fwdProto}://${fwdHost}` : url.origin;
+        const reqOrigin = req.headers.get('origin');
+        const sameOrigin = reqOrigin
+          ? (reqOrigin === url.origin || reqOrigin === expectedOrigin)
+          : req.headers.get('sec-fetch-site') === 'same-origin';
+        if (!sameOrigin) return result(null, 403);
         if (path === '/auth/logout') {
           if (id) await sessions.delete(digest(id));
           return go('/login',{'Set-Cookie':cookie('',0),'Clear-Site-Data':'"cache", "storage"'});
