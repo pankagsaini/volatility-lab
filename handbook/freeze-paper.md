@@ -96,3 +96,18 @@ The hosted publisher verifies the paper-feed root commit, the SHA-256 of the ori
 Each hosted batch writes two tables to its GitHub Actions summary. Session coverage compares elapsed exchange minutes with complete and partial archive filenames. For the scheduled entry, exit and final minutes, the summary separately reports whether the worker accepted a report when it became available and whether the book recorded any paper entries or exits. This allows a completed broker capture with no qualifying trade to be distinguished from an absent minute.
 
 The outcomes summary groups eligible closed paper P&L by underlying, holding period and the observed sign of entry IV minus prior-session HV30. It reports gross P&L, modeled fees, net P&L and the number of distinct exit sessions. Trades closed on the same day contribute one combined observation to the mean and its standard error. Days without eligible closes do not enter that statistic. Open marks, historical ledgers and gap-affected closes stay outside eligible results. A prospective close with known economics and an incomplete capture path is reported separately. Full-session continuity, overnight carry and the capacity to earn those results with investor capital require separate evidence. [Hosted batch reports](https://github.com/pankagsaini/volatility-lab/actions/workflows/paper-batch.yml)
+
+### 23 November closing verification
+
+The private Upstox archive contains **386 of 386** expected capture-start minutes from 09:15 through 15:40 IST. Both the scheduled exit and closing reports contained 11 records. The following quotes were for the front expiry on 23 November. Displayed bid and ask quantities covered at least one lot on both sides of all four ATM legs at 15:15. At 15:40 both calls had zero bid quantity. The put quotes still showed sufficient two-sided size.
+
+| Capture available (IST) | NIFTY 25,350 call bid / ask | NIFTY 25,350 put bid / ask | BANKNIFTY 62,600 call bid / ask | BANKNIFTY 62,600 put bid / ask |
+|---|---:|---:|---:|---:|
+| 15:15:45.312 | 34.40 / 34.50 | 16.05 / 16.15 | 89.10 / 89.45 | 58.30 / 58.55 |
+| 15:40:44.517 | 0.00 / 0.05 | 0.30 / 0.35 | 0.00 / 0.05 | 14.55 / 14.60 |
+
+The compressed files were `2026-11-23_snapshot_151542_complete.json.gz` (SHA-256 `4758d1ae9d76b37eb9c21ce838b7fb4f326e1156722137f1ff06eb6d0b1b0b19`) and `2026-11-23_snapshot_154042_complete.json.gz` (`be12003825a2ceb78318d90215923211ac371ef4ef90719ceea6246276024b21`). Their uncompressed JSON hashes were `f43f855ac13d758c66d3a1de7641a8e018a17e31df97a9a9dc7d0333ec729ecf` and `95cac45b37fac4d86d4116a29b1afab3d989161804ab5bf1853255399a9abcc3`.
+
+After the final capture the collector reported **32.19 of 85 minutes** used in its accounting window beginning at 09:15:48 IST, leaving **52.81 minutes**. Google's account-wide usage is unavailable from this counter. The final capture took 3.723 seconds, including 1.993 seconds fetching and 1.730 seconds archiving.
+
+An independent read of all 386 original reports found 385 distinct availability minutes. Only the 10:32 capture crossed a minute boundary. The final hosted batch, dispatched after close, processed the remaining 77 reports. In a fresh browser the public paper workspace showed 386 processed captures through 15:40:44 IST, one availability exception, zero open positions and zero closes. Both indices had failed the predeclared DTE gate that morning. This session verifies data collection and publication. A prospective exit and overnight carry still require an eligible position. [Post-close hosted run](https://github.com/pankagsaini/volatility-lab/actions/runs/45153806768)
