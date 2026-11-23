@@ -769,6 +769,7 @@ def evaluate_strategies_for_chain(
             "lots": max(1, int(lots)),
             "maxCredit": max(0.0, premium),
             "entryIv": iv,
+            "entry_vrp_pp": float(vrp30) if hv30_valid else None,
             "curIv": iv,
             "grossMtm": 0.0,
             "estCharges": chg,
@@ -818,6 +819,14 @@ def _is_due(position, reference, legacy_close):
     if deadline is not None and stamp is not None:
         return stamp >= deadline
     return legacy_close or (stamp is not None and str(position.get("date") or "") < stamp.date().isoformat())
+
+
+def _record_missing_liquidation_book(position, stamp):
+    if (position.get("policy_version") == "research-v1" and stamp is not None
+            and position.get("provenance_status") == "VALIDATED_EVENT_QUOTES"):
+        position["provenance_status"] = "GAP_AFFECTED"
+        position["path_status"] = "INCOMPLETE_QUOTE_PATH"
+        position.setdefault("unobserved_path_since", stamp.isoformat())
 
 
 def mark_open_positions_to_market(
@@ -901,6 +910,7 @@ def mark_open_positions_to_market(
 
         pos["freshness"] = "FRESH" if all_legs_fresh else "STALE"
         if not all_legs_fresh:
+            _record_missing_liquidation_book(pos, stamp)
             pos["staleReason"] = f"Missing live quote, stale quote, or non-executable book in snapshot for {key}"
             if scheduled_exit or pos.get("exit_pending"):
                 pos["exit_pending"] = True
@@ -981,6 +991,7 @@ def mark_open_positions_to_market(
                 "maxCredit": max_cr,
                 "maxLoss": max_loss,
                 "entryIv": pos.get("entryIv"),
+                "entry_vrp_pp": pos.get("entry_vrp_pp"),
                 "gross": pos["grossMtm"],
                 "charges": pos["estCharges"],
                 "net": pos["netMtm"],
@@ -1071,6 +1082,7 @@ def process_live_upstox_snapshot(
     if not live_chains:
         if snapshot_day >= MIN_FORWARD_DATE:
             for position in state["open_positions"]:
+                _record_missing_liquidation_book(position, snap_dt)
                 position["freshness"] = "STALE"
                 position["staleReason"] = "No live option-chain record at scheduled close"
                 if _is_due(position, snap_dt, mkt["mins"] >= 915):

@@ -12,7 +12,7 @@ assert.equal(book.policy_version, 'research-v1');
 assert.equal(book.provenance_schema, 'event-quotes-v1');
 assert.equal(book.worker_checkpoint, undefined);
 assert.equal(book._ledger_revision, undefined);
-assert.match(book.min_trigger_date, /^\d{4}-\d{2}-\d{2}$/);
+assert([book.inception_date,book.min_trigger_date,book.prospective_start].every(day => day === '2026-11-23'));
 assert([book.open_positions,book.closed_trades,book.intraday_mtm_series].every(Array.isArray));
 assert([...book.open_positions,...book.closed_trades].every(row =>
   row.policy_version === 'research-v1' && Number.isFinite(Date.parse(row.triggerTime)) &&

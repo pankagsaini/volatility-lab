@@ -19,6 +19,7 @@ from typing import Iterable, Protocol
 import requests
 
 from volatility_lab.backtest import paper_worker as worker
+from volatility_lab.backtest.session_evidence import SNAPSHOT_NAME, record_applied, session_evidence
 from volatility_lab.core.market_calendar import last_trading_day_on_or_before
 from volatility_lab.storage.collector_support import atomic_json, data_lock
 
@@ -45,6 +46,8 @@ class ArchiveReader(Protocol):
 
 class MissingPriorClose(RuntimeError):
     """Keep this capture and all subsequent captures pending until the reference history is available."""
+
+    session_evidence: dict | None = None
 
 
 def _require_prior_close(report):
@@ -117,7 +120,7 @@ class DriveReader:
                 raise RuntimeError("Incomplete Drive archive listing")
             for row in page["files"]:
                 name = row["name"]
-                if worker.CAPTURE.fullmatch(name) and name[:10] >= start_date and name > cursor:
+                if SNAPSHOT_NAME.fullmatch(name) and name[:10] >= start_date and name > cursor:
                     if not DRIVE_ID.fullmatch(row["id"]):
                         raise ValueError("Invalid Drive capture ID")
                     yield Capture(name, row["id"], int(row["size"]), row.get("md5Checksum"))
@@ -154,8 +157,14 @@ def _prefix_digest(previous, capture):
 
 def _eligible(reader, start_date, checkpoint):
     by_name = {}
+    inventory = {}
     for capture in reader.list_captures(start_date, ""):
-        if not worker.CAPTURE.fullmatch(capture.name) or capture.name[:10] < start_date:
+        match = SNAPSHOT_NAME.fullmatch(capture.name)
+        if not match or match[1] < start_date:
+            continue
+        minute = int(match[2]) * 60 + int(match[3])
+        inventory.setdefault(match[1], {}).setdefault(match[4], set()).add(minute)
+        if match[4] != "complete":
             continue
         if by_name.setdefault(capture.name, capture) != capture:
             raise ValueError("Conflicting Drive captures have the same filename")
@@ -170,7 +179,7 @@ def _eligible(reader, start_date, checkpoint):
             pending.append(capture)
     if last != cursor or digest != checkpoint.get("archive_prefix_sha256", ""):
         raise ValueError("The committed Drive capture history changed. Reconcile the private checkpoint.")
-    return pending
+    return pending, inventory
 
 
 def build_batch(reader: ArchiveReader, state_dir, start_date, *, max_captures=None):
@@ -194,7 +203,8 @@ def build_batch(reader: ArchiveReader, state_dir, start_date, *, max_captures=No
             checkpoint = state["worker_checkpoint"]
             checkpoint["drive_folder_id"] = reader.folder_id
 
-        captures = _eligible(reader, start_date, checkpoint)
+        as_of = worker.datetime.now(worker.engine.IST_TZ)
+        captures, inventory = _eligible(reader, start_date, checkpoint)
         if not ledger.exists():
             atomic_json(ledger, state)
         before = checkpoint["completed"]
@@ -208,7 +218,13 @@ def build_batch(reader: ArchiveReader, state_dir, start_date, *, max_captures=No
                     report, digest = worker._read_report(path)
                     _require_prior_close(report)
                     # _apply can flag a market gap before the engine rejects a report. Roll that back on retry.
+                    previous_time = state["last_capture_at"]
                     state = worker._apply(copy.deepcopy(state), report, capture.name, digest)
+                    if state["last_capture_at"] != previous_time:
+                        record_applied(state, previous_time)
+                except MissingPriorClose as exc:
+                    exc.session_evidence = session_evidence(inventory, state, as_of, capture.name)
+                    raise
                 except (EOFError, ValueError, zlib.error, gzip.BadGzipFile) as exc:
                     if index == len(captures) - 1:
                         pending = capture.name
@@ -220,8 +236,10 @@ def build_batch(reader: ArchiveReader, state_dir, start_date, *, max_captures=No
                 checkpoint["archive_prefix_sha256"] = _prefix_digest(checkpoint.get("archive_prefix_sha256", ""), capture)
                 checkpoint["cursor"] = capture.name
                 atomic_json(ledger, state)
+        more = bool(max_captures and len(captures) > max_captures)
+        first_queued = pending or (captures[max_captures].name if more else None)
         metadata = {
             "processed": checkpoint["completed"] - before, "cursor": checkpoint["cursor"], "pending": pending,
-            "more": bool(max_captures and len(captures) > max_captures),
+            "more": more, "session_evidence": session_evidence(inventory, state, as_of, first_queued),
         }
         return metadata, worker.public_state(state)

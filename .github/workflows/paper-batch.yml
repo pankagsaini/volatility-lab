@@ -36,7 +36,7 @@ jobs:
           python -m pip install --require-hashes -r "$RUNNER_TEMP/paper-deps.txt"
       - name: Fetch the current data branch
         run: |
-          git fetch --no-tags --depth=1 origin refs/heads/paper-feed
+          git fetch --no-tags --filter=blob:none origin refs/heads/paper-feed
           git worktree add --detach "$RUNNER_TEMP/paper-feed" FETCH_HEAD
       - name: Process archived captures in a private temporary directory
         env:

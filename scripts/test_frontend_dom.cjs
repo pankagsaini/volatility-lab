@@ -212,8 +212,9 @@ const server = http.createServer((request,response) => {
     assert(await page.locator('#cx_on_vrp').isChecked(),'Preset entry bounds remain available for custom replay');
     assert.equal(await page.locator('#cx_min_vrp').inputValue(),'3');
     assert.equal(await page.locator('#btLedgerBody tr').count(),18,'Preset baseline remains independently available');
+    await page.clock.setFixedTime(new Date('2026-11-23T10:00:00+05:30'));
     const paperBook={schema:2,version:'forward-test-v20.1-event-time-gated',source_authority:'python_paper_worker',cohort_kind:'prospective',policy_version:'research-v1',
-      provenance_schema:'event-quotes-v1',min_trigger_date:'2026-11-23',updated_at:null,status:'ARMED_WAITING_FOR_FIRST_CAPTURE',
+      provenance_schema:'event-quotes-v1',prospective_start:'2026-11-23',inception_date:'2026-11-23',min_trigger_date:'2026-11-23',updated_at:null,status:'ARMED_WAITING_FOR_FIRST_CAPTURE',
       open_positions:[],closed_trades:[],intraday_mtm_series:[]};
     const feed='https://raw.githubusercontent.com/**/paper-feed/paper-ledger.json*';
     await page.route(feed,r=>r.fulfill({json:paperBook}));
@@ -221,14 +222,20 @@ const server = http.createServer((request,response) => {
     await page.waitForFunction(()=>window.forwardLedger?.source_authority==='python_paper_worker');
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Awaiting first (prospective|published market) capture/);
     assert.equal(await page.locator('#paperArchiveCount').textContent(),'0 recorded · 0 verified · 0 unverified');
+    assert.equal(await page.locator('#fwdKpiClosedNet').textContent(),'—');
+    assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/Awaiting a verified close/);
     await page.route(feed,r=>r.abort());
     const apiFeed='https://api.github.com/repos/pankagsaini/volatility-lab/contents/paper-ledger.json*';
-    const sourceStamp=new Date(Date.now()-300000).toISOString();
+    const sourceStamp='2026-11-23T04:25:00.000Z';
     const markedTrade={id:'fixture',sym:'NIFTY',strat:'S2',session_date:sourceStamp.slice(0,10),frontScope:true,
       policy_version:'research-v1',triggerTime:sourceStamp,mark_at:sourceStamp,freshness:'FRESH',stratName:'S2',
       provenance_status:'VALIDATED_EVENT_QUOTES',grossMtm:100,netMtm:75,estCharges:25,capital:10000,legs:[]};
-    const publishedBook={...paperBook,min_trigger_date:sourceStamp.slice(0,10),status:'ACTIVE_LIVE_SESSION',
-      updated_at:sourceStamp,open_positions:[markedTrade,{...markedTrade,id:'earlier',mark_at:new Date(Date.parse(sourceStamp)-180000).toISOString()}]};
+    const finished={...markedTrade,id:'closed',date:'2026-11-23',exit_session_date:'2026-11-23',
+      gross:250,charges:20,net:230,exit_at:sourceStamp,integrity_status:'VALIDATED_FRESH_EXECUTABLE_MARK',
+      legs:[{type:'CE',strike:25000,side:1,entryPx:90,exitPx:95,entryQuoteAt:sourceStamp,exitQuoteAt:sourceStamp}]};
+    const publishedBook={...paperBook,status:'ACTIVE_LIVE_SESSION',
+      updated_at:sourceStamp,open_positions:[markedTrade,{...markedTrade,id:'earlier',mark_at:new Date(Date.parse(sourceStamp)-180000).toISOString()}],
+      closed_trades:[finished,{...finished,id:'gap',path_status:'INCOMPLETE_QUOTE_PATH',provenance_status:'GAP_AFFECTED'}]};
     await page.route(apiFeed,r=>{
       assert.equal(r.request().headers().accept,'application/vnd.github.raw+json');
       return r.fulfill({json:publishedBook});
@@ -237,6 +244,9 @@ const server = http.createServer((request,response) => {
     await page.waitForFunction(ts=>window.forwardLedger?.updated_at===ts,sourceStamp);
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Captures processed through/);
     const marks=await page.locator('#fwdOpenPositionsBody').textContent();
+    assert.equal(await page.locator('#paperArchiveCount').textContent(),'2 recorded · 1 verified · 1 unverified');
+    assert.match(await page.locator('#fwdKpiClosedNet').textContent(),/230/);
+    assert.match(await page.locator('#fwdClosedLedgerBody').textContent(),/25000CE/);
     assert.match(marks,/VERIFIED AT CAPTURE/,'A dated batch can show a mark fresh at its own capture');
     assert.match(marks,/MTM WITHHELD/,'An older mark remains withheld within the same batch');
     assert(!(await page.locator('#fwdLastMarkedBadge').textContent()).includes('Latest feed unavailable'));
@@ -256,6 +266,7 @@ const server = http.createServer((request,response) => {
     }
     assert.equal(await page.locator('#fwdOpenPositionsBody button').count(),0,'Read-only positions must not offer a nonfunctional close action');
     if(process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'paper-final.png'),fullPage:true});
+    await page.clock.setFixedTime(new Date());
     await page.locator('#wsOptionsBtn').click();
     await page.locator('[data-tab="straddle"]').click();
     for (const mode of ['intraday','intra_iv','payoff']) await page.locator('[data-scmode="'+mode+'"]').click();

@@ -15,6 +15,16 @@ Replacing the OPEN prefix with FWD did not match any of the 20 bundled open posi
 
 ## Ten independently matched closes under the prior policy
 
+On 23 November both preserved exports still matched the SHA-256 values above. A second comparison used trade ID, instrument, strategy, date, leg contract and side, multiplier, entry and exit prices, gross, fees and net. Of the 29 shared closed IDs, 26 had matching recorded terms and were labeled legacy-unverified in the cloud export. Three IDs had conflicting terms. Their net paper amounts were:
+
+| Closed ID | Bundled net ₹ | Cloud net ₹ |
+|---|---:|---:|
+| FWD-20261116-BAN-0125-S4 | −2,562.92 | −20,732.79 |
+| FWD-20261116-NIF-1117-S3 | +1,414.05 | +1,375.09 |
+| FWD-20261117-BAN-0125-S4 | +12,221.47 | −15,747.45 |
+
+The raw-book checks below support the cloud economics for these three under the earlier policy. The bundled alternatives and the 51 single-source closes remain preserved for historical investigation. All historical rows stay outside the prospective series. To reproduce the classification locally, use `python scripts/compare_paper_archives.py BUNDLED.json CLOUD.json --show-ids`.
+
 The check matched each leg's contract/expiry, side-specific bid or ask, recorded quote timestamp and displayed executable depth for the full signed quantity on both entry and exit. Gross was recomputed as the sum of signed price changes × leg multiplier × lot size. The engine's dated charges recomputation uses each side and premium (implementation `volatility_lab/backtest/forward_test.py:419`, `volatility_lab/backtest/broker_charges.py:31`). Each close tied to the ledger within ₹0.01. Across all ten records, gross was **−69,899.50**, charges **3,779.27** and net **−73,678.77**. The validation confirms executable displayed books, not exchange fills, a guaranteed simultaneous basket fill, or a realized broker account statement. These trades predate research-v1.
 
 Private file references below use the stem `YYYY-MM-DD_snapshot_HHMMSS_complete.json.gz`. The hexadecimal suffix is the first 12 characters of the SHA-256 of the compressed file. Leg records and raw market payloads remain private.
@@ -59,3 +69,11 @@ Each successful advance publishes two files together on the `paper-feed` branch.
 The hosted workflow requires the repository secrets `PAPER_DRIVE_FOLDER_ID`, `PAPER_DRIVE_READER_JSON` and `PAPER_CHECKPOINT_KEY`. Preserve the checkpoint key when rotating the Drive credential. To check recovery, compare the batch run summary, public capture timestamp, processed count and closed IDs. The runtime does not need an Upstox token, a Windows task or a mounted Drive. Broker capture remains subject to its own credentials and quota.
 
 For offline analysis, use `python -m volatility_lab.forward_test --sync --replay --start-date YYYY-MM-DD --archive-dir ARCHIVE --data-dir ISOLATED_DIR`. Historical replay uses a separate ledger and cannot publish prospective results. The historical comparison importer accepts `--sync --source FILE --data-dir SEPARATE_DIR`. Keep both historical books for reconciliation.
+
+### Prospective controls and run evidence
+
+The hosted publisher verifies the paper-feed root commit, the SHA-256 of the original empty export and the digest of the frozen entry rules. Restoring and advancing the private checkpoint also checks each position's policy, entry identity and raw capture references. A prior open position must survive as the same open position or as a close with the same entry terms.
+
+Each hosted batch writes two tables to its GitHub Actions summary. Session coverage compares elapsed exchange minutes with complete and partial archive filenames. For the scheduled entry, exit and final minutes, the summary separately reports whether the worker accepted a report when it became available and whether the book recorded any paper entries or exits. This allows a completed broker capture with no qualifying trade to be distinguished from an absent minute.
+
+The outcomes summary groups eligible closed paper P&L by underlying, holding period and the observed sign of entry IV minus prior-session HV30. It reports gross P&L, modeled fees, net P&L and the number of distinct exit sessions. Trades closed on the same day contribute one combined observation to the mean and its standard error. Days without eligible closes do not enter that statistic. Open marks, historical ledgers and gap-affected closes stay outside eligible results. A prospective close with known economics and an incomplete capture path is reported separately. Full-session continuity, overnight carry and the capacity to earn those results with investor capital require separate evidence. [Hosted batch reports](https://github.com/pankagsaini/volatility-lab/actions/workflows/paper-batch.yml)
