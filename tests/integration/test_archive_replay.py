@@ -36,6 +36,37 @@ def report(stamp='2026-11-13T10:30:00+05:30'):
     }
 
 
+def test_retain_saved_snapshot_preserves_broker_data_and_rejects_ineligible_replacement(tmp_path, monkeypatch):
+    from scripts import refresh_forecasts
+
+    captured = report()
+    bank = copy.deepcopy(captured['records'][1])
+    bank['label'] = 'BANKNIFTY|2026-11-17'
+    bank['data'][0]['call_options']['option_greeks']['iv'] = None
+    captured['records'].append(bank)
+    captured['catalogue']['indices']['BANKNIFTY'] = captured['catalogue']['indices']['NIFTY'].copy()
+    captured['forward_ledger'] = {'private': True}
+    monkeypatch.setattr(refresh_forecasts, 'fetch_json', lambda *_: captured)
+    output = tmp_path / 'latest-snapshot.json'
+    refresh_forecasts.retain_snapshot(output)
+    before = output.read_bytes()
+    restored = json.loads(before)
+    assert restored['retrieved_at'] == captured['retrieved_at']
+    assert restored['records'] == captured['records']
+    assert 'forward_ledger' not in restored
+
+    bank['chain_retrieved_at'] = '2026-11-13T10:27:59+05:30'
+    with pytest.raises(ValueError, match='capture window'):
+        refresh_forecasts.retain_snapshot(output)
+    captured['records'].pop()
+    with pytest.raises(ValueError, match='both indices'):
+        refresh_forecasts.retain_snapshot(output)
+    captured['pending'] = ['quotes']
+    with pytest.raises(ValueError, match='complete broker snapshot'):
+        refresh_forecasts.retain_snapshot(output)
+    assert output.read_bytes() == before
+
+
 def test_historical_replay_uses_dated_late_close_and_special_session():
     for stamp in ('2026-11-13T15:39:00+05:30', '2026-11-08T14:30:00+05:30'):
         saved = report(stamp)

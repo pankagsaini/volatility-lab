@@ -131,38 +131,131 @@ cloud.apiAll_ = requests => requests.map(req => {
   return {...req, data};
 });
 
-// Exercise both scheduler admission checks and the EOD reserve with an existing budget.
+// Charge actual simulated elapsed time and exercise the minute trigger's admission checks.
 {
-  const settings = new Map([['SCHEDULE_MODE', 'intraday']]);
+  const day = '2026-11-13';
+  const midnight = Date.parse(day + 'T00:00:00+05:30');
+  const settings = new Map();
+  let stamp, minute, captureMs, lockedUsage, lockCalls, failAt;
+  const attempts = [];
+  class SchedulerClock extends Date {
+    constructor(...args) { super(...(args.length ? args : [stamp])); }
+    static now() { return stamp; }
+  }
   const props = {getProperty: key => settings.get(key) || null,
     setProperty: (key, value) => settings.set(key, value), setProperties: obj => Object.entries(obj).forEach(([k,v])=>settings.set(k,v)), deleteProperty: key => settings.delete(key)};
-  const initialWindow = {windowStartMs: now - 60000, windowEndMs: now + 86400000, ms: 0};
+  const initialWindow = {windowStartMs: midnight, windowEndMs: midnight + 86400000, ms: 0};
   const budgetAt = minutes => settings.set('RUNTIME_BUDGET', JSON.stringify({...initialWindow, ms: minutes * 60000}));
-  let minute = 600, lockedUsage = null;
-  const attempts = [];
-  const scheduler = vm.createContext({Date: Clock, Utilities: {formatDate: () => '5'},
+  const scheduler = vm.createContext({Date: SchedulerClock, Utilities: {formatDate: () => '5'},
     LockService: {getScriptLock: () => ({tryLock() {
+      lockCalls++;
       if (lockedUsage !== null) budgetAt(lockedUsage);
       return true;
     }, releaseLock() {}})}});
   vm.runInContext(gs, scheduler);
   scheduler.props_ = () => props;
-  scheduler.day_ = () => '2026-11-13';
+  scheduler.day_ = () => day;
   scheduler.minute_ = () => minute;
   scheduler.marketClosed_ = () => false;
-  settings.set('MARKET_CALENDAR',JSON.stringify({year:'2026',checked:'2026-11-13',closed:[],special:{}}));
-  scheduler.capture_ = mode => {attempts.push(mode); return {status: 'complete'};};
+  scheduler.capture_ = mode => {
+    assert.equal(mode, 'snapshot');
+    attempts.push(minute);
+    stamp += captureMs;
+    return {status: minute === failAt ? 'partial' : 'complete'};
+  };
+  function reset(duration = 10000) {
+    settings.clear();
+    settings.set('SCHEDULE_MODE', 'intraday');
+    settings.set('MARKET_CALENDAR', JSON.stringify({year:'2026', checked:day, closed:[], special:{}}));
+    attempts.length = 0;
+    captureMs = duration;
+    lockedUsage = null;
+    lockCalls = 0;
+    failAt = null;
+    budgetAt(0);
+  }
+  function tick(slot) {
+    minute = slot;
+    stamp = midnight + slot * 60000;
+    scheduler.scheduledCapture();
+  }
+  function regularSession() {
+    for (let slot = 554; slot <= 941; slot++) tick(slot);
+  }
+  reset();
+  regularSession();
+  assert.deepEqual(attempts, Array.from({length:386}, (_, i) => 555 + i), 'normal work covers every market minute');
+  assert.equal(JSON.parse(settings.get('RUNTIME_BUDGET')).ms, 386 * captureMs);
+
+  reset(17500);
+  regularSession();
+  assert(attempts.length < 386, 'expensive workload reaches the guard');
+  assert(!attempts.includes(914), 'ordinary captures pause under pressure');
+  assert(attempts.includes(915), '15:15 exit gets a snapshot');
+  assert(attempts.includes(940), '15:40 closing snapshot still has a budget');
+  assert.equal(attempts.at(-1), 940);
+  assert.equal(JSON.parse(settings.get('RUNTIME_BUDGET')).ms, attempts.length * captureMs);
+
+  reset();
+  budgetAt(82);
+  tick(914);
+  failAt = 915;
+  assert.throws(() => tick(915), /Capture incomplete/);
+  assert.equal(settings.has('LAST_SNAPSHOT_SLOT'), false);
+  tick(916);
+  assert.deepEqual(attempts, [915, 916], 'a partial exit does not block the next real capture');
+  assert.equal(settings.get('LAST_SNAPSHOT_SLOT'), day + '|361');
+  budgetAt(83.5);
+  tick(939);
+  tick(940);
+  assert.deepEqual(attempts, [915, 916, 940], 'closing book keeps its reserve');
+
+  reset();
+  budgetAt(82);
+  tick(914);
+  assert.equal(lockCalls, 0);
+  tick(916);
+  assert.deepEqual(attempts, [916], 'a late trigger records only the actual minute');
+  assert.equal(settings.get('LAST_SNAPSHOT_SLOT'), day + '|361');
+  budgetAt(83.5);
+  tick(939);
   budgetAt(85);
-  scheduler.scheduledCapture();
-  assert.deepEqual(attempts, []);
-  budgetAt(84); lockedUsage = 85;
-  scheduler.scheduledCapture();
-  assert.deepEqual(attempts, [], 'recheck budget after obtaining lock');
-  lockedUsage = null;
-  budgetAt(84.9);
-  for (minute = 0; minute < 1440; minute++) scheduler.scheduledCapture();
-  assert.equal(attempts.length, 386);
-  assert(attempts.every(mode => mode === 'snapshot'));
+  tick(940);
+  assert.equal(lockCalls, 1, 'exhausted thresholds return before acquiring a lock');
+
+  reset();
+  budgetAt(81);
+  lockedUsage = 82;
+  tick(914);
+  lockedUsage = 83.5;
+  tick(915);
+  lockedUsage = 85;
+  tick(940);
+  assert.deepEqual(attempts, [], 'each threshold is checked again after acquiring the lock');
+
+  reset();
+  settings.set('COLLECTOR_RUNTIME_MINUTES', '3');
+  budgetAt(1.5);
+  tick(914);
+  tick(915);
+  budgetAt(2.25);
+  tick(939);
+  tick(940);
+  assert.deepEqual(attempts, [915, 940], 'small operator limits preserve proportional milestone budgets');
+
+  for (const [open, close, exit] of [[600, 720, 705], [1080, 1140, 1080]]) {
+    reset();
+    settings.set('SPECIAL_SESSIONS_JSON', JSON.stringify({[day]:{startMins:open, endMins:close}}));
+    budgetAt(82);
+    tick(exit - 1);
+    tick(exit);
+    budgetAt(83.5);
+    tick(close - 1);
+    tick(close);
+    tick(close + 1);
+    assert.deepEqual(attempts, [exit, close], 'special session uses its own exit and closing time');
+  }
+  reset();
   const policy = () => scheduler.runtimePolicy_(props);
   for (const value of ['200', 'invalid', '-1', '0', '2.5']) {
     settings.set('COLLECTOR_RUNTIME_MINUTES', value);

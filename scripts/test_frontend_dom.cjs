@@ -212,20 +212,104 @@ const server = http.createServer((request,response) => {
     assert(await page.locator('#cx_on_vrp').isChecked(),'Preset entry bounds remain available for custom replay');
     assert.equal(await page.locator('#cx_min_vrp').inputValue(),'3');
     assert.equal(await page.locator('#btLedgerBody tr').count(),18,'Preset baseline remains independently available');
+    await page.clock.setFixedTime(new Date('2026-11-23T10:00:00+05:30'));
     const paperBook={schema:2,version:'forward-test-v20.1-event-time-gated',source_authority:'python_paper_worker',cohort_kind:'prospective',policy_version:'research-v1',
-      provenance_schema:'event-quotes-v1',min_trigger_date:'2026-11-23',updated_at:null,status:'ARMED_WAITING_FOR_FIRST_CAPTURE',
+      provenance_schema:'event-quotes-v1',prospective_start:'2026-11-23',inception_date:'2026-11-23',min_trigger_date:'2026-11-23',updated_at:null,status:'ARMED_WAITING_FOR_FIRST_CAPTURE',
       open_positions:[],closed_trades:[],intraday_mtm_series:[]};
     const feed='https://raw.githubusercontent.com/**/paper-feed/paper-ledger.json*';
     await page.route(feed,r=>r.fulfill({json:paperBook}));
     await page.locator('#wsForwardBtn').click();
     await page.waitForFunction(()=>window.forwardLedger?.source_authority==='python_paper_worker');
-    assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Awaiting first prospective capture/);
+    assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Awaiting first (prospective|published market) capture/);
     assert.equal(await page.locator('#paperArchiveCount').textContent(),'0 recorded · 0 verified · 0 unverified');
+    assert.equal(await page.locator('#fwdKpiClosedNet').textContent(),'—');
+    assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/Awaiting a verified close/);
     await page.route(feed,r=>r.abort());
-    await page.route('**/paper-ledger.json',r=>r.fulfill({json:{...paperBook,source_authority:'apps_script_cloud'}}));
+    const apiFeed='https://api.github.com/repos/pankagsaini/volatility-lab/contents/paper-ledger.json*';
+    const sourceStamp='2026-11-23T04:25:00.000Z';
+    const markedTrade={id:'fixture',sym:'NIFTY',strat:'S2',session_date:sourceStamp.slice(0,10),frontScope:true,
+      policy_version:'research-v1',triggerTime:sourceStamp,mark_at:sourceStamp,freshness:'FRESH',stratName:'S2',
+      provenance_status:'VALIDATED_EVENT_QUOTES',grossMtm:100,netMtm:75,estCharges:25,capital:10000,legs:[]};
+    const finished={...markedTrade,id:'closed',date:'2026-11-23',exit_session_date:'2026-11-23',
+      gross:250,charges:20,net:230,exit_at:sourceStamp,integrity_status:'VALIDATED_FRESH_EXECUTABLE_MARK',
+      legs:[{type:'CE',strike:25000,side:1,entryPx:90,exitPx:95,entryQuoteAt:sourceStamp,exitQuoteAt:sourceStamp}]};
+    const publishedBook={...paperBook,status:'ACTIVE_LIVE_SESSION',last_capture_at:sourceStamp,capture_audit:{exceptions:1},
+      updated_at:sourceStamp,open_positions:[markedTrade,{...markedTrade,id:'earlier',mark_at:new Date(Date.parse(sourceStamp)-180000).toISOString()},
+        {...markedTrade,id:'settlement',exit_pending:true,manual_reconciliation_required:true,settlement_pending:true,provenance_status:'GAP_AFFECTED'},
+        {...markedTrade,id:'pending',exit_pending:true,provenance_status:'GAP_AFFECTED'}],
+      closed_trades:[finished,{...finished,id:'gap',path_status:'INCOMPLETE_QUOTE_PATH',provenance_status:'GAP_AFFECTED',
+        exitReason:'Scheduled close (delayed until fresh quote)'}]};
+    await page.route(apiFeed,r=>{
+      assert.equal(r.request().headers().accept,'application/vnd.github.raw+json');
+      return r.fulfill({json:publishedBook});
+    });
+    await page.locator('#fwdScanNowBtn').click();
+    await page.waitForFunction(ts=>window.forwardLedger?.updated_at===ts,sourceStamp);
+    assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Captures processed through/);
+    const marks=await page.locator('#fwdOpenPositionsBody').textContent();
+    assert.equal(await page.locator('#paperArchiveCount').textContent(),'2 recorded · 1 verified · 1 unverified');
+    assert.match(await page.locator('#fwdKpiClosedNet').textContent(),/230/);
+    assert.match(await page.locator('#fwdClosedLedgerBody').textContent(),/25000CE/);
+    assert.match(marks,/VERIFIED AT CAPTURE/,'A dated batch can show a mark fresh at its own capture');
+    assert.match(marks,/MTM WITHHELD/,'An older mark remains withheld within the same batch');
+    assert.match(marks,/PENDING SETTLEMENT RECONCILIATION/);
+    assert.match(marks,/EXIT PENDING FRESH QUOTE/);
+    assert.match(await page.locator('#fwdClosedLedgerBody').textContent(),/Scheduled close \(delayed until fresh quote\).*IST.*Missing leg quote/);
+    const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#fwdExportCsvBtn').click()]);
+    const csv=fs.readFileSync(await download.path(),'utf8').split('\n');
+    for(const [id,status] of [['settlement','PENDING SETTLEMENT RECONCILIATION'],['pending','EXIT PENDING FRESH QUOTE']]){
+      const row=csv.find(line=>line.startsWith('"OPEN_UNVERIFIED","'+id+'"'));
+      assert(row && row.includes('"'+status+'","10000","","","",""'),'Withheld marks export their status and original capital only');
+    }
+    assert(csv.some(line=>line.startsWith('"CLOSED_UNVERIFIED","gap"') && line.includes('delayed until fresh quote')));
+    assert(!(await page.locator('#fwdLastMarkedBadge').textContent()).includes('Latest feed unavailable'));
+    assert.match(await page.locator('#fwdLastMarkedBadge').textContent(), /1 capture exception$/);
+    const nov23Close='2026-11-23T15:40:00+05:30';
+    for (const [now, captured, expected, inception='2026-11-23'] of [
+      ['2026-11-22T18:00', null, null],
+      ['2026-11-23T08:59', null, null],
+      ['2026-11-23T11:10', sourceStamp, null],
+      ['2026-11-23T13:50', sourceStamp, '2026-11-23 10:48'],
+      ['2026-11-24T13:50', sourceStamp, '2026-11-23 15:40'],
+      ['2026-11-24T13:50', nov23Close, null],
+      ['2026-11-25T08:59', sourceStamp, '2026-11-23 15:40'],
+      ['2026-11-25T08:59', nov23Close, null],
+      ['2026-11-25T11:11', nov23Close, '2026-11-25 10:48'],
+      ['2026-11-28T13:50', nov23Close, '2026-11-27 15:40'],
+      ['2026-11-28T13:50', '2026-11-27T15:40:51+05:30', null],
+      ['2026-11-08T13:50', '2026-11-06T15:40:00+05:30', null, '2026-11-01'],
+      ['2026-11-08T18:00', '2026-11-08T14:30:00+05:30', '2026-11-08 15:40', '2026-11-01'],
+      ['2026-11-09T08:59', '2026-11-08T14:30:00+05:30', '2026-11-08 15:40', '2026-11-01'],
+      ['2026-11-09T08:59', '2026-11-08T15:40:13+05:30', null, '2026-11-01'],
+      ['2026-11-24T13:50', null, '2026-11-23 15:40'],
+    ]) {
+      await page.clock.setFixedTime(new Date(now+':00+05:30'));
+      const status=await page.evaluate(({captured,inception})=>{
+        const book=window.forwardLedger;
+        const original={min_trigger_date:book.min_trigger_date,last_capture_at:book.last_capture_at};
+        Object.assign(book,{min_trigger_date:inception,last_capture_at:captured});
+        window.renderForwardWorkspace();
+        const label=document.getElementById('fwdLastMarkedBadge').textContent;
+        Object.assign(book,original);
+        return label;
+      },{captured,inception});
+      assert.equal(status.includes('Coverage behind schedule'),expected!==null,now);
+      if (expected) assert(status.includes('expected through '+expected+' IST'),status);
+    }
+    await page.clock.setFixedTime(new Date('2026-11-23T13:50:00+05:30'));
+    await page.route(apiFeed,r=>r.abort());
+    await page.route('**/paper-ledger.json',r=>r.fulfill({json:paperBook}));
     await page.locator('#fwdScanNowBtn').click();
     await page.waitForFunction(()=>document.getElementById('fwdLastMarkedBadge').textContent.includes('Latest feed unavailable'));
-    assert.equal(await page.evaluate(()=>window.forwardLedger.source_authority),'python_paper_worker');
+    assert.equal(await page.evaluate(()=>window.forwardLedger.updated_at),sourceStamp,'An older Pages bundle cannot roll back a newer accepted book');
+    const caughtUp='2026-11-23T11:13:00+05:30';
+    await page.route(feed,r=>r.fulfill({json:{...publishedBook,updated_at:caughtUp,last_capture_at:'2026-11-23T10:48:45+05:30',capture_audit:{exceptions:2}}}));
+    await page.locator('#fwdScanNowBtn').click();
+    await page.waitForFunction(ts=>window.forwardLedger.updated_at===ts,caughtUp);
+    const caughtUpBadge=await page.locator('#fwdLastMarkedBadge').textContent();
+    assert.match(caughtUpBadge,/10:48/);
+    assert.match(caughtUpBadge,/2 capture exceptions$/);
+    assert(!caughtUpBadge.includes('Coverage behind schedule'));
     await page.selectOption('#fwdPolicyFilter','legacy');
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Read-only archive/);
     assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/\d+ recorded closes/);
@@ -237,6 +321,7 @@ const server = http.createServer((request,response) => {
     }
     assert.equal(await page.locator('#fwdOpenPositionsBody button').count(),0,'Read-only positions must not offer a nonfunctional close action');
     if(process.env.FRONTEND_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FRONTEND_SCREENSHOT_DIR,'paper-final.png'),fullPage:true});
+    await page.clock.setFixedTime(new Date());
     await page.locator('#wsOptionsBtn').click();
     await page.locator('[data-tab="straddle"]').click();
     for (const mode of ['intraday','intra_iv','payoff']) await page.locator('[data-scmode="'+mode+'"]').click();

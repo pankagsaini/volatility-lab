@@ -40,13 +40,24 @@ jobs:
       - name: Refresh completed broker candles and expiry forecasts
         id: forecasts
         continue-on-error: true
-        run: python scripts/refresh_forecasts.py
-      - name: Retain dated forecasts when the broker refresh fails
+        run: python scripts/refresh_forecasts.py --paper-history docs/paper-risk-history.json
+      - name: Retain the latest verified forecast publication when refresh fails
         if: steps.forecasts.outcome == 'failure'
         run: |
           git restore --source=HEAD -- index.html docs/index.html docs/live_state.json volatility_lab/data/nifty_one_year.csv volatility_lab/data/banknifty_one_year.csv volatility_lab/data/reference-manifest.json
-          echo '::warning::Forecast refresh failed. Publishing the checked-in dated forecasts; no missing candles or historical IV were filled.'
-          echo 'Forecast refresh failed. The website retains the checked-in forecast training dates. See the refresh step for the missing-session or source error.' >> "$GITHUB_STEP_SUMMARY"
+          python scripts/retain_published_forecasts.py
+          echo '::warning::Forecast refresh failed. Retaining the latest verified training date.'
+          echo 'The release keeps dated forecasts after the refresh failure. The retention step records their training date.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain the verified snapshot if the collector was unavailable
+        run: |
+          if [ ! -f docs/latest-snapshot.json ]; then
+            python scripts/refresh_forecasts.py --retain-snapshot docs/latest-snapshot.json
+          fi
+      - name: Retain verified daily risk histories during a candle outage
+        run: |
+          if [ ! -f docs/paper-risk-history.json ]; then
+            python scripts/paper_risk_history.py --retain docs/paper-risk-history.json
+          fi
       - name: Verify refreshed publication
         run: |
           node scripts/test_frontend.cjs
@@ -55,9 +66,14 @@ jobs:
         id: pricing
         continue-on-error: true
         run: python scripts/refresh_pricing_inputs.py --output docs/pricing-inputs.json
-      - name: Report source outage without disabling the lab
+      - name: Retain verified pricing inputs during an official source outage
         if: steps.pricing.outcome == 'failure'
-        run: echo '::warning::Official source refresh failed. Retaining dated verified inputs; the browser disables model pricing when inputs expire.'
+        run: python scripts/refresh_pricing_inputs.py --retain --output docs/pricing-inputs.json
+      - name: Bundle the published paper book for same-origin fallback
+        run: |
+          git fetch --no-tags --depth=1 origin refs/heads/paper-feed
+          git show FETCH_HEAD:paper-ledger.json > "$RUNNER_TEMP/paper-ledger.json"
+          node scripts/bundle_paper_book.cjs "$RUNNER_TEMP/paper-ledger.json" docs/paper-ledger.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
