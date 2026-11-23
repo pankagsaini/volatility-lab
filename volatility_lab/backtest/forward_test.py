@@ -849,9 +849,11 @@ def _requires_expiry_reconciliation(position, stamp):
     try:
         expired = stamp is not None and stamp > expiry_close(position.get("exp"))
     except (ValueError, TypeError):
-        expired = True
-    if expired:
         position.update(freshness="STALE", exit_pending=True, manual_reconciliation_required=True,
+                        staleReason="Missing or invalid contract expiry; verify the contract before closing.")
+        return True
+    if expired:
+        position.update(freshness="STALE", exit_pending=True, manual_reconciliation_required=True, settlement_pending=True,
                         staleReason="Expired contract without an executable exit; reconcile against settlement.")
     return expired
 

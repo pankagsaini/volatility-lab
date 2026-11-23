@@ -234,8 +234,11 @@ const server = http.createServer((request,response) => {
       gross:250,charges:20,net:230,exit_at:sourceStamp,integrity_status:'VALIDATED_FRESH_EXECUTABLE_MARK',
       legs:[{type:'CE',strike:25000,side:1,entryPx:90,exitPx:95,entryQuoteAt:sourceStamp,exitQuoteAt:sourceStamp}]};
     const publishedBook={...paperBook,status:'ACTIVE_LIVE_SESSION',
-      updated_at:sourceStamp,open_positions:[markedTrade,{...markedTrade,id:'earlier',mark_at:new Date(Date.parse(sourceStamp)-180000).toISOString()}],
-      closed_trades:[finished,{...finished,id:'gap',path_status:'INCOMPLETE_QUOTE_PATH',provenance_status:'GAP_AFFECTED'}]};
+      updated_at:sourceStamp,open_positions:[markedTrade,{...markedTrade,id:'earlier',mark_at:new Date(Date.parse(sourceStamp)-180000).toISOString()},
+        {...markedTrade,id:'settlement',exit_pending:true,manual_reconciliation_required:true,settlement_pending:true,provenance_status:'GAP_AFFECTED'},
+        {...markedTrade,id:'pending',exit_pending:true,provenance_status:'GAP_AFFECTED'}],
+      closed_trades:[finished,{...finished,id:'gap',path_status:'INCOMPLETE_QUOTE_PATH',provenance_status:'GAP_AFFECTED',
+        exitReason:'Scheduled close (delayed until fresh quote)'}]};
     await page.route(apiFeed,r=>{
       assert.equal(r.request().headers().accept,'application/vnd.github.raw+json');
       return r.fulfill({json:publishedBook});
@@ -249,6 +252,16 @@ const server = http.createServer((request,response) => {
     assert.match(await page.locator('#fwdClosedLedgerBody').textContent(),/25000CE/);
     assert.match(marks,/VERIFIED AT CAPTURE/,'A dated batch can show a mark fresh at its own capture');
     assert.match(marks,/MTM WITHHELD/,'An older mark remains withheld within the same batch');
+    assert.match(marks,/PENDING SETTLEMENT RECONCILIATION/);
+    assert.match(marks,/EXIT PENDING FRESH QUOTE/);
+    assert.match(await page.locator('#fwdClosedLedgerBody').textContent(),/Scheduled close \(delayed until fresh quote\).*IST.*Missing leg quote/);
+    const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#fwdExportCsvBtn').click()]);
+    const csv=fs.readFileSync(await download.path(),'utf8').split('\n');
+    for(const [id,status] of [['settlement','PENDING SETTLEMENT RECONCILIATION'],['pending','EXIT PENDING FRESH QUOTE']]){
+      const row=csv.find(line=>line.startsWith('"OPEN_UNVERIFIED","'+id+'"'));
+      assert(row && row.includes('"'+status+'","10000","","","",""'),'Withheld marks export their status and original capital only');
+    }
+    assert(csv.some(line=>line.startsWith('"CLOSED_UNVERIFIED","gap"') && line.includes('delayed until fresh quote')));
     assert(!(await page.locator('#fwdLastMarkedBadge').textContent()).includes('Latest feed unavailable'));
     await page.route(apiFeed,r=>r.abort());
     await page.route('**/paper-ledger.json',r=>r.fulfill({json:paperBook}));

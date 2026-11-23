@@ -66,6 +66,6 @@ def test_no_chains_after_expiry_requires_settlement_reconciliation():
     assert held["exit_pending"] and not held.get("manual_reconciliation_required")
     result = advance(pending, "2026-11-25", "09:15:45")
     held, = result["open_positions"]
-    assert held["exit_pending"] and held["manual_reconciliation_required"]
+    assert held["exit_pending"] and held["manual_reconciliation_required"] and held["settlement_pending"]
     assert "settlement" in held["staleReason"]
     assert not result["closed_trades"] and result["intraday_mtm_series"][-1]["net_mtm"] is None

@@ -61,7 +61,7 @@ def public_state(state):
     trade_fields = (
         "id date session_date sym exp kind dte strat stratName frontScope holding policy_version "
         "triggerTime available_at markedAt mark_at trigTime entryTime exitTime exit_at exit_session_date "
-        "scheduled_exit_at exitReason freshness exit_pending manual_reconciliation_required integrity_status "
+        "scheduled_exit_at exitReason freshness exit_pending manual_reconciliation_required settlement_pending integrity_status "
         "provenance_status path_status entryIv entry_vrp_pp curIv capital maxLoss maxCredit netPremium maxProfit "
         "lots grossMtm estCharges netMtm gross charges net metrics sig trigReason"
     )
