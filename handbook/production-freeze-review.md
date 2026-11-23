@@ -7,6 +7,8 @@
 
 **23 November operating update.** The v23 collector reserves runtime for the scheduled exit and final minute. The hosted publisher checks frozen rules and archived leg quotes, reports overdue exits, and separates delayed observations from scheduled fills. Independent reconciliation now covers all 11 historical closes that included timestamped leg evidence in the 20 November afternoon export. Their net paper result was −₹75,633.26 after modeled fees. The other 26 closes in that export remain quarantined. The scorecard below records the 20 November baseline. Investor-performance sign-off requires new forward observations. [Reconciliation and current controls](freeze-paper.md)
 
+**23 November close.** All 386 scheduled minute files were present, including the scheduled exit and final minute. The hosted book processed all 386 captures and showed zero positions after the eight scheduled entry evaluations failed the minimum DTE in an independent replay. The collector used 32.19 minutes of its 85-minute allowance. An overnight position, a prospective close and positive after-cost expectancy still require subsequent observations. [Dated session evidence](freeze-paper.md#23-november-closing-verification)
+
 | Area | Score / 100 | Evidence and decision |
 |---|---:|---|
 | Data pipeline | 65 | Raw hashes and timestamped captures are available. 385 of 386 minute slots on 19 Nov; only 235 on 13 Nov. Full-day account quota and uninterrupted evaluator operation unproven. [Capture audit](freeze-integrity.md) |
