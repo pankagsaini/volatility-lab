@@ -45,11 +45,11 @@ Additional strategy structures, calibration, a 3D surface, return projections, b
 
 ## Daily five-step SOP
 
-1. **Before open:** Verify exchange session and expiries, live collector mode, scheduled trigger, dated risk inputs, quota headroom, latest Drive backup and open/pending positions. Record the policy version, timestamp and expected decision minutes. Separate legacy exposure.
-2. **09:20/09:25 IST:** Preserve each complete report or a missed-decision entry. Check nearest expiry, completed prior close, per-leg event time, displayed size and sides. Record signal/no signal and source hash. Missed windows are not chased.
-3. **Intraday:** Monitor snapshot age and gaps, check portfolio and individual liquidation marks, stop/target status and current executable books. Use the term/smile/history for context; check the timestamp before discretionary use. A missing mark stays unavailable.
-4. **15:15 through close:** Confirm which intraday and prior-expiry-session positions were due; record actual book/time or pending exit. Carry only explicitly tagged positional positions. Handle expired unresolved positions with official settlement evidence. Preserve the final capture and check the EOD job separately.
-5. **Post-close and next morning:** Run the read-only sync into the dedicated mirror, compare filtered IDs/legs/net to the Workspace 3 export, hash source files, retain fees and record open discrepancies. Journal daily cohort P&L, drawdown, missing minutes, runtime and observed fills; verify pending EOD recovery next morning. Do not revise the strategy in response to a day's result. [Mirror instructions](freeze-paper.md)
+1. **Before open.** Check the exchange session, nearest listed expiries, dated prior-close inputs, collector status and open or pending positions. The hosted batch verifies the original cohort and rules.
+2. **09:20 and 09:25 IST.** Review the scheduled decisions in the next batch summary. Each new receipt records the underlying, strategy, front expiry, result, reason and source digest. Check the separate coverage table for a missing or partial report.
+3. **Intraday.** Check quote age, side and size on held legs. A break in the liquidation path stays attached to the position through close. Use the timestamp on each chart or mark when making a discretionary decision.
+4. **Scheduled exit through close.** Compare the due time, actual exit time, pending positions and final capture. The regular exit is 15:15 IST. The session calendar determines early and special-session deadlines. Expired positions awaiting settlement remain visible until official settlement evidence is reconciled.
+5. **After close and next morning.** Check the hosted batch's coverage, carry, overdue exits, modeled fees, after-cost outcomes and collector runtime. Compare the published ledger with Workspace 3. A failed batch retains its last published checkpoint. On a discrepancy, inspect the private capture identified by the receipt before using the affected result. [Hosted batch and reconciliation](freeze-paper.md)
 
 ## 20 November post-close release check
 

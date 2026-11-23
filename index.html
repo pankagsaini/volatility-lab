@@ -3944,20 +3944,16 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         return Number.isFinite(parsed) ? parsed : fallback;
       }
 
-      function forwardMarkStatusHtml(position) {
+      function forwardPositionStatus(position) {
+        if (position.settlement_pending) return 'PENDING SETTLEMENT RECONCILIATION';
+        if (position.manual_reconciliation_required || position.integrity_status === 'UNVERIFIED_RECORD') {
+          return 'INTEGRITY REVIEW REQUIRED';
+        }
+        if (position.exit_pending) return 'EXIT PENDING FRESH QUOTE';
         if (position.provenance_status === 'GAP_AFFECTED') {
-          return '<span class="text-amber-300">MTM withheld · incomplete capture path</span>';
+          return position.path_status === 'INCOMPLETE_QUOTE_PATH' ? 'MTM WITHHELD · MISSING LEG QUOTE' : 'MTM WITHHELD · INCOMPLETE CAPTURE PATH';
         }
-        if (String(position.integrity_status || '') === 'UNVERIFIED_RECORD' || position.manual_reconciliation_required) {
-          return '<span class="px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/50 text-rose-300 font-bold text-[10px]">INTEGRITY REVIEW REQUIRED</span>';
-        }
-        if (position.exit_pending) {
-          return '<span class="px-2 py-0.5 rounded bg-sky-500/20 border border-sky-500/50 text-sky-300 font-bold text-[10px]">EXIT PENDING FRESH QUOTE</span>';
-        }
-        if (!position.hasCurrentMark || String(position.freshness || '').toUpperCase() !== 'FRESH') {
-          return '<span class="px-2 py-0.5 rounded bg-violet-500/20 border border-violet-500/50 text-violet-300 font-bold text-[10px]">MTM WITHHELD — STALE MARK</span>';
-        }
-        return '<span class="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-[10px]">VERIFIED AT CAPTURE</span>';
+        return position.hasCurrentMark ? 'VERIFIED AT CAPTURE' : 'MTM WITHHELD — STALE MARK';
       }
 
       function evaluateFwdSetupState() {
@@ -3985,8 +3981,9 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           const markAgeAtCapture = Date.parse(forwardLedger.updated_at) - Date.parse(p.mark_at);
           p.hasCurrentMark = forwardLedger.source_authority === 'python_paper_worker' && String(p.freshness || '').toUpperCase() === 'FRESH'
             && String(p.integrity_status || '') !== 'UNVERIFIED_RECORD'
-            && (markAgeAtCapture >= 0 && markAgeAtCapture <= 120000) && p.provenance_status==='VALIDATED_EVENT_QUOTES' && [p.grossMtm,p.netMtm,p.estCharges].every(Number.isFinite) && !p.manual_reconciliation_required;
-          p.slTpStatus = forwardMarkStatusHtml(p);
+            && (markAgeAtCapture >= 0 && markAgeAtCapture <= 120000) && p.provenance_status==='VALIDATED_EVENT_QUOTES' && [p.grossMtm,p.netMtm,p.estCharges].every(Number.isFinite) && !p.manual_reconciliation_required && !p.exit_pending && !p.settlement_pending;
+          p.paperStatus = forwardPositionStatus(p);
+          p.slTpStatus = '<span class="font-bold text-[10px] ' + (p.hasCurrentMark ? 'text-emerald-300' : 'text-amber-300') + '">' + p.paperStatus + '</span>';
           return p;
         });
 
@@ -4243,7 +4240,11 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           if (!closedList.length) closedTbody.replaceChildren();
           unverified.forEach(trade => {
             const row = closedTbody.insertRow();
-            [trade.date,trade.sym + ' · ' + trade.exp,trade.strat,trade.provenance_status === 'GAP_AFFECTED' ? 'Incomplete capture path · excluded from performance' : 'Execution evidence unavailable'].forEach((value,index) => {
+            const note = trade.provenance_status === 'GAP_AFFECTED'
+              ? ((trade.path_status === 'INCOMPLETE_QUOTE_PATH' ? 'Missing leg quote' : 'Incomplete capture path') + ' · excluded from performance')
+              : 'Execution evidence unavailable';
+            const exit = trade.exit_at && trade.exitReason ? trade.exitReason + ' · ' + trade.simExitTime + ' · ' : '';
+            [trade.date,trade.sym + ' · ' + trade.exp,trade.strat,exit + note].forEach((value,index) => {
               const cell = row.insertCell(); cell.textContent = value; cell.className = 'py-2 px-2 text-slate-300';
               if (index === 3) cell.colSpan = 7;
             });
@@ -4448,7 +4449,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
               records.push([verified ? type : type+'_UNVERIFIED',row.id,row.session_date || row.date,
                 row.triggerTime || row.entryTime,open ? row.mark_at || row.markedAt : row.exit_at || row.exitTime,
                 row.sym,row.exp,row.dte,row.strat,row.policy_version || 'legacy',row.holding,row.scheduled_exit_at,
-                open ? row.staleReason || row.freshness : row.exitReason,verified ? row.simCapital : '',
+                open ? row.paperStatus : row.exitReason,Number.isFinite(row.capital) ? row.capital : '',
                 verified ? (open ? row.simGrossMtm : row.simGross) : '',verified ? row.simCharges : '',
                 verified ? (open ? row.simNetMtm : row.simNet) : '',verified ? row.simRocPct.toFixed(2) : '',
                 JSON.stringify(row.legs || [])]);

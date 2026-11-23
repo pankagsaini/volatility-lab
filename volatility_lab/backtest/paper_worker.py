@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from volatility_lab.backtest import forward_test as engine
+from volatility_lab.backtest.execution_evidence import verify_execution_evidence
 from volatility_lab.ingestion.google_archive_sync import validate_report
 from volatility_lab.runtime.settings import load_settings
 from volatility_lab.storage.collector_support import atomic_json, data_lock
@@ -60,7 +61,7 @@ def public_state(state):
     trade_fields = (
         "id date session_date sym exp kind dte strat stratName frontScope holding policy_version "
         "triggerTime available_at markedAt mark_at trigTime entryTime exitTime exit_at exit_session_date "
-        "scheduled_exit_at exitReason freshness exit_pending manual_reconciliation_required integrity_status "
+        "scheduled_exit_at exitReason freshness exit_pending manual_reconciliation_required settlement_pending integrity_status "
         "provenance_status path_status entryIv entry_vrp_pp curIv capital maxLoss maxCredit netPremium maxProfit "
         "lots grossMtm estCharges netMtm gross charges net metrics sig trigReason"
     )
@@ -138,7 +139,8 @@ def _apply(state, report, name, digest):
         _note_gap(
             state, {"from": state["prospective_start"], "next": report["day"], "reason": "no initial session capture"}
         )
-    processed = engine.process_live_upstox_snapshot(report, ledger=state)
+    decisions = []
+    processed = engine.process_live_upstox_snapshot(report, ledger=state, decision_receipts=decisions)
     if processed.get("gate_blocked"):
         raise ValueError("Engine blocked the market capture")
     for key in (
@@ -152,13 +154,19 @@ def _apply(state, report, name, digest):
         processed[key] = state[key]
     for trade in processed["closed_trades"]:
         if trade.get("exit_at") == current.isoformat():
+            verify_execution_evidence(report, trade, "exit")
             trade["exit_capture"] = name
             trade["exit_capture_sha256"] = digest
     for pos in processed["open_positions"] + processed["closed_trades"]:
         if pos.get("triggerTime") == current.isoformat():
+            verify_execution_evidence(report, pos, "entry")
             pos["entry_capture"] = name
             pos["entry_capture_sha256"] = digest
     processed.update(worker_checkpoint=cp, last_capture_at=current.isoformat())
+    if decisions:
+        cp.setdefault("entry_decisions", {}).setdefault(report["day"], []).append({
+            "available_at": current.isoformat(), "capture_sha256": digest, "decisions": decisions,
+        })
     cp["completed"] += 1
     cp["last_day"] = report["day"]
     return processed

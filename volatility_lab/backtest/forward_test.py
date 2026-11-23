@@ -9,7 +9,8 @@ from volatility_lab.runtime.settings import data_dir as runtime_data_dir
 from volatility_lab import PACKAGE_ROOT
 
 import copy
-from volatility_lab.core.freeze_policy import RULES, entry_allowed
+from volatility_lab.core.freeze_policy import RULES, entry_decision
+from volatility_lab.core.freeze_policy import entry_allowed as entry_allowed
 import hashlib
 import json
 import re
@@ -630,6 +631,7 @@ def evaluate_strategies_for_chain(
     require_event_timestamps: bool = False,
     decision_minute: int | None = None,
     calendar_dte: float | None = None,
+    decision_rows: dict[str, dict] | None = None,
 ) -> list[dict[str, Any]]:
     """Evaluate all 6 quantitative strategies (S1-S6) on a real Upstox option chain."""
     sym = str(symbol).upper()
@@ -642,6 +644,8 @@ def evaluate_strategies_for_chain(
     strike_map = _build_strike_quote_map(chain_rows)
 
     if K not in strike_map:
+        for row in (decision_rows or {}).values():
+            row["reason"] = "atm_strike_unavailable"
         # Data integrity gate: cannot evaluate setups without valid ATM strikes
         return []
 
@@ -649,11 +653,15 @@ def evaluate_strategies_for_chain(
     c_iv = _iv_percent(atm_node.get("cIv"))
     p_iv = _iv_percent(atm_node.get("pIv"))
     if c_iv is None or p_iv is None:
+        for row in (decision_rows or {}).values():
+            row["reason"] = "atm_iv_unavailable"
         return []
     if require_event_timestamps and not all(
         _quote_timestamp_is_fresh(atm_node.get(prefix + "QuoteTimestamp"), quote_reference)
         for prefix in ("c", "p")
     ):
+        for row in (decision_rows or {}).values():
+            row["reason"] = "atm_quote_time_unavailable"
         return []
 
     iv = round(0.5 * (c_iv + p_iv), 2)
@@ -713,9 +721,13 @@ def evaluate_strategies_for_chain(
 
     results = []
     for s_code, is_trig, metrics_txt in trig_defs:
+        receipt = (decision_rows or {}).get(s_code)
         if decision_minute is not None:
-            is_trig = entry_allowed(s_code, minute=decision_minute, dte=calendar_dte, vrp=vrp30,
-                                    hv30=hv30_value, rr25=rev25_value)
+            outcome, reason = entry_decision(s_code, minute=decision_minute, dte=calendar_dte, vrp=vrp30,
+                                             hv30=hv30_value, rr25=rev25_value)
+            is_trig = outcome == "qualified"
+            if receipt is not None:
+                receipt.update(outcome=outcome, reason=reason)
         legs = build_strategy_legs(sym, K, s_code)
         has_missing_quote = False
         for l in legs:
@@ -735,6 +747,8 @@ def evaluate_strategies_for_chain(
             l["curPx"] = round(px, 2)
 
         if has_missing_quote:
+            if receipt is not None and is_trig:
+                receipt.update(outcome="inputs_unavailable", reason="entry_book_unavailable")
             # Data Integrity: NEVER substitute estimated or fabricated prices.
             # Skip setup entry entirely when real quote is unavailable.
             continue
@@ -743,6 +757,8 @@ def evaluate_strategies_for_chain(
         payoff = expiry_payoff(legs, lot_qty)
         premium = payoff['netPremium']
         if (s_code == 'S2' and premium >= 0) or (s_code != 'S2' and premium <= 0):
+            if receipt is not None and is_trig:
+                receipt.update(outcome="entry_ineligible", reason="premium_sign")
             continue
         cap = max(cap_base, -premium)
 
@@ -829,6 +845,19 @@ def _record_missing_liquidation_book(position, stamp):
         position.setdefault("unobserved_path_since", stamp.isoformat())
 
 
+def _requires_expiry_reconciliation(position, stamp):
+    try:
+        expired = stamp is not None and stamp > expiry_close(position.get("exp"))
+    except (ValueError, TypeError):
+        position.update(freshness="STALE", exit_pending=True, manual_reconciliation_required=True,
+                        staleReason="Missing or invalid contract expiry; verify the contract before closing.")
+        return True
+    if expired:
+        position.update(freshness="STALE", exit_pending=True, manual_reconciliation_required=True, settlement_pending=True,
+                        staleReason="Expired contract without an executable exit; reconcile against settlement.")
+    return expired
+
+
 def mark_open_positions_to_market(
     open_positions: list[dict[str, Any]],
     live_chains: dict[str, list[dict[str, Any]]],
@@ -866,17 +895,17 @@ def mark_open_positions_to_market(
             still_open.append(pos)
             continue
         stamp = _parse_aware_timestamp(reference_timestamp)
-        try:
-            expired = stamp is not None and stamp > expiry_close(exp)
-        except (ValueError, TypeError):
-            expired = True
-        if expired:
-            pos.update(freshness="STALE", exit_pending=True, manual_reconciliation_required=True,
-                       staleReason="Expired contract without an executable exit; reconcile against settlement.")
+        if _requires_expiry_reconciliation(pos, stamp):
             still_open.append(pos)
             continue
         scheduled_exit = _is_due(pos, reference_timestamp, auto_close_intraday_1515)
         exit_was_pending = bool(pos.get("exit_pending"))
+        deadline = _parse_aware_timestamp(pos.get("scheduled_exit_at"))
+        # Captures arrive throughout the scheduled minute. A later minute cannot establish its book.
+        missed_minute = deadline is not None and stamp is not None and stamp >= deadline + timedelta(minutes=1)
+        if missed_minute and pos.get("policy_version") == "research-v1" and pos.get("provenance_status") == "VALIDATED_EVENT_QUOTES":
+            pos.update(provenance_status="GAP_AFFECTED", path_status="INCOMPLETE_CAPTURE_PATH")
+            pos.setdefault("unobserved_path_since", deadline.isoformat())
         position_lots = int(pos.get("lots", 1))
         lot_qty = LOT_SIZES[sym] * position_lots
         key = f"{sym}|{exp}"
@@ -951,15 +980,16 @@ def mark_open_positions_to_market(
         sl_thresh, tp_thresh = exit_thresholds(pos["strat"], cap, max_cr, max_loss, position_sl, position_tp)
 
         close_reason = None
-        # OPERATIONAL SAFETY: Stale marks CANNOT drive automated SL/TP exits!
-        if all_legs_fresh and sl_thresh is not None and pos["grossMtm"] <= sl_thresh:
+        if all_legs_fresh and (scheduled_exit or exit_was_pending):
+            due_time = deadline.strftime("%H:%M") if deadline is not None else "15:15"
+            close_reason = ("Prior-session scheduled exit" if pos.get("holding") == "positional" else "Auto-Close")
+            close_reason += f" at {due_time} IST"
+            if missed_minute or exit_was_pending:
+                close_reason += " (delayed until fresh quote)"
+        elif all_legs_fresh and sl_thresh is not None and pos["grossMtm"] <= sl_thresh:
             close_reason = f"Stop-Loss Hit ({position_sl})"
         elif all_legs_fresh and tp_thresh is not None and pos["grossMtm"] >= tp_thresh:
             close_reason = f"Target Hit ({position_tp})"
-        elif all_legs_fresh and (scheduled_exit or exit_was_pending):
-            close_reason = ("Prior-session scheduled exit" if pos.get("holding") == "positional" else "15:15 IST Auto-Close")
-            if exit_was_pending:
-                close_reason += " (delayed until fresh quote)"
 
         if close_reason:
             for l in pos["legs"]:
@@ -1014,6 +1044,7 @@ def process_live_upstox_snapshot(
     tp_rule: str = "NONE",
     lots: int = 1,
     front_scope_only: bool = True,
+    decision_receipts: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Process a live Upstox snapshot through the strict Forward-Only Trigger Gate (>= 2026-11-11 & 09:15-15:30 IST)."""
     state = sanitize_forward_ledger(ledger if ledger is not None else load_forward_ledger())
@@ -1059,6 +1090,16 @@ def process_live_upstox_snapshot(
 
     state["gate_blocked"] = False
     state["gate_message"] = f"Live Forward Session Active ({snapshot_day} · {mkt['time_label']})"
+    due = [strategy for strategy, rule in RULES.items() if rule.get("minute") == mkt["mins"]]
+    receipts = {}
+    if decision_receipts is not None and due:
+        for sym in ("NIFTY", "BANKNIFTY"):
+            receipts[sym] = {
+                strategy: {"symbol": sym, "strategy": strategy, "expiry": None,
+                           "outcome": "inputs_unavailable", "reason": "front_expiry_unavailable"}
+                for strategy in due
+            }
+            decision_receipts.extend(receipts[sym].values())
 
     # Extract live option chains from payload.records or payload.chains
     live_chains: dict[str, list[dict[str, Any]]] = {}
@@ -1079,12 +1120,30 @@ def process_live_upstox_snapshot(
                 live_chains[str(k_lbl)] = c_rows
                 live_chain_timestamps[str(k_lbl)] = (payload.get("chain_timestamps") or {}).get(str(k_lbl))
 
+    if due:
+        catalogue = (payload.get("catalogue") or {}).get("indices", {})
+        listed_labels = {f"{symbol}|{expiry}" for symbol, scope in catalogue.items()
+                         for expiry in scope.get("option_expiries", [])}
+        listed_labels.update(live_chains)
+        listed_labels.update(str(rec.get("label") or "") for rec in records if isinstance(rec, dict))
+        front_expiries = {}
+        for label in listed_labels:
+            symbol, _, expiry = label.partition("|")
+            if (symbol in ("NIFTY", "BANKNIFTY") and re.fullmatch(r"\d{4}-\d{2}-\d{2}", expiry)
+                    and expiry >= snapshot_day and (symbol not in front_expiries or expiry < front_expiries[symbol])):
+                front_expiries[symbol] = expiry
+        for symbol, expiry in front_expiries.items():
+            for row in receipts.get(symbol, {}).values():
+                row.update(expiry=expiry, reason="front_chain_unavailable")
+
     if not live_chains:
         if snapshot_day >= MIN_FORWARD_DATE:
             for position in state["open_positions"]:
                 _record_missing_liquidation_book(position, snap_dt)
+                if _requires_expiry_reconciliation(position, snap_dt):
+                    continue
                 position["freshness"] = "STALE"
-                position["staleReason"] = "No live option-chain record at scheduled close"
+                position["staleReason"] = "No live option-chain record in this capture"
                 if _is_due(position, snap_dt, mkt["mins"] >= 915):
                     position["exit_pending"] = True
             if any(p.get("exit_pending") for p in state["open_positions"]):
@@ -1123,36 +1182,27 @@ def process_live_upstox_snapshot(
     }
 
     reference_time = snap_dt
-    if any(rule.get("minute") == mkt["mins"] for rule in RULES.values()):
-        eligible_expiries: dict[str, list[str]] = {"NIFTY": [], "BANKNIFTY": []}
-        catalogue = (payload.get("catalogue") or {}).get("indices", {})
-        catalogue_labels = {f"{symbol}|{expiry}" for symbol, scope in catalogue.items()
-                            for expiry in scope.get("option_expiries", [])}
-        listed_labels = catalogue_labels | set(live_chains) | {str(rec.get("label") or "") for rec in records if isinstance(rec, dict)}
-        for label in listed_labels:
-            if "|" not in label:
-                continue
-            sym_part, exp_part = label.split("|", 1)
-            if sym_part in eligible_expiries and re.fullmatch(r"\d{4}-\d{2}-\d{2}", exp_part) and exp_part >= snapshot_day:
-                eligible_expiries[sym_part].append(exp_part)
-        front_expiries = {
-            "NIFTY": set(sorted(set(eligible_expiries["NIFTY"]))[:1]),
-            "BANKNIFTY": set(sorted(set(eligible_expiries["BANKNIFTY"]))[:1]),
-        }
+    if due:
         for lbl, chain_rows in live_chains.items():
             sym, exp = lbl.split("|", 1)
+            if exp != front_expiries.get(sym):
+                continue
+            rows = receipts.get(sym, {})
             chain_ts = live_chain_timestamps.get(lbl)
             chain_dt = _parse_aware_timestamp(chain_ts)
             if chain_dt is None or not _quote_timestamp_is_fresh(chain_ts, reference_time):
+                for row in rows.values():
+                    row["reason"] = "chain_quote_time_unavailable"
                 continue
             chain_mkt = get_nse_market_status_ist(chain_dt)
             if chain_mkt["isoDay"] != snapshot_day or not chain_mkt["open"] or chain_mkt["mins"] != mkt["mins"]:
-                continue
-            is_front = exp in front_expiries.get(sym, set())
-            if not is_front:  # Research-v1 always trades the nearest listed expiry.
+                for row in rows.values():
+                    row["reason"] = "chain_outside_decision_minute"
                 continue
             spot_val = float(chain_rows[0].get("underlying_spot_price") or 0.0)
             if not np.isfinite(spot_val) or spot_val <= 0:
+                for row in rows.values():
+                    row["reason"] = "spot_unavailable"
                 continue
             metrics = payload.get("risk_metrics")
             symbol_metrics = metrics.get(sym, {}) if isinstance(metrics, dict) else {}
@@ -1170,9 +1220,13 @@ def process_live_upstox_snapshot(
                 expiry_dt = expiry_close(exp)
                 seconds_to_expiry = (expiry_dt - chain_dt).total_seconds()
                 if seconds_to_expiry <= 0:
+                    for row in rows.values():
+                        row.update(outcome="expiry_ineligible", reason="contract_expired")
                     continue
                 dte = int(np.ceil(seconds_to_expiry / 86400.0))
             except Exception:
+                for row in rows.values():
+                    row["reason"] = "expiry_clock_unavailable"
                 continue
             eval_setups = evaluate_strategies_for_chain(
                 symbol=sym,
@@ -1190,20 +1244,28 @@ def process_live_upstox_snapshot(
                 decision_minute=mkt["mins"],
                 calendar_dte=seconds_to_expiry / 86400.0,
                 require_event_timestamps=True,
+                decision_rows=rows,
             )
             for setup in eval_setups:
                 s_key = f"{sym}|{exp}|{setup['strat']}"
+                row = rows.get(setup["strat"])
+                if row is not None and setup.get("triggered") and s_key in existing_keys:
+                    row.update(outcome="position_exists", reason="position_already_recorded")
                 if setup.get("triggered") and s_key not in existing_keys:
                     holding = RULES[setup["strat"]]["holding"]
                     deadline = scheduled_exit_at(snapshot_day, exp, holding)
                     if deadline <= snap_dt:
+                        if row is not None:
+                            row.update(outcome="entry_ineligible", reason="exit_deadline_elapsed")
                         continue
                     setup.update(triggerTime=snap_dt.isoformat(), available_at=snap_dt.isoformat(),
                                  policy_version="research-v1", holding=holding, scheduled_exit_at=deadline.isoformat())
                     setup["provenance_status"] = "VALIDATED_EVENT_QUOTES"
-                    setup["frontScope"] = is_front
+                    setup["frontScope"] = True
                     setup["mtmPath"] = []  # The first liquidation mark must cross the exit book.
                     state["open_positions"].append(setup)
+                    if row is not None:
+                        row.update(outcome="entered", reason="position_opened")
                     existing_keys.add(s_key)
 
     # 2. Mark open positions to market and close at 15:15 IST (or SL/TP hit)
