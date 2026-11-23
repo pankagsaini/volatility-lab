@@ -233,7 +233,7 @@ const server = http.createServer((request,response) => {
     const finished={...markedTrade,id:'closed',date:'2026-11-23',exit_session_date:'2026-11-23',
       gross:250,charges:20,net:230,exit_at:sourceStamp,integrity_status:'VALIDATED_FRESH_EXECUTABLE_MARK',
       legs:[{type:'CE',strike:25000,side:1,entryPx:90,exitPx:95,entryQuoteAt:sourceStamp,exitQuoteAt:sourceStamp}]};
-    const publishedBook={...paperBook,status:'ACTIVE_LIVE_SESSION',
+    const publishedBook={...paperBook,status:'ACTIVE_LIVE_SESSION',last_capture_at:sourceStamp,capture_audit:{exceptions:1},
       updated_at:sourceStamp,open_positions:[markedTrade,{...markedTrade,id:'earlier',mark_at:new Date(Date.parse(sourceStamp)-180000).toISOString()},
         {...markedTrade,id:'settlement',exit_pending:true,manual_reconciliation_required:true,settlement_pending:true,provenance_status:'GAP_AFFECTED'},
         {...markedTrade,id:'pending',exit_pending:true,provenance_status:'GAP_AFFECTED'}],
@@ -263,40 +263,38 @@ const server = http.createServer((request,response) => {
     }
     assert(csv.some(line=>line.startsWith('"CLOSED_UNVERIFIED","gap"') && line.includes('delayed until fresh quote')));
     assert(!(await page.locator('#fwdLastMarkedBadge').textContent()).includes('Latest feed unavailable'));
-    for (const [now, behind] of [
-      ['2026-11-23T11:10:59+05:30', false],
-      ['2026-11-23T13:50:00+05:30', true],
-      ['2026-11-24T13:50:00+05:30', false],
-      ['2026-11-25T08:59:00+05:30', false],
-      ['2026-11-28T13:50:00+05:30', false],
+    assert.match(await page.locator('#fwdLastMarkedBadge').textContent(), /1 capture exception$/);
+    const nov23Close='2026-11-23T15:40:00+05:30';
+    for (const [now, captured, expected, inception='2026-11-23'] of [
+      ['2026-11-22T18:00', null, null],
+      ['2026-11-23T08:59', null, null],
+      ['2026-11-23T11:10', sourceStamp, null],
+      ['2026-11-23T13:50', sourceStamp, '2026-11-23 10:48'],
+      ['2026-11-24T13:50', sourceStamp, '2026-11-23 15:40'],
+      ['2026-11-24T13:50', nov23Close, null],
+      ['2026-11-25T08:59', sourceStamp, '2026-11-23 15:40'],
+      ['2026-11-25T08:59', nov23Close, null],
+      ['2026-11-25T11:11', nov23Close, '2026-11-25 10:48'],
+      ['2026-11-28T13:50', nov23Close, '2026-11-27 15:40'],
+      ['2026-11-28T13:50', '2026-11-27T15:40:51+05:30', null],
+      ['2026-11-08T13:50', '2026-11-06T15:40:00+05:30', null, '2026-11-01'],
+      ['2026-11-08T18:00', '2026-11-08T14:30:00+05:30', '2026-11-08 15:40', '2026-11-01'],
+      ['2026-11-09T08:59', '2026-11-08T14:30:00+05:30', '2026-11-08 15:40', '2026-11-01'],
+      ['2026-11-09T08:59', '2026-11-08T15:40:13+05:30', null, '2026-11-01'],
+      ['2026-11-24T13:50', null, '2026-11-23 15:40'],
     ]) {
-      await page.clock.setFixedTime(new Date(now));
-      await page.evaluate(()=>window.renderForwardWorkspace());
-      const status=await page.locator('#fwdLastMarkedBadge').textContent();
-      assert.equal(status.includes('Coverage behind schedule'),behind,now);
-      if (behind) {
-        assert.match(status,/09:55/);
-        assert.match(status,/expected through 10:48 IST/);
-      }
-    }
-    for (const [now, captured, behind] of [
-      ['13:50', '14:30', false],
-      ['18:00', '14:30', true],
-      ['21:30', '15:40', false],
-    ]) {
-      await page.clock.setFixedTime(new Date('2026-11-08T'+now+':00+05:30'));
-      const status=await page.evaluate(clock=>{
+      await page.clock.setFixedTime(new Date(now+':00+05:30'));
+      const status=await page.evaluate(({captured,inception})=>{
         const book=window.forwardLedger;
-        const original={...book};
-        Object.assign(book,{min_trigger_date:'2026-11-01',last_capture_at:'2026-11-08T'+clock+':00+05:30'});
+        const original={min_trigger_date:book.min_trigger_date,last_capture_at:book.last_capture_at};
+        Object.assign(book,{min_trigger_date:inception,last_capture_at:captured});
         window.renderForwardWorkspace();
         const label=document.getElementById('fwdLastMarkedBadge').textContent;
-        delete book.last_capture_at;
         Object.assign(book,original);
         return label;
-      },captured);
-      assert.equal(status.includes('Coverage behind schedule'),behind,now);
-      if (behind) assert.match(status,/expected through 15:40 IST/);
+      },{captured,inception});
+      assert.equal(status.includes('Coverage behind schedule'),expected!==null,now);
+      if (expected) assert(status.includes('expected through '+expected+' IST'),status);
     }
     await page.clock.setFixedTime(new Date('2026-11-23T13:50:00+05:30'));
     await page.route(apiFeed,r=>r.abort());
@@ -305,11 +303,12 @@ const server = http.createServer((request,response) => {
     await page.waitForFunction(()=>document.getElementById('fwdLastMarkedBadge').textContent.includes('Latest feed unavailable'));
     assert.equal(await page.evaluate(()=>window.forwardLedger.updated_at),sourceStamp,'An older Pages bundle cannot roll back a newer accepted book');
     const caughtUp='2026-11-23T11:13:00+05:30';
-    await page.route(feed,r=>r.fulfill({json:{...publishedBook,updated_at:caughtUp,last_capture_at:'2026-11-23T10:48:45+05:30'}}));
+    await page.route(feed,r=>r.fulfill({json:{...publishedBook,updated_at:caughtUp,last_capture_at:'2026-11-23T10:48:45+05:30',capture_audit:{exceptions:2}}}));
     await page.locator('#fwdScanNowBtn').click();
     await page.waitForFunction(ts=>window.forwardLedger.updated_at===ts,caughtUp);
     const caughtUpBadge=await page.locator('#fwdLastMarkedBadge').textContent();
     assert.match(caughtUpBadge,/10:48/);
+    assert.match(caughtUpBadge,/2 capture exceptions$/);
     assert(!caughtUpBadge.includes('Coverage behind schedule'));
     await page.selectOption('#fwdPolicyFilter','legacy');
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Read-only archive/);
