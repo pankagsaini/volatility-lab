@@ -241,6 +241,14 @@ def write_summary(text):
             print(text, file=output)
 
 
+def report_archive_backlog(metadata):
+    output_path = os.environ.get("GITHUB_OUTPUT")
+    if output_path:
+        caught_up = metadata["more"] is False and metadata["pending"] is None
+        with Path(output_path).open("a", encoding="utf-8") as output:
+            print(f"caught_up={'true' if caught_up else 'false'}", file=output)
+
+
 def update_feed(feed, private, key, reader):
     if len(key) < 32 or b"\n" in key or b"\r" in key or b"\x00" in key:
         raise ValueError("Use a single-line checkpoint key of at least 32 bytes")
@@ -284,6 +292,7 @@ def update_feed(feed, private, key, reader):
     write_summary(format_session_evidence(metadata["session_evidence"]) + "\n" + format_outcomes(prospective_outcomes(candidate)))
     print(f"Processed {int(metadata['processed'])} captures. Pending capture: {bool(metadata['pending'])}. "
           f"Additional captures queued: {bool(metadata['more'])}.", flush=True)
+    report_archive_backlog(metadata)
 
 
 def main():
