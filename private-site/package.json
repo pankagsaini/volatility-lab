@@ -1,0 +1,8 @@
+{
+  "name": "volatility-lab-private-site",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "dependencies": { "@netlify/blobs": "11.1.9" },
+  "scripts": { "test": "node --test test.mjs" }
+}
