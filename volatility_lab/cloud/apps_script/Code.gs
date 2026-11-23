@@ -67,8 +67,19 @@ function runtimePolicy_(properties) {
   const requested = Number(properties.getProperty('COLLECTOR_RUNTIME_MINUTES'));
   const total = Number.isInteger(requested) && requested > 0 ? Math.min(requested, maximum) : maximum;
 
+  // Allow for the last admitted capture as well as the protected attempt.
+  // Keep at least half of even a small operator-set budget for ordinary minutes.
+  const reserveMs = Math.min(2 * CAPTURE_SAFE_DEADLINE_MS, total * 60000 / 4);
   return { tier: workspace ? 'operator_verified_workspace' : 'consumer_default',
-    total_minutes: total, snapshot_minutes: total, eod_reserve_minutes: 0 };
+    total_minutes: total, snapshot_minutes: total, eod_reserve_minutes: 0,
+    reserve_per_protected_snapshot_seconds: reserveMs / 1000 };
+}
+
+function snapshotAdmissionLimit_(policy, minute, open, close) {
+  // Match scheduled_exit_at in backtest/forward_test.py for special sessions too.
+  const exitMinute = Math.max(open, Math.min(15 * 60 + 15, close - 15));
+  const pending = Number(minute < exitMinute) + Number(minute < close);
+  return policy.snapshot_minutes * 60000 - pending * policy.reserve_per_protected_snapshot_seconds * 1000;
 }
 
 function readRuntimeBudget_(properties, key, nowMs) {
@@ -916,11 +927,14 @@ function scheduledCapture() {
   const snapEnd = sp ? sp.endMins : regularCloseMinutes_(today);
   if (mins < snapStart || mins > snapEnd) return;
   const mode = 'snapshot';
-  const limit = runtimePolicy_(properties).snapshot_minutes * 60000;
-  const pauseMessage = mode + ' runtime admission limit reached (' + limit / 60000 + ' minutes). ' + today;
+  const policy = runtimePolicy_(properties);
+  const limit = snapshotAdmissionLimit_(policy, mins, snapStart, snapEnd);
+  const pauseMessage = limit < policy.snapshot_minutes * 60000
+    ? 'snapshot paused to preserve runtime for later session captures (' + limit / 60000 + ' minutes). ' + today
+    : mode + ' runtime admission limit reached (' + limit / 60000 + ' minutes). ' + today;
   let budget = readRuntimeBudget_(properties, 'RUNTIME_BUDGET', Date.now());
   if (budget.ms >= limit) {
-    properties.setProperty('COLLECTOR_STATUS', pauseMessage);
+    if (properties.getProperty('COLLECTOR_STATUS') !== pauseMessage) properties.setProperty('COLLECTOR_STATUS', pauseMessage);
     return;
   }
 
