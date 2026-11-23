@@ -1,10 +1,15 @@
 """Check whether a catch-up trigger still needs to run the paper worker."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
 import subprocess
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from volatility_lab.core.market_calendar import IST, LAST_SOURCED_HOLIDAY_YEAR, is_trading_day, session_window
 
 
 CATCHUP_HOURS = {f"41 {hour} * * *": hour for hour in (5, 10, 15)}
@@ -32,9 +37,44 @@ def paired_slot(cron, created_at):
     return targeted - timedelta(minutes=22)
 
 
-def github(path):
-    result = subprocess.run(["gh", "api", path], capture_output=True, check=True, timeout=12)
+def github(path, *, raw=False):
+    args = ["gh", "api", path]
+    if raw:
+        args.extend(["--header", "Accept: application/vnd.github.raw+json"])
+    result = subprocess.run(args, capture_output=True, check=True, timeout=12)
     return json.loads(result.stdout)
+
+
+def required_capture(due, inception):
+    """Last completed trading minute due at this slot since the cohort opened."""
+    day = due.astimezone(IST).date()
+    while day >= inception:
+        if day.year > LAST_SOURCED_HOLIDAY_YEAR:
+            raise ValueError("Holiday calendar is provisional")
+        window = session_window(day)
+        if window:
+            target = min(due - timedelta(minutes=1), window[1])
+            if target >= window[0]:
+                return target
+        elif is_trading_day(day, include_special=True):
+            raise ValueError("Trading session has no verified hours")
+        day -= timedelta(days=1)
+    return None
+
+
+def published_through_slot(book, due):
+    if book["cohort_kind"] != "prospective" or book["source_authority"] != "python_paper_worker":
+        return False
+    target = required_capture(due, date.fromisoformat(book["prospective_start"]))
+    if target is None:
+        return True
+    if not book["last_capture_at"]:
+        return False
+    observed = utc(book["last_capture_at"]).astimezone(IST)
+    minute = observed.replace(second=0, microsecond=0)
+    window = session_window(minute.date())
+    return (window is not None and window[0] <= minute <= window[1]
+            and target <= observed <= datetime.now(timezone.utc))
 
 
 def completed_batch(cron, run_id, repo, read=github):
@@ -52,7 +92,8 @@ def completed_batch(cron, run_id, repo, read=github):
             if job["name"] == "publish" and job["conclusion"] == "success":
                 steps = {step["name"] for step in job["steps"] if step["conclusion"] == "success"}
                 if REQUIRED_STEPS <= steps:
-                    return run["id"]
+                    book = read(f"repos/{repo}/contents/paper-ledger.json?ref=paper-feed", raw=True)
+                    return run["id"] if published_through_slot(book, due) else None
     return None
 
 

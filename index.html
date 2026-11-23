@@ -3791,7 +3791,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         if (forwardLedger.source_authority === 'dated_archive') return 'Read-only archive · ' + new Date(forwardLedger.updated_at).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'}) + ' IST';
         if (forwardLedger.source_authority !== 'python_paper_worker') return 'Awaiting the published paper book';
         if (forwardLedger.status === 'ARMED_WAITING_FOR_FIRST_CAPTURE') return 'Awaiting first prospective capture · starts ' + forwardLedger.min_trigger_date;
-        const stamp = Date.parse(forwardLedger.last_capture_at || forwardLedger.updated_at);
+        const stamp = Date.parse(forwardLedger.last_capture_at);
         if (!Number.isFinite(stamp)) return 'Awaiting the first dated batch';
         const asOf = new Date(stamp).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'});
         return 'Captures processed through ' + asOf + ' IST';
@@ -3800,17 +3800,23 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
       function paperCoverageLag(book, now) {
         if (book.source_authority !== 'python_paper_worker') return '';
         const clock = istDayAndMinute(now);
-        if (!clock || clock.day < book.min_trigger_date) return '';
-        const session = TradingSessions.session(clock.day);
-        if (!session) return '';
-        // Compare elapsed capture minutes after the scheduled 22-minute catch-up interval.
-        const due = [10 * 60 + 49, 15 * 60 + 49, 20 * 60 + 49]
-          .filter(slot => slot > session.startMins && clock.mins >= slot + 22).at(-1);
-        if (due === undefined) return '';
-        const expectedMinute = Math.min(due - 1, session.endMins);
-        const captured = istDayAndMinute(book.last_capture_at || book.updated_at);
-        if (captured && captured.day === clock.day && captured.mins >= expectedMinute) return '';
-        return ' · Coverage behind schedule · expected through ' + fmtIstClockMin(expectedMinute) + ' IST';
+        if (!clock) return '';
+        const first = Date.parse(book.min_trigger_date);
+        const captured = istDayAndMinute(book.last_capture_at);
+        const slots = [10 * 60 + 49, 15 * 60 + 49, 20 * 60 + 49];
+        // A closed day or a new session before its first batch still owes the prior close.
+        for (let date = Date.parse(clock.day); date >= first; date -= 86400000) {
+          const day = new Date(date).toISOString().slice(0, 10);
+          const session = TradingSessions.session(day);
+          if (!session) continue;
+          const elapsed = day === clock.day ? clock.mins : 1440;
+          const slot = slots.filter(minute => minute > session.startMins && elapsed >= minute + 22).at(-1);
+          if (slot === undefined) continue;
+          const expected = Math.min(slot - 1, session.endMins);
+          if (captured && (captured.day > day || (captured.day === day && captured.mins >= expected))) return '';
+          return ' · Coverage behind schedule · expected through ' + day + ' ' + fmtIstClockMin(expected) + ' IST';
+        }
+        return '';
       }
 
       var FORWARD_CLEAN_LEDGER_TEMPLATE = {
@@ -4045,7 +4051,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         const ledgerReady = !String(forwardLedger.status).startsWith('WAITING_FOR_');
         const badge = document.getElementById('fwdLastMarkedBadge');
         const exceptions = forwardLedger.capture_audit?.exceptions;
-        const gapNote = Number.isInteger(exceptions) && exceptions > 0 ? ' · '+exceptions+' capture exceptions' : '';
+        const gapNote = Number.isInteger(exceptions) && exceptions > 0 ? ' · '+exceptions+' capture exception'+(exceptions === 1 ? '' : 's') : '';
         if (badge) badge.textContent = forwardStatusLabel() + paperCoverageLag(forwardLedger, Date.now()) + gapNote + (paperRefreshFailed && forwardLedger.source_authority !== 'dated_archive' ? ' · Latest feed unavailable' : '');
         const modeLabel = document.getElementById('fwdAutoModeLabel');
         if (modeLabel) modeLabel.textContent = forwardLedger.source_authority === 'dated_archive' ? 'Paper trading · dated archive' : 'Scheduled paper batch';
