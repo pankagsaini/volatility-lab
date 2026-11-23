@@ -13,8 +13,10 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.publish_live_state import build, write_state  # noqa: E402
+from scripts.public_artifact import fetch_json  # noqa: E402
 from volatility_lab.core.market_data import IST, candles_to_frame  # noqa: E402
-from volatility_lab.core.market_calendar import session_window  # noqa: E402
+from volatility_lab.core.market_calendar import expiry_close, session_window  # noqa: E402
+from volatility_lab.ingestion.google_archive_sync import validate_report  # noqa: E402
 from volatility_lab.core.vol_lib import validate_ohlc  # noqa: E402
 from volatility_lab.storage.references import text_digest  # noqa: E402
 from volatility_lab.forecasting.expiry_forecast import sessions  # noqa: E402
@@ -75,6 +77,40 @@ def refresh_daily_candles(data, expected):
         frame.to_csv(data / name, index=False, date_format='%Y-%m-%d')
 
 
+def write_public_snapshot(snapshot, output, now):
+    if snapshot.get('mode') != 'snapshot' or snapshot.get('pending') or snapshot.get('errors'):
+        raise ValueError('No complete broker snapshot')
+    fields = ('provider', 'schema', 'status', 'mode', 'nfo_session_validated', 'day', 'retrieved_at',
+              'records', 'catalogue', 'risk_metrics', 'exchange_calendar', 'daily_history', 'closing_risk')
+    saved = {key: snapshot[key] for key in fields if key in snapshot}
+    validate_report(saved)
+    captured = pd.Timestamp(saved['retrieved_at'])
+    if captured > now + timedelta(seconds=30):
+        raise ValueError('Snapshot timestamp is in the future')
+    active = set()
+    for record in saved['records']:
+        symbol, _, expiry = record['label'].partition('|')
+        if symbol not in KEYS or not expiry:
+            continue
+        # The desk rejects a snapshot if any option chain was stale when captured.
+        times = (record['retrieved_at'], record.get('chain_retrieved_at') or record['retrieved_at'])
+        if any(not -30 <= (captured - pd.Timestamp(value)).total_seconds() <= 120 for value in times):
+            raise ValueError('Option chain outside the desk capture window')
+        expiry_day = datetime.strptime(expiry, '%Y-%m-%d').date()
+        if expiry_day > captured.astimezone(IST).date() or (
+                expiry_day == captured.astimezone(IST).date() and captured < expiry_close(expiry_day)):
+            active.add(symbol)
+    if active != set(KEYS):
+        raise ValueError('Snapshot lacks an active option chain for both indices')
+    output.write_text(json.dumps(saved, separators=(',', ':'), allow_nan=False), encoding='utf-8')
+
+
+def retain_snapshot(output):
+    previous = fetch_json('latest-snapshot.json', 20_000_000)
+    write_public_snapshot(previous, output, datetime.now(IST))
+    print('Retained broker snapshot captured at', previous['retrieved_at'])
+
+
 def refresh(now=None, paper_history=None):
     now = now or datetime.now(IST)
     expected = completed_session(now)
@@ -96,13 +132,10 @@ def refresh(now=None, paper_history=None):
             candle_error = exc
         snapshot = fetch(url, {})
         # Publish the same-origin snapshot even when the candle request failed.
-        if (snapshot.get('provider') == 'Upstox' and snapshot.get('schema') == 1
-                and snapshot.get('status') == 'complete' and snapshot.get('mode') == 'snapshot'
-                and snapshot.get('nfo_session_validated') is True and snapshot.get('records')):
-            fields = ('provider', 'schema', 'status', 'mode', 'nfo_session_validated', 'day', 'retrieved_at',
-                      'records', 'catalogue', 'risk_metrics', 'exchange_calendar', 'daily_history', 'closing_risk')
-            saved = {key: snapshot[key] for key in fields if key in snapshot}
-            (ROOT / 'docs/latest-snapshot.json').write_text(json.dumps(saved, separators=(',', ':'), allow_nan=False))
+        try:
+            write_public_snapshot(snapshot, ROOT / 'docs/latest-snapshot.json', now)
+        except (KeyError, TypeError, ValueError) as exc:
+            print('Current response cannot supply the saved dashboard snapshot:', exc)
         if candle_error is not None:
             raise candle_error
         catalogue = snapshot.get('catalogue', {}).get('indices', {})
@@ -131,5 +164,11 @@ def refresh(now=None, paper_history=None):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--paper-history', type=Path)
-    refresh(paper_history=parser.parse_args().paper_history)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--paper-history', type=Path)
+    mode.add_argument('--retain-snapshot', type=Path)
+    args = parser.parse_args()
+    if args.retain_snapshot:
+        retain_snapshot(args.retain_snapshot)
+    else:
+        refresh(paper_history=args.paper_history)
