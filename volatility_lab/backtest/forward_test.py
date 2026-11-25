@@ -1429,7 +1429,8 @@ def simulate_forward_portfolio(
                 targeted = tp_thresh is not None and gross >= tp_thresh
                 if stopped or targeted:
                     raw_gross = round(gross, 2)
-                    chg = compute_position_charges(t["date"], t["sym"], exit_legs, lots=lots)
+                    exit_mark_day = str(times[0])[:10] if times else t.get("exit_session_date")
+                    chg = compute_position_charges(t["date"], t["sym"], exit_legs, lots=lots, exit_day=exit_mark_day)
                     exit_time = str(pt["t"]) if "IST" in str(pt["t"]) else f"{pt['t']} IST"
                     exit_reason = f"SL Hit ({sl_rule})" if stopped else f"Target Hit ({tp_rule})"
                     break
@@ -1529,7 +1530,8 @@ def evaluate_forward_test_scorecard(
         c_chg = round(sum(t["simCharges"] for t in c_sub), 2)
         c_net = round(sum(t["simNet"] for t in c_sub), 2)
         tot_net = round(c_net + o_net, 2)
-        unit_cap = (28037 if sc in ("S1", "S3", "S5") else 56074) * lots_mult
+        sym_cap = STRATEGY_CAPITAL_PER_LOT.get(str(index_filter).upper(), STRATEGY_CAPITAL_PER_LOT["NIFTY"])
+        unit_cap = sym_cap[sc] * lots_mult
         roc_pct = round((tot_net / unit_cap) * 100.0, 2) if unit_cap > 0 else 0.0
         is_armed = len(o_sub) == 0 and len(c_sub) == 0
         scorecard.append({

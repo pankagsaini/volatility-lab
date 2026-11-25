@@ -1073,47 +1073,47 @@ function doGet(e) {
     if (requiredKey && e?.parameter?.key !== requiredKey) return respond(JSON.stringify({error:'Unauthorized'}));
     const cache = scriptCache_();
     if (action === 'list_days') {
-      const folder = folder_();
-      const files = folder.getFiles();
+      const folderId = folder_().getId();
       const days = new Set();
-      let count = 0;
-      while (files.hasNext() && count < 200) {
-        const f = files.next();
-        count++;
-        const name = f.getName();
-        if ((name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
-          const match = name.match(/^(\d{4}-\d{2}-\d{2})/);
-          if (match) days.add(match[1]);
+      let pageToken = '';
+      for (let pageIndex = 0; pageIndex < 20; pageIndex++) {
+        const page = listDriveFilesPage_(folderId, pageToken, 'modifiedTime desc');
+        for (const f of (page.files || [])) {
+          const name = f.name || '';
+          if ((name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
+            const match = name.match(/^(\d{4}-\d{2}-\d{2})/);
+            if (match) days.add(match[1]);
+          }
         }
+        if (!page.nextPageToken || days.size >= 60) break;
+        pageToken = page.nextPageToken;
       }
-      return ContentService.createTextOutput(JSON.stringify({
+      return respond(JSON.stringify({
         days: Array.from(days).sort().reverse()
-      })).setMimeType(ContentService.MimeType.JSON);
+      }));
     }
 
     const requestedDay = e && e.parameter && e.parameter.day;
     if (requestedDay && action === 'latest') {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDay)) throw new Error('Invalid archive date');
-      let file = null;
-      const folder = folder_();
-      const files = folder.getFiles();
-      let latestTime = 0;
-      let count = 0;
-      while (files.hasNext() && count < 150) {
-        const f = files.next();
-        count++;
-        const name = f.getName();
-        if (name.startsWith(requestedDay) && (name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
-          const time = f.getLastUpdated().getTime();
-          if (time > latestTime) {
-            latestTime = time;
-            file = f;
+      const folderId = folder_().getId();
+      let matchId = null;
+      let pageToken = '';
+      for (let pageIndex = 0; pageIndex < 50 && !matchId; pageIndex++) {
+        const page = listDriveFilesPage_(folderId, pageToken, 'modifiedTime desc');
+        for (const f of (page.files || [])) {
+          const name = f.name || '';
+          if (name.startsWith(requestedDay) && (name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
+            matchId = f.id;
+            break;
           }
         }
+        if (!page.nextPageToken) break;
+        pageToken = page.nextPageToken;
       }
-      if (!file) throw new Error('No complete archive for ' + requestedDay);
-      return ContentService.createTextOutput(JSON.stringify(marketFieldsOnly_(JSON.parse(Utilities.ungzip(file.getBlob()).getDataAsString()))))
-        .setMimeType(ContentService.MimeType.JSON);
+      if (!matchId) throw new Error('No complete archive for ' + requestedDay);
+      const file = DriveApp.getFileById(matchId);
+      return respond(JSON.stringify(marketFieldsOnly_(JSON.parse(Utilities.ungzip(file.getBlob()).getDataAsString()))));
     }
 
 

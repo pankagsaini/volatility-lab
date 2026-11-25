@@ -123,3 +123,41 @@ def test_same_origin_reader_size_and_redirects(monkeypatch):
     response.status_code = 404
     with pytest.raises(FileNotFoundError):
         public_artifact.fetch_json("live_state.json", 9)
+
+
+def test_ci_read_token_header_attached_only_when_configured(monkeypatch, tmp_path):
+    from scripts import paper_risk_history
+
+    seen = []
+
+    class Response:
+        status_code = 200
+
+        def __init__(self, chunks):
+            self._chunks = chunks
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def iter_content(self, size):
+            return self._chunks
+
+    monkeypatch.delenv("CI_READ_TOKEN", raising=False)
+    monkeypatch.setattr(public_artifact.requests, "get", lambda url, **opts: seen.append((url, opts)) or Response([b'{"ok":1}']))
+    assert public_artifact.fetch_json("live_state.json", 64) == {"ok": 1}
+    assert "headers" not in seen[-1][1]
+
+    monkeypatch.setenv("CI_READ_TOKEN", "  ci-secret-token\n")
+    assert public_artifact.fetch_json("live_state.json", 64) == {"ok": 1}
+    assert seen[-1][1]["headers"] == {"X-CI-Read-Token": "ci-secret-token"}
+
+    paper_risk_history.write_bundle(paper_risk_history.REFERENCE_DIR, tmp_path / "bundle.json")
+    raw = (tmp_path / "bundle.json").read_bytes()
+    monkeypatch.setattr(paper_risk_history.requests, "get", lambda url, **opts: seen.append((url, opts)) or Response([raw]))
+    bundle = paper_risk_history.fetch_bundle()
+    assert set(bundle["files"]) == {"nifty_one_year.csv", "banknifty_one_year.csv"}
+    assert seen[-1][0] == paper_risk_history.URL
+    assert seen[-1][1]["headers"] == {"X-CI-Read-Token": "ci-secret-token"}

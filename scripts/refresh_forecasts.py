@@ -63,6 +63,7 @@ def fetch(url, params):
 
 
 def refresh_daily_candles(data, expected):
+    today_ist = datetime.now(IST).date()
     for symbol, key in KEYS.items():
         name = symbol.lower() + '_one_year.csv'
         existing = pd.read_csv(ROOT / 'volatility_lab/data' / name)
@@ -73,7 +74,13 @@ def refresh_daily_candles(data, expected):
         if response.get('status') != 'success':
             raise ValueError('Daily candle request failed')
         payload = response.get('data') or {}
-        frame = merge_candles(existing, payload.get('candles', []), expected)
+        candles = list(payload.get('candles') or [])
+        if expected == today_ist and not any(str(row[0]).startswith(str(expected)) for row in candles):
+            # Upstox holds same-day closing candles on the intraday endpoint until overnight rollover.
+            intraday = fetch(f'https://api.upstox.com/v3/historical-candle/intraday/{instrument}/days/1', {})
+            if intraday.get('status') == 'success':
+                candles.extend((intraday.get('data') or {}).get('candles') or [])
+        frame = merge_candles(existing, candles, expected)
         frame.to_csv(data / name, index=False, date_format='%Y-%m-%d')
 
 

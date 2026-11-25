@@ -1,5 +1,5 @@
 """Daily publication must advance past old IV snapshots without using partial candles."""
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import json
 from pathlib import Path
 
@@ -63,3 +63,35 @@ def test_snapshot_risk_uses_prior_dated_closes_only():
     frame.loc[39, 'Close'] = 9999
     assert prior_close_metrics(frame, session) == metrics
     assert prior_close_metrics(frame.iloc[:10], session) == {}
+
+
+def test_daily_refresh_falls_back_to_intraday_for_same_day_close(tmp_path, monkeypatch):
+    data_dir = Path(__file__).parents[2] / 'volatility_lab/data'
+    latest = pd.read_csv(data_dir / 'nifty_one_year.csv').Date.max()
+    expected = date(2026, 11, 25)
+    prior_sessions = refresh.sessions(pd.Timestamp(latest).date() + timedelta(days=1), expected)
+    assert prior_sessions[-1] == expected
+
+    class SameDay(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 11, 25, 17, 30, tzinfo=refresh.IST).astimezone(tz)
+
+    calls = []
+
+    def fake_fetch(url, params):
+        calls.append(url)
+        if '/intraday/' in url:
+            return {'status': 'success', 'data': {'candles': [['2026-11-25T00:00:00+05:30', 100, 102, 99, 101, 0]]}}
+        candles = [[f'{day.isoformat()}T00:00:00+05:30', 100, 102, 99, 101, 0] for day in prior_sessions[:-1]]
+        return {'status': 'success', 'data': {'candles': candles}}
+
+    monkeypatch.setattr(refresh, 'datetime', SameDay)
+    monkeypatch.setattr(refresh, 'fetch', fake_fetch)
+    refresh.refresh_daily_candles(tmp_path, expected)
+    assert sum('/intraday/' in url for url in calls) == 2
+    assert pd.read_csv(tmp_path / 'nifty_one_year.csv').Date.iloc[-1] == '2026-11-25'
+
+    monkeypatch.setattr(refresh, 'fetch', lambda url, params: {'status': 'success', 'data': {'candles': []}} if '/intraday/' in url else fake_fetch(url, params))
+    with pytest.raises(ValueError, match='missing a completed session'):
+        refresh.refresh_daily_candles(tmp_path, expected)

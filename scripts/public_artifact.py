@@ -1,6 +1,7 @@
 """Read a size-limited JSON artifact from the deployed website."""
 
 import json
+import os
 import re
 
 import requests
@@ -9,7 +10,11 @@ import requests
 def fetch_json(filename, max_bytes, *, timeout=(5, 15)):
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*\.json", filename):
         raise ValueError("Invalid public artifact name")
-    with requests.get(f"https://volatilitylab.in/{filename}", stream=True, allow_redirects=False, timeout=timeout) as response:
+    options = {"stream": True, "allow_redirects": False, "timeout": timeout}
+    token = os.environ.get("CI_READ_TOKEN", "").strip()
+    if token:
+        options["headers"] = {"X-CI-Read-Token": token}
+    with requests.get(f"https://volatilitylab.in/{filename}", **options) as response:
         if response.status_code == 404:
             raise FileNotFoundError(f"Published {filename} is missing")
         if response.status_code != 200:
