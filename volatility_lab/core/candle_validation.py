@@ -3,7 +3,7 @@ from pathlib import Path
 from contextlib import closing
 from datetime import datetime,timezone,timedelta
 from collections import defaultdict,Counter
-import argparse,csv,gzip,hashlib,json,math,sqlite3,time
+import argparse,csv,gzip,hashlib,json,math,os,sqlite3,time
 from concurrent.futures import ProcessPoolExecutor
 from archive_coverage import ROOT,readonly
 from collector_support import atomic_json
@@ -143,13 +143,22 @@ def run(root=ROOT,out=OUT):
         print(json.dumps(report,indent=2))
 
 if __name__=='__main__':
-    import msvcrt
     OUT.mkdir(parents=True,exist_ok=True)
     with (OUT/'validator.lock').open('a+b') as handle:
-        handle.seek(0,2)
-        if not handle.tell():handle.write(b'0');handle.flush()
-        handle.seek(0)
-        try:msvcrt.locking(handle.fileno(),msvcrt.LK_NBLCK,1)
-        except OSError:raise SystemExit('Another validation is already running.')
+        if os.name == 'nt':
+            import msvcrt
+            handle.seek(0,2)
+            if not handle.tell():handle.write(b'0');handle.flush()
+            handle.seek(0)
+            try:msvcrt.locking(handle.fileno(),msvcrt.LK_NBLCK,1)
+            except OSError:raise SystemExit('Another validation is already running.')
+        else:
+            import fcntl
+            try:fcntl.flock(handle.fileno(),fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:raise SystemExit('Another validation is already running.')
         try:run()
-        finally:handle.seek(0);msvcrt.locking(handle.fileno(),msvcrt.LK_UNLCK,1)
+        finally:
+            if os.name == 'nt':
+                handle.seek(0);msvcrt.locking(handle.fileno(),msvcrt.LK_UNLCK,1)
+            else:
+                fcntl.flock(handle.fileno(),fcntl.LOCK_UN)

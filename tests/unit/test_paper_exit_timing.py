@@ -69,3 +69,31 @@ def test_no_chains_after_expiry_requires_settlement_reconciliation():
     assert held["exit_pending"] and held["manual_reconciliation_required"] and held["settlement_pending"]
     assert "settlement" in held["staleReason"]
     assert not result["closed_trades"] and result["intraday_mtm_series"][-1]["net_mtm"] is None
+
+
+def test_scorecard_uses_banknifty_unit_capital_and_sl_replay_passes_exit_day(monkeypatch):
+    bn = engine.evaluate_forward_test_scorecard(dict(engine.CLEAN_SLATE_LEDGER), index_filter="BANKNIFTY", lots=1)
+    assert [row["unit_capital"] for row in bn["scorecard"]] == [26570, 46718, 26570, 53140, 26570, 53140]
+
+    seen_exit_days = []
+    real_charges = engine.compute_position_charges
+
+    def spy_charges(*args, **kwargs):
+        seen_exit_days.append(kwargs.get("exit_day"))
+        return real_charges(*args, **kwargs)
+
+    monkeypatch.setattr(engine, "compute_position_charges", spy_charges)
+    legs = [{"side": -1, "mult": 1, "strike": 25000, "type": "CE", "entryPx": 100.0}]
+    ledger = dict(
+        engine.CLEAN_SLATE_LEDGER,
+        closed_trades=[{
+            "id": "SL-1", "date": DAY, "session_date": DAY, "exit_session_date": "2026-11-26",
+            "triggerTime": DAY + "T09:20:00+05:30", "sym": "NIFTY", "exp": EXPIRY, "dte": 8,
+            "frontScope": True, "strat": "S1", "policy_version": "research-v1", "provenance_status": "VALIDATED_EVENT_QUOTES",
+            "lots": 1, "capital": 28037, "maxCredit": 6500, "maxLoss": 13000, "gross": 0.0, "legs": legs,
+            "mtmPath": [{"t": "2026-11-25 10:00 IST", "fresh": True, "exit_prices": [250.0], "quote_times": ["2026-11-25T10:00:00+05:30"]}],
+        }],
+    )
+    sim = engine.simulate_forward_portfolio(ledger=ledger, symbol="NIFTY", expiry_scope="ALL", sl_rule="SL_25_CAP")
+    assert len(sim["closed_trades"]) == 1
+    assert seen_exit_days == ["2026-11-26", "2026-11-25"]

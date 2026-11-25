@@ -3,6 +3,7 @@
 from datetime import datetime
 from io import StringIO
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -51,7 +52,11 @@ def write_bundle(source, output):
 
 
 def fetch_bundle():
-    with requests.get(URL, timeout=(10, 30), allow_redirects=False, stream=True) as response:
+    options = {"timeout": (10, 30), "allow_redirects": False, "stream": True}
+    token = os.environ.get("CI_READ_TOKEN", "").strip()
+    if token:
+        options["headers"] = {"X-CI-Read-Token": token}
+    with requests.get(URL, **options) as response:
         if response.status_code == 404:
             raise FileNotFoundError("Public daily history bundle has not been published")
         if response.status_code != 200:

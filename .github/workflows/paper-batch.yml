@@ -62,6 +62,7 @@ jobs:
           PAPER_DRIVE_FOLDER_ID: ${{ secrets.PAPER_DRIVE_FOLDER_ID }}
           PAPER_CHECKPOINT_KEY: ${{ secrets.PAPER_CHECKPOINT_KEY }}
           VOL_LAB_DATA_DIR: ${{ runner.temp }}/paper-references
+          CI_READ_TOKEN: ${{ secrets.CI_READ_TOKEN }}
         run: python scripts/build_paper_feed.py "$RUNNER_TEMP/paper-feed"
       - name: Publish one fast-forward commit
         if: steps.catchup.outputs.skip != 'true'

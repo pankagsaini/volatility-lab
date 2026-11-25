@@ -69,3 +69,43 @@ assert.equal(cloud.dualStraddlePoint_({...dualRec, data: [
     put_options: {market_data: {quote_source: 'rest', quote_timestamp: quoteAt,
       bid_price: 48, ask_price: 50, bid_qty: 75, ask_qty: 75}}}]}, quoteAt), null,
   'One recorded leg is not a straddle mark');
+
+// Archive day listing and per-day snapshot lookup paginate Drive in modifiedTime desc order.
+values.set('ARCHIVE_FOLDER_ID', 'arch-folder');
+const pages = {
+  '': {
+    files: [
+      {id: 'f-new', name: '2026-11-25_snapshot_154000_complete.json.gz'},
+      {id: 'f-mid', name: '2026-11-25_snapshot_091600_complete.json.gz'},
+    ],
+    nextPageToken: 'page-2',
+  },
+  'page-2': {
+    files: [{id: 'f-old', name: '2026-11-18_eod_154500_complete.json.gz'}],
+  },
+};
+cloud.ScriptApp = {
+  getOAuthToken: () => 'test-token',
+};
+cloud.DriveApp = {
+  getFolderById: id => ({getId: () => id}),
+  getFileById: id => ({
+    getBlob: () => id,
+    getId: () => id,
+  }),
+};
+cloud.UrlFetchApp = {
+  fetch: url => {
+    assert(url.includes('orderBy=modifiedTime%20desc'), 'Drive listing must sort newest first');
+    const tokenMatch = url.match(/pageToken=([^&]+)/);
+    const key = tokenMatch ? decodeURIComponent(tokenMatch[1]) : '';
+    return {getResponseCode: () => 200, getContentText: () => JSON.stringify(pages[key])};
+  },
+};
+cloud.Utilities = {
+  ...cloud.Utilities,
+  ungzip: id => ({getDataAsString: () => JSON.stringify({day: id, status: 'complete', records: [], forward_test_ledger: {secret: 1}})}),
+};
+assert.deepEqual(JSON.parse(get({action: 'list_days'}).text).days, ['2026-11-25', '2026-11-18']);
+assert.deepEqual(JSON.parse(get({action: 'latest', day: '2026-11-18'}).text), {day: 'f-old', status: 'complete', records: []});
+assert.deepEqual(JSON.parse(get({action: 'latest', day: '2026-11-25'}).text), {day: 'f-new', status: 'complete', records: []});
