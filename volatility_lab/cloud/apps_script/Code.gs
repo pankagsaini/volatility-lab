@@ -296,7 +296,9 @@ function catalogue_(now) {
   const cached = readJsonProperty_(properties, 'CATALOGUE', null);
   if (cached) {
     const parsed = cached;
-    if (parsed.day === today) {
+    // version 2 added the broker contract-master lot size; refetch once so an
+    // older cached catalogue cannot hide it for the rest of the session.
+    if (parsed.day === today && parsed.version === 2) {
       return parsed;
     }
   }
@@ -309,7 +311,7 @@ function catalogue_(now) {
     throw new Error('Instrument master unavailable');
   }
   const master = JSON.parse(Utilities.ungzip(response.getBlob()).getDataAsString());
-  const catalogue = { day: today, indices: {} };
+  const catalogue = { day: today, version: 2, indices: {} };
 
   for (const symbol of Object.keys(CONFIG.indices)) {
     const underlyingKey = CONFIG.indices[symbol];
@@ -327,6 +329,12 @@ function catalogue_(now) {
     if (futures.length < 2) {
       throw new Error('Futures contracts unavailable for ' + symbol);
     }
+    // Broker contract master is the only authoritative lot size. Quote payloads
+    // carry no lot field, so it is published in the catalogue for the desk.
+    const lotSize = master
+      .filter(x => x.underlying_key === underlyingKey && x.instrument_type === 'FUT')
+      .map(x => Number(x.lot_size))
+      .find(n => Number.isFinite(n) && n > 0) || null;
     const contracts = api_('/v2/option/contract', { instrument_key: underlyingKey });
     const maxExpiry = futures[futures.length - 1].expiry;
     let dates = [...new Set(contracts.map(x => String(x.expiry).slice(0, 10)))]
@@ -340,7 +348,8 @@ function catalogue_(now) {
     }
     catalogue.indices[symbol] = {
       futures: futures,
-      option_expiries: dates
+      option_expiries: dates,
+      lot_size: lotSize
     };
   }
   properties.setProperty('CATALOGUE', JSON.stringify(catalogue));

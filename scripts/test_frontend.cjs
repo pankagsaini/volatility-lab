@@ -21,7 +21,7 @@ for (const name of ['chartNumber','observedIv','observedSpread','observedMean','
   'forwardInterval','scenarioLegs','black76Price','normCdf','normPdf','currentRow','chartOpts',
   'renderTab1Regime','renderTab2Term','renderTab4Straddle','rowMatchesCriteria',
   'liveNumber','liveTimestamp','istDayAndMinute','nextTradingDay','expiryClock','isExpiryRollWindow',
-  'getDefaultActiveExpiryIdx','positionalGateOpen','interpolateOiDataDecayPct','computeStrikeGexProfile','renderTab6ZeroDteDesk','fmtIstClockMin']) {
+  'getDefaultActiveExpiryIdx','chainDteForCapture','positionalGateOpen','interpolateOiDataDecayPct','computeStrikeGexProfile','renderTab6ZeroDteDesk','fmtIstClockMin']) {
   const start = html.indexOf('      function '+name+'(');
   assert(start>=0, name);
   vm.runInContext(html.slice(start, html.indexOf('\n      }',start)+8),web);
@@ -140,6 +140,18 @@ assert.equal(web.positionalGateOpen({dte:1.99}),false);
 assert.equal(web.positionalGateOpen({dte:2}),true);
 assert.equal(web.positionalGateOpen({dte:0.05}),false);
 
+// Expiry-day chains stay in the capture after the closing bell; chains that
+// expired on an earlier session are dropped, never re-dated.
+const close2311 = Date.parse('2026-11-23T15:40:00+05:30');
+assert.equal(web.chainDteForCapture('2026-11-23', close2311 - 3*60000, '2026-11-23'), 3/1440);
+assert.equal(web.chainDteForCapture('2026-11-23', close2311 + 44000, '2026-11-23'), 0,
+  'The 15:40:44 closing capture keeps its expiry-day chain at 0 DTE');
+assert.equal(web.chainDteForCapture('2026-11-23', close2311 + 86400000, '2026-11-24'), null,
+  'A chain cannot outlive its expiry session');
+assert.equal(web.chainDteForCapture('2026-11-30', close2311, '2026-11-23'),
+  (Date.parse('2026-11-30T15:40:00+05:30') - close2311)/86400000);
+assert.equal(web.chainDteForCapture('not-a-day', close2311, '2026-11-23'), null);
+
 // Tab 2: the expiring front is held out of the σ_fwd chain and drawn as a kink.
 web.window.VL_PUBLIC_STATE={forecasts:{}};
 web.marketCatalog={NIFTY:[
@@ -167,6 +179,11 @@ const gex=web.computeStrikeGexProfile(gammaItem,'NIFTY');
 assert.equal(gex.rows.length,3);
 assert.equal(gex.rows.find(row=>row.k===24900).gexCr,-5,'Broker OI quantity must not be multiplied by lot size twice');
 assert.equal(gex.lot,65);
+assert.equal(gex.lotSource,'archive metadata');
+const gexBroker = web.computeStrikeGexProfile({...gammaItem,lotSize:65},'NIFTY');
+assert.equal(gexBroker.lot,65);
+assert.equal(gexBroker.lotSource,'broker contract master','Broker contract master holds the authoritative lot size');
+assert.equal(web.computeStrikeGexProfile({...gammaItem,lotSize:70},'NIFTY').lot,70);
 assert.equal(gex.pin.k,25000);
 assert.equal(gex.flip,24953);
 assert.equal(web.computeStrikeGexProfile({spot:25000,chain:[{k:25000}]},'NIFTY').rows.length,0);
@@ -207,8 +224,12 @@ web.activeZeroDteMode = 'inr'; web.renderTab6ZeroDteDesk();
 assert.equal(web.zerodteStraddleChart.data.datasets[3].data[1],75.68);
 web.activeSymbol='BANKNIFTY'; web.renderTab6ZeroDteDesk();
 assert(web.zerodteStraddleChart.data.datasets[3].data.every(p=>p===null),'NIFTY study cannot become BANKNIFTY evidence');
+assert.match(web.zerodteStraddleChart.data.datasets[3].label,/not applicable/,'The NIFTY study is not presented as a BANKNIFTY benchmark');
 web.activeSymbol='NIFTY'; zeroItem.expiry='2026-11-23'; web.renderTab6ZeroDteDesk();
-assert.equal(web.zerodteStraddleChart.data.labels.length,0,'0DTE desk must not plot next-week decay');
+assert.equal(web.zerodteStraddleChart.data.labels.length,3,'A non-expiry front still shows the marks recorded for it');
+assert(web.zerodteStraddleChart.data.datasets[2].data.every(p=>p===null),'Ideal √t curvature stays off outside the expiry clock');
+assert(web.zerodteStraddleChart.data.datasets[3].data.every(p=>p===null),'OIData expiry study stays off outside the expiry clock');
+assert.match(web.zerodteStraddleChart.data.datasets[3].label,/not applicable/,'The Tuesday study is not claimed for a non-expiry session');
 zeroItem.expiry='2026-11-17';
 zeroItem.dualIntraday = ['14:59','15:00','15:30','15:31'].map((t,i)=>({markAt:'2026-11-17T'+t+':00+05:30',spot:[100,200,400,800][i],anchorK:25000,anchorStrad:100,rollStrad:100,rollAtm:25000}));
 web.renderTab6ZeroDteDesk();

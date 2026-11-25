@@ -1,16 +1,38 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en-IN" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Volatility Lab — NSE Options Quant Desk</title>
-  <meta name="description" content="Volatility research for NIFTY 50 and BANKNIFTY. Explore captured options data, expiry risk, dated forecasts and recorded strategy replays." />
-  <meta property="og:title" content="Volatility Lab — NSE Options Quant Desk" />
-  <meta property="og:description" content="A focused workspace for Indian index volatility research, captured market data and strategy replay." />
+  <title>Volatility Lab — Indian index options research</title>
+  <meta name="description" content="Understand the curve. Compare volatility. Explore expiry risk. Volatility Lab is an Indian index options research desk built on recorded NIFTY and BANKNIFTY data: term structure, volatility smile, expiry-day microstructure and replayable strategy evidence." />
+  <link rel="canonical" href="https://volatilitylab.in/" />
+  <meta name="theme-color" content="#070b12" />
+  <meta property="og:site_name" content="Volatility Lab" />
+  <meta property="og:title" content="Volatility Lab — Indian index options research" />
+  <meta property="og:description" content="Understand the curve. Compare volatility. Explore expiry risk. Recorded NIFTY and BANKNIFTY options data, term structure, volatility smile and expiry-day research." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://volatilitylab.in/" />
+  <meta property="og:image" content="https://volatilitylab.in/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Volatility Lab — Indian index options research" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070b12' stroke='%238b5cf6' stroke-width='3'/%3E%3Cpath d='M32 10 L52 32 L32 54 L12 32 Z' fill='%2338bdf8' fill-opacity='0.18' stroke='%2338bdf8' stroke-width='3'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%2334d399'/%3E%3C/svg%3E" />
+  <meta name="twitter:title" content="Volatility Lab — Indian index options research" />
+  <meta name="twitter:description" content="Understand the curve. Compare volatility. Explore expiry risk. Recorded NIFTY and BANKNIFTY options research." />
+  <meta name="twitter:image" content="https://volatilitylab.in/og-image.png" />
+  <link rel="icon" href="favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png" />
+  <link rel="apple-touch-icon" href="favicon-192.png" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"WebSite","name":"Volatility Lab",
+   "alternateName":"Volatility Lab — Indian index options research","url":"https://volatilitylab.in/",
+   "description":"Understand the curve. Compare volatility. Explore expiry risk. Recorded NIFTY and BANKNIFTY options research.",
+   "inLanguage":"en-IN",
+   "publisher":{"@type":"Organization","name":"Volatility Lab","url":"https://volatilitylab.in/",
+     "logo":{"@type":"ImageObject","url":"https://volatilitylab.in/favicon-192.png"}}}
+  </script>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="scripts/snapshot-metrics.js"></script>
   <script src="scripts/trading-sessions.js"></script>
@@ -1638,6 +1660,19 @@
         return list.length > 1 && isExpiryRollWindow(list[0].expiry, asOfIso) ? 1 : 0;
       }
 
+      // Calendar days to expiry for a chain inside a capture. An expiry-day
+      // chain stays available for the whole session, including the closing
+      // capture taken seconds after the 15:40 bell, at exactly 0 DTE. A chain
+      // that expired on an earlier session is dropped instead of re-dated.
+      function chainDteForCapture(expiryIso, capturedMs, sessionDay) {
+        const expiry = String(expiryIso || '').slice(0, 10);
+        const close = TradingSessions.expiryMillis(expiry);
+        if (!Number.isFinite(close) || !Number.isFinite(capturedMs)) return null;
+        const days = (close - capturedMs) / 86400000;
+        if (days > 0) return days;
+        return expiry === sessionDay ? 0 : null;
+      }
+
       function enrichItemWithBlack76(item) {
         if (!item || (item.archivedAsOf && !item.snapshotId)) return item;
         if (!Array.isArray(item.chain)) item.chain = [];
@@ -2645,7 +2680,12 @@
 
       function computeStrikeGexProfile(item, sym) {
         const lotSizes = (typeof backtestMeta === 'object' && backtestMeta && backtestMeta.lotSizes) || {};
-        const lot = Number(lotSizes[sym]) > 0 ? Number(lotSizes[sym]) : (sym === 'BANKNIFTY' ? 30 : 65);
+        // Prefer the broker contract-master lot recorded with the snapshot. The
+        // archive metadata is only a fallback for older captures.
+        const brokerLot = Number(item && item.lotSize) > 0 ? Number(item.lotSize) : null;
+        const archiveLot = Number(lotSizes[sym]) > 0 ? Number(lotSizes[sym]) : (sym === 'BANKNIFTY' ? 30 : 65);
+        const lot = brokerLot || archiveLot;
+        const lotSource = brokerLot ? 'broker contract master' : 'archive metadata';
         const S = Number(item.spot || item.syn || 0);
         const rows = (item.chain || []).map(node => {
           const callGamma = chartNumber(node.modelCallGamma), putGamma = chartNumber(node.modelPutGamma);
@@ -2672,14 +2712,22 @@
             if (flip === null || Math.abs(level - S) < Math.abs(flip - S)) flip = level;
           }
         }
-        return {rows, pin, flip, lot, totalCr: Number(cumulative.toFixed(2))};
+        return {rows, pin, flip, lot, lotSource, totalCr: Number(cumulative.toFixed(2))};
       }
       window.computeStrikeGexProfile = computeStrikeGexProfile;
 
       function renderTab6ZeroDteDesk() {
         const list = marketCatalog[activeSymbol] || [];
         if (!list.length) return;
-        const r = list[0];
+        // Expiry day always inspects the expiring front; on other days the tab
+        // follows the header expiry selection so every listed contract (NIFTY or
+        // BANKNIFTY) can be inspected.
+        const frontClock = expiryClock(list[0].expiry, list[0].pricingAsOf || list[0].snapshotId || list[0].ivCapturedAt);
+        const selectedIdx = Number.isInteger(activeExpiryIdx) ? activeExpiryIdx : 0;
+        const manual = typeof userSelectedExpiryManually !== 'undefined' && !!userSelectedExpiryManually;
+        const focusIdx = frontClock && frontClock.is0Dte && !manual
+          ? 0 : Math.min(Math.max(0, selectedIdx), list.length - 1);
+        const r = list[focusIdx];
         enrichItemWithBlack76(r);
         const asOf = r.pricingAsOf || r.snapshotId || r.ivCapturedAt || lastSyncedRetrievedAt;
         const clock = expiryClock(r.expiry, asOf);
@@ -2692,11 +2740,17 @@
 
         const badge = document.getElementById('zerodteContractBadge');
         if (badge) badge.textContent = activeSymbol + ' ' + r.expiry + ' · ' +
-          (clock ? (clock.is0Dte ? '0DTE · ' + Math.round(clock.minsLeft) + ' min to close' : clock.rawCalendarDays + ' DTE front') : 'clock unavailable');
+          (clock ? (clock.is0Dte
+            ? (clock.minsLeft > 0 ? '0DTE · ' + Math.round(clock.minsLeft) + ' min to close' : '0DTE · session closed')
+            : clock.rawCalendarDays + ' DTE front') : 'clock unavailable');
         const subtitle = document.getElementById('zerodteSubtitle');
-        if (subtitle) subtitle.textContent = clock && clock.is0Dte
-          ? 'Expiry-day clock active: T_cal = ' + clock.minsLeft.toFixed(0) + ' minutes, T_vol = ' + Math.round(clock.tVol * 245 * 375) + ' trading minutes. Pricing uses T_cal; T_vol is shown as a diagnostic.'
-          : 'The front listed contract is not expiring today. Expiry-day series stay blank until a recorded expiry-day capture exists; no value is interpolated.';
+        if (subtitle) subtitle.textContent = clock
+          ? (clock.is0Dte
+            ? (clock.minsLeft > 0
+              ? 'Expiry-day clock active: T_cal = ' + clock.minsLeft.toFixed(0) + ' minutes, T_vol = ' + Math.round(clock.tVol * 245 * 375) + ' trading minutes. Pricing uses T_cal; T_vol is shown as a diagnostic.'
+              : 'Expiry-day session complete: T_cal = 0, so model greeks and the √t benchmark stop at the last recorded print. The marks below are the paired books recorded up to the ' + fmtIstClockMin(closeMins) + ' close; nothing is extended past them.')
+            : 'The front listed contract expires in ' + clock.rawCalendarDays + ' days. Showing this session\'s recorded paired-book series for it; the expiry-day clock, √t and OIData benchmarks stay off until an expiry-day capture exists.')
+          : 'Expiry clock unavailable for this capture.';
 
         // KPI 1
         const kClock = document.getElementById('zKpiClockIv');
@@ -2706,15 +2760,22 @@
           const broker = r.brokerAtmIv > 0 ? r.brokerAtmIv.toFixed(2) + '%' : '—';
           const tvol = Number(r.b76TradingIv) > 0 ? r.b76TradingIv.toFixed(2) + '%' : '—';
           kClockSub.textContent = 'T_vol IV ' + tvol + ' · broker ' + broker + ' · ' +
-            (clock ? (clock.is0Dte ? Math.round(clock.minsLeft) + ' min left' : clock.rawCalendarDays + ' calendar days') : 'clock unavailable');
+            (clock ? (clock.is0Dte
+              ? (clock.minsLeft > 0 ? Math.round(clock.minsLeft) + ' min left' : 'session closed, T_cal 0')
+              : clock.rawCalendarDays + ' calendar days') : 'clock unavailable');
         }
 
-        // Recorded dual straddle series. The collector writes rolling and anchor
-        // paired-book mids; nothing is reconstructed from spot distance.
+        // Recorded dual straddle series. The mid comes from the captured
+        // two-sided books at the anchor and the nearest listed strike to spot;
+        // nothing is reconstructed from spot distance or last traded prices.
+        // Points must belong to the capture session. Expiry-day-only overlays are
+        // gated separately so a front contract that is not expiring today still
+        // shows the marks that were actually recorded for it.
+        const captureDay = r.sessionDate || (clock && clock.day) || null;
         const sessionPoint = p => {
           const stamp = p && liveTimestamp(p.markAt || p.snapshotId);
-          return clock && clock.is0Dte && Number.isFinite(stamp) && stamp <= liveTimestamp(asOf)
-            && new Date(stamp + 19800000).toISOString().slice(0, 10) === clock.day;
+          return captureDay && Number.isFinite(stamp) && stamp <= liveTimestamp(asOf)
+            && new Date(stamp + 19800000).toISOString().slice(0, 10) === captureDay;
         };
         const dual = (r.dualIntraday || []).filter(sessionPoint)
           .map(p => ({...p, t: new Date(liveTimestamp(p.markAt) + 19800000).toISOString().slice(11, 16)}))
@@ -2806,11 +2867,14 @@
             oiSeries.push(null);
           }
         });
+        const oiLabel = oiEligible
+          ? 'OIData NSE Tuesday median (published, first record)'
+          : 'OIData NIFTY Tuesday study (not applicable to this contract)';
         const straddleData = {labels, datasets: [
           {label: 'Rolling spot-ATM (recorded)', data: rollSeries, borderColor: '#38bdf8', borderWidth: 2.8, pointRadius: 3, spanGaps: false, tension: .2},
           {label: 'Open anchor ' + (Number.isFinite(anchorK) ? anchorK : '—') + ' (recorded)', data: anchorSeries, borderColor: '#f59e0b', borderDash: [4, 3], borderWidth: 2.2, pointRadius: 2.5, spanGaps: false, tension: .2},
           {label: 'Theoretical √t (benchmark, first record)', data: sqrtSeries, borderColor: '#94a3b8', borderDash: [6, 4], borderWidth: 1.8, pointRadius: 0, tension: .2},
-          {label: 'OIData NSE Tuesday median (published, first record)', data: oiSeries, borderColor: '#f43f5e', borderWidth: 2.2, pointRadius: 2, tension: .25}
+          {label: oiLabel, data: oiSeries, borderColor: '#f43f5e', borderWidth: 2.2, pointRadius: 2, tension: .25}
         ]};
         zerodteStraddleChart = updateOrCreateChart(zerodteStraddleChart, document.getElementById('zerodteStraddleCanvas'),
           'line', straddleData, chartOpts(activeZeroDteMode === 'pct' ? '%' : '₹', false));
@@ -2874,7 +2938,7 @@
         }
         const gexSource = document.getElementById('zGexSource');
         if (gexSource) gexSource.textContent = gex.rows.length
-          ? 'Source: ' + gex.rows.length + ' recorded strikes with per-leg model gamma. Cumulative balance is a crossing across strikes, not a dealer gamma-flip price.'
+          ? 'Source: ' + gex.rows.length + ' recorded strikes with per-leg model gamma at lot ' + gex.lot + ' (' + gex.lotSource + '). Cumulative balance is a crossing across strikes, not a dealer gamma-flip price.'
           : 'Gamma unavailable: needs a fresh two-sided book plus verified rate and dividend inputs.';
 
         // Descriptive spot proxy. Official index settlement is published by the clearing corporation.
@@ -4758,8 +4822,8 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           if (!isFinite(recordAge) || recordAge < -30000 || recordAge > 120000) throw new Error('Stale chain');
           var greeksAge = captured - liveTimestamp(rec.chain_retrieved_at || rec.retrieved_at);
           if (!isFinite(greeksAge) || greeksAge < -30000 || greeksAge > 120000) throw new Error('Stale chain Greeks');
-          var dte = (TradingSessions.expiryMillis(expiry) - captured) / 86400000;
-          if (!(dte > 0)) return;
+          var dte = chainDteForCapture(expiry, captured, sessionDay);
+          if (dte === null) return;
           var spotQuote = findQuote(sym === 'NIFTY' ? 'NSE_INDEX|Nifty 50' : 'NSE_INDEX|Nifty Bank');
           var spot = liveNumber(spotQuote ? spotQuote.last_price : rec.data[0].underlying_spot_price);
           if (!(spot > 0)) throw new Error('Missing underlying price');
@@ -4794,6 +4858,8 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
           var riskAge = risk ? (Date.parse(sessionDay) - Date.parse(risk.as_of)) / 86400000 : NaN;
           var validRisk = risk && risk.units === 'annualized_percent' && riskAge > 0 && riskAge <= 5;
           var metadata = payload.catalogue && payload.catalogue.indices && payload.catalogue.indices[sym];
+          // Broker contract master lot size; never inferred from quote payloads.
+          var brokerLot = metadata && Number(metadata.lot_size) > 0 ? Number(metadata.lot_size) : null;
           var future = metadata && (metadata.futures || []).find(function(f) { return String(f.expiry).slice(0, 10) === expiry; });
           var futureQuote = future && findQuote(future.instrument_key);
           var vixQuote = findQuote('NSE_INDEX|India VIX');
@@ -4806,7 +4872,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
             futureBook: futureQuote ? {expiry:future.expiry, fBid:liveNumber(bid.price), fAsk:liveNumber(ask.price),
               fBidQty:liveNumber(bid.quantity), fAskQty:liveNumber(ask.quantity), fQuoteAt:futureQuote.timestamp} : null,
             expiry: expiry, kind: future ? 'Monthly' : (metadata ? 'Weekly' : 'Listed'), dte: dte, spot: spot, atm: atm.k,
-            chain: chain, snapshotId: asOf, sessionDate: sessionDay, pricingAsOf: asOf,
+            lotSize: brokerLot, chain: chain, snapshotId: asOf, sessionDate: sessionDay, pricingAsOf: asOf,
             riskAsOf: validRisk ? risk.as_of : null, riskSource: validRisk ? risk.source : null,
             iv: (atm.cIv + atm.pIv) / 2, cIv: atm.cIv, pIv: atm.pIv,
             upstoxCallIv: atm.cIv, upstoxPutIv: atm.pIv, upstoxAtmIv: (atm.cIv + atm.pIv) / 2,
@@ -4859,9 +4925,9 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
             markSource:paired ? 'paired_book_mid' : null, cQuoteAt:anchor?.cQuoteAt, pQuoteAt:anchor?.pQuoteAt,
             iv:anchor?.uCallIv > 0 && anchor.uPutIv > 0 ? (anchor.uCallIv + anchor.uPutIv) / 2 : null,
             ivSource:'Upstox option_greeks.iv', expiry, snapshotId:item.ivCapturedAt, markAt:asOf});
-          // Dual-straddle desk series. The collector is the only source of a
-          // rolling spot-ATM mid; the browser never reconstructs one from spot
-          // distance. Anchor mids are reused from the settled anchor strike.
+          // Dual-straddle desk series. A mark exists only when both legs are
+          // fresh two-sided books; the page derives it from the recorded capture
+          // and never from spot distance, LTP or a synthesised rolling anchor.
           const dualMarks = new Map();
           for (const p of previous?.dualIntraday || []) {
             const stamp = p && liveTimestamp(p.markAt);

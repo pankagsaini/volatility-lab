@@ -69,3 +69,27 @@ assert.equal(cloud.dualStraddlePoint_({...dualRec, data: [
     put_options: {market_data: {quote_source: 'rest', quote_timestamp: quoteAt,
       bid_price: 48, ask_price: 50, bid_qty: 75, ask_qty: 75}}}]}, quoteAt), null,
   'One recorded leg is not a straddle mark');
+
+// The broker contract master is the lot-size source; quotes carry no lot field.
+values.delete('CATALOGUE');
+const masterRow = (uk, expiry, lot, key) => ({underlying_key: uk, instrument_type: 'FUT', expiry,
+  lot_size: lot, instrument_key: key, trading_symbol: key});
+cloud.Utilities.ungzip = () => ({getDataAsString: () => JSON.stringify([
+  masterRow('NSE_INDEX|Nifty 50','2026-11-24',65,'NSE_FO|N1'),
+  masterRow('NSE_INDEX|Nifty 50','2026-12-29',65,'NSE_FO|N2'),
+  masterRow('NSE_INDEX|Nifty Bank','2026-11-26',30,'NSE_FO|B1'),
+  masterRow('NSE_INDEX|Nifty Bank','2026-12-29',30,'NSE_FO|B2')])});
+cloud.UrlFetchApp = {fetch: () => ({getResponseCode: () => 200, getBlob: () => ({})})};
+cloud.api_ = () => [{expiry:'2026-11-24'}, {expiry:'2026-12-29'}, {expiry:'2026-11-26'}];
+const master = cloud.catalogue_(new Date('2026-11-23T10:00:00+05:30'));
+assert.equal(master.indices.NIFTY.lot_size, 65, 'NIFTY lot comes from the broker contract master');
+assert.equal(master.indices.BANKNIFTY.lot_size, 30, 'BANKNIFTY lot comes from the broker contract master');
+let masterFetches = 0;
+cloud.UrlFetchApp = {fetch: () => { masterFetches++; return {getResponseCode: () => 200, getBlob: () => ({})}; }};
+values.set('CATALOGUE', JSON.stringify({day: '2026-11-23', indices: {NIFTY: {lot_size: null}}}));
+const refreshed = cloud.catalogue_(new Date('2026-11-23T10:00:00+05:30'));
+assert.equal(masterFetches, 1, 'A catalogue cached before the lot-size schema is refetched');
+assert.equal(refreshed.version, 2);
+assert.equal(refreshed.indices.NIFTY.lot_size, 65);
+cloud.catalogue_(new Date('2026-11-23T10:05:00+05:30'));
+assert.equal(masterFetches, 1, 'The current schema is served from cache for the rest of the day');

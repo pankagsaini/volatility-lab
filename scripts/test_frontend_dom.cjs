@@ -8,6 +8,16 @@ const root = path.resolve(__dirname,'..');
 const html = fs.readFileSync(path.join(root,'docs/index.html'),'utf8');
 assert.equal(html,fs.readFileSync(path.join(root,'index.html'),'utf8'));
 assert(!/#(?:d4af37|eab308)/i.test(html));
+// Search-facing head: the desk is presented as volatility research, not an NSE
+// quant product, and the icon is a crawlable asset rather than a data URI.
+assert(!/NSE Options Quant Desk/.test(html),'The search snippet must not frame the desk as an NSE quant product');
+assert(html.includes('<title>Volatility Lab — Indian index options research</title>'));
+assert(html.includes('property="og:image" content="https://volatilitylab.in/og-image.png"'));
+assert(html.includes('rel="canonical" href="https://volatilitylab.in/"'));
+assert(!/rel="icon" type="image\/svg\+xml"/.test(html),'A data-URI icon cannot become a crawlable favicon');
+assert(html.includes('href="favicon.ico"'));
+for (const asset of ['favicon.ico','favicon-32.png','favicon-48.png','favicon-192.png','og-image.png'])
+  assert(fs.statSync(path.join(root,'docs',asset)).size > 0, asset + ' must ship with the site');
 const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
 assert.equal(ids.length,new Set(ids).size,'Duplicate HTML IDs');
 for (const [,id] of html.matchAll(/getElementById\(['"]([^'"]+)['"]\)/g)) assert(ids.includes(id),'Missing DOM ID '+id);
@@ -30,8 +40,12 @@ const server = http.createServer((request,response) => {
     const errors = [];
     page.on('pageerror',error=>errors.push(error.message));
     await page.route('https://script.google.com/**',route=>route.abort());
-    await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
+    const base = 'http://127.0.0.1:'+server.address().port;
+    await page.goto(base,{waitUntil:'networkidle'});
     await page.waitForFunction(()=>window._vlDeskInitialized && window.Chart);
+    assert.equal(await page.title(),'Volatility Lab — Indian index options research');
+    for (const asset of ['/favicon.ico','/favicon-192.png','/og-image.png'])
+      assert.equal((await page.request.get(base+asset)).status(),200,asset+' must be served to crawlers');
     assert((await page.locator('#kpiSpot').textContent()).includes('25,116'));
     assert.equal(await page.locator('#shareDesk').count(),0);
     assert.equal(await page.locator('#workspaceTitle').textContent(),'Volatility research');
@@ -85,7 +99,7 @@ const server = http.createServer((request,response) => {
       const i=anchor.data.findIndex(v=>typeof v==='number' && Number.isFinite(v));
       return i<0?null:{bench:sqrt.data[i],anchor:anchor.data[i]};
     });
-    if (anchored) assert(Math.abs(anchored.bench-anchored.anchor)<=0.02,
+    if (anchored && Number.isFinite(anchored.bench)) assert(Math.abs(anchored.bench-anchored.anchor)<=0.02,
       'The √t benchmark starts at the first recorded premium, never at an implied open');
     await page.locator('[data-zmode="pct"]').click();
     const pctStart = await page.evaluate(()=>{
@@ -95,7 +109,7 @@ const server = http.createServer((request,response) => {
       const i=anchor.data.findIndex(v=>typeof v==='number' && Number.isFinite(v));
       return i<0?null:{bench:sqrt.data[i],anchor:anchor.data[i]};
     });
-    if (pctStart) assert(Math.abs(pctStart.bench)<=0.02&&Math.abs(pctStart.anchor)<=0.02,
+    if (pctStart && Number.isFinite(pctStart.bench)) assert(Math.abs(pctStart.bench)<=0.02&&Math.abs(pctStart.anchor)<=0.02,
       'Percent mode is rebased to the first recorded premium');
     await page.locator('[data-tab="term"]').click();
     assert.equal(await page.evaluate(()=>Chart.getChart('termMainCanvas').data.datasets.length),2);
