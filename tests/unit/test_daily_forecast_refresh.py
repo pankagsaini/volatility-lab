@@ -65,33 +65,37 @@ def test_snapshot_risk_uses_prior_dated_closes_only():
     assert prior_close_metrics(frame.iloc[:10], session) == {}
 
 
-def test_daily_refresh_falls_back_to_intraday_for_same_day_close(tmp_path, monkeypatch):
+@pytest.mark.parametrize('now', ['2026-11-25T17:30:00+05:30', '2026-11-26T01:15:00+05:30'])
+def test_daily_refresh_uses_only_the_completed_broker_candle(tmp_path, monkeypatch, now):
     data_dir = Path(__file__).parents[2] / 'volatility_lab/data'
     latest = pd.read_csv(data_dir / 'nifty_one_year.csv').Date.max()
     expected = date(2026, 11, 25)
     prior_sessions = refresh.sessions(pd.Timestamp(latest).date() + timedelta(days=1), expected)
     assert prior_sessions[-1] == expected
 
-    class SameDay(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return datetime(2026, 11, 25, 17, 30, tzinfo=refresh.IST).astimezone(tz)
-
+    as_of = datetime.fromisoformat(now)
+    close_date = '2026-11-25'
     calls = []
 
     def fake_fetch(url, params):
         calls.append(url)
         if '/intraday/' in url:
-            return {'status': 'success', 'data': {'candles': [['2026-11-25T00:00:00+05:30', 100, 102, 99, 101, 0]]}}
+            return {'status': 'success', 'data': {'candles': [[f'{close_date}T00:00:00+05:30', 100, 102, 99, 101, 0]]}}
         candles = [[f'{day.isoformat()}T00:00:00+05:30', 100, 102, 99, 101, 0] for day in prior_sessions[:-1]]
         return {'status': 'success', 'data': {'candles': candles}}
 
-    monkeypatch.setattr(refresh, 'datetime', SameDay)
     monkeypatch.setattr(refresh, 'fetch', fake_fetch)
-    refresh.refresh_daily_candles(tmp_path, expected)
+    refresh.refresh_daily_candles(tmp_path, expected, as_of)
     assert sum('/intraday/' in url for url in calls) == 2
     assert pd.read_csv(tmp_path / 'nifty_one_year.csv').Date.iloc[-1] == '2026-11-25'
 
+    close_date = '2026-11-26'
+    with pytest.raises(ValueError, match='missing a completed session'):
+        refresh.refresh_daily_candles(tmp_path, expected, as_of)
+
+    with pytest.raises(ValueError, match='unfinished'):
+        refresh.refresh_daily_candles(tmp_path, expected, datetime.fromisoformat('2026-11-25T11:00:00+05:30'))
+
     monkeypatch.setattr(refresh, 'fetch', lambda url, params: {'status': 'success', 'data': {'candles': []}} if '/intraday/' in url else fake_fetch(url, params))
     with pytest.raises(ValueError, match='missing a completed session'):
-        refresh.refresh_daily_candles(tmp_path, expected)
+        refresh.refresh_daily_candles(tmp_path, expected, as_of)
