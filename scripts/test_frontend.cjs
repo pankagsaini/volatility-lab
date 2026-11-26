@@ -218,7 +218,8 @@ web.activeZeroDteMode='pct';
 
 // The shipped history may contain IV only with provenance; pre-capture years stay empty.
 const charts = vm.runInContext('OptionsCharts',web);
-const comparisonState = {forecasts:{NIFTY:{expiries:[{expiry:'2026-11-17',as_of:'2026-11-11T15:40:00+05:30',training_through:'2026-11-11',egarch:17,ewma:null}]}}};
+const comparisonState = {forecast_update:{generated_at:'2026-11-11T15:42:00+05:30'},
+  forecastObservedAt:Date.parse('2026-11-11T15:44:00+05:30'), forecasts:{NIFTY:{expiries:[{expiry:'2026-11-17',as_of:'2026-11-11T15:40:00+05:30',training_through:'2026-11-11',egarch:17,ewma:null}]}}};
 const comparisonRow = {expiry:'2026-11-17',ivCapturedAt:'2026-11-11T15:45:00+05:30',brokerAtmIv:20};
 assert.equal(charts.comparison(comparisonState,'NIFTY',comparisonRow).egarchGap,3);
 assert.equal(charts.comparison(comparisonState,'NIFTY',{...comparisonRow,ivCapturedAt:'2026-11-12T15:45:00+05:30'}).egarchGap,3);
@@ -229,6 +230,16 @@ for (const stamp of ['2026-11-11T15:30:00+05:30','invalid']) {
 }
 assert.equal(charts.comparison(comparisonState,'NIFTY',{...comparisonRow,brokerAtmIv:null,iv:22}).egarchGap,null,'Model IV cannot fill comparison');
 assert.equal(charts.comparison({},'NIFTY',comparisonRow).egarch,null);
+const afterClose = {...comparisonState, forecast_update:{generated_at:'2026-11-11T17:07:00+05:30'},
+  forecastObservedAt:Date.parse('2026-11-11T17:08:00+05:30')};
+const atClose = {...comparisonRow, ivCapturedAt:'2026-11-11T15:40:44+05:30'};
+assert.equal(charts.comparison(afterClose,'NIFTY',atClose).context,'Generated after capture');
+for (const state of [afterClose, {...comparisonState, forecast_update:{}},
+    {...comparisonState, forecastObservedAt:undefined},
+    {...comparisonState, forecastObservedAt:Date.parse('2026-11-11T15:46:00+05:30')}]) {
+  assert.equal(charts.comparison(state,'NIFTY',comparisonRow).egarchGap,null);
+}
+assert.equal(charts.comparison(afterClose,'NIFTY',{...comparisonRow,ivCapturedAt:'2026-11-11T17:08:00+05:30'}).egarchGap,3);
 const smile = charts.smile({spot:100,atm:100,chain:[
   {k:90,uPutIv:22,uPutDelta:-.11}, {k:95,uPutIv:19,uPutDelta:-.20},
   {k:100,uCallIv:16,uPutIv:18}, {k:105,uCallIv:15,uCallDelta:.25},
