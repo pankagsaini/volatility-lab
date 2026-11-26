@@ -45,7 +45,7 @@ web.pricingInputs = {schema:1,rate:{model_rate:.066,source:'https://www.rbi.org.
   dividends:Object.fromEntries(['NIFTY','BANKNIFTY'].map((s,i)=>[s,{model_yield:.0142,as_of:'2026-10-30',sha256:'fixture',source:'https://www.niftyindices.com/Factsheet/'+(i?'ind_nifty_bank.pdf':'ind_nifty50.pdf')}]))};
 // Compile every inline script, including the large generated data section.
 for (const [, attributes, script] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
-  if (/application\/json/.test(attributes)) JSON.parse(script);
+  if (/application\/(?:ld\+)?json/.test(attributes)) JSON.parse(script);
   else new vm.Script(script);
 }
 assert.equal(html, fs.readFileSync(path.join(root, 'docs/index.html'), 'utf8'));
