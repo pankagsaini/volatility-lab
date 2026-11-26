@@ -13,12 +13,27 @@ assert.equal(ids.length,new Set(ids).size,'Duplicate HTML IDs');
 for (const [,id] of html.matchAll(/getElementById\(['"]([^'"]+)['"]\)/g)) assert(ids.includes(id),'Missing DOM ID '+id);
 const publicState = JSON.parse(html.match(/id="deskPublicState">(.*?)<\/script>/s)[1]);
 assert.deepEqual(publicState,JSON.parse(fs.readFileSync(path.join(root,'docs/live_state.json'),'utf8')));
+// Search appearance: the title, description and structured data must describe
+// the research product, not the retired "NSE Options Quant Desk" wording.
+const head = html.slice(0, html.indexOf('</head>'));
+assert.equal(html.match(/<title>([^<]+)<\/title>/)[1],'Volatility Lab — Indian index options research');
+assert(/Understand the curve\. Compare volatility\. Explore expiry risk\./.test(head));
+assert(!/NSE Options|Quant Desk|Institutional/.test(head),'Retired snippet wording must not return');
+const ld = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])['@graph'];
+const org = ld.find(node=>node['@type']==='Organization');
+assert(org && /\/icon-512\.png$/.test(org.logo.url),'Organization logo points at the published mark');
+assert(ld.some(node=>node['@type']==='WebSite'&&node.url==='https://volatilitylab.in/'));
+for (const asset of ['favicon.ico','favicon.svg','favicon-96.png','favicon-192.png','apple-touch-icon.png','icon-512.png','og-image.png']) {
+  assert(fs.existsSync(path.join(root,'docs',asset)),'Missing published asset '+asset);
+}
 const server = http.createServer((request,response) => {
   const name = decodeURIComponent(new URL(request.url,'http://local').pathname);
   const target = path.resolve(root,'docs','.'+(name === '/' ? '/index.html' : name));
   if (!target.startsWith(path.join(root,'docs')+path.sep)) {response.writeHead(403);response.end();return;}
   fs.readFile(target,(error,data) => {
-    response.writeHead(error?404:200,{'Content-Type':target.endsWith('.html')?'text/html':target.endsWith('.js')?'application/javascript':target.endsWith('.css')?'text/css':'application/json'});
+    const type = target.endsWith('.html')?'text/html':target.endsWith('.js')?'application/javascript':target.endsWith('.css')?'text/css'
+      :target.endsWith('.svg')?'image/svg+xml':target.endsWith('.png')?'image/png':target.endsWith('.ico')?'image/x-icon':'application/json';
+    response.writeHead(error?404:200,{'Content-Type':type});
     response.end(error?'Missing asset':data);
   });
 });
@@ -32,6 +47,19 @@ const server = http.createServer((request,response) => {
     await page.route('https://script.google.com/**',route=>route.abort());
     await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
     await page.waitForFunction(()=>window._vlDeskInitialized && window.Chart);
+    const brand = await page.evaluate(() => ({
+      title:document.title, canonical:document.querySelector('link[rel="canonical"]').href,
+      icon:document.querySelector('link[rel="icon"][type="image/svg+xml"]').getAttribute('href')}));
+    assert.equal(brand.title,'Volatility Lab — Indian index options research');
+    assert.equal(brand.canonical,'https://volatilitylab.in/');
+    assert.equal(brand.icon,'favicon.svg');
+    // Playwright request interception can cancel favicon fetches from the page,
+    // so probe the same origin over HTTP instead.
+    for (const asset of ['favicon.ico','favicon.svg','favicon-96.png','favicon-192.png','apple-touch-icon.png','icon-512.png','og-image.png']) {
+      const response = await fetch('http://127.0.0.1:'+server.address().port+'/'+asset);
+      assert.equal(response.status,200,asset+' must be served');
+      assert((await response.arrayBuffer()).byteLength>0,asset+' must not be empty');
+    }
     assert((await page.locator('#kpiSpot').textContent()).includes('25,116'));
     assert.equal(await page.locator('#shareDesk').count(),0);
     assert.equal(await page.locator('#workspaceTitle').textContent(),'Volatility research');
