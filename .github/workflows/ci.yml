@@ -113,6 +113,9 @@ jobs:
           node scripts/test_live_connection.cjs
           node scripts/test_collector_audit.cjs
 
+      - name: Verify the public landing page and the auth gate
+        run: node scripts/test_auth_worker.cjs
+
       - name: Verify chart and scenario regressions
         run: node scripts/test_frontend.cjs
 
