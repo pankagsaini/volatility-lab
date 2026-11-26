@@ -3868,6 +3868,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
       };
 
       var publishedPaperBook = null;
+      var paperBookSource = '';
       var paperRefreshFailed = false;
       var forwardOpenPositions = [];
       var forwardClosedTrades = [];
@@ -3960,6 +3961,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
             try {
               const response=await fetch(source.url,{headers:source.headers,cache:'no-store',credentials:'omit',signal:AbortSignal.timeout(5000)});
               if (response.ok && acceptPublishedPaperBook(await response.json())) {
+                paperBookSource = source.bundled ? 'Website bundle' : 'Published paper feed';
                 paperRefreshFailed = !!source.bundled;
                 return true;
               }
@@ -4089,7 +4091,8 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
         const gapNote = Number.isInteger(exceptions) && exceptions > 0 ? ' · '+exceptions+' capture exception'+(exceptions === 1 ? '' : 's') : '';
         if (badge) badge.textContent = forwardStatusLabel() + paperCoverageLag(forwardLedger, Date.now()) + gapNote + (paperRefreshFailed && forwardLedger.source_authority !== 'dated_archive' ? ' · Latest feed unavailable' : '');
         const modeLabel = document.getElementById('fwdAutoModeLabel');
-        if (modeLabel) modeLabel.textContent = forwardLedger.source_authority === 'dated_archive' ? 'Paper trading · dated archive' : 'Scheduled paper batch';
+        if (modeLabel) modeLabel.textContent = forwardLedger.source_authority === 'dated_archive'
+          ? 'Paper trading · dated archive' : (paperBookSource || 'Scheduled paper batch');
         const openSub = document.getElementById('fwdOpenTableSub');
         if (openSub) openSub.textContent = ledgerReady ? 'Positions matching your filters' : forwardStatusLabel();
         var state = evaluateFwdSetupState();

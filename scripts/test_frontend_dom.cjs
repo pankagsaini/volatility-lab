@@ -249,6 +249,7 @@ const server = http.createServer((request,response) => {
     await page.locator('#wsForwardBtn').click();
     await page.waitForFunction(()=>window.forwardLedger?.source_authority==='python_paper_worker');
     assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Awaiting first (prospective|published market) capture/);
+    assert.equal(await page.locator('#fwdAutoModeLabel').textContent(),'Published paper feed');
     assert.equal(await page.locator('#paperArchiveCount').textContent(),'0 recorded · 0 verified · 0 unverified');
     assert.equal(await page.locator('#fwdKpiClosedNet').textContent(),'—');
     assert.match(await page.locator('#fwdKpiClosedNetSub').textContent(),/Awaiting a verified close/);
@@ -330,11 +331,17 @@ const server = http.createServer((request,response) => {
     await page.locator('#fwdScanNowBtn').click();
     await page.waitForFunction(()=>document.getElementById('fwdLastMarkedBadge').textContent.includes('Latest feed unavailable'));
     assert.equal(await page.evaluate(()=>window.forwardLedger.updated_at),sourceStamp,'An older Pages bundle cannot roll back a newer accepted book');
+    assert.equal(await page.locator('#fwdAutoModeLabel').textContent(),'Published paper feed','Keep source of retained newer book');
+    await page.route('**/paper-ledger.json',r=>r.fulfill({json:publishedBook}));
+    await page.locator('#fwdScanNowBtn').click();
+    await page.waitForFunction(()=>document.getElementById('fwdAutoModeLabel').textContent==='Website bundle');
+    assert.match(await page.locator('#fwdLastMarkedBadge').textContent(),/Captures processed through/);
     const caughtUp='2026-11-23T11:13:00+05:30';
     await page.route(feed,r=>r.fulfill({json:{...publishedBook,updated_at:caughtUp,last_capture_at:'2026-11-23T10:48:45+05:30',capture_audit:{exceptions:2}}}));
     await page.locator('#fwdScanNowBtn').click();
     await page.waitForFunction(ts=>window.forwardLedger.updated_at===ts,caughtUp);
     const caughtUpBadge=await page.locator('#fwdLastMarkedBadge').textContent();
+    assert.equal(await page.locator('#fwdAutoModeLabel').textContent(),'Published paper feed');
     assert.match(caughtUpBadge,/10:48/);
     assert.match(caughtUpBadge,/2 capture exceptions$/);
     assert(!caughtUpBadge.includes('Coverage behind schedule'));
