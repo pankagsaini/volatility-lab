@@ -13,6 +13,22 @@ function pairedBookMid_(rec, strike, referenceStamp) {
   return matched ? Number((books[0].mid + books[1].mid).toFixed(2)) : null;
 }
 
+function optionBookCoverage_(record, lotSize) {
+  const coverage = {sides: record.data.length * 2, fresh: 0, oneLot: 0};
+  for (const row of record.data) {
+    for (const side of ['call_options', 'put_options']) {
+      const book = row?.[side]?.market_data;
+      if (book?.quote_source !== 'Upstox /v2/market-quote/quotes' ||
+          !captureQuoteFresh_(book.quote_timestamp, record.retrieved_at)) continue;
+      coverage.fresh++;
+      if ([book.bid_price, book.ask_price, book.bid_qty, book.ask_qty].every(Number.isFinite)
+          && book.bid_price > 0 && book.ask_price >= book.bid_price
+          && Math.min(book.bid_qty, book.ask_qty) >= lotSize) coverage.oneLot++;
+    }
+  }
+  return coverage;
+}
+
 function dualStraddlePoint_(rec, stamp) {
   const markAt = timestampMillis_(stamp);
   if (!Number.isFinite(markAt) || !Array.isArray(rec.data) || !rec.data.length) return null;

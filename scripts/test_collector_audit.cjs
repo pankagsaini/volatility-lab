@@ -70,6 +70,15 @@ assert.equal(cloud.dualStraddlePoint_({...dualRec, data: [
       bid_price: 48, ask_price: 50, bid_qty: 75, ask_qty: 75}}}]}, quoteAt), null,
   'One recorded leg is not a straddle mark');
 
+const book = overrides => ({market_data:{...leg(41,43).market_data,...overrides}});
+const coverage = cloud.optionBookCoverage_({retrieved_at:quoteAt,data:[
+  {call_options:book({}), put_options:book({bid_qty:64})},
+  {call_options:book({quote_timestamp:new Date(Date.parse(quoteAt)+1).toISOString()}), put_options:book({quote_source:'chain'})},
+  {call_options:book({ask_price:40}), put_options:book({quote_timestamp:new Date(Date.parse(quoteAt)-120001).toISOString()})},
+  {call_options:book({}), put_options:null}
+]},65);
+assert.deepEqual({...coverage},{sides:8,fresh:4,oneLot:2});
+
 // Archive day listing and per-day snapshot lookup paginate Drive in modifiedTime desc order.
 values.set('ARCHIVE_FOLDER_ID', 'arch-folder');
 const pages = {

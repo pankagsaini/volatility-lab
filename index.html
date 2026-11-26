@@ -39,7 +39,7 @@
   ]}
   </script>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-  <script src="scripts/snapshot-metrics.js"></script>
+  <script src="scripts/snapshot-metrics.js?v=20261127-book-coverage"></script>
   <script src="scripts/trading-sessions.js"></script>
   <script src="scripts/freeze-policy.js?v=research-v1"></script>
   <script src="scripts/options-charts.js?v=20261127-forecast-timing"></script>
@@ -401,6 +401,7 @@
                   <th class="py-3 px-3 text-violet-300" scope="col">DTE-matched EGARCH</th>
                   <th class="py-3 px-3" scope="col">IV − EGARCH at capture</th>
                   <th class="py-3 px-3 text-left" scope="col">Forecast context</th>
+                  <th class="py-3 px-3 text-left" scope="col">Option books at capture</th>
                 </tr></thead>
                 <tbody id="expiryComparisonBody" class="divide-y divide-[#1a2639]"></tbody>
               </table>
@@ -2145,7 +2146,10 @@
             '<td class="text-sky-300">' + formatLiveNumber(c.iv,2,'%') + '</td>' +
             '<td class="text-violet-300">' + formatLiveNumber(c.egarch,2,'%') + '</td>' +
             '<td>' + gap(c.egarchGap) + '</td>' +
-            '<td class="text-left text-slate-400">' + context + '</td></tr>';
+            '<td class="text-left text-slate-400">' + context + '</td>' +
+            '<td class="text-left">' + (item.bookCoverage
+              ? item.bookCoverage.fresh + '/' + item.bookCoverage.sides + ' sides fresh · ' + item.bookCoverage.oneLot + ' with one lot both sides'
+              : 'Coverage unavailable') + '</td></tr>';
         }).join('');
 
         var ctx = document.getElementById('termMainCanvas');
@@ -4684,7 +4688,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
 
       function liveBookValid(node, prefix, reference) {
         var age = liveTimestamp(reference) - liveTimestamp(node[prefix + 'QuoteAt']);
-        return isFinite(age) && age >= -30000 && age <= 120000
+        return isFinite(age) && age >= 0 && age <= 120000
           && node[prefix + 'Bid'] > 0 && node[prefix + 'Ask'] >= node[prefix + 'Bid']
           && node[prefix + 'BidQty'] > 0 && node[prefix + 'AskQty'] > 0;
       }
@@ -4851,6 +4855,7 @@ var backtestMeta = {"schema":2,"lotSizes":{"NIFTY":65,"BANKNIFTY":30},"chargeMod
               ? 'VALIDATED_EVENT_TIME_TWO_SIDED_BOOK' : 'UNVALIDATED_BROKER_GREEKS' };
           item.brokerAtmIv = atm.uCallIv > 0 && atm.uPutIv > 0 ? (atm.uCallIv + atm.uPutIv) / 2 : null;
           item.ivCapturedAt = rec.chain_retrieved_at || rec.retrieved_at;
+          item.bookCoverage = optionBookCoverage_(rec, sym === 'NIFTY' ? 65 : 30);
           enrichItemWithBlack76(item);
           var c25 = item.modelAtmIv > 0 ? liveDeltaIv(chain,'c',.25) : capturedDeltaIv(chain,'c',.25);
           var p25 = item.modelAtmIv > 0 ? liveDeltaIv(chain,'p',-.25) : capturedDeltaIv(chain,'p',-.25);

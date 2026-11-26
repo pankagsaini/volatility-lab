@@ -566,8 +566,12 @@ function enrichSnapshotInputs_(report, started, fullDepth) {
   const requests = [];
   const chains = report.records.filter(r => /^(NIFTY|BANKNIFTY)\|\d{4}-\d{2}-\d{2}$/.test(r.label) && Array.isArray(r.data));
   const options = [];
+  // Widen the front option chain at the frozen entry and scheduled intraday exit clocks.
+  const decisionMinute = !fullDepth && [560, 565, 915].includes(minute_(new Date(started)));
   for (const rec of chains) {
-    const selected = fullDepth ? null : quoteStrikes_(rec);
+    const [symbol, expiry] = rec.label.split('|');
+    const front = report.catalogue?.indices?.[symbol]?.option_expiries?.[0];
+    const selected = fullDepth || (decisionMinute && expiry === front) ? null : quoteStrikes_(rec);
     for (const row of rec.data) {
       if (selected && !selected.has(Number(row.strike_price))) continue;
       for (const side of ['call_options','put_options']) {

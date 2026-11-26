@@ -328,6 +328,26 @@ cloud.apiAll_ = requests => requests.map(req => {
   assert.deepEqual(attempts,['snapshot','snapshot','snapshot'],'unknown weekend remains closed');
 }
 
+// Only the front listed expiry gets additional wings at the three paper decision clocks.
+{
+  let minute;
+  const ctx = vm.createContext({Date:Clock, console});
+  vm.runInContext(gs,ctx);
+  ctx.minute_ = () => minute;
+  ctx.quoteStrikes_ = () => new Set([100]);
+  const captured = [];
+  ctx.apiAll_ = requests => {captured.push(...requests.flatMap(r=>r.params.instrument_key.split(',')));return [];};
+  const dates = ['2026-11-17','2026-11-23'];
+  for (minute of [559,560,565,566,915]) {
+    captured.length = 0;
+    const records = dates.map(expiry=>({label:'NIFTY|'+expiry,retrieved_at:new Date(now).toISOString(),
+      data:[100,200].map(strike=>({strike_price:strike,call_options:{instrument_key:expiry+':'+strike}}))}));
+    ctx.enrichSnapshotInputs_({records,catalogue:{indices:{NIFTY:{option_expiries:dates}}}},now,false);
+    assert.equal(captured.includes(dates[0]+':200'),[560,565,915].includes(minute));
+    assert(!captured.includes(dates[1]+':200'));
+  }
+}
+
 // Exercise the real enrichment loop independently of the capture fixtures.
 {
   const batching = vm.createContext({Date: Clock, console, Utilities: {
