@@ -62,8 +62,10 @@ def fetch(url, params):
     return payload
 
 
-def refresh_daily_candles(data, expected):
-    today_ist = datetime.now(IST).date()
+def refresh_daily_candles(data, expected, now=None):
+    completed = completed_session(now or datetime.now(IST))
+    if expected > completed:
+        raise ValueError('Cannot publish an unfinished exchange session.')
     for symbol, key in KEYS.items():
         name = symbol.lower() + '_one_year.csv'
         existing = pd.read_csv(ROOT / 'volatility_lab/data' / name)
@@ -75,11 +77,16 @@ def refresh_daily_candles(data, expected):
             raise ValueError('Daily candle request failed')
         payload = response.get('data') or {}
         candles = list(payload.get('candles') or [])
-        if expected == today_ist and not any(str(row[0]).startswith(str(expected)) for row in candles):
-            # Upstox holds same-day closing candles on the intraday endpoint until overnight rollover.
+        if expected == completed and not any(str(row[0]).startswith(str(expected)) for row in candles):
+            # The historical feed and the current-session feed roll over independently.
+            # Across midnight, accept only the daily candle for the completed exchange session.
             intraday = fetch(f'https://api.upstox.com/v3/historical-candle/intraday/{instrument}/days/1', {})
             if intraday.get('status') == 'success':
-                candles.extend((intraday.get('data') or {}).get('candles') or [])
+                bars = (intraday.get('data') or {}).get('candles') or []
+                if len(bars) == 1:
+                    stamp = pd.Timestamp(bars[0][0])
+                    if stamp.tzinfo is not None and stamp.tz_convert(IST).date() == expected:
+                        candles.append(bars[0])
         frame = merge_candles(existing, candles, expected)
         frame.to_csv(data / name, index=False, date_format='%Y-%m-%d')
 
@@ -131,7 +138,7 @@ def refresh(now=None, paper_history=None):
         # independent live catalogue or forecast step is unavailable.
         candle_error = None
         try:
-            refresh_daily_candles(data, expected)
+            refresh_daily_candles(data, expected, now)
             if paper_history is not None:
                 from scripts.paper_risk_history import write_bundle
                 write_bundle(data, paper_history)
