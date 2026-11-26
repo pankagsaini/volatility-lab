@@ -97,7 +97,7 @@ cloud.props_ = () => ({getProperty: key => properties.get(key) || null,
 cloud.scriptCache_ = () => ({get: key => cache.get(key), put: (k, v) => cache.set(k, v), remove: k => cache.delete(k)});
 cloud.marketClosed_ = () => false;
 cloud.marketWindow_ = () => ({closed: false, startMins: 555, endMins: 940});
-cloud.catalogue_ = () => ({indices: {
+cloud.catalogue_ = () => ({day:cloud.day_(new Date(now)), indices: {
   NIFTY: {futures: [], option_expiries: ['2026-11-17']},
   BANKNIFTY: {futures: [], option_expiries: ['2026-11-23']}
 }});
@@ -415,6 +415,13 @@ async function main() {
   const selected = cloud.quoteStrikes_({label:'NIFTY|2026-11-17',data:longChain});
   assert(selected.has(25000) && selected.has(24500) && selected.has(25500));
   assert(selected.size < longChain.length);
+  const currentCatalogue = cloud.catalogue_;
+  cloud.catalogue_ = () => ({...currentCatalogue(),day:'2000-01-01'});
+  const fallbackCapture = cloud.capture_('snapshot');
+  assert.equal(fallbackCapture.status,'partial');
+  assert(fallbackCapture.records.length > 0);
+  assert.equal(fallbackCapture.errors.find(e => e.item === 'catalogue').catalogue_day,'2000-01-01');
+  cloud.catalogue_ = currentCatalogue;
   const enrich = cloud.enrichSnapshotInputs_;
   cloud.enrichSnapshotInputs_ = () => {throw new Error('fixture enrichment failure');};
   const rawOnly = cloud.capture_('snapshot');

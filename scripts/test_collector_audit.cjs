@@ -27,6 +27,21 @@ const cloud = vm.createContext({
 });
 vm.runInContext(source, cloud);
 const get = parameter => cloud.doGet({parameter});
+{
+  const today = new Date('2026-11-25T05:00:00Z');
+  const scope = {futures:[{expiry:'2026-11-23'},{expiry:'2026-12-29'}],
+    option_expiries:['2026-11-23','2026-12-01','2026-12-29']};
+  const saved = {day:'2026-11-23',indices:{NIFTY:scope,BANKNIFTY:scope}};
+  values.set('CATALOGUE',JSON.stringify(saved));
+  cloud.UrlFetchApp = {fetch:()=>({getResponseCode:()=>503})};
+  const fallback = cloud.catalogue_(today);
+  assert.equal(fallback.day,saved.day);
+  assert.deepEqual(Array.from(fallback.indices.NIFTY.option_expiries),['2026-12-01','2026-12-29']);
+  assert.equal(fallback.indices.BANKNIFTY.futures.length,1);
+  assert.deepEqual(JSON.parse(values.get('CATALOGUE')),saved);
+  values.delete('CATALOGUE');
+  assert.throws(()=>cloud.catalogue_(today),/Instrument master unavailable/);
+}
 for (const action of ['ledger','forward_ledger']) {
   assert.equal(JSON.parse(get({action}).text).error, 'Unknown data action');
 }
