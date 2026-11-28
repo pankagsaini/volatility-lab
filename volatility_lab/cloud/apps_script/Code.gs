@@ -287,7 +287,12 @@ function save_(name, value) {
   const jsonBlob = Utilities.newBlob(jsonContent, 'application/json', name + '.json');
   const gzipBlob = Utilities.gzip(jsonBlob);
   gzipBlob.setName(name + '.json.gz');
-  return folder_().createFile(gzipBlob).getId();
+  const expectedBytes = gzipBlob.getBytes().length;
+  const file = folder_().createFile(gzipBlob);
+  if (!expectedBytes || file.getSize() !== expectedBytes) {
+    throw new Error('Snapshot archive write incomplete');
+  }
+  return file.getId();
 }
 
 function catalogue_(now) {
