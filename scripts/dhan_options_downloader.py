@@ -18,11 +18,6 @@ Optional environment variables:
   LOCAL_STAGING_DIR         Local working directory (default: ./dhan_staging)
 """
 
-from google.auth.transport.requests import Request as GoogleAuthRequest
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
-
 RUN_DEADLINE = None
 DRIVE_MIRROR = None
 
@@ -41,6 +36,7 @@ from pathlib import Path
 from time import sleep, monotonic, time as wall_time
 from zoneinfo import ZoneInfo
 import csv
+import errno
 import hashlib
 import io
 import json
@@ -71,7 +67,7 @@ class DhanHTTPError(RuntimeError):
 class UnresolvedOptionRequests(RuntimeError):
     def __init__(self, requests_failed):
         self.requests_failed = requests_failed
-        super().__init__(f"{len(requests_failed)} option request(s) still rejected with DH-905")
+        super().__init__(f"{len(requests_failed)} option request(s) unresolved")
 
 
 class IncompleteOptionWindow(RuntimeError):
@@ -81,7 +77,7 @@ class IncompleteOptionWindow(RuntimeError):
 
 
 WORKERS = 4
-REQUEST_INTERVAL = 0.35
+REQUEST_INTERVAL = 0.25
 DAILY_BUDGET = 100_000
 
 
@@ -98,6 +94,7 @@ class DownloadPacer:
         self.cooldown_file = ledger.with_name("options-cooldown.json")
         retry_at = json.loads(self.cooldown_file.read_text())["retry_at"] if self.cooldown_file.exists() else 0
         self.next_start = monotonic() + max(0, retry_at - wall_time())
+        self.interval = REQUEST_INTERVAL
         self.hour = None
         self.remaining = 0
         self.fatal_error = None
@@ -134,10 +131,15 @@ class DownloadPacer:
                     delay = self.reserve(wall_time())
                     if delay == 0:
                         self.remaining -= 1
-                        self.next_start = monotonic() + REQUEST_INTERVAL
+                        self.next_start = monotonic() + self.interval
                         return
                     self.next_start = monotonic() + delay
             sleep(min(30, delay))
+
+    def throttle(self):
+        with self.lock:
+            self.interval = min(2.0, max(0.5, self.interval * 2))
+            self.next_start = max(self.next_start, monotonic() + self.interval)
 
     def cooldown(self, delay):
         with self.lock:
@@ -176,6 +178,8 @@ def call_api(session, path, payload=None):
             return call_api_with_retries(session, path, payload)
         except DhanHTTPError as exc:
             if exc.status == 429 or exc.code == "DH-904":
+                if exc.status != 429:
+                    request_pacer.throttle()
                 delay = max(900, delay)
                 reason = "Dhan rate limit"
             elif exc.status in (500, 502, 503, 504):
@@ -210,6 +214,8 @@ def call_api_with_retries(session, path, payload=None):
             continue
         if path == "profile" and resp.status_code in (401, 403):
             raise PermissionError("Dhan declined the current session token.")
+        if resp.status_code == 429:
+            request_pacer.throttle()
         if resp.status_code in (429, 500, 502, 503, 504):
             delay = retry_delay(resp.headers.get("Retry-After", ""), attempt)
             if resp.status_code == 429 or resp.headers.get("Retry-After"):
@@ -366,13 +372,36 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+DATA_ERRORS = (ValueError, KeyError, TypeError, IndexError, OverflowError, zipfile.BadZipFile)
+
+
+def quarantine(path):
+    # Preserve the received bytes outside the checkpoint namespace for inspection.
+    path.rename(path.with_name(f"{path.name}.{uuid.uuid4().hex}.rejected"))
+
+
+def retry_drive_io(operation):
+    delays = (5, 15, 45)
+    for attempt in range(len(delays) + 1):
+        try:
+            return operation()
+        except OSError as exc:
+            if exc.errno not in (errno.EIO, errno.ETIMEDOUT, errno.EAGAIN, errno.EBUSY,
+                                 errno.ECONNRESET, errno.ENETUNREACH) or attempt == len(delays):
+                raise
+            print(f"Temporary storage error; retrying in {delays[attempt]} seconds.", flush=True)
+            sleep(delays[attempt])
+
+
 def write_atomic(path, data):
     tmp = path.with_name(path.name + "." + uuid.uuid4().hex + ".part")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
+    def commit():
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+    retry_drive_io(commit)
 
 
-def get_option_window(session, req, spot_days, day_folder):
+def get_option_window(session, req, spot_days, day_folder, repair=False):
     endpoint = "charts/rollingoption"
     wire = dict(req, securityId=int(req["securityId"]), expiryCode=int(req["expiryCode"]))
     days = sorted(d for d in spot_days if wire["fromDate"] <= d < wire["toDate"])
@@ -396,43 +425,76 @@ def get_option_window(session, req, spot_days, day_folder):
         return dict(a, securityId=str(a["securityId"]), expiryCode=str(a["expiryCode"])) == dict(
             b, securityId=str(b["securityId"]), expiryCode=str(b["expiryCode"]))
 
+    buffered = []
+
+    def flush_batch():
+        if buffered:
+            # Keep at most eight validated responses in memory between durable saves.
+            batch = json.dumps(buffered, separators=(",", ":"), allow_nan=False).encode()
+            write_atomic(day_folder / (digest(batch) + ".batch"), batch)
+            buffered.clear()
+
     def get_span(first, last):
         end = str(date.fromisoformat(last) + timedelta(days=1))
         request = dict(wire, fromDate=first, toDate=end)
-        key = first if first == last else f"{first}_{last}"
-        checkpoint = day_folder / (key + ".json")
         entry = dict(request=request, response=call_api(session, endpoint, request),
                      retrieved_utc=datetime.now(timezone.utc).isoformat())
-        save_json(checkpoint, entry)
-        consume(entry)
+        try:
+            consume(entry)
+        except DATA_ERRORS:
+            save_json(day_folder / (f"{first}_{last}.{uuid.uuid4().hex}.rejected"), entry)
+            raise
+        buffered.append(entry)
+        if len(buffered) >= 8:
+            flush_batch()
         if first == last:
             single_checked.add(first)
 
     # Support day checkpoints from either older notebook, including numeric strings.
-    saved = sorted(day_folder.glob("*.json")) if day_folder.exists() else []
-    for path in saved:
-        entry = json.loads(path.read_bytes())
-        if path.name == "_full_rejected.json":
-            if not same_request(entry["request"], wire):
-                raise ValueError("Saved full-window request differs from the current selector.")
-            attempt = entry
-            continue
+    def restore(entry):
         request = entry["request"]
-        if not same_request(request, dict(wire, fromDate=request["fromDate"], toDate=request["toDate"])):
-            raise ValueError(f"Checkpoint selector differs: {path.name}")
-        if not (wire["fromDate"] <= request["fromDate"] < request["toDate"] <= wire["toDate"]):
-            raise ValueError(f"Checkpoint dates are outside this window: {path.name}")
+        first, end = request["fromDate"], request["toDate"]
+        if not same_request(request, dict(wire, fromDate=first, toDate=end)):
+            raise ValueError("Checkpoint selector differs")
+        if not (wire["fromDate"] <= first < end <= wire["toDate"]):
+            raise ValueError("Checkpoint dates outside requested window")
+        single = date.fromisoformat(end) - date.fromisoformat(first) == timedelta(days=1)
+        if repair and not single and (day_folder / "_daily_replay").exists():
+            return
         consume(entry)
-        if date.fromisoformat(request["toDate"]) - date.fromisoformat(request["fromDate"]) == timedelta(days=1):
-            single_checked.add(request["fromDate"])
+        if single and (not repair or first in present):
+            single_checked.add(first)
+
+    saved = sorted((*day_folder.glob("*.json"), *day_folder.glob("*.batch")))
+    for path in saved:
+        try:
+            payload = json.loads(path.read_bytes())
+            if path.name == "_full_rejected.json":
+                if not same_request(payload["request"], wire):
+                    raise ValueError("Rejected request differs")
+                attempt = payload
+            elif path.suffix == ".batch":
+                if not isinstance(payload, list):
+                    raise ValueError("Invalid response batch")
+                for entry in payload:
+                    try:
+                        restore(entry)
+                    except DATA_ERRORS:
+                        save_json(path.with_suffix("." + uuid.uuid4().hex + ".rejected"), entry)
+            else:
+                restore(payload)
+        except DATA_ERRORS:
+            quarantine(path)
 
     family = (wire["securityId"], wire["expiryFlag"], wire["expiryCode"], wire["fromDate"], wire["toDate"])
-    if not saved:
+    if not saved and not repair:
         with span_lock:
             full_rejected = (family, 30) in rejected_spans
         if not full_rejected:
             try:
                 response = call_api(session, endpoint, wire)
+            except DATA_ERRORS:
+                pass  # Try smaller date spans below.
             except DhanHTTPError as exc:
                 if (exc.status, exc.code) != (400, "DH-905"):
                     raise
@@ -443,18 +505,22 @@ def get_option_window(session, req, spot_days, day_folder):
                     rejected_spans.add((family, 30))
             else:
                 entry = dict(request=wire, response=response, retrieved_utc=datetime.now(timezone.utc).isoformat())
-                consume(entry)
-                if set(days) <= present:
-                    return dict(response=response, wire_request=wire)
                 day_folder.mkdir(exist_ok=True)
-                save_json(day_folder / "_full_partial.json", entry)
+                try:
+                    consume(entry)
+                except DATA_ERRORS:
+                    save_json(day_folder / (uuid.uuid4().hex + ".rejected"), entry)
+                else:
+                    if set(days) <= present:
+                        return dict(response=response, wire_request=wire)
+                    save_json(day_folder / "_full_partial.json", entry)
 
     if not days and attempt:
         raise UnresolvedOptionRequests([attempt])
     day_folder.mkdir(exist_ok=True)
     # Try the longest remaining contiguous span first. Keep boundaries exclusive.
     # If a size fails for this family of selectors, try smaller spans directly.
-    for limit in (29, 15, 7, 3, 1):
+    for limit in ((1,) if repair else (29, 15, 7, 3, 1)):
         with span_lock:
             if (family, limit) in rejected_spans:
                 continue
@@ -479,6 +545,10 @@ def get_option_window(session, req, spot_days, day_folder):
                 continue
             try:
                 get_span(first, last)
+            except DATA_ERRORS as exc:
+                if limit == 1:
+                    failures.append(dict(date=first, error=str(exc)))
+                continue
             except DhanHTTPError as exc:
                 if (exc.status, exc.code) != (400, "DH-905"):
                     raise
@@ -490,6 +560,9 @@ def get_option_window(session, req, spot_days, day_folder):
                 with span_lock:
                     rejected_spans.add((family, limit))
                 break
+    flush_batch()
+    failures.extend(dict(date=d, error="No option rows on a spot trading date")
+                    for d in sorted(set(days) - present - {f.get("date") for f in failures}))
     if failures:
         raise UnresolvedOptionRequests(failures)
     result = dict(response={"data": {side: merged}}, source_responses=originals)
@@ -498,19 +571,24 @@ def get_option_window(session, req, spot_days, day_folder):
     return result
 
 
-def collect_bundle(folder, symbol, start, stop, pilot, session):
+def collect_bundle(folder, symbol, start, stop, pilot, session, repair=False):
     scope = list(series(symbol, start, stop, pilot))
     label = f"{symbol}_{start}_{stop}"
     dest = folder / (label + ".zip")
     plan_hash = digest(json.dumps([VERSION, scope], sort_keys=True).encode())
     if dest.exists():
-        with zipfile.ZipFile(dest) as archive:
-            manifest = json.loads(archive.read("manifest.json"))
-            if manifest["plan_hash"] != plan_hash or archive.testzip():
-                raise ValueError(f"Invalid prior bundle: {dest.name}")
-            if set(archive.namelist()) != {"manifest.json", *(k + ".json" for k, _, _ in scope)}:
-                raise ValueError(f"Incomplete prior bundle: {dest.name}")
-            return manifest["coverage"]
+        try:
+            with zipfile.ZipFile(dest) as archive:
+                manifest = json.loads(archive.read("manifest.json"))
+                if manifest["plan_hash"] != plan_hash:
+                    raise ValueError(f"Invalid prior bundle: {dest.name}")
+                if set(archive.namelist()) != {"manifest.json", *(k + ".json" for k, _, _ in scope)}:
+                    raise ValueError(f"Incomplete prior bundle: {dest.name}")
+                if any(digest(archive.read(key + ".json")) != manifest["sha256"][key] for key, _, _ in scope):
+                    raise ValueError("Stored archive member checksum differs")
+                return manifest["coverage"]
+        except DATA_ERRORS:
+            quarantine(dest)
 
     partial = folder / (label + ".in-progress")
     partial.mkdir(exist_ok=True)
@@ -535,18 +613,33 @@ def collect_bundle(folder, symbol, start, stop, pilot, session):
         path = partial / (key + ".json")
         existing = path.is_file()
         blob = None
+        item = None
         if existing:
-            blob = path.read_bytes()
-            item = json.loads(blob)
-        elif key == "spot" and index_chunk(folder.parent, symbol, start, stop).is_file():
-            with zipfile.ZipFile(index_chunk(folder.parent, symbol, start, stop)) as z:
-                item = json.loads(z.read("spot.json"))
-        else:
+            try:
+                blob = retry_drive_io(path.read_bytes)
+                item = json.loads(blob)
+                if item["request"] != request or item["endpoint"] != endpoint:
+                    raise ValueError("Checkpoint request differs")
+                measure(item["response"], endpoint, request)
+            except DATA_ERRORS:
+                quarantine(path)
+                item = None
+                existing = False
+        if item is None and key == "spot" and index_chunk(folder.parent, symbol, start, stop).is_file():
+            try:
+                with zipfile.ZipFile(index_chunk(folder.parent, symbol, start, stop)) as z:
+                    candidate = json.loads(z.read("spot.json"))
+                if candidate["request"] == request and candidate["endpoint"] == endpoint:
+                    measure(candidate["response"], endpoint, request)
+                    item = candidate
+            except DATA_ERRORS:
+                pass  # An unusable index cache can be fetched independently.
+        if item is None:
             try:
                 if key == "spot":
                     fetched = dict(response=call_api(session, endpoint, request))
                 else:
-                    fetched = get_option_window(worker_session(), request, spot_days, partial / (key + ".days"))
+                    fetched = get_option_window(worker_session(), request, spot_days, partial / (key + ".days"), repair=repair)
             except UnresolvedOptionRequests as exc:
                 save_json(partial / (key + ".error.json"), dict(endpoint=endpoint, request=request,
                           failed_requests=exc.requests_failed, utc=datetime.now(timezone.utc).isoformat()))
@@ -564,8 +657,14 @@ def collect_bundle(folder, symbol, start, stop, pilot, session):
             summary = measure_candles(data, endpoint, request)
         except (KeyError, TypeError, ValueError) as exc:
             save_json(partial / (key + ".rejected.json"), item)
+            if key != "spot":
+                daily = partial / (key + ".days")
+                daily.mkdir(exist_ok=True)
+                write_atomic(daily / "_daily_replay", b"1")
             raise ValueError(f"{symbol} {key}: {exc}") from None
         if key == "spot":
+            if not summary["rows"]:
+                raise ValueError("No spot trading dates for this window")
             spot_minutes.update(data["timestamp"])
             spot_days.update(summary["dates"])
         else:
@@ -586,7 +685,10 @@ def collect_bundle(folder, symbol, start, stop, pilot, session):
             stats[key] = summary
             hashes[key] = checksum
             archive.write(partial / (key + ".json"), key + ".json")
-        pack(stage(scope[0]))
+        try:
+            pack(stage(scope[0]))
+        except DATA_ERRORS as exc:
+            raise IncompleteOptionWindow({"spot": str(exc)}) from exc
         pool = ThreadPoolExecutor(max_workers=WORKERS)
         try:
             # Each worker owns a distinct selector and its checkpoints. Only the
@@ -597,6 +699,9 @@ def collect_bundle(folder, symbol, start, stop, pilot, session):
                     result = finished.result()
                 except UnresolvedOptionRequests as exc:
                     gaps[futures[finished]] = exc.requests_failed
+                    continue
+                except DATA_ERRORS as exc:
+                    gaps[futures[finished]] = str(exc)
                     continue
                 pack(result)
                 if DRIVE_MIRROR is not None and not pilot:
@@ -618,8 +723,9 @@ def collect_bundle(folder, symbol, start, stop, pilot, session):
         (partial / (key + ".json")).unlink(missing_ok=True)
         day_folder = partial / (key + ".days")
         if day_folder.is_dir():
-            for completed in day_folder.glob("*.json"):
+            for completed in (*day_folder.glob("*.json"), *day_folder.glob("*.batch")):
                 completed.unlink()
+            (day_folder / "_daily_replay").unlink(missing_ok=True)
             if not any(day_folder.iterdir()):
                 day_folder.rmdir()
         (partial / (key + ".error.json")).unlink(missing_ok=True)
@@ -628,7 +734,7 @@ def collect_bundle(folder, symbol, start, stop, pilot, session):
     return stats
 
 
-def download_windows(root, session, pilot, symbol_only=None):
+def download_windows(root, session, pilot, symbol_only=None, repair=False):
     first, end = (date(2026, 11, 16), date(2026, 11, 24)) if pilot else (START, END)
     folder = root / ("pilot-v1" if pilot else f"history-v1_{first}_{end}")
     folder.mkdir(exist_ok=True)
@@ -642,13 +748,22 @@ def download_windows(root, session, pilot, symbol_only=None):
         with coverage_path.open(newline="") as src:
             for row in csv.DictReader(src):
                 coverage[(row["symbol"], row["window_start"], row["series"])] = [row[c] for c in columns]
-    pending_windows = []
+    pending_path = root / "options-pending.json"
+
+    def read_pending():
+        return json.loads(pending_path.read_bytes()) if pending_path.is_file() else {}
+
+    # Both symbol generators share this durable queue. Reload before each change.
+    pilot_gaps = []
+    queued_names = set(read_pending())
     for left, right in windows(first, end):
         for symbol in ([symbol_only] if symbol_only else SYMBOLS):
             zip_name = f"{symbol}_{left}_{right}.zip"
+            if not pilot and ((zip_name in queued_names) != repair):
+                continue
             if DRIVE_MIRROR is not None and not pilot and DRIVE_MIRROR.has_remote_zip(zip_name):
                 expected = [key for key, _, _ in series(symbol, left, right, False)]
-                if all((symbol, str(left), key) in coverage for key in expected):
+                if not repair and all((symbol, str(left), key) in coverage for key in expected):
                     continue
                 # Repair legacy ZIPs whose coverage CSV was never published.
                 DRIVE_MIRROR.restore_archive(zip_name, folder / zip_name)
@@ -660,11 +775,18 @@ def download_windows(root, session, pilot, symbol_only=None):
                           dict(state="downloading", symbol=symbol, start=str(left), end_exclusive=str(right),
                                utc=datetime.now(timezone.utc).isoformat()))
             try:
-                stats = collect_bundle(folder, symbol, left, right, pilot, session)
+                def collect():
+                    return collect_bundle(folder, symbol, left, right, pilot, session, repair=repair)
+                stats = retry_drive_io(collect)
             except IncompleteOptionWindow as exc:
                 pending = dict(symbol=symbol, start=str(left), end_exclusive=str(right),
                                unresolved_series=sorted(exc.gaps))
-                pending_windows.append(pending)
+                if not pilot:
+                    queue = read_pending()
+                    queue[zip_name] = pending
+                    save_json(pending_path, queue)
+                else:
+                    pilot_gaps.append(pending)
                 yield dict(state="incomplete", **pending)
                 continue
             spot_dates = set(stats["spot"]["dates"])
@@ -687,9 +809,16 @@ def download_windows(root, session, pilot, symbol_only=None):
                 write_atomic(coverage_path, report.getvalue().encode())
             if DRIVE_MIRROR is not None and not pilot:
                 DRIVE_MIRROR.publish_window(folder, zip_name, coverage_path, f"{symbol}_{left}_{right}.in-progress")
+            if repair:
+                queue = read_pending()
+                queue.pop(zip_name, None)
+                save_json(pending_path, queue)
             print(f"{symbol} {left} to {right}: {len(stats)} series staged.", flush=True)
             if not was_final:
                 yield dict(state="archived", symbol=symbol, start=str(left), end_exclusive=str(right))
+    pending_windows = pilot_gaps if pilot else [
+        row for row in read_pending().values() if symbol_only is None or row["symbol"] == symbol_only
+    ]
     # Include coverage from windows published by previous runners.
     saved = [dict(zip(columns, values)) for values in coverage.values()]
     series_count = len(saved)
@@ -875,12 +1004,15 @@ def download_indices(root, session, start=START, end=END):
 def download_options(root, session, *, pilot_only=False):
     status_path = root / "options-progress.json"
     report = json.loads(status_path.read_text()) if status_path.is_file() else {s: {} for s in SYMBOLS}
-    for pilot in ((True,) if pilot_only else (True, False)):
+    for mode in (("pilot",) if pilot_only else ("pilot", "history", "repair")):
+        pilot = mode == "pilot"
         phase = "pilot" if pilot else "history"
         if pilot and all(report.get(s, {}).get("pilot", {}).get("ready_for_history") for s in SYMBOLS):
             continue
-        jobs = {symbol: download_windows(root, session, pilot, symbol) for symbol in SYMBOLS
-                if pilot or report[symbol].get("pilot", {}).get("ready_for_history")}
+        jobs = {symbol: download_windows(root, session, pilot, symbol, repair=mode == "repair")
+                for symbol in SYMBOLS
+                if (pilot or report[symbol].get("pilot", {}).get("ready_for_history"))
+                and (mode != "repair" or report[symbol].get("history", {}).get("incomplete_windows"))}
         while jobs:
             for symbol, job in list(jobs.items()):
                 entry = report[symbol]
@@ -901,6 +1033,8 @@ def download_options(root, session, *, pilot_only=False):
                     if stops_all_requests(exc):
                         save_json(status_path, report)
                         raise
+                    if isinstance(exc, OSError):
+                        raise
                     del jobs[symbol]
                 else:
                     entry[phase] = dict(passed=False, status="in_progress", last_window=checkpoint)
@@ -913,6 +1047,7 @@ class DriveMirror:
     """Syncs staging metadata, active .in-progress checkpoints, and completed ZIPs with Google Drive."""
 
     METADATA_FILES = (
+        "options-pending.json",
         "options-progress.json",
         "options-run-status.json",
         "options-request-budget.json",
@@ -925,6 +1060,10 @@ class DriveMirror:
         self.local_root = local_root
         self.history_name = f"history-v1_{START}_{END}"
         self.lock = Lock()
+
+        from google.auth.transport.requests import Request as GoogleAuthRequest
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
 
         creds = Credentials(
             token=None,
@@ -979,6 +1118,8 @@ class DriveMirror:
 
     def _download_file(self, file_id: str, dest: Path):
         dest.parent.mkdir(parents=True, exist_ok=True)
+        from googleapiclient.http import MediaIoBaseDownload
+
         request = self.service.files().get_media(fileId=file_id)
         tmp = dest.with_suffix(dest.suffix + ".dl")
         with tmp.open("wb") as fh:
@@ -989,16 +1130,23 @@ class DriveMirror:
         os.replace(tmp, dest)
 
     def _upload_file(self, parent_id: str, local_path: Path, mime_type: str = "application/octet-stream"):
+        from googleapiclient.http import MediaFileUpload
+
         children = self._list_children(parent_id)
         media = MediaFileUpload(str(local_path), mimetype=mime_type, resumable=True)
         if local_path.name in children:
-            self.service.files().update(fileId=children[local_path.name]["id"], media_body=media).execute(num_retries=3)
+            result = self.service.files().update(fileId=children[local_path.name]["id"], media_body=media,
+                                                 fields="id,md5Checksum").execute(num_retries=3)
         else:
-            self.service.files().create(
+            result = self.service.files().create(
                 body={"name": local_path.name, "parents": [parent_id]},
                 media_body=media,
-                fields="id",
+                fields="id,md5Checksum",
             ).execute(num_retries=3)
+        with local_path.open("rb") as source:
+            expected = hashlib.file_digest(source, "md5").hexdigest()
+        if result.get("md5Checksum") != expected:
+            raise OSError(errno.EIO, "Google Drive upload checksum mismatch")
 
     def pull_startup_state(self):
         self.local_root.mkdir(parents=True, exist_ok=True)
@@ -1026,7 +1174,7 @@ class DriveMirror:
                 self.partial_cache[partial.name] = (parent, set(self._list_children(parent)))
             parent, existing = self.partial_cache[partial.name]
             path = partial / (key + ".json")
-            if path.name not in existing:
+            if path.name not in existing or any(partial.glob(path.name + ".*.rejected")):
                 self._upload_file(parent, path, "application/json")
                 existing.add(path.name)
 
@@ -1073,6 +1221,8 @@ class DriveMirror:
                     print(f"Flushed in-progress checkpoints to Drive: {item.name}", flush=True)
 
     def _push_tree(self, local_dir: Path, remote_folder_id: str):
+        from googleapiclient.http import MediaFileUpload
+
         existing = self._list_children(remote_folder_id)
         for child in sorted(local_dir.iterdir()):
             if child.is_dir():
@@ -1098,7 +1248,12 @@ class DriveMirror:
         with self.lock:
             # Publish the CSV first. A published ZIP marks a committed window.
             self._upload_file(self.history_id, coverage_path, "text/csv")
-            if zip_name not in self.remote_zips:
+            damaged = any(history_local.glob(zip_name + ".*.rejected"))
+            if damaged and zip_name in self.remote_zips:
+                old_id = self.archive_files[zip_name]["id"]
+                self.service.files().copy(fileId=old_id, body={"name": zip_name + "." + uuid.uuid4().hex + ".rejected",
+                                                              "parents": [self.history_id]}).execute(num_retries=3)
+            if zip_name not in self.remote_zips or damaged:
                 self._upload_file(self.history_id, zip_path, "application/zip")
                 self.remote_zips.add(zip_name)
             zip_path.unlink(missing_ok=True)
@@ -1134,7 +1289,16 @@ def main():
     DRIVE_MIRROR.pull_startup_state()
 
     saved_status = local_root / "options-run-status.json"
-    if saved_status.is_file() and json.loads(saved_status.read_text()).get("state") == "archived_pending_review":
+    last_status = json.loads(saved_status.read_text()) if saved_status.is_file() else {}
+    if last_status.get("state") in {"starting", "downloading"}:
+        stamps = [last_status.get("utc")]
+        budget_item = DRIVE_MIRROR._list_children(staging_folder_id).get("options-request-budget.json", {})
+        stamps.append(budget_item.get("modifiedTime"))
+        recent = [datetime.fromisoformat(t.replace("Z", "+00:00")).timestamp() for t in stamps if t]
+        if recent and wall_time() - max(recent) < 3600:
+            print("Another downloader recently wrote a checkpoint. Deferring this run.", flush=True)
+            return
+    if last_status.get("state") == "archived_pending_review":
         expected = {f"{symbol}_{a}_{b}.zip" for symbol in SYMBOLS for a, b in windows(START, END)}
         if expected <= DRIVE_MIRROR.remote_zips:
             print("All scheduled archives have been published.")
@@ -1181,6 +1345,7 @@ def main():
         )
         record_run_state("archived_pending_review" if all_archived else "incomplete")
         if not all_archived:
+            DRIVE_MIRROR.push_in_progress_all()
             raise RuntimeError("Incomplete history; see options-progress.json in Drive")
 
 
