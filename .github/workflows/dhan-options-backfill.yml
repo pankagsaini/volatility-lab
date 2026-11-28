@@ -1,0 +1,60 @@
+name: Dhan Historical Options Backfill
+
+on:
+  push:
+    branches: [master]
+    paths: [.github/workflows/dhan-options-backfill.yml, scripts/dhan_options_downloader.py]
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      max_run_minutes:
+        description: "Soft stop after N minutes (leaves time to sync checkpoints to Drive)"
+        required: false
+        default: "320"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dhan-options-backfill
+  cancel-in-progress: false
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests==2.34.2 google-api-python-client==2.202.0 google-auth==2.63.1
+
+      - name: Verify checkpoint resume and contract scope
+        run: python scripts/test_dhan_options_downloader.py
+
+      - name: Run Dhan options downloader
+        env:
+          DHAN_ACCESS_TOKEN: ${{ secrets.DHAN_ACCESS_TOKEN }}
+          DHAN_DRIVE_CLIENT_ID: ${{ secrets.DHAN_DRIVE_CLIENT_ID }}
+          DHAN_DRIVE_CLIENT_SECRET: ${{ secrets.DHAN_DRIVE_CLIENT_SECRET }}
+          DHAN_DRIVE_REFRESH_TOKEN: ${{ secrets.DHAN_DRIVE_REFRESH_TOKEN }}
+          DHAN_STAGING_FOLDER_ID: ${{ vars.DHAN_STAGING_FOLDER_ID || '1sauTXWOxaVR-Rxssv5cwGzYcnwJOsJiy' }}
+          MAX_RUN_MINUTES: ${{ github.event.inputs.max_run_minutes || '320' }}
+        run: |
+          for key in DHAN_ACCESS_TOKEN DHAN_DRIVE_CLIENT_ID DHAN_DRIVE_CLIENT_SECRET DHAN_DRIVE_REFRESH_TOKEN; do
+            if [[ -z "${!key}" ]]; then echo "::error::Missing repository secret $key"; exit 1; fi
+          done
+          python scripts/dhan_options_downloader.py
