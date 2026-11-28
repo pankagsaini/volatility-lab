@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const {gzipSync, gunzipSync} = require('node:zlib');
 const source = fs.readFileSync(process.env.COLLECTOR_SOURCE_PATH || path.join(__dirname, '../volatility_lab/cloud/apps_script/Code.gs'), 'utf8').replace(/\r\n/g,'\n');
 const values = new Map();
 const cached = new Map();
@@ -70,42 +71,121 @@ assert.equal(cloud.dualStraddlePoint_({...dualRec, data: [
       bid_price: 48, ask_price: 50, bid_qty: 75, ask_qty: 75}}}]}, quoteAt), null,
   'One recorded leg is not a straddle mark');
 
-// Archive day listing and per-day snapshot lookup paginate Drive in modifiedTime desc order.
+// Drive can return empty intermediate pages. The order and date filter are
+// applied by the server before pagination, just as they are on the real API.
 values.set('ARCHIVE_FOLDER_ID', 'arch-folder');
-const pages = {
-  '': {
-    files: [
-      {id: 'f-new', name: '2026-11-25_snapshot_154000_complete.json.gz'},
-      {id: 'f-mid', name: '2026-11-25_snapshot_091600_complete.json.gz'},
-    ],
-    nextPageToken: 'page-2',
-  },
-  'page-2': {
-    files: [{id: 'f-old', name: '2026-11-18_eod_154500_complete.json.gz'}],
-  },
-};
-cloud.ScriptApp = {
-  getOAuthToken: () => 'test-token',
-};
+cached.clear();
+const stamp = '2026-11-25T10:10:00Z';
+const latest = {schema: 1, day: '2026-11-25', mode: 'snapshot', status: 'complete',
+  provider: 'Upstox', nfo_session_validated: true, records: [{label: 'quotes'}], retrieved_at: stamp};
+const archives = [
+  {id: 'empty', name: '2026-11-26_snapshot_154000_complete.json.gz', size: '0'},
+  {id: 'partial', name: '2026-11-26_snapshot_153900_partial.json.gz', size: '78'},
+  {id: 'new', name: '2026-11-25_snapshot_154000_complete.json.gz', size: '275', data: latest},
+  {id: 'old', name: '2026-11-18_eod_154500_complete.json.gz', size: '45',
+    data: {day: '2026-11-18', status: 'complete', records: [], forward_test_ledger: {secret: 1}}},
+];
+const calls = [];
+const reads = [];
+let blankPages = 0;
+cloud.ScriptApp = {getOAuthToken: () => 'test-token'};
 cloud.DriveApp = {
   getFolderById: id => ({getId: () => id}),
-  getFileById: id => ({
-    getBlob: () => id,
-    getId: () => id,
-  }),
-};
-cloud.UrlFetchApp = {
-  fetch: url => {
-    assert(url.includes('orderBy=modifiedTime%20desc'), 'Drive listing must sort newest first');
-    const tokenMatch = url.match(/pageToken=([^&]+)/);
-    const key = tokenMatch ? decodeURIComponent(tokenMatch[1]) : '';
-    return {getResponseCode: () => 200, getContentText: () => JSON.stringify(pages[key])};
+  getFileById: id => {
+    const file = archives.find(row => row.id === id);
+    if (!file) throw Error('Missing file');
+    return {getSize: () => Number(file.size), getBlob: () => {
+      reads.push(id);
+      if (file.readError) throw file.readError;
+      return file.bytes || gzipSync(JSON.stringify(file.data));
+    }, getId: () => id};
   },
 };
-cloud.Utilities = {
-  ...cloud.Utilities,
-  ungzip: id => ({getDataAsString: () => JSON.stringify({day: id, status: 'complete', records: [], forward_test_ledger: {secret: 1}})}),
+cloud.Utilities.ungzip = bytes => ({getDataAsString: () => gunzipSync(bytes).toString('utf8')});
+cloud.UrlFetchApp = {
+  fetch: url => {
+    const params = new URL(url).searchParams;
+    calls.push(params);
+    const prefix = /name contains '([^']+)'/.exec(params.get('q'));
+    const files = archives.filter(f => !prefix || f.name.startsWith(prefix[1]));
+    const page = Number(params.get('pageToken') || 0);
+    // The fixtures are in descending filename order. Within a requested
+    // day their modification order matches their insertion order.
+    const offset = page - blankPages;
+    const listed = offset < 0 ? [] : files.slice(offset, offset + 1);
+    const nextPageToken = offset + 1 < files.length ? String(page + 1) : undefined;
+    return {getResponseCode: () => 200,
+      getContentText: () => JSON.stringify({files: listed, nextPageToken})};
+  },
 };
-assert.deepEqual(JSON.parse(get({action: 'list_days'}).text).days, ['2026-11-25', '2026-11-18']);
-assert.deepEqual(JSON.parse(get({action: 'latest', day: '2026-11-18'}).text), {day: 'f-old', status: 'complete', records: []});
-assert.deepEqual(JSON.parse(get({action: 'latest', day: '2026-11-25'}).text), {day: 'f-new', status: 'complete', records: []});
+const response = parameter => JSON.parse(get(parameter).text);
+blankPages = 21;
+assert.deepEqual(response({action: 'list_days'}).days, ['2026-11-25', '2026-11-18']);
+assert(calls.every(p => p.get('orderBy') === 'name desc' && p.get('fields').includes('size')));
+calls.length = 0;
+blankPages = 51;
+assert.deepEqual(response({day: '2026-11-18'}), {day: '2026-11-18', status: 'complete', records: []});
+assert.equal(calls.length, 52);
+assert(calls.every(p => p.get('orderBy') === 'modifiedTime desc'
+  && p.get('q').includes("name contains '2026-11-18_'")));
+assert.equal(response({day: '2026-11-26'}).error, 'No complete archive for 2026-11-26');
+calls.length = 0;
+assert.equal(response({day: "x'"}).error, 'Invalid archive date');
+assert.equal(calls.length, 0);
+
+blankPages = 1;
+for (const id of ['empty', 'deleted']) {
+  values.set('LATEST_SNAPSHOT_FILE_ID', id);
+  values.set('LAST_SNAPSHOT', JSON.stringify({status: 'complete', file_id: id, retrieved_at: stamp}));
+  const recovered = response({since: stamp});
+  assert.equal(recovered.retrieved_at, stamp);
+  assert.deepEqual(recovered.records, latest.records);
+  assert.equal(recovered.unchanged, undefined);
+  assert.equal(cached.has('DOGET_CAPTURE_DATA_V1_' + id), false);
+}
+const badStamp = '2026-11-26T10:10:00Z';
+const truncated = gzipSync(JSON.stringify(latest)).subarray(0, -8);
+const broken = [
+  {id: 'truncated', name: '2026-11-26_snapshot_154000_complete.json.gz', bytes: truncated},
+  {id: 'malformed', name: '2026-11-26_snapshot_153900_complete.json.gz', bytes: gzipSync('{"records":')},
+  {id: 'partial-body', name: '2026-11-26_snapshot_153800_complete.json.gz', data: {...latest, status: 'partial'}},
+].map(file => ({size: '60', ...file}));
+archives.unshift(...broken);
+values.set('LATEST_SNAPSHOT_FILE_ID', 'truncated');
+values.set('LAST_SNAPSHOT', JSON.stringify({status: 'complete', file_id: 'truncated', retrieved_at: badStamp}));
+for (const parameter of [{since: badStamp}, {}]) {
+  reads.length = 0;
+  const recovered = response(parameter);
+  assert.equal(recovered.retrieved_at, stamp, 'skip damaged archives, including on a conditional read');
+  assert.deepEqual(recovered.records, latest.records);
+  assert.deepEqual(reads, ['truncated', 'malformed', 'partial-body', 'new']);
+  assert.equal(cached.has('DOGET_CAPTURE_DATA_V1_truncated'), false);
+}
+assert.equal(response({day: '2026-11-26'}).error, 'No complete archive for 2026-11-26');
+const eod = {day: '2026-11-27', target_day: '2026-11-26', status: 'complete', records: []};
+archives.push({id: 'eod', name: '2026-11-26_eod_153000_complete.json.gz', size: '70', data: eod});
+assert.deepEqual(response({day: '2026-11-26'}), eod);
+archives.unshift({id: 'unvalidated', name: '2026-11-27_snapshot_154000_complete.json.gz', size: '70',
+  data: {...latest, nfo_session_validated: false, retrieved_at: badStamp}});
+values.delete('LATEST_SNAPSHOT_FILE_ID');
+assert.equal(response({}).retrieved_at, stamp, 'apply live validation to listed snapshots as well');
+
+values.set('LATEST_SNAPSHOT_FILE_ID', 'new');
+values.set('LAST_SNAPSHOT', JSON.stringify({status: 'complete', file_id: 'new', retrieved_at: badStamp}));
+assert.equal(response({since: badStamp}).retrieved_at, stamp, 'use the timestamp inside the archive');
+values.set('LAST_SNAPSHOT', JSON.stringify({status: 'complete', file_id: 'new', retrieved_at: stamp}));
+cached.clear();
+reads.length = 0;
+assert.equal(response({since: stamp}).unchanged, true);
+assert.equal(response({since: stamp}).unchanged, true);
+assert.deepEqual(reads, ['new'], 'cache a validated timestamp across conditional reads');
+broken[0].readError = Error('Drive quota exceeded');
+assert.match(response({day: '2026-11-26'}).error, /permissions, network or quota/);
+
+archives.splice(0, archives.length, ...Array.from({length: 65}, (_, i) => {
+  const day = new Date(Date.UTC(2026, 10, 28 - i)).toISOString().slice(0, 10);
+  return {id: day, name: day + '_snapshot_120000_complete.json.gz', size: '80'};
+}));
+blankPages = 0;
+const days = response({action: 'list_days'}).days;
+assert.deepEqual(days, archives.slice(0, 60).map(f => f.id));

@@ -93,6 +93,7 @@ const cloud = vm.createContext({ Date: Clock, console: {log() {}}, Utilities: {
 vm.runInContext(gs, cloud);
 cloud.safeError_ = error => String(error.stack || error);
 cloud.props_ = () => ({getProperty: key => properties.get(key) || null,
+  getProperties: () => Object.fromEntries(properties),
   setProperty: (key, val) => properties.set(key, val)});
 cloud.scriptCache_ = () => ({get: key => cache.get(key), put: (k, v) => cache.set(k, v), remove: k => cache.delete(k)});
 cloud.marketClosed_ = () => false;
@@ -402,10 +403,14 @@ async function main() {
   assert(!('forward_test_status' in rawOnly)); assert.equal(rawOnly.records[1].data[0].call_options.market_data.ltp,999);
   cloud.enrichSnapshotInputs_ = enrich;
   cloud.ContentService = {MimeType:{JSON:'json'},createTextOutput:text => ({setMimeType:() => JSON.parse(text)})};
+  cloud.DriveApp = {getFileById: () => ({getSize: () => 128, getBlob: () => JSON.stringify(report)})};
+  cloud.Utilities.ungzip = blob => ({getDataAsString: () => blob});
   properties.set('LATEST_SNAPSHOT_FILE_ID',status.file_id);
   assert.equal(cloud.doGet({parameter:{since:status.retrieved_at}}).unchanged,true);
   properties.set('LATEST_SNAPSHOT_FILE_ID','different-file');
-  assert.notEqual(cloud.doGet({parameter:{since:status.retrieved_at}}).unchanged,true);
+  const differentPointer = cloud.doGet({parameter:{since:status.retrieved_at}});
+  assert.equal(differentPointer.unchanged, undefined);
+  assert.equal(differentPointer.retrieved_at, report.retrieved_at);
   const anchorProps = new Map();
   const localProps = {getProperty:k=>anchorProps.get(k), setProperty:(k,v)=>anchorProps.set(k,v)};
   const anchorRec = {label:'NIFTY|2026-11-17',data:rawChain('NIFTY','2026-11-17')};

@@ -4,6 +4,7 @@
 const SNAPSHOT_RETENTION_DAYS = 0;
 const RUNTIME_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
 const CAPTURE_SAFE_DEADLINE_MS = 45000;
+const COMPLETE_ARCHIVE_NAME = /^(\d{4}-\d{2}-\d{2})_(snapshot|eod)_(.+)_complete\.json\.gz$/;
 
 const CONFIG = {
   timeZone: 'Asia/Kolkata',
@@ -70,9 +71,11 @@ function runtimePolicy_(properties) {
   // Allow for the last admitted capture as well as the protected attempt.
   // Keep at least half of even a small operator-set budget for ordinary minutes.
   const reserveMs = Math.min(2 * CAPTURE_SAFE_DEADLINE_MS, total * 60000 / 4);
-  return { tier: workspace ? 'operator_verified_workspace' : 'consumer_default',
+  return {
+    tier: workspace ? 'operator_verified_workspace' : 'consumer_default',
     total_minutes: total, snapshot_minutes: total, eod_reserve_minutes: 0,
-    reserve_per_protected_snapshot_seconds: reserveMs / 1000 };
+    reserve_per_protected_snapshot_seconds: reserveMs / 1000
+  };
 }
 
 function snapshotAdmissionLimit_(policy, minute, open, close) {
@@ -117,7 +120,7 @@ function scriptCache_() {
     if (typeof CacheService !== 'undefined' && CacheService && typeof CacheService.getScriptCache === 'function') {
       return CacheService.getScriptCache();
     }
-  } catch (e) {}
+  } catch (e) { }
   return null;
 }
 
@@ -147,13 +150,16 @@ function folder_() {
   return DriveApp.getFolderById(folderId);
 }
 
-function listDriveFilesPage_(folderId, pageToken, orderBy) {
-  const query = "'" + folderId + "' in parents and trashed = false";
+function listDriveFilesPage_(folderId, pageToken, orderBy, day) {
+  let query = "'" + folderId + "' in parents and trashed = false";
+  if (day) {
+    query += " and name contains '" + day + "_'";
+  }
   const params = {
     q: query,
     orderBy: orderBy || 'name',
     pageSize: '1000',
-    fields: 'nextPageToken,files(id,name)'
+    fields: 'nextPageToken,files(id,name,size)'
   };
   if (pageToken) params.pageToken = pageToken;
   const queryString = Object.keys(params)
@@ -168,6 +174,39 @@ function listDriveFilesPage_(folderId, pageToken, orderBy) {
     throw new Error('Drive file listing failed with HTTP ' + response.getResponseCode());
   }
   return JSON.parse(response.getContentText());
+}
+
+function readCompleteArchive_(file, requireSnapshot) {
+  const blob = file.getBlob();
+  let payload;
+  try {
+    payload = JSON.parse(Utilities.ungzip(blob).getDataAsString());
+  } catch (err) {
+    return null;
+  }
+  if (!payload || payload.status !== 'complete') return null;
+  // Historical EOD captures predate the live snapshot schema.
+  if (requireSnapshot && (payload.schema !== 1 || payload.provider !== 'Upstox' || payload.mode !== 'snapshot'
+    || payload.nfo_session_validated !== true || !Array.isArray(payload.records) || !payload.records.length)) return null;
+  return payload;
+}
+
+function findCompleteArchive_(folderId, day, skipId) {
+  let pageToken = '';
+  do {
+    const page = listDriveFilesPage_(folderId, pageToken, day ? 'modifiedTime desc' : 'name desc', day);
+    for (const file of page.files || []) {
+      if (file.id === skipId || (file.size != null && Number(file.size) === 0)) continue;
+      const match = COMPLETE_ARCHIVE_NAME.exec(file.name);
+      if (!match) continue;
+      if (day && match[1] !== day) continue;
+      if (!day && (match[2] !== 'snapshot' || !/^\d{6}$/.test(match[3]))) continue;
+      const payload = readCompleteArchive_(DriveApp.getFileById(file.id), !day);
+      if (payload) return payload;
+    }
+    pageToken = page.nextPageToken;
+  } while (pageToken);
+  return null;
 }
 
 function api_(path, params) {
@@ -287,7 +326,12 @@ function save_(name, value) {
   const jsonBlob = Utilities.newBlob(jsonContent, 'application/json', name + '.json');
   const gzipBlob = Utilities.gzip(jsonBlob);
   gzipBlob.setName(name + '.json.gz');
-  return folder_().createFile(gzipBlob).getId();
+  const expectedBytes = gzipBlob.getBytes().length;
+  const file = folder_().createFile(gzipBlob);
+  if (!expectedBytes || file.getSize() !== expectedBytes) {
+    throw new Error('Snapshot archive write incomplete');
+  }
+  return file.getId();
 }
 
 function catalogue_(now) {
@@ -349,8 +393,8 @@ function catalogue_(now) {
 
 /**
  * Determines whether a given date is open, closed, or a special session.
- * NSE/FAOP/74467 and the December 2026 CAS rules define regular F&O hours.
- */
+  * NSE/FAOP/74467 and the December 2026 CAS rules define regular F&O hours.
+   */
 function regularCloseMinutes_(day) {
   return day < '2026-08-03' ? 930 : day < '2026-12-07' ? 940 : 945;
 }
@@ -363,14 +407,16 @@ function indexExpiryMillis_(day) {
 
 function regularWindowLabel_(day) {
   const end = regularCloseMinutes_(day);
-  return '09:15-' + Math.floor(end / 60) + ':' + String(end % 60).padStart(2,'0');
+  return '09:15-' + Math.floor(end / 60) + ':' + String(end % 60).padStart(2, '0');
 }
 
 function calendarSpecial_(calendar, day) {
   const entry = calendar && calendar.special && calendar.special[day];
   if (!entry) return null;
-  return {startMins:minute_(new Date(entry.start_time)), endMins:minute_(new Date(entry.end_time)),
-    eodStartMins:minute_(new Date(entry.end_time)) + 5, eodEndMins:CONFIG.eodEndMins, label:'Broker NFO special session'};
+  return {
+    startMins: minute_(new Date(entry.start_time)), endMins: minute_(new Date(entry.end_time)),
+    eodStartMins: minute_(new Date(entry.end_time)) + 5, eodEndMins: CONFIG.eodEndMins, label: 'Broker NFO special session'
+  };
 }
 
 function marketWindow_(dateObj) {
@@ -382,7 +428,7 @@ function marketWindow_(dateObj) {
   let customSpecial = {};
   try {
     customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
-  } catch (e) {}
+  } catch (e) { }
   const configuredSpecial = customSpecial[targetDay] || SPECIAL_SESSIONS[targetDay];
   if (configuredSpecial) {
     return {
@@ -423,7 +469,7 @@ function marketWindow_(dateObj) {
               if (!nfo || !/^\d{4}-\d{2}-\d{2}$/.test(r.date) || !r.date.startsWith(year)) return [];
               const start = timestampMillis_(nfo.start_time), end = timestampMillis_(nfo.end_time);
               if (!(end > start) || day_(new Date(start)) !== r.date || day_(new Date(end)) !== r.date) return [];
-              return [[r.date, {start_time:start, end_time:end}]];
+              return [[r.date, { start_time: start, end_time: end }]];
             })),
             closed: body.data
               .filter(r => (
@@ -438,7 +484,7 @@ function marketWindow_(dateObj) {
           refreshed = true;
         }
       }
-    } catch (err) {}
+    } catch (err) { }
     if (refreshed && lastFailure) properties.deleteProperty('MARKET_CALENDAR_RETRY_AT');
     if (!refreshed) properties.setProperty('MARKET_CALENDAR_RETRY_AT', String(Date.now() + 5 * 60000));
   }
@@ -448,16 +494,16 @@ function marketWindow_(dateObj) {
   const exchangeHolidays = NSE_FO_HOLIDAYS[year] || [];
   // A saved full-year calendar keeps announced dates through a failed refresh.
   // Fresh broker dates can include additional closures issued after the annual circular.
-  const special = calendarSpecial_(saved,targetDay);
-  if (special) return Object.assign({closed:false, special:true},special);
-  if (weekday > 5) return {closed:true, special:false,label:saved?.checked === targetDay ? 'Weekend' : 'Market calendar unavailable'};
+  const special = calendarSpecial_(saved, targetDay);
+  if (special) return Object.assign({ closed: false, special: true }, special);
+  if (weekday > 5) return { closed: true, special: false, label: saved?.checked === targetDay ? 'Weekend' : 'Market calendar unavailable' };
   if (saved?.closed.includes(targetDay) || exchangeHolidays.includes(targetDay)) {
     return { closed: true, special: false, label: 'Trading Holiday' };
   }
 
   const recent = saved && Date.parse(targetDay) - Date.parse(saved.checked) <= 7 * 86400000;
   if (!recent && !NSE_FO_HOLIDAYS[year]) {
-    return {closed:true, special:false, label:'Market calendar unavailable'};
+    return { closed: true, special: false, label: 'Market calendar unavailable' };
   }
   return {
     closed: false,
@@ -483,13 +529,13 @@ function publishedClosingRisk_(values) {
   const days = {};
   for (const [key, value] of Object.entries(values)) {
     if (!key.startsWith('CLOSING_HV_')) continue;
-    try { Object.assign(days,JSON.parse(value)); } catch (err) {}
+    try { Object.assign(days, JSON.parse(value)); } catch (err) { }
   }
   return days;
 }
 
 function dailyIndexCutoff_(day) {
-  return new Date(Date.parse(day + 'T00:00:00Z') - 365 * 86400000).toISOString().slice(0,10);
+  return new Date(Date.parse(day + 'T00:00:00Z') - 365 * 86400000).toISOString().slice(0, 10);
 }
 
 function publishedDailyHistory_(properties, day, values) {
@@ -501,7 +547,7 @@ function publishedDailyHistory_(properties, day, values) {
     const days = {};
     for (const key of Object.keys(values)) {
       if (!key.startsWith('DAILY_IV_' + symbol + '_')) continue;
-      try { Object.assign(days,JSON.parse(values[key])); } catch (err) {}
+      try { Object.assign(days, JSON.parse(values[key])); } catch (err) { }
     }
     if (latest[symbol]) days[latest[symbol].d] = latest[symbol];
     result[symbol] = Object.keys(days).filter(d => d >= cutoff && d <= day).sort().map(d => days[d]);
@@ -510,7 +556,7 @@ function publishedDailyHistory_(properties, day, values) {
 }
 
 function attachStraddleAnchors_(report, properties) {
-  const stored = readJsonProperty_(properties,'SESSION_STRADDLE_ANCHORS',null);
+  const stored = readJsonProperty_(properties, 'SESSION_STRADDLE_ANCHORS', null);
   const prior = stored && stored.day === report.day ? stored.strikes : {};
   const strikes = Object.assign({}, prior);
   let changed = false;
@@ -522,13 +568,13 @@ function attachStraddleAnchors_(report, properties) {
       const spot = Number(rec.data[0]?.underlying_spot_price);
       const listed = rec.data.map(row => Number(row.strike_price)).filter(k => Number.isFinite(k) && k > 0);
       if (!(spot > 0) || !listed.length) continue;
-      strikes[rec.label] = listed.reduce((a,b) => Math.abs(a-spot) === Math.abs(b-spot) ? Math.min(a,b)
-        : Math.abs(a-spot) < Math.abs(b-spot) ? a : b);
+      strikes[rec.label] = listed.reduce((a, b) => Math.abs(a - spot) === Math.abs(b - spot) ? Math.min(a, b)
+        : Math.abs(a - spot) < Math.abs(b - spot) ? a : b);
       changed = true;
     }
     rec.straddle_anchor_strike = strikes[rec.label];
   }
-  if (changed) properties.setProperty('SESSION_STRADDLE_ANCHORS',JSON.stringify({day:report.day,strikes}));
+  if (changed) properties.setProperty('SESSION_STRADDLE_ANCHORS', JSON.stringify({ day: report.day, strikes }));
 }
 
 function quoteStrikes_(rec) {
@@ -539,20 +585,22 @@ function quoteStrikes_(rec) {
   const strikes = new Set();
   if (rec.straddle_anchor_strike > 0) strikes.add(rec.straddle_anchor_strike);
   // Dense near ATM, then sparse wings. Delta brackets below use observed broker data.
-  for (const distance of [0,1,2,3,4,5,7,10]) {
+  for (const distance of [0, 1, 2, 3, 4, 5, 7, 10]) {
     strikes.add(atm - distance * step);
     strikes.add(atm + distance * step);
   }
-  for (const side of ['call_options','put_options']) {
+  for (const side of ['call_options', 'put_options']) {
     const sign = side === 'call_options' ? 1 : -1;
-    const candidates = rows.map(r => ({k:Number(r.strike_price), d:sign * Number(r[side]?.option_greeks?.delta),
-      iv:Number(r[side]?.option_greeks?.iv)})).filter(r => r.d > 0 && r.d < 1 && r.iv > 0);
-    for (const target of [.10,.25]) {
+    const candidates = rows.map(r => ({
+      k: Number(r.strike_price), d: sign * Number(r[side]?.option_greeks?.delta),
+      iv: Number(r[side]?.option_greeks?.iv)
+    })).filter(r => r.d > 0 && r.d < 1 && r.iv > 0);
+    for (const target of [.10, .25]) {
       for (const pool of [candidates, candidates.filter(r => (r.k - spot) * sign > 0)]) {
         let lower = -Infinity, upper = Infinity;
         for (const r of pool) {
-          if (r.d <= target) lower = Math.max(lower,r.d);
-          if (r.d >= target) upper = Math.min(upper,r.d);
+          if (r.d <= target) lower = Math.max(lower, r.d);
+          if (r.d >= target) upper = Math.min(upper, r.d);
         }
         for (const r of pool) if (r.d === lower || r.d === upper) strikes.add(r.k);
       }
@@ -570,10 +618,10 @@ function enrichSnapshotInputs_(report, started, fullDepth) {
     const selected = fullDepth ? null : quoteStrikes_(rec);
     for (const row of rec.data) {
       if (selected && !selected.has(Number(row.strike_price))) continue;
-      for (const side of ['call_options','put_options']) {
+      for (const side of ['call_options', 'put_options']) {
         const option = row[side];
         if (option && option.instrument_key) options.push(option);
-        else report.input_diagnostics.push({item:rec.label, reason:'Missing option instrument key'});
+        else report.input_diagnostics.push({ item: rec.label, reason: 'Missing option instrument key' });
       }
     }
   }
@@ -635,7 +683,7 @@ function enrichSnapshotInputs_(report, started, fullDepth) {
 }
 
 function capture_(mode) {
-  if (!['snapshot','test'].includes(mode)) throw new Error('Unsupported capture mode');
+  if (!['snapshot', 'test'].includes(mode)) throw new Error('Unsupported capture mode');
   const started = Date.now();
   const now = new Date();
   const today = day_(now);
@@ -738,12 +786,12 @@ function capture_(mode) {
 
     if (mode === 'snapshot') {
       try {
-        attachStraddleAnchors_(report,properties);
+        attachStraddleAnchors_(report, properties);
         enrichSnapshotInputs_(report, started, properties.getProperty('OPTION_QUOTE_DEPTH') === 'full');
         report.enrichment_status = report.input_diagnostics.length ? 'partial' : 'complete';
       } catch (err) {
         report.enrichment_status = 'failed';
-        report.input_diagnostics = (report.input_diagnostics || []).concat([{item:'enrichment',reason:safeError_(err)}]);
+        report.input_diagnostics = (report.input_diagnostics || []).concat([{ item: 'enrichment', reason: safeError_(err) }]);
       }
     }
     report.status = (report.errors.length || report.pending.length) ? 'partial' : 'complete';
@@ -796,8 +844,8 @@ function capture_(mode) {
 function safeError_(err) {
   const message = String(err.message || '');
   if (['Timestamped quote enrichment unavailable',
-       'Snapshot enrichment time budget exhausted', 'Recovery archive unavailable', 'Recovery archive decode failed', 'Recovery archive unavailable or unreadable', 'Expired contract unavailable'].includes(message)) return message;
-  const isWhitelisted = /^(Broker HTTP \d{3}|Empty broker data|Invalid broker JSON|Incomplete quote response|Wrong option expiry|Instrument master unavailable|(Three futures unavailable|Futures contracts unavailable) for (NIFTY|BANKNIFTY)|No option expiries for (NIFTY|BANKNIFTY)|Set UPSTOX_TOKEN in Script Properties|Invalid session date|Capture in progress|Invalid reconciliation archive|No pending EOD.*)$/.test(message);
+    'Snapshot enrichment time budget exhausted', 'Recovery archive unavailable', 'Recovery archive decode failed', 'Recovery archive unavailable or unreadable', 'Expired contract unavailable'].includes(message)) return message;
+  const isWhitelisted = /^(Broker HTTP \d{3}|Empty broker data|Invalid broker JSON|Incomplete quote response|Wrong option expiry|Instrument master unavailable|(Three futures unavailable|Futures contracts unavailable) for (NIFTY|BANKNIFTY)|No option expiries for (NIFTY|BANKNIFTY)|Set UPSTOX_TOKEN in Script Properties|Invalid archive date|Invalid session date|Capture in progress|Invalid reconciliation archive|No pending EOD.*)$/.test(message);
   return isWhitelisted ? message : 'Capture failed; check permissions, network or quota';
 }
 
@@ -864,9 +912,9 @@ function installIntradaySchedule() {
 
 /**
  * Re-create a deleted minute trigger and surface stale capture state.  It is a
- * best-effort recovery mechanism; upstream platform and market-data outages are
- * still reported rather than fabricated as successful data.
- */
+  * best-effort recovery mechanism; upstream platform and market-data outages are
+   * still reported rather than fabricated as successful data.
+    */
 function scheduledWatchdog() {
   const properties = props_();
   if (properties.getProperty('SCHEDULE_MODE') !== 'intraday') return;
@@ -881,17 +929,17 @@ function scheduledWatchdog() {
   const at = Number(properties.getProperty('LAST_SNAPSHOT_AT_MS') || 0);
   const session = marketWindow_(now);
   if (at > 0 && !session.closed && minute_(now) >= session.startMins && minute_(now) <= session.endMins
-      && now.getTime() - at > 3 * 60000) {
+    && now.getTime() - at > 3 * 60000) {
     properties.setProperty('COLLECTOR_STATUS', 'stale snapshot health alert ' + new Date().toISOString());
   }
 }
 
 /**
  * Core time-driven capture scheduler (runs every minute).
- * Quota-optimized:
- * - Tightened regular market hours: date-specific NSE F&O hours
- * - Skips PropertiesService writes outside market hours so daily write quota is never wasted.
- */
+  * Quota-optimized:
+   * - Tightened regular market hours: date-specific NSE F&O hours
+    * - Skips PropertiesService writes outside market hours so daily write quota is never wasted.
+     */
 function scheduledCapture() {
   const now = new Date();
   const today = day_(now);
@@ -906,20 +954,20 @@ function scheduledCapture() {
   let customSpecial = {};
   try {
     customSpecial = JSON.parse(properties.getProperty('SPECIAL_SESSIONS_JSON') || '{}');
-  } catch (e) {}
-  const calendar = readJsonProperty_(properties,'MARKET_CALENDAR',null);
+  } catch (e) { }
+  const calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
   let sp = customSpecial[today] || SPECIAL_SESSIONS[today] ||
-    (calendar?.checked <= today ? calendarSpecial_(calendar,today) : null);
+    (calendar?.checked <= today ? calendarSpecial_(calendar, today) : null);
   const weekend = weekday > 5;
   // Refresh before selecting a window, including after a failed premarket lookup.
   // Unknown weekends can still discover an announced afternoon session.
   if (!sp && mins >= 420 && mins < CONFIG.eodEndMins &&
-      (calendar?.checked !== today || !calendar.special)) {
+    (calendar?.checked !== today || !calendar.special)) {
     const session = marketWindow_(now);
     if (session.special) sp = session;
     else if (weekend && session.label === 'Market calendar unavailable' && mins >= 540) {
       const status = 'Weekend session unverified · NSE F&O calendar unavailable · ' + today;
-      if (properties.getProperty('COLLECTOR_STATUS') !== status) properties.setProperty('COLLECTOR_STATUS',status);
+      if (properties.getProperty('COLLECTOR_STATUS') !== status) properties.setProperty('COLLECTOR_STATUS', status);
     }
   }
   if (weekend && !sp) return;
@@ -936,6 +984,7 @@ function scheduledCapture() {
   if (budget.ms >= limit) {
     if (properties.getProperty('COLLECTOR_STATUS') !== pauseMessage) properties.setProperty('COLLECTOR_STATUS', pauseMessage);
     return;
+
   }
 
   const started = Date.now();
@@ -1034,19 +1083,19 @@ function auditStatus() {
 
 /**
  * Public Web API endpoint for volatilitylab.in.
- * Caches responses in CacheService for 55 seconds to eliminate redundant Drive/Gzip reads.
- */
-function captureIntegrity_(properties,stamp,day) {
-    const capturedAt = timestampMillis_(stamp);
-    return {
-      status: properties.getProperty('COLLECTOR_STATUS'),
-      captured_at: stamp || null,
-      age_seconds: Number.isFinite(capturedAt) ? Math.max(0, (Date.now() - capturedAt) / 1000) : null,
-      snapshot_gap: properties.getProperty('SNAPSHOT_GAP_DAY') === String(day || '').slice(0, 10)
-        ? (properties.getProperty('SNAPSHOT_GAP') || 'Detected snapshot gap')
-        : null,
-      raw_snapshot_retention: 'indefinite'
-    };
+  * Caches responses in CacheService for 55 seconds to eliminate redundant Drive/Gzip reads.
+   */
+function captureIntegrity_(properties, stamp, day) {
+  const capturedAt = timestampMillis_(stamp);
+  return {
+    status: properties.getProperty('COLLECTOR_STATUS'),
+    captured_at: stamp || null,
+    age_seconds: Number.isFinite(capturedAt) ? Math.max(0, (Date.now() - capturedAt) / 1000) : null,
+    snapshot_gap: properties.getProperty('SNAPSHOT_GAP_DAY') === String(day || '').slice(0, 10)
+      ? (properties.getProperty('SNAPSHOT_GAP') || 'Detected snapshot gap')
+      : null,
+    raw_snapshot_retention: 'indefinite'
+  };
 }
 
 // Public capture reads can encounter pre-separation archives or status properties.
@@ -1062,7 +1111,7 @@ function doGet(e) {
   const callback = e?.parameter?.callback || '';
   const readAction = action === 'latest';
   if (callback && (!readAction || !/^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/.test(callback))) {
-    return ContentService.createTextOutput(JSON.stringify({error:'Invalid callback'})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ error: 'Invalid callback' })).setMimeType(ContentService.MimeType.JSON);
   }
   const respond = json => callback
     ? ContentService.createTextOutput(callback + '(' + json + ');').setMimeType(ContentService.MimeType.JAVASCRIPT)
@@ -1070,24 +1119,23 @@ function doGet(e) {
   try {
     const properties = props_();
     const requiredKey = properties.getProperty('WEBHOOK_KEY');
-    if (requiredKey && e?.parameter?.key !== requiredKey) return respond(JSON.stringify({error:'Unauthorized'}));
+    if (requiredKey && e?.parameter?.key !== requiredKey) return respond(JSON.stringify({ error: 'Unauthorized' }));
     const cache = scriptCache_();
     if (action === 'list_days') {
       const folderId = folder_().getId();
       const days = new Set();
       let pageToken = '';
-      for (let pageIndex = 0; pageIndex < 20; pageIndex++) {
-        const page = listDriveFilesPage_(folderId, pageToken, 'modifiedTime desc');
+
+      do {
+        const page = listDriveFilesPage_(folderId, pageToken, 'name desc');
         for (const f of (page.files || [])) {
-          const name = f.name || '';
-          if ((name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
-            const match = name.match(/^(\d{4}-\d{2}-\d{2})/);
-            if (match) days.add(match[1]);
-          }
+          if (f.size != null && Number(f.size) === 0) continue;
+          const match = COMPLETE_ARCHIVE_NAME.exec(f.name);
+          if (match) days.add(match[1]);
+          if (days.size === 60) break;
         }
-        if (!page.nextPageToken || days.size >= 60) break;
         pageToken = page.nextPageToken;
-      }
+      } while (pageToken && days.size < 60);
       return respond(JSON.stringify({
         days: Array.from(days).sort().reverse()
       }));
@@ -1096,24 +1144,9 @@ function doGet(e) {
     const requestedDay = e && e.parameter && e.parameter.day;
     if (requestedDay && action === 'latest') {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDay)) throw new Error('Invalid archive date');
-      const folderId = folder_().getId();
-      let matchId = null;
-      let pageToken = '';
-      for (let pageIndex = 0; pageIndex < 50 && !matchId; pageIndex++) {
-        const page = listDriveFilesPage_(folderId, pageToken, 'modifiedTime desc');
-        for (const f of (page.files || [])) {
-          const name = f.name || '';
-          if (name.startsWith(requestedDay) && (name.indexOf('_snapshot_') !== -1 || name.indexOf('_eod_') !== -1) && name.endsWith('_complete.json.gz')) {
-            matchId = f.id;
-            break;
-          }
-        }
-        if (!page.nextPageToken) break;
-        pageToken = page.nextPageToken;
-      }
-      if (!matchId) throw new Error('No complete archive for ' + requestedDay);
-      const file = DriveApp.getFileById(matchId);
-      return respond(JSON.stringify(marketFieldsOnly_(JSON.parse(Utilities.ungzip(file.getBlob()).getDataAsString()))));
+      const payload = findCompleteArchive_(folder_().getId(), requestedDay);
+      if (!payload) return respond(JSON.stringify({ error: 'No complete archive for ' + requestedDay }));
+      return respond(JSON.stringify(marketFieldsOnly_(payload)));
     }
 
 
@@ -1127,10 +1160,10 @@ function doGet(e) {
       let triggers = [];
       try {
         triggers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
-      } catch (err) {}
+      } catch (err) { }
       const statusJson = JSON.stringify({
         status: properties.getProperty('COLLECTOR_STATUS'),
-        last_snapshot: JSON.stringify(marketFieldsOnly_(readJsonProperty_(properties,'LAST_SNAPSHOT',null))),
+        last_snapshot: JSON.stringify(marketFieldsOnly_(readJsonProperty_(properties, 'LAST_SNAPSHOT', null))),
         last_snapshot_slot: properties.getProperty('LAST_SNAPSHOT_SLOT'),
         mode: properties.getProperty('SCHEDULE_MODE'),
         interval: properties.getProperty('INTERVAL_MINUTES') || '1',
@@ -1146,7 +1179,7 @@ function doGet(e) {
         raw_snapshot_retention: 'indefinite'
       });
       if (cache) {
-        try { cache.put('DOGET_COLLECTOR_STATUS_V1', statusJson, CONFIG.doGetCacheSeconds); } catch (e) {}
+        try { cache.put('DOGET_COLLECTOR_STATUS_V1', statusJson, CONFIG.doGetCacheSeconds); } catch (e) { }
       }
       return ContentService.createTextOutput(statusJson).setMimeType(ContentService.MimeType.JSON);
     }
@@ -1156,63 +1189,57 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    if (action !== 'latest') return respond(JSON.stringify({error:'Unknown data action'}));
+    if (action !== 'latest') return respond(JSON.stringify({ error: 'Unknown data action' }));
     const fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
-    const last = readJsonProperty_(properties,'LAST_SNAPSHOT',null);
-    if (fileId && last && last.file_id === fileId && last.status === 'complete' && last.retrieved_at &&
-        e?.parameter?.since === last.retrieved_at) {
-      return respond(JSON.stringify({unchanged:true,retrieved_at:last.retrieved_at,
-        capture_integrity:captureIntegrity_(properties,last.retrieved_at,last.day)}));
-    }
-    if (cache && fileId) {
-      const cachedSnap = cache.get('DOGET_CAPTURE_DATA_V1_' + fileId);
-      if (cachedSnap) return respond(cachedSnap);
+    const last = readJsonProperty_(properties, 'LAST_SNAPSHOT', null);
+    const cachedSnap = cache && fileId ? cache.get('DOGET_CAPTURE_DATA_V1_' + fileId) : null;
+    const since = e?.parameter?.since;
+    const matchesLast = since && fileId && last && last.file_id === fileId && last.status === 'complete'
+      && last.retrieved_at === since;
+    const unchanged = () => respond(JSON.stringify({
+      unchanged: true, retrieved_at: since, capture_integrity: captureIntegrity_(properties, since, last.day)
+    }));
+    // Large snapshots exceed the response cache limit. Cache their verified timestamp separately.
+    const stampKey = 'DOGET_VALIDATED_STAMP_V1_' + fileId;
+    if (matchesLast && cache && cache.get(stampKey) === since) return unchanged();
+    if (cachedSnap) {
+      if (matchesLast && JSON.parse(cachedSnap).retrieved_at === since) return unchanged();
+      return respond(cachedSnap);
     }
 
-    let file = null;
-
+    let pointedFile = null;
     if (fileId) {
       try {
-        file = DriveApp.getFileById(fileId);
+        pointedFile = DriveApp.getFileById(fileId);
       } catch (err) {
-        file = null;
+        // A deleted or inaccessible pointer can be recovered from the archive listing.
       }
     }
-
-    if (!file) {
-      // A lost file-id must not make recovery dependent on Drive's arbitrary
-      // iterator order or a small prefix of an indefinitely retained archive.
-      const page = listDriveFilesPage_(folder_().getId(), '', 'modifiedTime desc');
-      const latest = (page.files || []).find(f =>
-        /^\d{4}-\d{2}-\d{2}_snapshot_\d{6}_complete\.json\.gz$/.test(f.name)
-      );
-      if (latest && latest.id) file = DriveApp.getFileById(latest.id);
-    }
-
-    if (!file) {
-      return respond(JSON.stringify({ error: 'No snapshot files found' }));
-    }
-
-    const uncompressed = Utilities.ungzip(file.getBlob());
-    const payload = JSON.parse(uncompressed.getDataAsString());
-    if (payload.schema !== 1 || payload.provider !== 'Upstox' || payload.mode !== 'snapshot'
-        || payload.status !== 'complete' || payload.nfo_session_validated !== true
-        || !Array.isArray(payload.records) || !payload.records.length) {
-      throw new Error('Latest archived snapshot is incomplete or invalid');
+    let payload = pointedFile && pointedFile.getSize() > 0 ? readCompleteArchive_(pointedFile, true) : null;
+    const fromPointer = !!payload;
+    if (fromPointer) {
+      if (cache && payload.retrieved_at) {
+        try { cache.put(stampKey, payload.retrieved_at, CONFIG.doGetCacheSeconds); } catch (err) { }
+      }
+      if (matchesLast && payload.retrieved_at === since) return unchanged();
+    } else {
+      payload = findCompleteArchive_(folder_().getId(), null, fileId);
+      if (!payload) return respond(JSON.stringify({ error: 'No snapshot files found' }));
     }
     // Older immutable archives can contain unrelated paper data. Publish market data only.
     marketFieldsOnly_(payload);
-    payload.capture_integrity = captureIntegrity_(properties,payload.retrieved_at,payload.day);
-    const calendar = readJsonProperty_(properties,'MARKET_CALENDAR',null);
+    payload.capture_integrity = captureIntegrity_(properties, payload.retrieved_at, payload.day);
+    const calendar = readJsonProperty_(properties, 'MARKET_CALENDAR', null);
     if (calendar && Array.isArray(calendar.closed)) {
-      payload.exchange_calendar = {year:calendar.year, closed:calendar.closed, special:calendar.special || {}};
+      payload.exchange_calendar = { year: calendar.year, closed: calendar.closed, special: calendar.special || {} };
     }
     const values = properties.getProperties();
-    payload.daily_history = publishedDailyHistory_(properties,day_(new Date()),values);
+    payload.daily_history = publishedDailyHistory_(properties, day_(new Date()), values);
+
     payload.closing_risk = publishedClosingRisk_(values);
     const outStr = JSON.stringify(payload);
-    if (cache && fileId && file.getId() === fileId && outStr.length < 95000) {
-      try { cache.put('DOGET_CAPTURE_DATA_V1_' + fileId, outStr, CONFIG.doGetCacheSeconds); } catch (e) {}
+    if (cache && fromPointer && outStr.length < 95000) {
+      try { cache.put('DOGET_CAPTURE_DATA_V1_' + fileId, outStr, CONFIG.doGetCacheSeconds); } catch (e) { }
     }
     return respond(outStr);
   } catch (err) {
@@ -1222,6 +1249,7 @@ function doGet(e) {
 
 function timestampMillis_(timestamp) {
   if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
+
     return timestamp > 1e11 ? timestamp : timestamp * 1000;
   }
   const value = String(timestamp || '').trim();
