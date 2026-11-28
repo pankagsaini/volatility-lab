@@ -98,7 +98,7 @@ cloud.props_ = () => ({getProperty: key => properties.get(key) || null,
 cloud.scriptCache_ = () => ({get: key => cache.get(key), put: (k, v) => cache.set(k, v), remove: k => cache.delete(k)});
 cloud.marketClosed_ = () => false;
 cloud.marketWindow_ = () => ({closed: false, startMins: 555, endMins: 940});
-cloud.catalogue_ = () => ({indices: {
+cloud.catalogue_ = () => ({day:cloud.day_(new Date(now)), indices: {
   NIFTY: {futures: [], option_expiries: ['2026-11-17']},
   BANKNIFTY: {futures: [], option_expiries: ['2026-11-23']}
 }});
@@ -329,6 +329,26 @@ cloud.apiAll_ = requests => requests.map(req => {
   assert.deepEqual(attempts,['snapshot','snapshot','snapshot'],'unknown weekend remains closed');
 }
 
+// Only the front listed expiry gets additional wings at the three paper decision clocks.
+{
+  let minute;
+  const ctx = vm.createContext({Date:Clock, console});
+  vm.runInContext(gs,ctx);
+  ctx.minute_ = () => minute;
+  ctx.quoteStrikes_ = () => new Set([100]);
+  const captured = [];
+  ctx.apiAll_ = requests => {captured.push(...requests.flatMap(r=>r.params.instrument_key.split(',')));return [];};
+  const dates = ['2026-11-17','2026-11-23'];
+  for (minute of [559,560,565,566,915]) {
+    captured.length = 0;
+    const records = dates.map(expiry=>({label:'NIFTY|'+expiry,retrieved_at:new Date(now).toISOString(),
+      data:[100,200].map(strike=>({strike_price:strike,call_options:{instrument_key:expiry+':'+strike}}))}));
+    ctx.enrichSnapshotInputs_({records,catalogue:{indices:{NIFTY:{option_expiries:dates}}}},now,false);
+    assert.equal(captured.includes(dates[0]+':200'),[560,565,915].includes(minute));
+    assert(!captured.includes(dates[1]+':200'));
+  }
+}
+
 // Exercise the real enrichment loop independently of the capture fixtures.
 {
   const batching = vm.createContext({Date: Clock, console, Utilities: {
@@ -396,6 +416,13 @@ async function main() {
   const selected = cloud.quoteStrikes_({label:'NIFTY|2026-11-17',data:longChain});
   assert(selected.has(25000) && selected.has(24500) && selected.has(25500));
   assert(selected.size < longChain.length);
+  const currentCatalogue = cloud.catalogue_;
+  cloud.catalogue_ = () => ({...currentCatalogue(),day:'2000-01-01'});
+  const fallbackCapture = cloud.capture_('snapshot');
+  assert.equal(fallbackCapture.status,'partial');
+  assert(fallbackCapture.records.length > 0);
+  assert.equal(fallbackCapture.errors.find(e => e.item === 'catalogue').catalogue_day,'2000-01-01');
+  cloud.catalogue_ = currentCatalogue;
   const enrich = cloud.enrichSnapshotInputs_;
   cloud.enrichSnapshotInputs_ = () => {throw new Error('fixture enrichment failure');};
   const rawOnly = cloud.capture_('snapshot');

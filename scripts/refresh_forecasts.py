@@ -160,7 +160,7 @@ def refresh(now=None, paper_history=None):
                 raise ValueError('Forecast training date does not match the latest completed session.')
             if not any(row.get('egarch') for row in series['expiries']):
                 raise ValueError('No eligible EGARCH forecasts produced.')
-        state['forecast_update'] = {'completed_session': str(expected), 'generated_at': now.isoformat(),
+        state['forecast_update'] = {'completed_session': str(expected), 'generated_at': datetime.now(IST).isoformat(),
                                     'provider': 'Upstox daily candles', 'status': 'complete'}
         for symbol in KEYS:
             name = symbol.lower() + '_one_year.csv'

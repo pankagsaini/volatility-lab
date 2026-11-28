@@ -349,8 +349,15 @@ function catalogue_(now) {
     { muteHttpExceptions: true, followRedirects: false, timeoutSeconds: 30 }
   );
   if (response.getResponseCode() !== 200) {
-    if (cached) return cached;
-    throw new Error('Instrument master unavailable');
+    if (!cached?.indices || !cached.day || cached.day >= today) throw new Error('Instrument master unavailable');
+    // Preserve obtainable raw observations during an outage; never submit expired contracts.
+    for (const symbol of Object.keys(CONFIG.indices)) {
+      const scope = cached.indices[symbol];
+      if (!Array.isArray(scope?.futures) || !Array.isArray(scope.option_expiries)) throw new Error('Instrument master unavailable');
+      scope.futures = scope.futures.filter(contract => contract.expiry >= today);
+      scope.option_expiries = scope.option_expiries.filter(expiry => expiry >= today);
+    }
+    return cached;
   }
   const master = JSON.parse(Utilities.ungzip(response.getBlob()).getDataAsString());
   const catalogue = { day: today, indices: {} };
@@ -614,8 +621,12 @@ function enrichSnapshotInputs_(report, started, fullDepth) {
   const requests = [];
   const chains = report.records.filter(r => /^(NIFTY|BANKNIFTY)\|\d{4}-\d{2}-\d{2}$/.test(r.label) && Array.isArray(r.data));
   const options = [];
+  // Widen the front option chain at the frozen entry and scheduled intraday exit clocks.
+  const decisionMinute = !fullDepth && [560, 565, 915].includes(minute_(new Date(started)));
   for (const rec of chains) {
-    const selected = fullDepth ? null : quoteStrikes_(rec);
+    const [symbol, expiry] = rec.label.split('|');
+    const front = report.catalogue?.indices?.[symbol]?.option_expiries?.[0];
+    const selected = fullDepth || (decisionMinute && expiry === front) ? null : quoteStrikes_(rec);
     for (const row of rec.data) {
       if (selected && !selected.has(Number(row.strike_price))) continue;
       for (const side of ['call_options', 'put_options']) {
@@ -709,6 +720,10 @@ function capture_(mode) {
     }
     const catalogue = catalogue_(now);
     report.catalogue = catalogue;
+    if (catalogue.day !== today) {
+      report.errors.push({item:'catalogue', reason:'Instrument catalogue not verified for this session',
+        catalogue_day:catalogue.day || null});
+    }
     const keys = Object.values(CONFIG.indices).concat(['NSE_INDEX|India VIX']);
     Object.values(catalogue.indices).forEach(idx => {
       idx.futures.forEach(f => keys.push(f.instrument_key));

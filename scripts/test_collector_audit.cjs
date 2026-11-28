@@ -28,6 +28,21 @@ const cloud = vm.createContext({
 });
 vm.runInContext(source, cloud);
 const get = parameter => cloud.doGet({parameter});
+{
+  const today = new Date('2026-11-25T05:00:00Z');
+  const scope = {futures:[{expiry:'2026-11-23'},{expiry:'2026-12-29'}],
+    option_expiries:['2026-11-23','2026-12-01','2026-12-29']};
+  const saved = {day:'2026-11-23',indices:{NIFTY:scope,BANKNIFTY:scope}};
+  values.set('CATALOGUE',JSON.stringify(saved));
+  cloud.UrlFetchApp = {fetch:()=>({getResponseCode:()=>503})};
+  const fallback = cloud.catalogue_(today);
+  assert.equal(fallback.day,saved.day);
+  assert.deepEqual(Array.from(fallback.indices.NIFTY.option_expiries),['2026-12-01','2026-12-29']);
+  assert.equal(fallback.indices.BANKNIFTY.futures.length,1);
+  assert.deepEqual(JSON.parse(values.get('CATALOGUE')),saved);
+  values.delete('CATALOGUE');
+  assert.throws(()=>cloud.catalogue_(today),/Instrument master unavailable/);
+}
 for (const action of ['ledger','forward_ledger']) {
   assert.equal(JSON.parse(get({action}).text).error, 'Unknown data action');
 }
@@ -70,6 +85,15 @@ assert.equal(cloud.dualStraddlePoint_({...dualRec, data: [
     put_options: {market_data: {quote_source: 'rest', quote_timestamp: quoteAt,
       bid_price: 48, ask_price: 50, bid_qty: 75, ask_qty: 75}}}]}, quoteAt), null,
   'One recorded leg is not a straddle mark');
+
+const book = overrides => ({market_data:{...leg(41,43).market_data,...overrides}});
+const coverage = cloud.optionBookCoverage_({retrieved_at:quoteAt,data:[
+  {call_options:book({}), put_options:book({bid_qty:64})},
+  {call_options:book({quote_timestamp:new Date(Date.parse(quoteAt)+1).toISOString()}), put_options:book({quote_source:'chain'})},
+  {call_options:book({ask_price:40}), put_options:book({quote_timestamp:new Date(Date.parse(quoteAt)-120001).toISOString()})},
+  {call_options:book({}), put_options:null}
+]},65);
+assert.deepEqual({...coverage},{sides:8,fresh:4,oneLot:2});
 
 // Drive can return empty intermediate pages. The order and date filter are
 // applied by the server before pagination, just as they are on the real API.

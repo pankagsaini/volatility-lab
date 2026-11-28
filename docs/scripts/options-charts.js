@@ -78,13 +78,19 @@ const OptionsCharts = (() => {
     const captured = Date.parse(row.ivCapturedAt || row.archivedAsOf);
     const forecastAt = Date.parse(record?.as_of);
     const day = stamp => Number.isFinite(stamp) ? new Date(stamp + 19800000).toISOString().slice(0,10) : '';
-    // Older forecasts remain visible as dated references, never as current edges.
-    const available = !!record && Number.isFinite(captured) && forecastAt <= captured
+    const generated = Date.parse(state?.forecast_update?.generated_at);
+    const seen = state?.forecastObservedAt;
+    // First observation is a conservative upper bound on when this release became available.
+    const hasGeneration = !!record && Number.isFinite(generated) && forecastAt <= generated
       && record.training_through <= day(forecastAt);
-    const aligned = available && day(forecastAt) === day(captured);
+    const available = hasGeneration && Number.isFinite(seen) && generated <= seen && seen <= captured;
+    let context = 'Timing unverified';
+    if (!record) context = 'Unavailable';
+    else if (hasGeneration && generated > captured) context = 'Generated after capture';
+    else if (available) context = 'Available at capture';
     const iv = positive(row.brokerAtmIv) ? row.brokerAtmIv : null;
     const egarch = positive(record?.egarch) ? record.egarch : null;
-    return {iv, egarch, aligned, training:record?.training_through || null,
+    return {iv, egarch, context, training:record?.training_through || null,
       egarchGap:available && iv !== null && egarch !== null ? iv - egarch : null};
   }
   return {smile, straddleSeries, tooltipName, heatStyle, forecast, comparison, auditedTrade};
