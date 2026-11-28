@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const {gzipSync, gunzipSync} = require('node:zlib');
 const source = fs.readFileSync(process.env.COLLECTOR_SOURCE_PATH || path.join(__dirname, '../volatility_lab/cloud/apps_script/Code.gs'), 'utf8').replace(/\r\n/g,'\n');
 const values = new Map();
 const cached = new Map();
@@ -85,6 +86,7 @@ const archives = [
     data: {day: '2026-11-18', status: 'complete', records: [], forward_test_ledger: {secret: 1}}},
 ];
 const calls = [];
+const reads = [];
 let blankPages = 0;
 cloud.ScriptApp = {getOAuthToken: () => 'test-token'};
 cloud.DriveApp = {
@@ -92,10 +94,14 @@ cloud.DriveApp = {
   getFileById: id => {
     const file = archives.find(row => row.id === id);
     if (!file) throw Error('Missing file');
-    return {getSize: () => Number(file.size), getBlob: () => file.data, getId: () => id};
+    return {getSize: () => Number(file.size), getBlob: () => {
+      reads.push(id);
+      if (file.readError) throw file.readError;
+      return file.bytes || gzipSync(JSON.stringify(file.data));
+    }, getId: () => id};
   },
 };
-cloud.Utilities.ungzip = data => ({getDataAsString: () => JSON.stringify(data)});
+cloud.Utilities.ungzip = bytes => ({getDataAsString: () => gunzipSync(bytes).toString('utf8')});
 cloud.UrlFetchApp = {
   fetch: url => {
     const params = new URL(url).searchParams;
@@ -137,6 +143,45 @@ for (const id of ['empty', 'deleted']) {
   assert.equal(recovered.unchanged, undefined);
   assert.equal(cached.has('DOGET_CAPTURE_DATA_V1_' + id), false);
 }
+const badStamp = '2026-11-26T10:10:00Z';
+const truncated = gzipSync(JSON.stringify(latest)).subarray(0, -8);
+const broken = [
+  {id: 'truncated', name: '2026-11-26_snapshot_154000_complete.json.gz', bytes: truncated},
+  {id: 'malformed', name: '2026-11-26_snapshot_153900_complete.json.gz', bytes: gzipSync('{"records":')},
+  {id: 'partial-body', name: '2026-11-26_snapshot_153800_complete.json.gz', data: {...latest, status: 'partial'}},
+].map(file => ({size: '60', ...file}));
+archives.unshift(...broken);
+values.set('LATEST_SNAPSHOT_FILE_ID', 'truncated');
+values.set('LAST_SNAPSHOT', JSON.stringify({status: 'complete', file_id: 'truncated', retrieved_at: badStamp}));
+for (const parameter of [{since: badStamp}, {}]) {
+  reads.length = 0;
+  const recovered = response(parameter);
+  assert.equal(recovered.retrieved_at, stamp, 'skip damaged archives, including on a conditional read');
+  assert.deepEqual(recovered.records, latest.records);
+  assert.deepEqual(reads, ['truncated', 'malformed', 'partial-body', 'new']);
+  assert.equal(cached.has('DOGET_CAPTURE_DATA_V1_truncated'), false);
+}
+assert.equal(response({day: '2026-11-26'}).error, 'No complete archive for 2026-11-26');
+const eod = {day: '2026-11-27', target_day: '2026-11-26', status: 'complete', records: []};
+archives.push({id: 'eod', name: '2026-11-26_eod_153000_complete.json.gz', size: '70', data: eod});
+assert.deepEqual(response({day: '2026-11-26'}), eod);
+archives.unshift({id: 'unvalidated', name: '2026-11-27_snapshot_154000_complete.json.gz', size: '70',
+  data: {...latest, nfo_session_validated: false, retrieved_at: badStamp}});
+values.delete('LATEST_SNAPSHOT_FILE_ID');
+assert.equal(response({}).retrieved_at, stamp, 'apply live validation to listed snapshots as well');
+
+values.set('LATEST_SNAPSHOT_FILE_ID', 'new');
+values.set('LAST_SNAPSHOT', JSON.stringify({status: 'complete', file_id: 'new', retrieved_at: badStamp}));
+assert.equal(response({since: badStamp}).retrieved_at, stamp, 'use the timestamp inside the archive');
+values.set('LAST_SNAPSHOT', JSON.stringify({status: 'complete', file_id: 'new', retrieved_at: stamp}));
+cached.clear();
+reads.length = 0;
+assert.equal(response({since: stamp}).unchanged, true);
+assert.equal(response({since: stamp}).unchanged, true);
+assert.deepEqual(reads, ['new'], 'cache a validated timestamp across conditional reads');
+broken[0].readError = Error('Drive quota exceeded');
+assert.match(response({day: '2026-11-26'}).error, /permissions, network or quota/);
+
 archives.splice(0, archives.length, ...Array.from({length: 65}, (_, i) => {
   const day = new Date(Date.UTC(2026, 10, 28 - i)).toISOString().slice(0, 10);
   return {id: day, name: day + '_snapshot_120000_complete.json.gz', size: '80'};

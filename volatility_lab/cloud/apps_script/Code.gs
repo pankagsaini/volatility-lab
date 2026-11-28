@@ -176,17 +176,33 @@ function listDriveFilesPage_(folderId, pageToken, orderBy, day) {
   return JSON.parse(response.getContentText());
 }
 
-// Dated requests also serve historical EOD archives. Latest recovery uses only snapshots.
-function findCompleteArchiveId_(folderId, day) {
+function readCompleteArchive_(file, requireSnapshot) {
+  const blob = file.getBlob();
+  let payload;
+  try {
+    payload = JSON.parse(Utilities.ungzip(blob).getDataAsString());
+  } catch (err) {
+    return null;
+  }
+  if (!payload || payload.status !== 'complete') return null;
+  // Historical EOD captures predate the live snapshot schema.
+  if (requireSnapshot && (payload.schema !== 1 || payload.provider !== 'Upstox' || payload.mode !== 'snapshot'
+    || payload.nfo_session_validated !== true || !Array.isArray(payload.records) || !payload.records.length)) return null;
+  return payload;
+}
+
+function findCompleteArchive_(folderId, day, skipId) {
   let pageToken = '';
   do {
     const page = listDriveFilesPage_(folderId, pageToken, day ? 'modifiedTime desc' : 'name desc', day);
     for (const file of page.files || []) {
-      if (file.size != null && Number(file.size) === 0) continue;
+      if (file.id === skipId || (file.size != null && Number(file.size) === 0)) continue;
       const match = COMPLETE_ARCHIVE_NAME.exec(file.name);
       if (!match) continue;
-      if (day && match[1] === day) return file.id;
-      if (!day && match[2] === 'snapshot' && /^\d{6}$/.test(match[3])) return file.id;
+      if (day && match[1] !== day) continue;
+      if (!day && (match[2] !== 'snapshot' || !/^\d{6}$/.test(match[3]))) continue;
+      const payload = readCompleteArchive_(DriveApp.getFileById(file.id), !day);
+      if (payload) return payload;
     }
     pageToken = page.nextPageToken;
   } while (pageToken);
@@ -1128,10 +1144,9 @@ function doGet(e) {
     const requestedDay = e && e.parameter && e.parameter.day;
     if (requestedDay && action === 'latest') {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDay)) throw new Error('Invalid archive date');
-      const matchId = findCompleteArchiveId_(folder_().getId(), requestedDay);
-      if (!matchId) return respond(JSON.stringify({ error: 'No complete archive for ' + requestedDay }));
-      const file = DriveApp.getFileById(matchId);
-      return respond(JSON.stringify(marketFieldsOnly_(JSON.parse(Utilities.ungzip(file.getBlob()).getDataAsString()))));
+      const payload = findCompleteArchive_(folder_().getId(), requestedDay);
+      if (!payload) return respond(JSON.stringify({ error: 'No complete archive for ' + requestedDay }));
+      return respond(JSON.stringify(marketFieldsOnly_(payload)));
     }
 
 
@@ -1178,37 +1193,38 @@ function doGet(e) {
     const fileId = properties.getProperty('LATEST_SNAPSHOT_FILE_ID');
     const last = readJsonProperty_(properties, 'LAST_SNAPSHOT', null);
     const cachedSnap = cache && fileId ? cache.get('DOGET_CAPTURE_DATA_V1_' + fileId) : null;
-    let file = null;
-    if (fileId && !cachedSnap) {
+    const since = e?.parameter?.since;
+    const matchesLast = since && fileId && last && last.file_id === fileId && last.status === 'complete'
+      && last.retrieved_at === since;
+    const unchanged = () => respond(JSON.stringify({
+      unchanged: true, retrieved_at: since, capture_integrity: captureIntegrity_(properties, since, last.day)
+    }));
+    // Large snapshots exceed the response cache limit. Cache their verified timestamp separately.
+    const stampKey = 'DOGET_VALIDATED_STAMP_V1_' + fileId;
+    if (matchesLast && cache && cache.get(stampKey) === since) return unchanged();
+    if (cachedSnap) {
+      if (matchesLast && JSON.parse(cachedSnap).retrieved_at === since) return unchanged();
+      return respond(cachedSnap);
+    }
+
+    let pointedFile = null;
+    if (fileId) {
       try {
-        const pointedFile = DriveApp.getFileById(fileId);
-        if (pointedFile.getSize() > 0) file = pointedFile;
+        pointedFile = DriveApp.getFileById(fileId);
       } catch (err) {
         // A deleted or inaccessible pointer can be recovered from the archive listing.
       }
     }
-    if ((cachedSnap || file) && last && last.file_id === fileId && last.status === 'complete' && last.retrieved_at &&
-      e?.parameter?.since === last.retrieved_at) {
-      return respond(JSON.stringify({
-        unchanged: true, retrieved_at: last.retrieved_at,
-        capture_integrity: captureIntegrity_(properties, last.retrieved_at, last.day)
-      }));
-    }
-    if (cachedSnap) return respond(cachedSnap);
-    if (!file) {
-      const matchId = findCompleteArchiveId_(folder_().getId());
-      if (matchId) file = DriveApp.getFileById(matchId);
-    }
-    if (!file) {
-      return respond(JSON.stringify({ error: 'No snapshot files found' }));
-    }
-
-    const uncompressed = Utilities.ungzip(file.getBlob());
-    const payload = JSON.parse(uncompressed.getDataAsString());
-    if (payload.schema !== 1 || payload.provider !== 'Upstox' || payload.mode !== 'snapshot'
-      || payload.status !== 'complete' || payload.nfo_session_validated !== true
-      || !Array.isArray(payload.records) || !payload.records.length) {
-      throw new Error('Latest archived snapshot is incomplete or invalid');
+    let payload = pointedFile && pointedFile.getSize() > 0 ? readCompleteArchive_(pointedFile, true) : null;
+    const fromPointer = !!payload;
+    if (fromPointer) {
+      if (cache && payload.retrieved_at) {
+        try { cache.put(stampKey, payload.retrieved_at, CONFIG.doGetCacheSeconds); } catch (err) { }
+      }
+      if (matchesLast && payload.retrieved_at === since) return unchanged();
+    } else {
+      payload = findCompleteArchive_(folder_().getId(), null, fileId);
+      if (!payload) return respond(JSON.stringify({ error: 'No snapshot files found' }));
     }
     // Older immutable archives can contain unrelated paper data. Publish market data only.
     marketFieldsOnly_(payload);
@@ -1222,10 +1238,8 @@ function doGet(e) {
 
     payload.closing_risk = publishedClosingRisk_(values);
     const outStr = JSON.stringify(payload);
-    if (cache && fileId && file.getId() === fileId && outStr.length < 95000) {
-
+    if (cache && fromPointer && outStr.length < 95000) {
       try { cache.put('DOGET_CAPTURE_DATA_V1_' + fileId, outStr, CONFIG.doGetCacheSeconds); } catch (e) { }
-
     }
     return respond(outStr);
   } catch (err) {
