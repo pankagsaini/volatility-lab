@@ -402,6 +402,7 @@ async function main() {
   assert(!('forward_test_status' in rawOnly)); assert.equal(rawOnly.records[1].data[0].call_options.market_data.ltp,999);
   cloud.enrichSnapshotInputs_ = enrich;
   cloud.ContentService = {MimeType:{JSON:'json'},createTextOutput:text => ({setMimeType:() => JSON.parse(text)})};
+  cloud.DriveApp = {getFileById: () => ({getSize: () => 128})};
   properties.set('LATEST_SNAPSHOT_FILE_ID',status.file_id);
   assert.equal(cloud.doGet({parameter:{since:status.retrieved_at}}).unchanged,true);
   properties.set('LATEST_SNAPSHOT_FILE_ID','different-file');

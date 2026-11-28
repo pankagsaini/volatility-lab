@@ -338,7 +338,7 @@ class TestExecutionSafetyFixes(unittest.TestCase):
         self.assertIn("function captureQuoteFresh_(timestamp, referenceTimestamp)", code)
         self.assertIn("customSpecial[today] || SPECIAL_SESSIONS[today]", code)
         self.assertNotIn("function executableQuote_", code)
-        self.assertIn("function listDriveFilesPage_(folderId, pageToken, orderBy)", code)
+        self.assertIn("function listDriveFilesPage_(folderId, pageToken, orderBy, day)", code)
         self.assertIn("'modifiedTime desc'", code)
         self.assertNotIn("method: 'delete'", code)
         self.assertIn("timeoutSeconds: 8", code)
